@@ -1,0 +1,300 @@
+ How to serialize prompts
+ [#](#how-to-serialize-prompts "Permalink to this headline")
+=======================================================================================
+ It is often preferrable to store prompts not as python code but as files. This can make it easy to share, store, and version prompts. This notebook covers how to do that in LangChain, walking through all the different types of prompts and the different serialization options.
+ At a high level, the following design principles are applied to serialization:
+1. Both JSON and YAML are supported. We want to support serialization methods that are human readable on disk, and YAML and JSON are two of the most popular methods for that. Note that this rule applies to prompts. For other assets, like Examples, different serialization methods may be supported.
+2. We support specifying everything in one file, or storing different components (templates, examples, etc) in different files and referencing them. For some cases, storing everything in file makes the most sense, but for others it is preferrable to split up some of the assets (long templates, large examples, reusable components). LangChain supports both.
+ There is also a single entry point to load prompts from disk, making it easy to load any type of prompt.
+```
+# All prompts are loaded through the `load\_prompt` function.
+from langchain.prompts import load\_prompt
+```
+ PromptTemplate
+ [#](#prompttemplate "Permalink to this headline")
+-------------------------------------------------------------------
+ This section covers examples for loading a PromptTemplate.
+### 
+ Loading from YAML
+ [#](#loading-from-yaml "Permalink to this headline")
+ This shows an example of loading a PromptTemplate from YAML.
+```
+!cat simple_prompt.yaml
+```
+```
+_type: prompt
+input_variables:
+    ["adjective", "content"]
+template: 
+    Tell me a {adjective} joke about {content}.
+```
+```
+prompt = load\_prompt("simple\_prompt.yaml")
+print(prompt.format(adjective="funny", content="chickens"))
+```
+```
+Tell me a funny joke about chickens.
+```
+### 
+ Loading from JSON
+ [#](#loading-from-json "Permalink to this headline")
+ This shows an example of loading a PromptTemplate from JSON.
+```
+!cat simple_prompt.json
+```
+```
+{
+    "_type": "prompt",
+    "input_variables": ["adjective", "content"],
+    "template": "Tell me a {adjective} joke about {content}."
+}
+```
+```
+prompt = load\_prompt("simple\_prompt.json")
+print(prompt.format(adjective="funny", content="chickens"))
+```
+ Tell me a funny joke about chickens.
+### 
+ Loading Template from a File
+ [#](#loading-template-from-a-file "Permalink to this headline")
+ This shows an example of storing the template in a separate file and then referencing it in the config. Notice that the key changes from
+ `template`
+ to
+ `template\_path`
+ .
+```
+!cat simple_template.txt
+```
+```
+Tell me a {adjective} joke about {content}.
+```
+```
+!cat simple_prompt_with_template_file.json
+```
+```
+{
+    "_type": "prompt",
+    "input_variables": ["adjective", "content"],
+    "template_path": "simple_template.txt"
+}
+```
+```
+prompt = load\_prompt("simple\_prompt\_with\_template\_file.json")
+print(prompt.format(adjective="funny", content="chickens"))
+```
+```
+Tell me a funny joke about chickens.
+```
+ FewShotPromptTemplate
+ [#](#fewshotprompttemplate "Permalink to this headline")
+---------------------------------------------------------------------------------
+ This section covers examples for loading few shot prompt templates.
+### 
+ Examples
+ [#](#examples "Permalink to this headline")
+ This shows an example of what examples stored as json might look like.
+```
+!cat examples.json
+```
+```
+[
+    {"input": "happy", "output": "sad"},
+    {"input": "tall", "output": "short"}
+]
+```
+ And here is what the same examples stored as yaml might look like.
+```
+!cat examples.yaml
+```
+```
+- input: happy
+  output: sad
+- input: tall
+  output: short
+```
+### 
+ Loading from YAML
+ [#](#id1 "Permalink to this headline")
+ This shows an example of loading a few shot example from YAML.
+```
+!cat few_shot_prompt.yaml
+```
+```
+_type: few_shot
+input_variables:
+    ["adjective"]
+prefix: 
+    Write antonyms for the following words.
+example_prompt:
+    _type: prompt
+    input_variables:
+        ["input", "output"]
+    template:
+        "Input: {input}\nOutput: {output}"
+examples:
+    examples.json
+suffix:
+    "Input: {adjective}\nOutput:"
+```
+```
+prompt = load\_prompt("few\_shot\_prompt.yaml")
+print(prompt.format(adjective="funny"))
+```
+```
+Write antonyms for the following words.
+Input: happy
+Output: sad
+Input: tall
+Output: short
+Input: funny
+Output:
+```
+ The same would work if you loaded examples from the yaml file.
+```
+!cat few_shot_prompt_yaml_examples.yaml
+```
+```
+_type: few_shot
+input_variables:
+    ["adjective"]
+prefix: 
+    Write antonyms for the following words.
+example_prompt:
+    _type: prompt
+    input_variables:
+        ["input", "output"]
+    template:
+        "Input: {input}\nOutput: {output}"
+examples:
+    examples.yaml
+suffix:
+    "Input: {adjective}\nOutput:"
+```
+```
+prompt = load\_prompt("few\_shot\_prompt\_yaml\_examples.yaml")
+print(prompt.format(adjective="funny"))
+```
+```
+Write antonyms for the following words.
+Input: happy
+Output: sad
+Input: tall
+Output: short
+Input: funny
+Output:
+```
+### 
+ Loading from JSON
+ [#](#id2 "Permalink to this headline")
+ This shows an example of loading a few shot example from JSON.
+```
+!cat few_shot_prompt.json
+```
+```
+{
+    "_type": "few_shot",
+    "input_variables": ["adjective"],
+    "prefix": "Write antonyms for the following words.",
+    "example_prompt": {
+        "_type": "prompt",
+        "input_variables": ["input", "output"],
+        "template": "Input: {input}\nOutput: {output}"
+    },
+    "examples": "examples.json",
+    "suffix": "Input: {adjective}\nOutput:"
+}   
+```
+```
+prompt = load\_prompt("few\_shot\_prompt.json")
+print(prompt.format(adjective="funny"))
+```
+```
+Write antonyms for the following words.
+Input: happy
+Output: sad
+Input: tall
+Output: short
+Input: funny
+Output:
+```
+### 
+ Examples in the Config
+ [#](#examples-in-the-config "Permalink to this headline")
+ This shows an example of referencing the examples directly in the config.
+```
+!cat few_shot_prompt_examples_in.json
+```
+```
+{
+    "_type": "few_shot",
+    "input_variables": ["adjective"],
+    "prefix": "Write antonyms for the following words.",
+    "example_prompt": {
+        "_type": "prompt",
+        "input_variables": ["input", "output"],
+        "template": "Input: {input}\nOutput: {output}"
+    },
+    "examples": [
+        {"input": "happy", "output": "sad"},
+        {"input": "tall", "output": "short"}
+    ],
+    "suffix": "Input: {adjective}\nOutput:"
+}   
+```
+```
+prompt = load\_prompt("few\_shot\_prompt\_examples\_in.json")
+print(prompt.format(adjective="funny"))
+```
+```
+Write antonyms for the following words.
+Input: happy
+Output: sad
+Input: tall
+Output: short
+Input: funny
+Output:
+```
+### 
+ Example Prompt from a File
+ [#](#example-prompt-from-a-file "Permalink to this headline")
+ This shows an example of loading the PromptTemplate that is used to format the examples from a separate file. Note that the key changes from
+ `example\_prompt`
+ to
+ `example\_prompt\_path`
+ .
+```
+!cat example_prompt.json
+```
+```
+{
+    "_type": "prompt",
+    "input_variables": ["input", "output"],
+    "template": "Input: {input}\nOutput: {output}" 
+}
+```
+```
+!cat few_shot_prompt_example_prompt.json 
+```
+```
+{
+    "_type": "few_shot",
+    "input_variables": ["adjective"],
+    "prefix": "Write antonyms for the following words.",
+    "example_prompt_path": "example_prompt.json",
+    "examples": "examples.json",
+    "suffix": "Input: {adjective}\nOutput:"
+}   
+```
+```
+prompt = load\_prompt("few\_shot\_prompt\_example\_prompt.json")
+print(prompt.format(adjective="funny"))
+```
+```
+Write antonyms for the following words.
+Input: happy
+Output: sad
+Input: tall
+Output: short
+Input: funny
+Output:
+```

@@ -1,0 +1,72 @@
+ How to create a custom prompt template
+ [#](#how-to-create-a-custom-prompt-template "Permalink to this headline")
+===================================================================================================================
+ Let’s suppose we want the LLM to generate English language explanations of a function given its name. To achieve this task, we will create a custom prompt template that takes in the function name as input, and formats the prompt template to provide the source code of the function.
+ Why are custom prompt templates needed?
+ [#](#why-are-custom-prompt-templates-needed "Permalink to this headline")
+--------------------------------------------------------------------------------------------------------------------
+ LangChain provides a set of default prompt templates that can be used to generate prompts for a variety of tasks. However, there may be cases where the default prompt templates do not meet your needs. For example, you may want to create a prompt template with specific dynamic instructions for your language model. In such cases, you can create a custom prompt template.
+ Take a look at the current set of default prompt templates
+ [here](../getting_started.html)
+ .
+ Creating a Custom Prompt Template
+ [#](#creating-a-custom-prompt-template "Permalink to this headline")
+---------------------------------------------------------------------------------------------------------
+ There are essentially two distinct prompt templates available - string prompt templates and chat prompt templates. String prompt templates provides a simple prompt in string format, while chat prompt templates produces a more structured prompt to be used with a chat API.
+ In this guide, we will create a custom prompt using a string prompt template.
+ To create a custom string prompt template, there are two requirements:
+1. It has an input\_variables attribute that exposes what input variables the prompt template expects.
+2. It exposes a format method that takes in keyword arguments corresponding to the expected input\_variables and returns the formatted prompt.
+ We will create a custom prompt template that takes in the function name as input and formats the prompt to provide the source code of the function. To achieve this, let’s first create a function that will return the source code of a function given its name.
+```
+import inspect
+def get\_source\_code(function\_name):
+    # Get the source code of the function
+    return inspect.getsource(function\_name)
+```
+ Next, we’ll create a custom prompt template that takes in the function name as input, and formats the prompt template to provide the source code of the function.
+```
+from langchain.prompts import StringPromptTemplate
+from pydantic import BaseModel, validator
+class FunctionExplainerPromptTemplate(StringPromptTemplate, BaseModel):
+ """ A custom prompt template that takes in the function name as input, and formats the prompt template to provide the source code of the function. """
+    @validator("input\_variables")
+    def validate\_input\_variables(cls, v):
+ """ Validate that the input variables are correct. """
+        if len(v) != 1 or "function\_name" not in v:
+            raise ValueError("function\_name must be the only input\_variable.")
+        return v
+    def format(self, \*\*kwargs) -> str:
+        # Get the source code of the function
+        source\_code = get\_source\_code(kwargs["function\_name"])
+        # Generate the prompt to be sent to the language model
+        prompt = f"""
+ Given the function name and source code, generate an English language explanation of the function.
+ Function Name: {kwargs["function\_name"].\_\_name\_\_}
+ Source Code:
+ {source\_code}
+ Explanation:
+ """
+        return prompt
+    def \_prompt\_type(self):
+        return "function-explainer"
+```
+ Use the custom prompt template
+ [#](#use-the-custom-prompt-template "Permalink to this headline")
+---------------------------------------------------------------------------------------------------
+ Now that we have created a custom prompt template, we can use it to generate prompts for our task.
+```
+fn\_explainer = FunctionExplainerPromptTemplate(input\_variables=["function\_name"])
+# Generate a prompt for the function "get\_source\_code"
+prompt = fn\_explainer.format(function\_name=get\_source\_code)
+print(prompt)
+```
+```
+        Given the function name and source code, generate an English language explanation of the function.
+        Function Name: get_source_code
+        Source Code:
+        def get_source_code(function_name):
+    # Get the source code of the function
+    return inspect.getsource(function_name)
+        Explanation:
+```

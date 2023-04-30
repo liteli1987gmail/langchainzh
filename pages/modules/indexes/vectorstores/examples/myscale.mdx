@@ -1,0 +1,145 @@
+ MyScale
+ [#](#myscale "Permalink to this headline")
+=====================================================
+> 
+> 
+> 
+> [MyScale](https://docs.myscale.com/en/overview/) 
+>  is a cloud-based database optimized for AI applications and solutions, built on the open-source
+>  [ClickHouse](https://github.com/ClickHouse/ClickHouse) 
+>  .
+>  
+> 
+> 
+> 
+> 
+ This notebook shows how to use functionality related to the
+ `MyScale`
+ vector database.
+ Setting up envrionments
+ [#](#setting-up-envrionments "Permalink to this headline")
+-------------------------------------------------------------------------------------
+```
+!pip install clickhouse-connect
+```
+ We want to use OpenAIEmbeddings so we have to get the OpenAI API Key.
+```
+import os
+import getpass
+os.environ['OPENAI\_API\_KEY'] = getpass.getpass('OpenAI API Key:')
+```
+ There are two ways to set up parameters for myscale index.
+1. Environment Variables
+ Before you run the app, please set the environment variable with
+ `export`
+ :
+ `export
+ MYSCALE\_URL='<your-endpoints-url>'
+ MYSCALE\_PORT=<your-endpoints-port>
+ MYSCALE\_USERNAME=<your-username>
+ MYSCALE\_PASSWORD=<your-password>
+ ...`
+ You can easily find your account, password and other info on our SaaS. For details please refer to
+ [this document](https://docs.myscale.com/en/cluster-management/) 
+ Every attributes under
+ `MyScaleSettings`
+ can be set with prefix
+ `MYSCALE\_`
+ and is case insensitive.
+2. Create
+ `MyScaleSettings`
+ object with parameters
+```
+from langchain.vectorstores import MyScale, MyScaleSettings
+config = MyScaleSetting(host="<your-backend-url>", port=8443, ...)
+index = MyScale(embedding\_function, config)
+index.add\_documents(...)
+```
+```
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.text\_splitter import CharacterTextSplitter
+from langchain.vectorstores import MyScale
+from langchain.document\_loaders import TextLoader
+```
+```
+from langchain.document\_loaders import TextLoader
+loader = TextLoader('../../../state\_of\_the\_union.txt')
+documents = loader.load()
+text\_splitter = CharacterTextSplitter(chunk\_size=1000, chunk\_overlap=0)
+docs = text\_splitter.split\_documents(documents)
+embeddings = OpenAIEmbeddings()
+```
+```
+for d in docs:
+    d.metadata = {'some': 'metadata'}
+docsearch = MyScale.from\_documents(docs, embeddings)
+query = "What did the president say about Ketanji Brown Jackson"
+docs = docsearch.similarity\_search(query)
+```
+```
+Inserting data...: 100%|██████████| 42/42 [00:18<00:00,  2.21it/s]
+```
+```
+print(docs[0].page\_content)
+```
+```
+As Frances Haugen, who is here with us tonight, has shown, we must hold social media platforms accountable for the national experiment they’re conducting on our children for profit. 
+It’s time to strengthen privacy protections, ban targeted advertising to children, demand tech companies stop collecting personal data on our children. 
+And let’s get all Americans the mental health services they need. More people they can turn to for help, and full parity between physical and mental health care. 
+Third, support our veterans. 
+Veterans are the best of us. 
+I’ve always believed that we have a sacred obligation to equip all those we send to war and care for them and their families when they come home. 
+My administration is providing assistance with job training and housing, and now helping lower-income veterans get VA care debt-free.  
+Our troops in Iraq and Afghanistan faced many dangers.
+```
+ Get connection info and data schema
+ [#](#get-connection-info-and-data-schema "Permalink to this headline")
+-------------------------------------------------------------------------------------------------------------
+```
+print(str(docsearch))
+```
+ Filtering
+ [#](#filtering "Permalink to this headline")
+---------------------------------------------------------
+ You can have direct access to myscale SQL where statement. You can write
+ `WHERE`
+ clause following standard SQL.
+**NOTE** 
+ : Please be aware of SQL injection, this interface must not be directly called by end-user.
+ If you custimized your
+ `column\_map`
+ under your setting, you search with filter like this:
+```
+from langchain.vectorstores import MyScale, MyScaleSettings
+from langchain.document\_loaders import TextLoader
+loader = TextLoader('../../../state\_of\_the\_union.txt')
+documents = loader.load()
+text\_splitter = CharacterTextSplitter(chunk\_size=1000, chunk\_overlap=0)
+docs = text\_splitter.split\_documents(documents)
+embeddings = OpenAIEmbeddings()
+for i, d in enumerate(docs):
+    d.metadata = {'doc\_id': i}
+docsearch = MyScale.from\_documents(docs, embeddings)
+```
+```
+Inserting data...: 100%|██████████| 42/42 [00:15<00:00,  2.69it/s]
+```
+```
+meta = docsearch.metadata\_column
+output = docsearch.similarity\_search\_with\_relevance\_scores('What did the president say about Ketanji Brown Jackson?', 
+                                                           k=4, where\_str=f"{meta}.doc\_id<10")
+for d, dist in output:
+    print(dist, d.metadata, d.page\_content[:20] + '...')
+```
+```
+0.252379834651947 {'doc_id': 6, 'some': ''} And I’m taking robus...
+0.25022566318511963 {'doc_id': 1, 'some': ''} Groups of citizens b...
+0.2469480037689209 {'doc_id': 8, 'some': ''} And so many families...
+0.2428302764892578 {'doc_id': 0, 'some': 'metadata'} As Frances Haugen, w...
+```
+ Deleting your data
+ [#](#deleting-your-data "Permalink to this headline")
+---------------------------------------------------------------------------
+```
+docsearch.drop()
+```

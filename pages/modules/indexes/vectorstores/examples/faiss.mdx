@@ -1,0 +1,129 @@
+ FAISS
+ [#](#faiss "Permalink to this headline")
+=================================================
+> 
+> 
+> 
+> [Facebook AI Similarity Search (Faiss)](https://engineering.fb.com/2017/03/29/data-infrastructure/faiss-a-library-for-efficient-similarity-search/) 
+>  is a library for efficient similarity search and clustering of dense vectors. It contains algorithms that search in sets of vectors of any size, up to ones that possibly do not fit in RAM. It also contains supporting code for evaluation and parameter tuning.
+>  
+> 
+> 
+> 
+> 
+[Faiss documentation](https://faiss.ai/) 
+ .
+ This notebook shows how to use functionality related to the
+ `FAISS`
+ vector database.
+```
+#!pip install faiss
+# OR
+!pip install faiss-cpu
+```
+ We want to use OpenAIEmbeddings so we have to get the OpenAI API Key.
+```
+import os
+import getpass
+os.environ['OPENAI\_API\_KEY'] = getpass.getpass('OpenAI API Key:')
+```
+```
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.text\_splitter import CharacterTextSplitter
+from langchain.vectorstores import FAISS
+from langchain.document\_loaders import TextLoader
+```
+```
+from langchain.document\_loaders import TextLoader
+loader = TextLoader('../../../state\_of\_the\_union.txt')
+documents = loader.load()
+text\_splitter = CharacterTextSplitter(chunk\_size=1000, chunk\_overlap=0)
+docs = text\_splitter.split\_documents(documents)
+embeddings = OpenAIEmbeddings()
+```
+```
+db = FAISS.from\_documents(docs, embeddings)
+query = "What did the president say about Ketanji Brown Jackson"
+docs = db.similarity\_search(query)
+```
+```
+print(docs[0].page\_content)
+```
+```
+Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
+Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. 
+One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. 
+And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.
+```
+ Similarity Search with score
+ [#](#similarity-search-with-score "Permalink to this headline")
+-----------------------------------------------------------------------------------------------
+ There are some FAISS specific methods. One of them is
+ `similarity\_search\_with\_score`
+ , which allows you to return not only the documents but also the similarity score of the query to them.
+```
+docs\_and\_scores = db.similarity\_search\_with\_score(query)
+```
+```
+docs\_and\_scores[0]
+```
+```
+(Document(page_content='In state after state, new laws have been passed, not only to suppress the vote, but to subvert entire elections. \n\nWe cannot let this happen. \n\nTonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. \n\nTonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. \n\nOne of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. \n\nAnd I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.', lookup_str='', metadata={'source': '../../state_of_the_union.txt'}, lookup_index=0),
+ 0.3914415)
+```
+ It is also possible to do a search for documents similar to a given embedding vector using
+ `similarity\_search\_by\_vector`
+ which accepts an embedding vector as a parameter instead of a string.
+```
+embedding\_vector = embeddings.embed\_query(query)
+docs\_and\_scores = db.similarity\_search\_by\_vector(embedding\_vector)
+```
+ Saving and loading
+ [#](#saving-and-loading "Permalink to this headline")
+---------------------------------------------------------------------------
+ You can also save and load a FAISS index. This is useful so you don’t have to recreate it everytime you use it.
+```
+db.save\_local("faiss\_index")
+```
+```
+new\_db = FAISS.load\_local("faiss\_index", embeddings)
+```
+```
+docs = new\_db.similarity\_search(query)
+```
+```
+docs[0]
+```
+```
+Document(page_content='In state after state, new laws have been passed, not only to suppress the vote, but to subvert entire elections. \n\nWe cannot let this happen. \n\nTonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. \n\nTonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. \n\nOne of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. \n\nAnd I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.', lookup_str='', metadata={'source': '../../state_of_the_union.txt'}, lookup_index=0)
+```
+ Merging
+ [#](#merging "Permalink to this headline")
+-----------------------------------------------------
+ You can also merge two FAISS vectorstores
+```
+db1 = FAISS.from\_texts(["foo"], embeddings)
+db2 = FAISS.from\_texts(["bar"], embeddings)
+```
+```
+db1.docstore.\_dict
+```
+```
+{'e0b74348-6c93-4893-8764-943139ec1d17': Document(page_content='foo', lookup_str='', metadata={}, lookup_index=0)}
+```
+```
+db2.docstore.\_dict
+```
+```
+{'bdc50ae3-a1bb-4678-9260-1b0979578f40': Document(page_content='bar', lookup_str='', metadata={}, lookup_index=0)}
+```
+```
+db1.merge\_from(db2)
+```
+```
+db1.docstore.\_dict
+```
+```
+{'e0b74348-6c93-4893-8764-943139ec1d17': Document(page_content='foo', lookup_str='', metadata={}, lookup_index=0),
+ 'd5211050-c777-493d-8825-4800e74cfdb6': Document(page_content='bar', lookup_str='', metadata={}, lookup_index=0)}
+```

@@ -1,0 +1,49 @@
+ Tair
+ [#](#tair "Permalink to this headline")
+===============================================
+ This notebook shows how to use functionality related to the Tair vector database.
+To run, you should have an
+ [Tair](https://www.alibabacloud.com/help/en/tair/latest/what-is-tair) 
+ instance up and running.
+```
+from langchain.embeddings.fake import FakeEmbeddings
+from langchain.text\_splitter import CharacterTextSplitter
+from langchain.vectorstores import Tair
+```
+```
+from langchain.document\_loaders import TextLoader
+loader = TextLoader('../../../state\_of\_the\_union.txt')
+documents = loader.load()
+text\_splitter = CharacterTextSplitter(chunk\_size=1000, chunk\_overlap=0)
+docs = text\_splitter.split\_documents(documents)
+embeddings = FakeEmbeddings(size=128)
+```
+ Connect to Tair using the
+ `TAIR\_URL`
+ environment variable
+```
+export TAIR\_URL="redis://{username}:{password}@{tair\_address}:{tair\_port}"
+```
+ or the keyword argument
+ `tair\_url`
+ .
+ Then store documents and embeddings into Tair.
+```
+tair\_url = "redis://localhost:6379"
+# drop first if index already exists
+Tair.drop\_index(tair\_url=tair\_url)
+vector\_store = Tair.from\_documents(
+    docs,
+    embeddings,
+    tair\_url=tair\_url
+)
+```
+ Query similar documents.
+```
+query = "What did the president say about Ketanji Brown Jackson"
+docs = vector\_store.similarity\_search(query)
+docs[0]
+```
+```
+Document(page_content='We’re going after the criminals who stole billions in relief money meant for small businesses and millions of Americans.  \n\nAnd tonight, I’m announcing that the Justice Department will name a chief prosecutor for pandemic fraud. \n\nBy the end of this year, the deficit will be down to less than half what it was before I took office.  \n\nThe only president ever to cut the deficit by more than one trillion dollars in a single year. \n\nLowering your costs also means demanding more competition. \n\nI’m a capitalist, but capitalism without competition isn’t capitalism. \n\nIt’s exploitation—and it drives up prices. \n\nWhen corporations don’t have to compete, their profits go up, your prices go up, and small businesses and family farmers and ranchers go under. \n\nWe see it happening with ocean carriers moving goods in and out of America. \n\nDuring the pandemic, these foreign-owned companies raised prices by as much as 1,000% and made record profits.', metadata={'source': '../../../state_of_the_union.txt'})
+```

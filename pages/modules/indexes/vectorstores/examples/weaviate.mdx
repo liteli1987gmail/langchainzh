@@ -1,0 +1,106 @@
+ Weaviate
+ [#](#weaviate "Permalink to this headline")
+=======================================================
+> 
+> 
+> 
+> [Weaviate](https://weaviate.io/) 
+>  is an open-source vector database. It allows you to store data objects and vector embeddings from your favorite ML-models, and scale seamlessly into billions of data objects.
+>  
+> 
+> 
+> 
+> 
+ This notebook shows how to use functionality related to the
+ `Weaviate`
+ vector database.
+ See the
+ `Weaviate`
+[installation instructions](https://weaviate.io/developers/weaviate/installation) 
+ .
+```
+!pip install weaviate-client
+```
+ We want to use
+ `OpenAIEmbeddings`
+ so we have to get the OpenAI API Key.
+```
+import os
+import getpass
+os.environ['OPENAI\_API\_KEY'] = getpass.getpass('OpenAI API Key:')
+```
+```
+WEAVIATE\_URL = getpass.getpass('WEAVIATE\_URL:')
+```
+```
+os.environ['WEAVIATE\_API\_KEY'] = getpass.getpass('WEAVIATE\_API\_KEY:')
+```
+```
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.text\_splitter import CharacterTextSplitter
+from langchain.vectorstores import Weaviate
+from langchain.document\_loaders import TextLoader
+```
+```
+from langchain.document\_loaders import TextLoader
+loader = TextLoader('../../../state\_of\_the\_union.txt')
+documents = loader.load()
+text\_splitter = CharacterTextSplitter(chunk\_size=1000, chunk\_overlap=0)
+docs = text\_splitter.split\_documents(documents)
+embeddings = OpenAIEmbeddings()
+```
+```
+import weaviate
+import os
+WEAVIATE\_URL = ""
+client = weaviate.Client(
+    url=WEAVIATE\_URL,
+    additional\_headers={
+        'X-OpenAI-Api-Key': os.environ["OPENAI\_API\_KEY"]
+    }
+)
+```
+```
+client.schema.delete\_all()
+client.schema.get()
+schema = {
+    "classes": [
+        {
+            "class": "Paragraph",
+            "description": "A written paragraph",
+            "vectorizer": "text2vec-openai",
+              "moduleConfig": {
+                "text2vec-openai": {
+                  "model": "ada",
+                  "modelVersion": "002",
+                  "type": "text"
+                }
+              },
+            "properties": [
+                {
+                    "dataType": ["text"],
+                    "description": "The content of the paragraph",
+                    "moduleConfig": {
+                        "text2vec-openai": {
+                          "skip": False,
+                          "vectorizePropertyName": False
+                        }
+                      },
+                    "name": "content",
+                },
+            ],
+        },
+    ]
+}
+client.schema.create(schema)
+```
+```
+vectorstore = Weaviate(client, "Paragraph", "content")
+```
+```
+query = "What did the president say about Ketanji Brown Jackson"
+docs = vectorstore.similarity\_search(query)
+```
+```
+print(docs[0].page\_content)
+```

@@ -1,0 +1,153 @@
+ Chat Prompt Template
+ [#](#chat-prompt-template "Permalink to this headline")
+===============================================================================
+[Chat Models](../models/chat.html)
+ takes a list of chat messages as input - this list commonly referred to as a prompt.
+These chat messages differ from raw string (which you would pass into a
+ [LLM](../models/llms.html)
+ model) in that every message is associated with a role.
+ For example, in OpenAI
+ [Chat Completion API](https://platform.openai.com/docs/guides/chat/introduction) 
+ , a chat message can be associated with the AI, human or system role. The model is supposed to follow instruction from system chat message more closely.
+ Therefore, LangChain provides several related prompt templates to make constructing and working with prompts easily. You are encouraged to use these chat related prompt templates instead of
+ `PromptTemplate`
+ when querying chat models to fully exploit the potential of underlying chat model.
+```
+from langchain.prompts import (
+    ChatPromptTemplate,
+    PromptTemplate,
+    SystemMessagePromptTemplate,
+    AIMessagePromptTemplate,
+    HumanMessagePromptTemplate,
+)
+from langchain.schema import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage
+)
+```
+ To create a message template associated with a role, you use
+ `MessagePromptTemplate`
+ .
+ For convenience, there is a
+ `from\_template`
+ method exposed on the template. If you were to use this template, this is what it would look like:
+```
+template="You are a helpful assistant that translates {input\_language} to {output\_language}."
+system\_message\_prompt = SystemMessagePromptTemplate.from\_template(template)
+human\_template="{text}"
+human\_message\_prompt = HumanMessagePromptTemplate.from\_template(human\_template)
+```
+ If you wanted to construct the
+ `MessagePromptTemplate`
+ more directly, you could create a PromptTemplate outside and then pass it in, eg:
+```
+prompt=PromptTemplate(
+    template="You are a helpful assistant that translates {input\_language} to {output\_language}.",
+    input\_variables=["input\_language", "output\_language"],
+)
+system\_message\_prompt\_2 = SystemMessagePromptTemplate(prompt=prompt)
+assert system\_message\_prompt == system\_message\_prompt\_2
+```
+ After that, you can build a
+ `ChatPromptTemplate`
+ from one or more
+ `MessagePromptTemplates`
+ . You can use
+ `ChatPromptTemplate`
+ ’s
+ `format\_prompt`
+ – this returns a
+ `PromptValue`
+ , which you can convert to a string or Message object, depending on whether you want to use the formatted value as input to an llm or chat model.
+```
+chat\_prompt = ChatPromptTemplate.from\_messages([system\_message\_prompt, human\_message\_prompt])
+# get a chat completion from the formatted messages
+chat\_prompt.format\_prompt(input\_language="English", output\_language="French", text="I love programming.").to\_messages()
+```
+```
+[SystemMessage(content='You are a helpful assistant that translates English to French.', additional_kwargs={}),
+ HumanMessage(content='I love programming.', additional_kwargs={})]
+```
+ Format output
+ [#](#format-output "Permalink to this headline")
+-----------------------------------------------------------------
+ The output of the format method is available as string, list of messages and
+ `ChatPromptValue`
+ As string:
+```
+output = chat\_prompt.format(input\_language="English", output\_language="French", text="I love programming.")
+output
+```
+```
+'System: You are a helpful assistant that translates English to French.\nHuman: I love programming.'
+```
+```
+# or alternatively 
+output\_2 = chat\_prompt.format\_prompt(input\_language="English", output\_language="French", text="I love programming.").to\_string()
+assert output == output\_2
+```
+ As
+ `ChatPromptValue`
+```
+chat\_prompt.format\_prompt(input\_language="English", output\_language="French", text="I love programming.")
+```
+```
+ChatPromptValue(messages=[SystemMessage(content='You are a helpful assistant that translates English to French.', additional_kwargs={}), HumanMessage(content='I love programming.', additional_kwargs={})])
+```
+ As list of Message objects
+```
+chat\_prompt.format\_prompt(input\_language="English", output\_language="French", text="I love programming.").to\_messages()
+```
+```
+[SystemMessage(content='You are a helpful assistant that translates English to French.', additional_kwargs={}),
+ HumanMessage(content='I love programming.', additional_kwargs={})]
+```
+ Different types of
+ `MessagePromptTemplate`
+[#](#different-types-of-messageprompttemplate "Permalink to this headline")
+-------------------------------------------------------------------------------------------------------------------------
+ LangChain provides different types of
+ `MessagePromptTemplate`
+ . The most commonly used are
+ `AIMessagePromptTemplate`
+ ,
+ `SystemMessagePromptTemplate`
+ and
+ `HumanMessagePromptTemplate`
+ , which create an AI message, system message and human message respectively.
+ However, in cases where the chat model supports taking chat message with arbitrary role, you can use
+ `ChatMessagePromptTemplate`
+ , which allows user to specify the role name.
+```
+from langchain.prompts import ChatMessagePromptTemplate
+prompt = "May the {subject} be with you"
+chat\_message\_prompt = ChatMessagePromptTemplate.from\_template(role="Jedi", template=prompt)
+chat\_message\_prompt.format(subject="force")
+```
+```
+ChatMessage(content='May the force be with you', additional_kwargs={}, role='Jedi')
+```
+ LangChain also provides
+ `MessagesPlaceholder`
+ , which gives you full control of what messages to be rendered during formatting. This can be useful when you are uncertain of what role you should be using for your message prompt templates or when you wish to insert a list of messages during formatting.
+```
+from langchain.prompts import MessagesPlaceholder
+human\_prompt = "Summarize our conversation so far in {word\_count} words."
+human\_message\_template = HumanMessagePromptTemplate.from\_template(human\_prompt)
+chat\_prompt = ChatPromptTemplate.from\_messages([MessagesPlaceholder(variable\_name="conversation"), human\_message\_template])
+```
+```
+human\_message = HumanMessage(content="What is the best way to learn programming?")
+ai\_message = AIMessage(content="""\
+1. Choose a programming language: Decide on a programming language that you want to learn. 
+2. Start with the basics: Familiarize yourself with the basic programming concepts such as variables, data types and control structures.
+3. Practice, practice, practice: The best way to learn programming is through hands-on experience\
+""")
+chat\_prompt.format\_prompt(conversation=[human\_message, ai\_message], word\_count="10").to\_messages()
+```
+```
+[HumanMessage(content='What is the best way to learn programming?', additional_kwargs={}),
+ AIMessage(content='1. Choose a programming language: Decide on a programming language that you want to learn. \n\n2. Start with the basics: Familiarize yourself with the basic programming concepts such as variables, data types and control structures.\n\n3. Practice, practice, practice: The best way to learn programming is through hands-on experience', additional_kwargs={}),
+ HumanMessage(content='Summarize our conversation so far in 10 words.', additional_kwargs={})]
+```
