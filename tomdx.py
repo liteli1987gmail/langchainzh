@@ -6,8 +6,8 @@ import json
 import requests
 
 # 遍历的文件夹路径
-orignType = ".md"
-folder_path = "./pages/modules/memory/examples"
+orignType = ".md" 
+folder_path = "./pages/modules/agents/tools/tool_input_validation"
 
 # 接口请求地址
 api_url = "https://api.openai.com/v1/chat/completions"
@@ -45,11 +45,11 @@ async def get_responses(content):
 
 
 # 这个模板为getOpenAIapi函数
-async def getOpenAIapi(encontent):
+def getOpenAIapi(encontent):
     url = 'https://api.openai.com/v1/chat/completions'
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer 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" 
+        "Authorization": "Bearer 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" 
     }
     p = """
     请将以下markdown格式的内容，翻译为中文，代码块不用翻译，请保持markdown格式输出。需要翻译的内容是：
@@ -99,22 +99,30 @@ async def process_file(file_path):
     if len(content) > 1000:
         # 将内容切割成块
         chunks = [content[i:i+1000] for i in range(0, len(content), 1000)]
+        return
     else:
         chunks = [content]
+
+    chunk = chunks[0]
     print(chunks)
+
+    prefix = "请将以下markdown格式的内容，翻译为中文，代码块不用翻译，请保持markdown格式输出。需要翻译的内容是："
+    results = getOpenAIapi(prefix + chunk)
+    result = "".join(results)
+
     # 创建Session
-    async with aiohttp.ClientSession() as session:
-        # 异步发送接口请求并处理结果
-        tasks = []
-        prefix = "请将以下markdown格式的内容，翻译为中文，代码块不用翻译，请保持markdown格式输出。需要翻译的内容是："
-        for chunk in chunks:
-            # data = {"content": prefix + chunk }
-            await asyncio.sleep(10)
-            task = asyncio.create_task(getOpenAIapi(prefix + chunk))
-            tasks.append(task)
-        results = await asyncio.gather(*tasks)
-        print(results)
-        result = "".join(results)
+    # async with aiohttp.ClientSession() as session:
+    #     # 异步发送接口请求并处理结果
+    #     # tasks = []
+    #     prefix = "请将以下markdown格式的内容，翻译为中文，代码块不用翻译，请保持markdown格式输出。需要翻译的内容是："
+    #     for chunk in chunks:
+    #         # data = {"content": prefix + chunk }
+    #         await asyncio.sleep(10)
+    #         # task = asyncio.create_task(getOpenAIapi(prefix + chunk))
+    #         # tasks.append(task)
+    #     results = await getOpenAIapi(prefix + chunk)
+    #     print(results)
+    #     result = "".join(results)
 
     # 构造新文件名
     new_file_path = file_path.replace(orignType , ".mdx")
@@ -125,12 +133,15 @@ async def process_file(file_path):
 # 遍历文件夹
 async def process_folder():
     print('遍历文件夹')
-    for root, dirs, files in os.walk(folder_path):
-        for file in files:
-            # 判断文件是否为md类型
-            if file.endswith(".mdx"):
-                file_path = os.path.join(root, file)
-                await process_file(file_path)
+    file_path = folder_path + orignType
+    print('遍历文件夹')
+    await process_file(file_path)
+    # for root, dirs, files in os.walk(folder_path):
+    #     for file in files:
+    #         # 判断文件是否为md类型
+    #         if file.endswith(".md"):
+    #             file_path = os.path.join(root, file)
+    #             await process_file(file_path)
 
 # 运行异步任务
 async def main():

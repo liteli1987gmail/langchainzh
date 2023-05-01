@@ -1,51 +1,31 @@
 
 
 
- Text Splitters
- [#](#text-splitters "Permalink to this headline")
+文字分割器
 ===================================================================
-
-
-
-
- Note
- 
-
-
 
 [Conceptual Guide](https://docs.langchain.com/docs/components/indexing/text-splitter) 
 
 
 
 
+当您想要处理较长的文本时，有必要将该文本分成若干小块。尽管这听起来很简单，但这里存在许多潜在的复杂性。理想情况下，您希望将语义相关的文本片段放在一起。“语义相关”的含义取决于文本的类型。这本笔记本展示了几种实现这一目标的方法。
 
- When you want to deal with long pieces of text, it is necessary to split up that text into chunks.
-As simple as this sounds, there is a lot of potential complexity here. Ideally, you want to keep the semantically related pieces of text together. What “semantically related” means could depend on the type of text.
-This notebook showcases several ways to do that.
- 
+在高级别上，文本分割器的工作原理如下:
 
+把文本分成小块，语义上有意义的块(通常是句子)。
 
+开始将这些小块组合成一个更大的块，直到达到一定的大小(通过某个函数衡量)。
 
- At a high level, text splitters work as following:
- 
+一旦你达到了这个大小，让这个块成为它自己的文本块，然后开始创建一个有一些重叠的新文本块(保持块之间的上下文)。
 
+这意味着有两个不同的轴，可以沿着它们自定义文本分割器:
 
-1. Split the text up into small, semantically meaningful chunks (often sentences).
-2. Start combining these small chunks into a larger chunk until you reach a certain size (as measured by some function).
-3. Once you reach that size, make that chunk its own piece of text and then start creating a new chunk of text with some overlap (to keep context between chunks).
+1. 文本是如何分割的
 
+2. 块大小是如何度量的
 
-
- That means there two different axes along which you can customize your text splitter:
- 
-
-
-1. How the text is split
-2. How the chunk size is measured
-
-
-
- For an introduction to the default text splitter and generic functionality see:
+有关默认文本分割器和通用功能的介绍，请参见:
  
 
 
@@ -55,8 +35,7 @@ This notebook showcases several ways to do that.
 
 
 
- We also have documentation for all the types of text splitters that are supported.
-Please see below for that list.
+我们还提供了支持的所有类型的文本分割器的文档。请参阅下面的列表。
  
 
 

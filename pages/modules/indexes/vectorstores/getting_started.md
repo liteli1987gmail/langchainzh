@@ -1,22 +1,16 @@
 
 
 
- Getting Started
- [#](#getting-started "Permalink to this headline")
+开始
 =====================================================================
 
 
+这个笔记本展示了与 VectorStores 相关的基本功能。使用向量存储的一个关键部分是创建要放入其中的向量，这通常是通过嵌入创建的。因此，建议您在深入研究之前先熟悉一下嵌入式笔记本。
 
- This notebook showcases basic functionality related to VectorStores. A key part of working with vectorstores is creating the vector to put in them, which is usually created via embeddings. Therefore, it is recommended that you familiarize yourself with the
- 
- embedding notebook
- 
- before diving into this.
+这涵盖了与所有向量存储相关的通用高级功能。
  
 
 
-
- This covers generic high level functionality related to all vector stores.
  
 
 
@@ -129,10 +123,7 @@ And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketan
 
 
 
- You can easily add text to a vectorstore with the
- `add_texts`
- method. It will return a list of document IDs (in case you need to use them downstream).
- 
+可以使用 add _ text 方法轻松地向向量存储添加文本。它将返回一个文档 ID 列表(以防您需要在下游使用它们)。
 
 
 
@@ -205,13 +196,12 @@ Document(page_content='Ankush went to Princeton', lookup_str='', metadata={}, lo
 
 
 
- From Documents
- [#](#from-documents "Permalink to this headline")
+从文件
 -------------------------------------------------------------------
 
 
 
- We can also initialize a vectorstore from documents directly. This is useful when we use the method on the text splitter to get documents directly (handy when the original documents have associated metadata).
+我们还可以直接从文档初始化一个向量存储。当我们使用文本分割器上的方法直接获取文档时，这非常有用(当原始文档具有相关元数据时很方便)。
  
 
 

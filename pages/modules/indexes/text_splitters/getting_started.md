@@ -1,40 +1,23 @@
 
 
 
- Getting Started
- [#](#getting-started "Permalink to this headline")
+开始
 =====================================================================
 
 
+默认推荐的文本分割器是 RecursivePersonterTextSplitter。此文本分割器接受字符列表。它试图根据第一个字符的分割来创建块，但是如果任何块太大，它就会移动到下一个字符，以此类推。默认情况下，它试图分割的字符是[“ n”、“ n”、“”、“”]
 
- The default recommended text splitter is the RecursiveCharacterTextSplitter. This text splitter takes a list of characters. It tries to create chunks based on splitting on the first character, but if any chunks are too large it then moves onto the next character, and so forth. By default the characters it tries to split on are
- `["\n\n",
- 
-
- "\n",
- 
-
- "
- 
-
- ",
- 
-
- ""]`
-
-
-
-
+除了控制可以分割的字符之外，你还可以控制其他一些事情:
  In addition to controlling which characters you can split on, you can also control a few other things:
  
 
 
 * `length_function`
- : how the length of chunks is calculated. Defaults to just counting number of characters, but it’s pretty common to pass a token counter here.
+ : 如何计算块的长度。默认情况下只计算字符数，但是在这里传递令牌计数器是很常见的。
 * `chunk_size`
- : the maximum size of your chunks (as measured by the length function).
+ : 块的最大大小(由长度函数测量)。
 * `chunk_overlap`
- : the maximum overlap between chunks. It can be nice to have some overlap to maintain some continuity between chunks (eg do a sliding window).
+ : 块之间的最大重叠。有一些重叠可以很好地保持块之间的一些连续性(例如做一个滑动窗口)。
 
 
 

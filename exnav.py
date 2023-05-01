@@ -8,7 +8,7 @@ from markdownify import markdownify
 
 # url的网页规律：<article class="bd-article" role="main">
 # modules use_cases reference ecosystem
-modules = 'ecosystem'
+modules = 'modules'
 with open(modules +".txt", "r") as f:
     links = [line.strip() for line in f]
 
@@ -56,7 +56,7 @@ def html_to_mdx(url):
 
 # 测试函数:10每次只执行前面的10个。
 
-for url in links[:100]:
+for url in links:
     file_path = html_to_mdx(url)
     print(f"Markdown 文件已保存为：{file_path}")
 

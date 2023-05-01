@@ -1,8 +1,7 @@
 
 
 
- Vectorstores
- [#](#vectorstores "Permalink to this headline")
+矢量存储器
 ===============================================================
 
 
@@ -19,13 +18,9 @@
 
 
 
- Vectorstores are one of the most important components of building indexes.
- 
+向量存储是构建索引的重要组成部分之一。
 
-
-
- For an introduction to vectorstores and generic functionality see:
- 
+有关向量存储和通用功能的介绍，请参阅:
 
 
 
@@ -34,9 +29,7 @@
 
 
 
- We also have documentation for all the types of vectorstores that are supported.
-Please see below for that list.
- 
+我们还有所有支持的向量存储类型的文档。请参阅下面的列表。
 
 
 

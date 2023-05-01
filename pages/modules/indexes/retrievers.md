@@ -1,36 +1,17 @@
 
 
 
- Retrievers
- [#](#retrievers "Permalink to this headline")
+ 捕获Retrievers
 ===========================================================
-
-
-
-
- Note
- 
-
 
 
 [Conceptual Guide](https://docs.langchain.com/docs/components/indexing/retriever) 
 
 
 
+检索器接口是一个通用接口，可以很容易地将文档与语言模型组合在一起。这个接口公开了一个 get _ relevant _ document 方法，该方法接受一个查询(字符串)并返回一个文档列表。
 
-
- The retriever interface is a generic interface that makes it easy to combine documents with
-language models. This interface exposes a
- 
- get_relevant_documents
- 
- method which takes in a query
-(a string) and returns a list of documents.
- 
-
-
-
- Please see below for a list of all the retrievers supported.
+请参阅下面所支持的所有检索器的列表。
  
 
 

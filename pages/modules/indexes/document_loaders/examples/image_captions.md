@@ -123,8 +123,8 @@ Image.open(requests.get(list_image_urls[0], stream=True).raw).convert('RGB')
 
 
 
-
-
+<!-- 
+![../../../../_images/febfb5a6c92c0e2cb9d8c68e66f47fa0a5f1442b578d454528715de087c00b83.png](../../../../_images/febfb5a6c92c0e2cb9d8c68e66f47fa0a5f1442b578d454528715de087c00b83.png) -->
 
 
 
