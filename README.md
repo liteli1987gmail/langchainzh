@@ -1,23 +1,38 @@
-# Nextra Docs Template 
+# Langchain中文网
 
-This is a template for creating documentation with [Nextra](https://nextra.site).
+Langchain中文网是Langchain的中文社区。
 
-[**Live Demo →**](https://nextra-docs-template.vercel.app)
+Langchain 是 Harrison Chase 的开源项目。
+[Langchain](https://github.com/hwchase17/langchain) 。
 
-[![](.github/screenshot.png)](https://nextra-docs-template.vercel.app)
+本项目将英文翻译为中文。版权所有归 Harrison Chase 所有。
 
-## Quick Start
+Langchain中文网的目的是帮助中国人阅读 Langchain 的文档。
 
-Click the button to clone this repository and deploy it on Vercel:
+如果遇到翻译错误，请指出错误，欢迎热爱社区的人一起来翻译。
 
-[![](https://vercel.com/button)](https://vercel.com/new/clone?s=https%3A%2F%2Fgithub.com%2Fshuding%2Fnextra-docs-template&showOptionalTeamCreation=false)
+联系人：特美丽，微信号是 abc18601613801。
 
-## Local Development
 
-First, run `pnpm i` to install the dependencies.
+更多关于如何使用Langchain的信息，请参阅[官方文档](https://python.langchain.com)。
 
-Then, run `pnpm dev` to start the development server and visit localhost:3000.
+## 贡献指南
 
-## License
+如果你想为Langchain中文网做出贡献，你可以在GitHub上fork我们的仓库并创建一个分支来提交你的更改。
 
-This project is licensed under the MIT License.
+我们欢迎任何形式的贡献，包括但不限于：
+
+- 纠正拼写、语法或文档错误
+- 提供新的代码或功能
+- 提交测试或改进测试覆盖
+- 维护或修复已有的代码
+
+对于重大的更改或添加，请先在[issues](https://github.com/hwchase17/langchain/issues)中提出一个议题以获取反馈和讨论。我们的团队将定期审查这些议题，并根据情况进行回应。
+
+## 版权声明
+
+Langchain 是 Harrison Chase 的开源项目，中文网仅做了翻译工作。一切版权归属Harrison Chase。
+
+
+
+此外，我们欢迎任何形式的贡献，包括但不限于代码、文档、测试、警告、错误修复等等。
