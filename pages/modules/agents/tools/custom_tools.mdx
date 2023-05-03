@@ -1,0 +1,319 @@
+定义自定义工具
+=================================================================================
+
+
+
+构建自己的代理时，您需要为其提供一组工具列表。除了实际调用的函数外，工具还由几个组件组成：
+
+
+
+*名称（str），是必需的，并且必须在提供给代理的一组工具中是唯一的
+*描述（str），是可选的，但建议使用，因为代理用于确定工具使用
+* return_direct（bool），默认为False
+* args_schema（Pydantic BaseModel），是可选的，但建议使用，可以用于提供更多信息或验证预期参数。
+
+
+
+当选择工具时应调用的函数应返回单个字符串。
+
+
+
+有两种定义工具的方法，我们将在下面的示例中涵盖这两种方法。an create completely new tools from scratch using either the Tool dataclass or by subclassing the BaseTool class. In this example, we are using the Tool dataclass to create a new tool called "Search". The tool uses the SerpAPIWrapper to answer questions about current events. We also initialize the LLM to use for the agent and create a new tool called "llm_math_chain" that uses the LLM for math calculations. The "verbose" parameter is set to True to provide additional output during the calculations.可以定义一个 args_schema 来提供有关输入的更多信息
+
+从 pydantic 导入 BaseModel，Field
+
+class CalculatorInput(BaseModel):
+    question: str = Field()
+        
+
+tools.append(
+    Tool(
+        name="Calculator",
+        func=llm_math_chain.run,
+        description="在需要回答数学问题时非常有用",
+        args_schema=CalculatorInput
+    )
+)
+
+```
+
+
+
+
+
+
+
+
+
+
+```
+# 构建代理。 这里我们将使用默认代理类型。
+# 有关选项的完整列表，请参见文档。
+agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
+
+```
+
+
+
+
+
+
+
+
+
+
+```
+agent.run("谁是莱昂纳多·迪卡普里奥的女朋友？她当前的年龄上升到0.43次方是多少？")
+
+```
+
+
+
+
+
+
+
+
+```
+> 进入新的 AgentExecutor 链...
+我需要找出莱昂纳多·迪卡普里奥的女友名字和她的年龄
+动作：搜索
+动作输入：“Leo DiCaprio girlfriend”
+迪卡普里奥在2022年夏天和女友卡米拉·莫罗内（Camila Morrone）分手后，两人的恋情持续了一年。Subclassing the BaseTool class
+
+从BaseTool类派生子类
+
+```python
+from typing import Type
+
+class CustomSearchTool(BaseTool):
+    name = "搜索"
+    description = "当你需要回答有关当前事件的问题时有用"
+
+    def _run(self, query: str) -> str:
+        """使用工具。"""
+        return search.run(query)
+    
+    async def _arun(self, query: str) -> str:
+        """异步使用工具。"""
+        raise NotImplementedError("BingSearchRun不支持异步")
+    
+class CustomCalculatorTool(BaseTool):
+    name = "计算器"
+    description = "用于进行数学计算"
+
+    def _run(self, query: str) -> str:
+        """使用工具。"""
+        return calculator.run(query)
+    
+    async def _arun(self, query: str) -> str:
+        """异步使用工具。"""
+        raise NotImplementedError("CustomCalculatorTool不支持异步")
+```
+
+以上是派生自BaseTool类的两个子类CustomSearchTool和CustomCalculatorTool，分别实现了搜索和计算器的功能。其中，CustomSearchTool用于回答关于当前事件的问题，而CustomCalculatorTool用于进行数学计算。# 代码块不用翻译，请保持markdown格式输出
+
+## CustomCalculatorTool
+
+这是一个名为`CustomCalculatorTool`的工具，用于回答关于数学的问题。它使用`CalculatorInput`作为参数模式。
+
+在`_run`方法中，该工具会运行`llm_math_chain.run(query)`并返回结果。
+
+在`_arun`方法中，该工具会抛出一个`NotImplementedError`，表示不支持异步操作。
+
+## 初始化工具和代理
+
+使用`CustomSearchTool()`和`CustomCalculatorTool()`初始化一个包含两个工具的工具链(`tools`)。
+
+使用`initialize_agent()`方法初始化一个名为`agent`的代理，使用`ZERO_SHOT_REACT_DESCRIPTION`作为代理类型，并打开冗长模式。
+
+## 运行代理
+
+使用`agent.run()`方法运行代理，并传入一个包含两个问题的字符串。代理将使用`CustomSearchTool()`和`CustomCalculatorTool()`工具链来回答这些问题，并打印出回答。请将以下markdown格式的内容，翻译为中文，代码块不用翻译，请保持markdown格式输出。需要翻译的内容是：Camila Morrone的当前年龄
+
+Action: 计算器
+Action Input: 25^(0.43)
+
+> 进入新的LLMMathChain链...
+25^(0.43)```text
+25\*\*(0.43)
+```
+...numexpr.evaluate("25\*\*(0.43)")...
+
+答案：3.991298452658078
+> 链结束。
+答案：3.991298452658078 我现在知道了最终答案
+最终答案：3.991298452658078
+
+> 链结束。
+
+```
+
+
+
+
+
+
+```
+'3.991298452658078'
+
+```
+
+
+
+
+
+
+
+
+
+使用 `tool` 装饰器
+
+为了更容易地定义自定义工具，提供了 `@tool` 装饰器。这个装饰器可以用于快速创建一个 `Tool`，从一个简单的函数中。装饰器默认使用函数名作为工具名，但可以通过传递一个字符串作为第一个参数来覆盖。此外，装饰器将使用函数的文档字符串作为工具的描述。
+
+定义了一个名为search_api的函数，该函数接受一个字符串类型的参数query，并返回一个字符串类型的结果`Results for query {query}`
+
+使用@tool装饰器来定义一个名为search的工具，这个工具会直接返回结果。该工具调用了search_api函数，接受一个字符串类型的参数query，返回一个字符串类型的结果"Results"。修改现有工具
+[#]（＃modify-existing-tools“此标题的永久链接”）
+-------------------------------------------------- -----现在，我们展示如何加载现有的工具并对其进行修改。在下面的示例中，我们做一些非常简单的事情，将搜索工具的名称更改为“Google Search”。
+
+```
+from langchain.agents import load_tools
+```
+
+```
+tools = load_tools(["serpapi", "llm-math"], llm=llm)
+```
+
+```
+tools[0].name = "Google Search"
+```
+
+```
+agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
+```
+
+```
+agent.run("Who is Leo DiCaprio's girlfriend? What is her current age raised to the 0.43 power?")
+```
+
+```
+> 进入新的AgentExecutor链...
+我需要找出Leo DiCaprio女友的名字和她的年龄。
+动作：Google Search
+动作输入："Leo DiCaprio girlfriend"I draw the lime at going to get a Mohawk, though." DiCaprio broke up with girlfriend Camila Morrone, 25, in the summer of 2022, after dating for four years. He's since been linked to another famous s
+```超模特——吉吉·哈迪德。现在我需要找出卡米拉·莫罗内的当前年龄。
+操作：计算器
+操作输入：25 ^ 0.43
+答案：3.991298452658078
+我现在知道了最终答案。
+最终答案：卡米拉·莫罗内的当前年龄提高到0.43次方约为3.99。
+
+> 完成链。
+
+```earch if the question is about Music, like '谁是昨天的歌手？'或'2022年最受欢迎的歌曲是什么？'"
+    )
+]
+# Initialize the agent
+agent = initialize_agent(
+    agent_type=AgentType.OPENAI,
+    api_key="your_api_key_here",
+    llm=LLMMathChain(),
+    tools=tools
+)
+
+# Use the agent to answer a question
+response = agent.answer("What is the capital of France?")
+
+# Print the response
+print(response)
+```
+
+这可以通过添加类似于“使用这个音乐搜索引擎而不是普通搜索，如果问题是关于音乐的，比如'谁是昨天的歌手？'或'2022年最受欢迎的歌曲是什么？'”的语句来实现。下面是一个例子。
+
+```
+# 导入通用所需的工具
+from langchain.agents import initialize_agent, Tool
+from langchain.agents import AgentType
+from langchain.llms import OpenAI
+from langchain import LLMMathChain, SerpAPIWrapper
+search = SerpAPIWrapper()
+tools = [
+    Tool(
+        name = "搜索",
+        func=search.run,
+        description="当您需要回答当前事件的问题时很有用"
+    ),
+    Tool(
+        name="音乐搜索",
+        func=lambda x: "'All I Want For Christmas Is You' by Mariah Carey.", #Mock Function
+        description="一个音乐搜索引擎。如果问题是关于音乐的，请使用这个搜索引擎而不是普通搜索，比如'谁是昨天的歌手？'或'2022年最受欢迎的歌曲是什么？'"
+    )
+]
+# 初始化代理
+agent = initialize_agent(
+    agent_type=AgentType.OPENAI,
+    api_key="your_api_key_here",
+    llm=LLMMathChain(),
+    tools=tools
+)
+
+# 使用代理回答问题
+response = agent.answer("法国的首都是哪里？")
+
+# 打印回答
+print(response)
+```irectly instead of going through the agent's decision making process. This can be done by using the `tools.run` method. Here is an example:
+
+```python
+from deepset_ai import tools
+
+answer = tools.run('text-classification', model_name_or_path='bert-base-uncased', data=['What is the capital of France?'])
+print(answer)
+```
+
+In this example, we are using the `text-classification` tool to classify the given text using a BERT model. The output will be a list of dictionaries, where each dictionary represents a possible label and its associated score. The `print` statement will output this list.直接返回结果给用户，如果被调用的话，可以通过设置LangChain中的工具的return_direct标志为True来轻松实现。
+
+
+```
+llm_math_chain = LLMMathChain(llm=llm)
+tools = [
+    Tool(
+        name="计算器",
+        func=llm_math_chain.run,
+        description="在需要回答数学问题时很有用",
+        return_direct=True
+    )
+]
+
+```
+
+
+```
+llm = OpenAI(temperature=0)
+agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
+
+```
+
+
+```
+agent.run("2\*\*.12是多少")
+
+```
+
+
+```
+> 进入新的AgentExecutor链...
+ 我需要计算一下
+操作：计算器
+操作输入：2\*\*.12答案：1.086734862526058
+
+> 链结束。
+
+```
+
+
+```
+'答案：1.086734862526058'
+
+```
