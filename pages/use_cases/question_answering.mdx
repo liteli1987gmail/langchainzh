@@ -1,0 +1,118 @@
+文档问答
+============================================
+
+> 
+> 
+> 
+> [概念指南](https://docs.langchain.com/docs/use-cases/qa-docs) 
+> 
+> 
+> 
+> 
+> 
+
+
+
+在此上下文中，问答指的是在文档数据上进行的问答。
+对于其他类型数据的问答，请参考其他来源的文档，如
+[SQL 数据库问答](tabular)
+或
+[与 API 交互](apis)。
+ 
+
+对于许多文档的问答，您几乎总是希望在数据上创建索引。
+这可以用于智能地访问给定问题的最相关文档，从而避免将所有文档传递给 LLM（节省时间和金钱）。
+ 
+
+有关更详细的介绍，请参见
+[此笔记本](../modules/indexes/getting_started)，
+但对于超级快速启动，步骤涉及：**加载文档**
+
+```
+from langchain.document_loaders import TextLoader
+loader = TextLoader('../state_of_the_union.txt')
+```
+
+在这里查看更多有关如何开始文档加载的信息。
+
+**创建索引**
+
+```
+from langchain.indexes import VectorstoreIndexCreator
+index = VectorstoreIndexCreator().from_loaders([loader])
+```
+
+目前最好、最流行的索引是VectorStore索引。
+
+**查询您的索引**
+
+```
+query = "What did the president say about Ketanji Brown Jackson"
+index.query(query)
+```
+
+或者，使用`query_with_sources`也可以返回所涉及的来源。
+
+```
+query = "What did the president say about Ketanji Brown Jackson"
+index.query_with_sources(query)
+```
+
+同样，这些高级接口掩盖了许多在幕后发生的事情，[请参见这里](/modules/indexes/getting_started)，以获取有关如何开始的更多信息，降低纬度理解它。
+
+文档问答
+------------------------------------------
+
+文档问答涉及获取多个文档，然后对它们提出问题。LLM响应将根据文档内容包含您问题的答案。
+
+使用问答链的推荐方法是：
+
+```
+from langchain.chains.question_answering import load_qa_chain
+chain = load_qa_chain(llm, chain_type="stuff")
+chain.run(input_documents=docs, question=query)
+
+```
+
+以下资源可用：
+
+* [问答笔记本](../modules/chains/index_examples/question_answering)：演示如何完成此任务的笔记本。
+* [VectorDB问答笔记本](../modules/chains/index_examples/vector_db_qa)：演示如何对VectorDB执行问答的笔记本。一个向量数据库。当你有大量文档时，这通常很有用，你不想将它们全部传递给LLM，而是想先对嵌入进行一些语义搜索。
+
+
+添加来源
+-------------------------------------------------------------------------
+
+还有一种变体，除了回答之外，语言模型还会引用它的来源（比如使用了哪些传递给它的文档）。
+
+使用带有来源的问答链进行起步的推荐方法是：
+
+```
+from langchain.chains.qa_with_sources import load_qa_with_sources_chain
+chain = load_qa_with_sources_chain(llm, chain_type="stuff")
+chain({"input_documents": docs, "question": query}, return_only_outputs=True)
+
+```
+以下资源可用：
+
+* [带来源的问答笔记本](../modules/chains/index_examples/qa_with_sources)：一个演示如何使用带有来源的问答链的笔记本。成此任务的方法。
+
+* [VectorDB QA With Sources Notebook](../modules/chains/index_examples/vector_db_qa_with_sources)：一份笔记本，介绍如何在向量数据库上使用源进行问答。当您有大量文档时，您可能不想将它们全部传递给LLM，而是想先对嵌入进行一些语义搜索，这时候这个方法通常非常有用。
+
+其他相关资源
+[#](#additional-related-resources "此标题的永久链接")
+-----------------------------------------------------------------------------------------------
+
+其他相关资源包括：
+
+* 用于处理文档的实用工具：指南介绍了几个实用的工具，对于此任务非常有帮助，包括文本分割器（用于分割长文档）和嵌入和向量存储（对上述向量数据库示例非常有用）。
+
+* CombineDocuments Chains：介绍了特定类型的链的概念概述，您可以使用这些链完成此任务。端到端示例
+[#](#end-to-end-examples "到这个标题的链接")
+
+要查看以端到端方式完成的示例
+----------------------------------------------------------
+
+请参阅以下资源：
+
+* [使用Sources Notebook对群聊进行语义搜索](question_answering/semantic-search-over-chat)：一个笔记本，可在群聊对话中进行语义搜索。
