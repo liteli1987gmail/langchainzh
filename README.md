@@ -1,9 +1,10 @@
 # Langchain中文网
 
-[Langchain中文网](www.langchain.asia)是Langchain的中文社区。
 
-Langchain 是 Harrison Chase 的开源项目。
-[Langchain](https://github.com/hwchase17/langchain) 。
+
+Langchain中文网是Langchain的中文社区。
+
+Langchain 是 Harrison Chase 的开源项目[Langchain](https://github.com/hwchase17/langchain) 。
 
 本项目将英文翻译为中文。版权所有归 Harrison Chase 所有。
 
