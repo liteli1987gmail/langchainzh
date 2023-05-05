@@ -3,7 +3,7 @@
 自托管嵌入[#](#self-hosted-embeddings "此标题的永久链接")
 ============================================
 
-让我们加载SelfHostedEmbeddings、SelfHostedHuggingFaceEmbeddings和SelfHostedHuggingFaceInstructEmbeddings类。
+让我们加载`SelfHostedEmbeddings`、`SelfHostedHuggingFaceEmbeddings`和`SelfHostedHuggingFaceInstructEmbeddings`类。
 
 ```
 from langchain.embeddings import (
