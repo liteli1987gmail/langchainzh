@@ -1,6 +1,5 @@
 
 
-外星人吃了。。。
 
 [Writer](https://writer.com/) is a platform to generate different language content.
 

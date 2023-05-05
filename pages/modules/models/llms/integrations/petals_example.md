@@ -1,7 +1,4 @@
 
-
-外星人吃了。。。
-
 `Petals`以BitTorrent方式在家中运行超过100B的语言模型。
 
 本笔记本介绍如何使用Langchain和[Petals](https://github.com/bigscience-workshop/petals)。
