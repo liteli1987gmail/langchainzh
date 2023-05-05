@@ -3,9 +3,7 @@
 Cohere[#](#cohere "Permalink to this headline")
 ===============================================
 
-[Cohere](https://cohere.ai/about) is a Canadian startup that provides natural language processing models that help companies improve human-machine interactions.
-
-This example goes over how to use LangChain to interact with `Cohere` [models](https://docs.cohere.ai/docs/generation-card).
+[Cohere](https://cohere.ai/about)是一家加拿大初创公司，提供自然语言处理模型，帮助企业改善人机交互。此示例介绍如何使用LangChain与`Cohere` [models](https://docs.cohere.ai/docs/generation-card) 进行交互。
 
 ```
 # Install the package

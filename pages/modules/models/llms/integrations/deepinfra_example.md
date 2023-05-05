@@ -3,9 +3,9 @@
 DeepInfra[#](#deepinfra "Permalink to this headline")
 =====================================================
 
-`DeepInfra` provides [several LLMs](https://deepinfra.com/models).
+`DeepInfra` 提供了多种LLM [several LLMs](https://deepinfra.com/models).
 
-This notebook goes over how to use Langchain with [DeepInfra](https://deepinfra.com).
+本文介绍如何使用Langchain与[DeepInfra](https://deepinfra.com)进行交互。 
 
 Imports[#](#imports "Permalink to this headline")
 -------------------------------------------------
@@ -17,13 +17,14 @@ from langchain import PromptTemplate, LLMChain
 
 ```
 
-Set the Environment API Key[#](#set-the-environment-api-key "Permalink to this headline")
+设置环境变量的API Key[#](#set-the-environment-api-key "Permalink to this headline")
 -----------------------------------------------------------------------------------------
 
-Make sure to get your API key from DeepInfra. You have to [Login](https://deepinfra.com/login?from=%2Fdash) and get a new token.
+请确保从DeepInfra获取API Key。您必须[登录](https://deepinfra.com/login?from=%2Fdash)并获取新令牌。
 
-You are given a 1 hour free of serverless GPU compute to test different models. (see [here](https://github.com/deepinfra/deepctl#deepctl))
-You can print your token with `deepctl auth token`
+您将获得1个小时的免费服务器级GPU计算时间，以测试不同的模型（请参见[此处](https://github.com/deepinfra/deepctl#deepctl)）。
+
+您可以使用 `deepctl auth token` 命令打印您的令牌。
 
 ```
 # get a new token: https://deepinfra.com/login?from=%2Fdash

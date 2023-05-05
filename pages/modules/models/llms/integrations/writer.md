@@ -1,11 +1,11 @@
 
 
 
-[Writer](https://writer.com/) is a platform to generate different language content.
+[Writer](https://writer.com/) 是一个生成不同语言内容的平台。
 
-This example goes over how to use LangChain to interact with `Writer` [models](https://dev.writer.com/docs/models).
+本示例将介绍如何使用LangChain与`Writer` [models](https://dev.writer.com/docs/models)进行交互。
 
-You have to get the WRITER_API_KEY [here](https://dev.writer.com/docs).
+您需要从[此处](https://dev.writer.com/docs)获取`WRITER_API_KEY`。
 
 ```
 from getpass import getpass

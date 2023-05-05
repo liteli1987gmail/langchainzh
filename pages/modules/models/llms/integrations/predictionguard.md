@@ -1,7 +1,8 @@
 
 
 
-How to use PredictionGuard wrapper
+如何使用 PredictionGuard wrapper
+=================================================
 
 ```
 ! pip install predictionguard langchain
@@ -14,7 +15,7 @@ from langchain.llms import PredictionGuard
 
 ```
 
-Basic LLM usage[#](#basic-llm-usage "Permalink to this headline")
+基本的LLM用法[#](#basic-llm-usage "Permalink to this headline")
 -----------------------------------------------------------------
 
 ```
@@ -27,7 +28,7 @@ pgllm("Tell me a joke")
 
 ```
 
-Chaining[#](#chaining "Permalink to this headline")
+链[#](#chaining "Permalink to this headline")
 ---------------------------------------------------
 
 ```

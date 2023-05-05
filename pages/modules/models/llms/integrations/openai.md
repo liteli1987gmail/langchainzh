@@ -1,9 +1,9 @@
 
 
 
-[OpenAI](https://platform.openai.com/docs/introduction) offers a spectrum of models with different levels of power suitable for different tasks.
+[OpenAI](https://platform.openai.com/docs/introduction)提供了不同级别的模型，适用于不同的任务。
 
-This example goes over how to use LangChain to interact with `OpenAI` [models](https://platform.openai.com/docs/models)
+此示例介绍了如何使用LangChain与`OpenAI` [models](https://platform.openai.com/docs/models) 进行交互。
 
 ```
 # get a token: https://platform.openai.com/account/api-keys
