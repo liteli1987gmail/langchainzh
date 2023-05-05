@@ -8,40 +8,21 @@
 
 
 
- Official Releases
- [#](#official-releases "Permalink to this headline")
--------------------------------------------------------------------------
+官方发布版本
+-----------------------------
 
-
-
- LangChain is available on PyPi, so to it is easily installable with:
- 
-
-
-
-
+LangChain可在PyPi上获取，因此可以使用以下命令轻松安装：
 
 ```
 pip install langchain
-
 ```
 
+这将安装LangChain的最小要求。
+LangChain的很多价值在于将其与各种模型提供程序、数据存储等集成。
+默认情况下，并没有安装执行这些操作所需的依赖项。
+但是，还有两种其他安装LangChain的方法，可以带来这些依赖项。
 
-
-
- That will install the bare minimum requirements of LangChain.
-A lot of the value of LangChain comes when integrating it with various model providers, datastores, etc.
-By default, the dependencies needed to do that are NOT installed.
-However, there are two other ways to install LangChain that do bring in those dependencies.
- 
-
-
-
- To install modules needed for the common LLM providers, run:
- 
-
-
-
+要安装用于常见LLM提供程序的模块，请运行：
 
 
 ```

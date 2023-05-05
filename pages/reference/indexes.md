@@ -7,9 +7,8 @@
 
 
 
- Indexes refer to ways to structure documents so that LLMs can best interact with them.
-LangChain has a number of modules that help you load, structure, store, and retrieve documents.
- 
+索引是指为结构化文档提供的方式，以便LLM可以与之最好地交互。
+LangChain有许多模块可帮助您加载、结构化、存储和检索文档。
 
 
 

@@ -1,14 +1,11 @@
 
 
-
- Models
+模型
  [#](#models "Permalink to this headline")
 ===================================================
 
 
-
- LangChain provides interfaces and integrations for a number of different types of models.
- 
+LangChain为许多不同类型的模型提供界面和集成。
 
 
 
