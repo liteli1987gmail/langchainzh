@@ -5,7 +5,7 @@ Aleph Alpha[#](#aleph-alpha "Permalink to this headline")
 
 [The Luminous series](https://docs.aleph-alpha.com/docs/introduction/luminous/) is a family of large language models.
 
-This example goes over how to use LangChain to interact with Aleph Alpha models
+本示例介绍如何使用 LangChain 与 Aleph Alpha 模型进行交互。
 
 ```
 # Install the package

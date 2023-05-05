@@ -1,12 +1,13 @@
 
 
+Runhouse
+==================
 
+[Runhouse](https://github.com/run-house/runhouse) 允许在环境和用户之间进行远程计算和数据处理。请参阅 [Runhouse docs](https://runhouse-docs.readthedocs-hosted.com/en/latest/)。
 
-The [Runhouse](https://github.com/run-house/runhouse) allows remote compute and data across environments and users. See the [Runhouse docs](https://runhouse-docs.readthedocs-hosted.com/en/latest/).
+此示例介绍了如何使用LangChain和 [Runhouse](https://github.com/run-house/runhouse)，与托管在您自己的GPU上，或在AWS，GCP，AWS或Lambda上提供的按需GPU交互的模型。 
 
-This example goes over how to use LangChain and [Runhouse](https://github.com/run-house/runhouse) to interact with models hosted on your own GPU, or on-demand GPUs on AWS, GCP, AWS, or Lambda.
-
-**Note**: Code uses `SelfHosted` name instead of the `Runhouse`.
+**注意**：此代码中使用 `SelfHosted` 而非 `Runhouse` 作为名称。
 
 ```
 !pip install runhouse

@@ -1,14 +1,13 @@
+PromptLayer
+============================================================
 
+`PromptLayer`是第一个允许您跟踪、管理和共享GPT提示工程的平台。`PromptLayer`充当您的代码和`OpenAI Python`库之间的中间件。
 
+`PromptLayer`记录所有您的`OpenAI API`请求，允许您在`PromptLayer`仪表板中搜索和探索请求历史记录。
 
+此示例演示了如何连接到[PromptLayer]（https://www.promptlayer.com），以开始记录您的OpenAI请求。
 
-`PromptLayer` is the first platform that allows you to track, manage, and share your GPT prompt engineering. `PromptLayer` acts a middleware between your code and `OpenAI’s` python library.
-
-`PromptLayer` records all your `OpenAI API` requests, allowing you to search and explore request history in the `PromptLayer` dashboard.
-
-This example showcases how to connect to [PromptLayer](https://www.promptlayer.com) to start recording your OpenAI requests.
-
-Another example is [here](https://python.langchain.com/en/latest/ecosystem/promptlayer.html).
+另一个示例在[这里]（https://python.langchain.com/en/latest/ecosystem/promptlayer.html） 。
 
 Install PromptLayer[#](#install-promptlayer "Permalink to this headline")
 -------------------------------------------------------------------------

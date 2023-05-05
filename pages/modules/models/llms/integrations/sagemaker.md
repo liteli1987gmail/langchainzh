@@ -1,27 +1,25 @@
+SageMaker
+====================
 
 
+[Amazon SageMaker](https://aws.amazon.com/sagemaker/) 是一个系统，可以使用完全托管的基础设施、工具和工作流程构建、训练和部署任何用例的机器学习（ML）模型。
 
-[Amazon SageMaker](https://aws.amazon.com/sagemaker/) is a system that can build, train, and deploy machine learning (ML) models for any use case with fully managed infrastructure, tools, and workflows.
-
-This notebooks goes over how to use an LLM hosted on a `SageMaker endpoint`.
+本笔记本将介绍如何使用托管在 `SageMaker endpoint` 上的LLM。
 
 ```
 !pip3 install langchain boto3
 
 ```
 
-Set up[#](#set-up "Permalink to this headline")
+设置[#](#set-up "Permalink to this headline")
 -----------------------------------------------
 
-You have to set up following required parameters of the `SagemakerEndpoint` call:
+您必须设置 `SagemakerEndpoint` 调用的以下必需参数：
 
-* `endpoint_name`: The name of the endpoint from the deployed Sagemaker model.
-Must be unique within an AWS Region.
-* `credentials_profile_name`: The name of the profile in the ~/.aws/credentials or ~/.aws/config files, which
-has either access keys or role information specified.
-If not specified, the default credential profile or, if on an EC2 instance,
-credentials from IMDS will be used.
-See: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html
+* `endpoint_name`：已部署的Sagemaker模型的端点名称。必须在AWS区域内是唯一的。
+* `credentials_profile_name`：位于~/.aws/credentials或~/.aws/config文件中的配置文件名称，其中指定了访问密钥或角色信息。
+如果未指定，将使用默认凭据文件配置文件或，如果在EC2实例上，则使用来自IMDS的凭据。
+参见：https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html
 
 Example[#](#example "Permalink to this headline")
 -------------------------------------------------
