@@ -1,6 +1,5 @@
 
 
-外星人吃了。。。
 
 [Amazon SageMaker](https://aws.amazon.com/sagemaker/) is a system that can build, train, and deploy machine learning (ML) models for any use case with fully managed infrastructure, tools, and workflows.
 

@@ -1,6 +1,5 @@
 
 
-外星人吃了。。。
 
 [OpenAI](https://platform.openai.com/docs/introduction) offers a spectrum of models with different levels of power suitable for different tasks.
 

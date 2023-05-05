@@ -1,6 +1,6 @@
 
 
-外星人吃了。。。
+
 
 > 
 > [Replicate](https://replicate.com/blog/machine-learning-needs-better-tools)在云端运行机器学习模型。我们拥有一系列开源模型，只需几行代码即可运行。如果您正在构建自己的机器学习模型，Replicate可以轻松实现大规模部署。
@@ -117,7 +117,6 @@ img
 
 ```
 
-![../../../../_images/506447a6eb1b49eb4e95c212b6e58965789809b619f0b328903e14e508982165.png](../../../../_images/506447a6eb1b49eb4e95c212b6e58965789809b619f0b328903e14e508982165.png)
 
 Chaining Calls[#](#chaining-calls "Permalink to this headline")
 ---------------------------------------------------------------
@@ -199,5 +198,4 @@ img
 
 ```
 
-![../../../../_images/5dc162007c5fcb88c9c7258d9d640be72c221c32ec99698a94781095ba4a3217.png](../../../../_images/5dc162007c5fcb88c9c7258d9d640be72c221c32ec99698a94781095ba4a3217.png)
 
