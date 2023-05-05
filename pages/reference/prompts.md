@@ -1,13 +1,12 @@
 
 
 
- Prompts
+提示词
  [#](#prompts "Permalink to this headline")
 =====================================================
 
 
-
- The reference guides here all relate to objects for working with Prompts.
+这里的参考指南都涉及到处理提示的对象。
  
 
 
