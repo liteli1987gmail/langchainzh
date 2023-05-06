@@ -1,135 +1,61 @@
+Notion数据库加载器
+=================================================
 
+NotionDBLoader是一个Python类，用于从Notion数据库中加载内容。它从数据库中检索页面，读取其内容，并返回Document对象的列表。
 
+要求：
 
- Notion DB Loader
- [#](#notion-db-loader "Permalink to this headline")
-=======================================================================
+* Notion数据库
+* Notion集成令牌
 
+设置：
 
+### 1. 创建Notion表数据库
 
- NotionDBLoader is a Python class for loading content from a Notion database. It retrieves pages from the database, reads their content, and returns a list of Document objects.
- 
+在Notion中创建一个新的表数据库。可以添加任何列到数据库中，并将它们视为元数据。例如，可以添加以下列：
 
+* 标题：将标题设置为默认属性。
+* 类别：一个多选属性，用于存储与页面相关联的类别。
+* 关键词：一个多选属性，用于存储与页面相关联的关键词。
 
+将内容添加到数据库中每个页面的正文中。NotionDBLoader将从这些页面中提取内容和元数据。
 
+### 2. 创建Notion集成
 
- Requirements
- [#](#requirements "Permalink to this headline")
----------------------------------------------------------------
+创建Notion集成，按照以下步骤操作：
 
+1. 访问Notion开发人员页面并使用Notion帐户登录。
+2. 点击“+新集成”按钮。
+3. 命名集成，并选择数据库所在的工作区。
+4. 选择所需的能力，此扩展名仅需读取内容能力。
+5. 点击“提交”按钮以创建集成。
 
-* A Notion Database
-* Notion Integration Token
+集成创建后，您将获得一个集成令牌（API密钥）。复制此令牌并保持安全，因为您将需要它来使用NotionDBLoader。
 
+### 3. 将集成连接到数据库
 
+要将您的集成连接到数据库，请按照以下步骤操作：
 
+1. 在Notion中打开数据库。
+2. 单击数据库视图右上角的三点菜单图标。
+3. 单击“+ 新集成”按钮。
+4. 找到您的集成，您可能需要开始在搜索框中输入其名称。
+5. 单击“连接”按钮将集成与数据库连接。
 
+### 4. 获取数据库ID
 
- Setup
- [#](#setup "Permalink to this headline")
--------------------------------------------------
+要获取数据库ID，请按照以下步骤操作：
 
+1. 在Notion中打开数据库。
+2. 单击数据库视图右上角的三点菜单图标。
+3. 从菜单中选择“复制链接”以将数据库URL复制到剪贴板中。
+4. 数据库ID是在URL中找到的长串字母数字字符。它通常看起来像这样：`https://www.notion.so/username/8935f9d140a04f95a872520c4f123456?v=…`。在这个例子中，数据库ID是8935f9d140a04f95a872520c4f123456。
 
+具有正确设置的数据库和已经获得的集成令牌和数据库ID，现在可以使用NotionDBLoader代码从Notion数据库中加载内容和元数据。
 
-### 
- 1. Create a Notion Table Database
- [#](#create-a-notion-table-database "Permalink to this headline")
+用法：
 
-
-
- Create a new table database in Notion. You can add any column to the database and they will be treated as metadata. For example you can add the following columns:
- 
-
-
-* Title: set Title as the default property.
-* Categories: A Multi-select property to store categories associated with the page.
-* Keywords: A Multi-select property to store keywords associated with the page.
-
-
-
- Add your content to the body of each page in the database. The NotionDBLoader will extract the content and metadata from these pages.
- 
-
-
-
-
-
-
- 2. Create a Notion Integration
- [#](#create-a-notion-integration "Permalink to this headline")
-------------------------------------------------------------------------------------------------
-
-
-
- To create a Notion Integration, follow these steps:
- 
-
-
-1. Visit the (Notion Developers)[https://www.notion.com/my-integrations] page and log in with your Notion account.
-2. Click on the “+ New integration” button.
-3. Give your integration a name and choose the workspace where your database is located.
-4. Select the require capabilities, this extension only need the Read content capability
-5. Click the “Submit” button to create the integration.
-Once the integration is created, you’ll be provided with an Integration Token (API key). Copy this token and keep it safe, as you’ll need it to use the NotionDBLoader.
-
-
-
-### 
- 3. Connect the Integration to the Database
- [#](#connect-the-integration-to-the-database "Permalink to this headline")
-
-
-
- To connect your integration to the database, follow these steps:
- 
-
-
-1. Open your database in Notion.
-2. Click on the three-dot menu icon in the top right corner of the database view.
-3. Click on the “+ New integration” button.
-4. Find your integration, you may need to start typing its name in the search box.
-5. Click on the “Connect” button to connect the integration to the database.
-
-
-
-
-### 
- 4. Get the Database ID
- [#](#get-the-database-id "Permalink to this headline")
-
-
-
- To get the database ID, follow these steps:
- 
-
-
-1. Open your database in Notion.
-2. Click on the three-dot menu icon in the top right corner of the database view.
-3. Select “Copy link” from the menu to copy the database URL to your clipboard.
-4. The database ID is the long string of alphanumeric characters found in the URL. It typically looks like this: https://www.notion.so/username/8935f9d140a04f95a872520c4f123456?v=…. In this example, the database ID is 8935f9d140a04f95a872520c4f123456.
-
-
-
- With the database properly set up and the integration token and database ID in hand, you can now use the NotionDBLoader code to load content and metadata from your Notion database.
- 
-
-
-
-
-
-
- Usage
- [#](#usage "Permalink to this headline")
--------------------------------------------------
-
-
-
- NotionDBLoader is part of the langchain package’s document loaders. You can use it as follows:
- 
-
-
-
-
+NotionDBLoader是langchain包的文档加载器的一部分。可以按照以下方式使用它：
 
 
 

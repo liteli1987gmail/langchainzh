@@ -1,20 +1,9 @@
 
 
+Python 代理[#](#python-agent "永久链接到此标题")
+======================================
 
- Python Agent
- [#](#python-agent "Permalink to this headline")
-===============================================================
-
-
-
- This notebook showcases an agent designed to write and execute python code to answer a question.
- 
-
-
-
-
-
-
+这个笔记本展示了一个代理程序，旨在编写和执行Python代码来回答问题。
 
 ```
 from langchain.agents.agent_toolkits import create_python_agent
@@ -23,15 +12,6 @@ from langchain.python import PythonREPL
 from langchain.llms.openai import OpenAI
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 agent_executor = create_python_agent(
@@ -42,40 +22,15 @@ agent_executor = create_python_agent(
 
 ```
 
+斐波那契例子[#](#fibonacci-example "永久链接到此标题")
+----------------------------------------
 
-
-
-
-
-
- Fibonacci Example
- [#](#fibonacci-example "Permalink to this headline")
--------------------------------------------------------------------------
-
-
-
- This example was created by
- [John Wiseman](https://twitter.com/lemonodor/status/1628270074074398720?s=20) 
- .
- 
-
-
-
-
-
-
+这个例子是由[John Wiseman](https://twitter.com/lemonodor/status/1628270074074398720?s=20)创建的。
 
 ```
 agent_executor.run("What is the 10th fibonacci number?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -100,39 +55,15 @@ Final Answer: 55
 
 ```
 
-
-
-
-
-
 ```
 '55'
 
 ```
 
+训练神经网络[#](#training-neural-net "永久链接到此标题")
+------------------------------------------
 
-
-
-
-
-
-
- Training neural net
- [#](#training-neural-net "Permalink to this headline")
------------------------------------------------------------------------------
-
-
-
- This example was created by
- [Samee Ur Rehman](https://twitter.com/sameeurehman/status/1630130518133207046?s=20) 
- .
- 
-
-
-
-
-
-
+这个例子是由[Samee Ur Rehman](https://twitter.com/sameeurehman/status/1630130518133207046?s=20)创建的。
 
 ```
 agent_executor.run("""Understand, write a single neuron neural network in PyTorch.
@@ -140,13 +71,6 @@ Take synthetic data for y=2x. Train for 1000 epochs and print every 100 epochs.
 Return prediction for x = 5""")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -207,20 +131,8 @@ Final Answer: The prediction for x = 5 is 10.0.
 
 ```
 
-
-
-
-
-
 ```
 'The prediction for x = 5 is 10.0.'
 
 ```
-
-
-
-
-
-
-
 

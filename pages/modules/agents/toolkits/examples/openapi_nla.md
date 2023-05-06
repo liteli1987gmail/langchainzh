@@ -1,34 +1,14 @@
+自然语言API
+[#](#natural-language-apis "Permalink to this headline")
+==================
 
+自然语言API工具包（NLAToolkits）使得LangChain代理可以高效地跨终端点进行调用计划和组合。本笔记本演示了Speak、Klarna和Spoonacluar API的样例组合。
 
+有关包含在NLAToolkit中的OpenAPI链的详细演练，请参见[OpenAPI操作链](openapi)笔记本。
 
- Natural Language APIs
- [#](#natural-language-apis "Permalink to this headline")
-=================================================================================
-
-
-
- Natural Language API Toolkits (NLAToolkits) permit LangChain Agents to efficiently plan and combine calls across endpoints. This notebook demonstrates a sample composition of the Speak, Klarna, and Spoonacluar APIs.
- 
-
-
-
- For a detailed walkthrough of the OpenAPI chains wrapped within the NLAToolkit, see the
- [OpenAPI Operation Chain](openapi)
- notebook.
- 
-
-
-
-
- First, import dependencies and load the LLM
- [#](#first-import-dependencies-and-load-the-llm "Permalink to this headline")
-----------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
+首先，导入依赖项并加载LLM
+[#](#first-import-dependencies-and-load-the-llm "Permalink to this headline")
+------------------------------------------------------------------------------
 
 ```
 from typing import List, Optional
@@ -42,37 +22,15 @@ from langchain.agents.agent_toolkits import NLAToolkit
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
-# Select the LLM to use. Here, we use text-davinci-003
-llm = OpenAI(temperature=0, max_tokens=700) # You can swap between different core LLM's here.
+# 选择要使用的LLM。在这里，我们使用text-davinci-003
+llm = OpenAI(temperature=0, max_tokens=700) #您可以在不同的核心LLM之间切换。
 
 ```
 
-
-
-
-
-
-
-
- Next, load the Natural Language API Toolkits
- [#](#next-load-the-natural-language-api-toolkits "Permalink to this headline")
-------------------------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
+接下来，加载自然语言API工具包
+[#](#next-load-the-natural-language-api-toolkits "Permalink to this headline")
+--------------------------------------------------------------------------------
 
 ```
 speak_toolkit = NLAToolkit.from_llm_and_url(llm, "https://api.speak.com/openapi.yaml")
@@ -80,18 +38,10 @@ klarna_toolkit = NLAToolkit.from_llm_and_url(llm, "https://www.klarna.com/us/sho
 
 ```
 
-
-
-
-
-
-
-
 ```
-Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
-Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
-Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
-
+尝试加载OpenAPI 3.0.1规范。这可能会导致性能降低。将您的OpenAPI规范转换为3.1.*规范以获得更好的支持。
+尝试加载OpenAPI 3.0.1规范。这可能会导致性能降低。将您的OpenAPI规范转换为3.1.*规范以获得更好的支持。
+尝试加载OpenAPI 3.0.1规范。这可能会导致性能降低。将您的OpenAPI规范转换为3.1.*规范以获得更好的支持。
 ```
 
 
@@ -101,128 +51,75 @@ Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performan
 
 
 
- Create the Agent
- [#](#create-the-agent "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
-
-
-
+ 创建代理
+[#](#create-the-agent "Permalink to this headline")
 
 ```
-# Slightly tweak the instructions from the default agent
-openapi_format_instructions = """Use the following format:
+#稍微修改默认代理的说明
+openapi_format_instructions = """使用以下格式：
 
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: what to instruct the AI Action representative.
-Observation: The Agent's response
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer. User can't see any of my observations, API responses, links, or tools.
-Final Answer: the final answer to the original input question with the right amount of detail
+问题：您必须回答的输入问题
+思考：您应该始终思考要做什么
+操作：要采取的操作，应为[{tool_names}]中的一个
+操作输入：指示AI操作代表要执行的操作
+观察：代理的响应
+...（这个思考/操作/操作输入/观察可以重复N次）
+思路：我现在知道了最终答案。用户看不到我的任何观察结果，API响应，链接或工具。
+最终答案：原始输入问题的最终答案，具有适当的详细信息
 
-When responding with your Final Answer, remember that the person you are responding to CANNOT see any of your Thought/Action/Action Input/Observations, so if there is any relevant information there you need to include it explicitly in your response."""
+在回答最终答案时，请记住，您回答的人无法看到您的任何思考/操作/操作输入/观察结果，因此如果有任何相关信息，您需要在回答中明确包含它。"""
 
 ```
-
-
-
-
-
-
-
-
 
 
 ```
 natural_language_tools = speak_toolkit.get_tools() + klarna_toolkit.get_tools()
 mrkl = initialize_agent(natural_language_tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
                         verbose=True, agent_kwargs={"format_instructions":openapi_format_instructions})
-
 ```
-
-
-
-
-
-
-
 
 
 
 ```
 mrkl.run("I have an end of year party for my Italian class and have to buy some Italian clothes for it")
-
 ```
-
-
-
-
-
 
 
 
 ```
 > Entering new AgentExecutor chain...
- I need to find out what kind of Italian clothes are available
-Action: Open_AI_Klarna_product_Api.productsUsingGET
-Action Input: Italian clothes
-Observation: The API response contains two products from the Alé brand in Italian Blue. The first is the Alé Colour Block Short Sleeve Jersey Men - Italian Blue, which costs $86.49, and the second is the Alé Dolid Flash Jersey Men - Italian Blue, which costs $40.00.
-Thought: I now know what kind of Italian clothes are available and how much they cost.
-Final Answer: You can buy two products from the Alé brand in Italian Blue for your end of year party. The Alé Colour Block Short Sleeve Jersey Men - Italian Blue costs $86.49, and the Alé Dolid Flash Jersey Men - Italian Blue costs $40.00.
+ 我需要了解哪些意大利服装可用
+操作：Open_AI_Klarna_product_Api.productsUsingGET
+操作输入：意大利服装
+观察：API响应包含两个来自Alé品牌的产品，颜色为意大利蓝色。第一个是Alé Colour Block Short Sleeve Jersey Men - Italian Blue，售价为86.49美元，第二个是Alé Dolid Flash Jersey Men - Italian Blue，售价为40.00美元。
+思路：现在我知道哪些意大利服装可用，以及它们的价格。
+最终答案：您可以为您义大利班的年终派对购买两种颜色为意大利蓝色的Alé品牌产品。Alé Colour Block Short Sleeve Jersey Men - Italian Blue售价为86.49美元，Alé Dolid Flash Jersey Men - Italian Blue售价为40.00美元。
 
-> Finished chain.
-
-```
-
-
-
-
-
-
-```
-'You can buy two products from the Alé brand in Italian Blue for your end of year party. The Alé Colour Block Short Sleeve Jersey Men - Italian Blue costs $86.49, and the Alé Dolid Flash Jersey Men - Italian Blue costs $40.00.'
+> 链结束。
 
 ```
 
 
+```
+'您可以为您义大利班的年终派对购买两种颜色为意大利蓝色的Alé品牌产品。Alé Colour Block Short Sleeve Jersey Men - Italian Blue售价为86.49美元，Alé Dolid Flash Jersey Men - Italian Blue售价为40.00美元。'
+```
 
 
 
+使用Auth + 添加更多终端点
+[#](#using-auth-adding-more-endpoints "Permalink to this headline")
+========================================
+
+某些终端点可能需要用户通过访问令牌等进行身份验证。在这里，我们展示如何通过`Requests`包装器对象传递验证信息。
+
+由于每个NLATool都向其包装的API公开简洁的自然语言接口，因此顶层对话代理的工作更容易，可以将每个终端点合并到满足用户请求的代理中。
 
 
-
- Using Auth + Adding more Endpoints
- [#](#using-auth-adding-more-endpoints "Permalink to this headline")
----------------------------------------------------------------------------------------------------------
+**添加Spoonacular终端点。**
 
 
-
- Some endpoints may require user authentication via things like access tokens. Here we show how to pass in the authentication information via the
- `Requests`
- wrapper object.
- 
-
-
-
- Since each NLATool exposes a concisee natural language interface to its wrapped API, the top level conversational agent has an easier job incorporating each endpoint to satisfy a user’s request.
- 
-
-
-
-**Adding the Spoonacular endpoints.** 
-
-
-
-1. Go to the
- [Spoonacular API Console](https://spoonacular.com/food-api/console#Profile) 
- and make a free account.
-2. Click on
- `Profile`
- and copy your API key below.
+1. 登录[Spoonacular API控制台](https://spoonacular.com/food-api/console#Profile)并注册一个免费帐户。
+2. 单击“Profile”，然后在下面复制您的API密钥。
 
 
 

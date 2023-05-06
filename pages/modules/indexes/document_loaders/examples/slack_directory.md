@@ -1,101 +1,30 @@
+# Slack (本地导出Zip文件)
 
+本笔记本介绍了如何从Slack导出的Zip文件中加载文档。
 
+为了获得这个Slack导出文件，请按照以下说明操作：
 
- Slack (Local Exported Zipfile)
- [#](#slack-local-exported-zipfile "Permalink to this headline")
-=================================================================================================
+🧑 摄入自己的数据集的说明
 
+导出您的Slack数据。您可以通过转到Workspace Management页面并单击导入/导出选项（{your_slack_domain}.slack.com/services/export）来完成此操作。然后，选择正确的日期范围，然后单击“Start export”。当导出准备就绪时，Slack会向您发送电子邮件和DM。
 
+下载将在您的下载文件夹中生成.zip文件（或者根据您的操作系统配置，可以在任何地方找到下载文件）。
 
- This notebook covers how to load documents from a Zipfile generated from a Slack export.
- 
+复制.zip文件的路径，并将其分配为下面的LOCAL_ZIPFILE。
 
-
-
- In order to get this Slack export, follow these instructions:
- 
-
-
-
-
- 🧑 Instructions for ingesting your own dataset
- [#](#instructions-for-ingesting-your-own-dataset "Permalink to this headline")
--------------------------------------------------------------------------------------------------------------------------------
-
-
-
- Export your Slack data. You can do this by going to your Workspace Management page and clicking the Import/Export option ({your_slack_domain}.slack.com/services/export). Then, choose the right date range and click
- `Start
- 
-
- export`
- . Slack will send you an email and a DM when the export is ready.
- 
-
-
-
- The download will produce a
- `.zip`
- file in your Downloads folder (or wherever your downloads can be found, depending on your OS configuration).
- 
-
-
-
- Copy the path to the
- `.zip`
- file, and assign it as
- `LOCAL_ZIPFILE`
- below.
- 
-
-
-
-
-
-
-
-```
-from langchain.document_loaders import SlackDirectoryLoader 
-
+``` python
+from langchain.document_loaders import SlackDirectoryLoader
 ```
 
-
-
-
-
-
-
-
-
-
-```
-# Optionally set your Slack URL. This will give you proper URLs in the docs sources.
+``` python
+# 可选择设置你的Slack URL，这将在文档中为您提供正确的URL。
 SLACK_WORKSPACE_URL = "https://xxx.slack.com"
-LOCAL_ZIPFILE = "" # Paste the local paty to your Slack zip file here.
+LOCAL_ZIPFILE = "" # 将本地路径粘贴到Slack zip文件中。
 
 loader = SlackDirectoryLoader(LOCAL_ZIPFILE, SLACK_WORKSPACE_URL)
-
 ```
 
-
-
-
-
-
-
-
-
-
-```
+``` python
 docs = loader.load()
 docs
-
 ```
-
-
-
-
-
-
-
-

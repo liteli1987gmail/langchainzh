@@ -1,102 +1,54 @@
 
+IFTTT Webhooks
+=================
 
 
- IFTTT WebHooks
- [#](#ifttt-webhooks "Permalink to this headline")
-===================================================================
+这篇笔记展示了如何使用IFTTT Webhooks。
 
+来自https://github.com/SidU/teams-langchain-js/wiki/Connecting-IFTTT-Services。
 
+创建Webhook[#](#creating-a-webhook "Permalink to this headline")
+--------------------------------------------------------------
 
- This notebook shows how to use IFTTT Webhooks.
- 
+* 访问https://ifttt.com/create
 
+配置“If This”[#](#configuring-the-if-this "Permalink to this headline")
+---------------------------------------------------------------------
 
+* 在IFTTT界面上单击“If This”按钮。
 
- From https://github.com/SidU/teams-langchain-js/wiki/Connecting-IFTTT-Services.
- 
+* 在搜索栏中搜索“Webhooks”。
 
+* 选择“接收带有JSON有效负载的Web请求”的第一个选项。
 
-
-
- Creating a webhook
- [#](#creating-a-webhook "Permalink to this headline")
----------------------------------------------------------------------------
-
-
-* Go to https://ifttt.com/create
-
-
-
-
-
- Configuring the “If This”
- [#](#configuring-the-if-this "Permalink to this headline")
----------------------------------------------------------------------------------------
-
-
-* Click on the “If This” button in the IFTTT interface.
-* Search for “Webhooks” in the search bar.
-* Choose the first option for “Receive a web request with a JSON payload.”
-* Choose an Event Name that is specific to the service you plan to connect to.
-This will make it easier for you to manage the webhook URL.
-For example, if you’re connecting to Spotify, you could use “Spotify” as your
-Event Name.
+* 选择一个与您计划连接的服务具体相关的事件名称。这将使您更容易管理Webhook URL。例如，如果您连接到Spotify，您可以使用“Spotify”作为您的事件名称。
 * Click the “Create Trigger” button to save your settings and create your webhook.
 
+配置“那么”（Then That）
 
+* 在IFTTT界面中点击“那么”按钮。
+* 搜索您要连接的服务，如Spotify。
+* 选择要从服务中执行的操作，例如“添加到播放列表”。
+* 通过指定必要的细节来配置操作，例如播放列表名称，例如“来自AI的歌曲”。
+* 在操作中引用Webhook接收到的JSON负载。对于Spotify场景，将“{{JsonPayload}}”作为您的搜索查询。
+* 单击“创建操作”按钮以保存您的操作设置。
 
+* 一旦您完成操作的配置，请单击“完成”按钮以完成设置。
 
+* 恭喜！您已成功将Webhook连接到所需的服务，现在您可以开始接收数据并触发操作 🎉
 
- Configuring the “Then That”
- [#](#configuring-the-then-that "Permalink to this headline")
--------------------------------------------------------------------------------------------
+完成[#](#finishing-up "Permalink to this headline")
+-------------------------------------------------
 
+* 要获取您的Webhook URL，请访问https://ifttt.com/maker_webhooks/settings
 
-* Tap on the “Then That” button in the IFTTT interface.
-* Search for the service you want to connect, such as Spotify.
-* Choose an action from the service, such as “Add track to a playlist”.
-* Configure the action by specifying the necessary details, such as the playlist name,
-e.g., “Songs from AI”.
-* Reference the JSON Payload received by the Webhook in your action. For the Spotify
-scenario, choose “{{JsonPayload}}” as your search query.
-* Tap the “Create Action” button to save your action settings.
-* Once you have finished configuring your action, click the “Finish” button to
-complete the setup.
-* Congratulations! You have successfully connected the Webhook to the desired
-service, and you’re ready to start receiving data and triggering actions 🎉
-
-
-
-
-
- Finishing up
- [#](#finishing-up "Permalink to this headline")
----------------------------------------------------------------
-
-
-* To get your webhook URL go to https://ifttt.com/maker_webhooks/settings
-* Copy the IFTTT key value from there. The URL is of the form
-https://maker.ifttt.com/use/YOUR_IFTTT_KEY. Grab the YOUR_IFTTT_KEY value.
-
-
-
-
-
-
+* 从那里复制IFTTT密钥值。 URL的格式为
+https://maker.ifttt.com/use/YOUR_IFTTT_KEY。获取YOUR_IFTTT_KEY值。
 
 ```
 from langchain.tools.ifttt import IFTTTWebhook
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import os
@@ -106,36 +58,13 @@ tool = IFTTTWebhook(name="Spotify", description="Add a song to spotify playlist"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 tool.run("taylor swift")
 
 ```
 
-
-
-
-
-
-
-
 ```
 "Congratulations! You've fired the spotify JSON event"
 
 ```
-
-
-
-
-
-
-
 

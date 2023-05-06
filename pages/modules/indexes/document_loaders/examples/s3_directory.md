@@ -1,136 +1,43 @@
+s3 Directory
+==========================================================
 
+本文介绍如何从s3目录对象加载文档对象。
 
-
- s3 Directory
- [#](#s3-directory "Permalink to this headline")
-===============================================================
-
-
-
- This covers how to load document objects from an s3 directory object.
- 
-
-
-
-
-
-
+示例代码：
 
 ```
 from langchain.document_loaders import S3DirectoryLoader
-
 ```
 
-
-
-
-
-
-
-
-
+需要安装`boto3`包：
 
 ```
-#!pip install boto3
-
+!pip install boto3
 ```
 
-
-
-
-
-
-
-
-
+初始化载入器：
 
 ```
 loader = S3DirectoryLoader("testing-hwc")
-
 ```
 
-
-
-
-
-
-
-
-
+加载并返回文档对象列表：
 
 ```
 loader.load()
-
 ```
 
+返回结果是一个Document对象列表，其中每个对象包含文档内容和元数据。
 
+指定前缀：
 
+您还可以指定前缀以更精细地控制要加载的文件。
 
-
-
-
-
-```
-[Document(page_content='Lorem ipsum dolor sit amet.', lookup_str='', metadata={'source': '/var/folders/y6/8_bzdg295ld6s1_97_12m4lr0000gn/T/tmpaa9xl6ch/fake.docx'}, lookup_index=0)]
-
-```
-
-
-
-
-
-
-
- Specifying a prefix
- [#](#specifying-a-prefix "Permalink to this headline")
------------------------------------------------------------------------------
-
-
-
- You can also specify a prefix for more finegrained control over what files to load.
- 
-
-
-
-
-
-
+示例代码：
 
 ```
 loader = S3DirectoryLoader("testing-hwc", prefix="fake")
-
-```
-
-
-
-
-
-
-
-
-
-
-```
 loader.load()
-
 ```
 
-
-
-
-
-
-
-
-```
-[Document(page_content='Lorem ipsum dolor sit amet.', lookup_str='', metadata={'source': '/var/folders/y6/8_bzdg295ld6s1_97_12m4lr0000gn/T/tmpujbkzf_l/fake.docx'}, lookup_index=0)]
-
-```
-
-
-
-
-
-
-
-
+返回结果是以前缀开头的Document对象列表，其中每个对象包含文档内容和元数据。

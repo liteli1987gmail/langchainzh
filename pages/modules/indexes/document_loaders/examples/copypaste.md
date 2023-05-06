@@ -1,98 +1,37 @@
 
 
+复制粘贴[#](#copy-paste "永久链接至此标题")
+===============================
 
- Copy Paste
- [#](#copy-paste "Permalink to this headline")
-===========================================================
-
-
-
- This notebook covers how to load a document object from something you just want to copy and paste. In this case, you don’t even need to use a DocumentLoader, but rather can just construct the Document directly.
- 
-
-
-
-
-
-
+本笔记本介绍了如何从想要复制和粘贴的内容中加载文档对象。在这种情况下，您甚至不需要使用DocumentLoader，而是可以直接构造文档。
 
 ```
 from langchain.docstore.document import Document
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 text = "..... put the text you copy pasted here......"
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 doc = Document(page_content=text)
 
 ```
 
+元数据[#](#metadata "永久链接至此标题")
+----------------------------
 
-
-
-
-
-
- Metadata
- [#](#metadata "Permalink to this headline")
--------------------------------------------------------
-
-
-
- If you want to add metadata about the where you got this piece of text, you easily can with the metadata key.
- 
-
-
-
-
-
-
+如果您想添加关于获取此文本片段的位置的元数据，可以轻松完成，只需使用元数据键即可。
 
 ```
 metadata = {"source": "internet", "date": "Friday"}
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 doc = Document(page_content=text, metadata=metadata)
 
 ```
-
-
-
-
-
-
-
 

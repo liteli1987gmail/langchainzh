@@ -1,39 +1,16 @@
 
+Pandas Dataframe代理
+[#](#pandas-dataframe-agent "Permalink to this headline")
+================
 
+本笔记本演示如何使用代理与pandas数据框交互。主要优化问答。
 
- Pandas Dataframe Agent
- [#](#pandas-dataframe-agent "Permalink to this headline")
-===================================================================================
-
-
-
- This notebook shows how to use agents to interact with a pandas dataframe. It is mostly optimized for question answering.
- 
-
-
-
-**NOTE: this agent calls the Python agent under the hood, which executes LLM generated Python code - this can be bad if the LLM generated Python code is harmful. Use cautiously.** 
-
-
-
-
-
-
-
+**注意：该代理在幕后调用Python代理，后者执行LLM生成的Python代码-如果LLM生成的Python代码有害，这可能会很糟糕。请谨慎使用。**
 
 ```
 from langchain.agents import create_pandas_dataframe_agent
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.llms import OpenAI
@@ -43,40 +20,15 @@ df = pd.read_csv('titanic.csv')
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent = create_pandas_dataframe_agent(OpenAI(temperature=0), df, verbose=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent.run("how many rows are there?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -91,36 +43,15 @@ Final Answer: There are 891 rows in the dataframe.
 
 ```
 
-
-
-
-
-
 ```
 'There are 891 rows in the dataframe.'
 
 ```
 
-
-
-
-
-
-
-
-
+```
+agent.run("how many people have more than 3 siblings")
 
 ```
-agent.run("how many people have more than 3 sibligngs")
-
-```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -135,36 +66,15 @@ Final Answer: 30 people have more than 3 siblings.
 
 ```
 
-
-
-
-
-
 ```
 '30 people have more than 3 siblings.'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent.run("whats the square root of the average age?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -191,19 +101,8 @@ Final Answer: 5.449689683556195
 
 ```
 
-
-
-
-
-
 ```
 '5.449689683556195'
 
 ```
-
-
-
-
-
-
 

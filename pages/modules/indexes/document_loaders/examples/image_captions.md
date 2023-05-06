@@ -1,13 +1,8 @@
 
+图像标题
+============================================================
 
-
- Image captions
- [#](#image-captions "Permalink to this headline")
-===================================================================
-
-
-
- This notebook shows how to use the ImageCaptionLoader tutorial to generate a query-able index of image captions
+本文介绍如何使用ImageCaptionLoader教程生成一个可查询的图像标题索引。
  
 
 

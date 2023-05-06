@@ -1,33 +1,14 @@
+# JSON代理[#](#json-agent "Permalink to this headline")
 
+本笔记本展示了一个代理，旨在与大型JSON/dict对象进行交互。当您想回答关于JSON blob的问题时，它非常有用，而此JSON blob过大，无法放入LLM的上下文窗口中。代理能够迭代地探索blob以找到需要回答用户问题的内容。
 
+在下面的示例中，我们使用OpenAI API的OpenAPI规范，可以在此处找到：[https://github.com/openai/openai-openapi/blob/master/openapi.yaml](https://github.com/openai/openai-openapi/blob/master/openapi.yaml)。
 
- JSON Agent
- [#](#json-agent "Permalink to this headline")
-===========================================================
+我们将使用JSON代理回答有关API规范的一些问题。
 
-
-
- This notebook showcases an agent designed to interact with large JSON/dict objects. This is useful when you want to answer questions about a JSON blob that’s too large to fit in the context window of an LLM. The agent is able to iteratively explore the blob to find what it needs to answer the user’s question.
- 
-
-
-
- In the below example, we are using the OpenAPI spec for the OpenAI API, which you can find
- [here](https://github.com/openai/openai-openapi/blob/master/openapi.yaml) 
- .
- 
-
-
-
- We will use the JSON agent to answer some questions about the API spec.
- 
-
-
-
-
- Initialization
- [#](#initialization "Permalink to this headline")
--------------------------------------------------------------------
+初始化
+[#](#initialization "Permalink to this headline")
+--------------------------------------------------
 
 
 

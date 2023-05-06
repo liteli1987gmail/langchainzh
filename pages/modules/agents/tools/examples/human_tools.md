@@ -1,21 +1,7 @@
+人类AGI工具
+=====================
 
-
-
- Human as a tool
- [#](#human-as-a-tool "Permalink to this headline")
-=====================================================================
-
-
-
- Human are AGI so they can certainly be used as a tool to help out AI agent
-when it is confused.
- 
-
-
-
-
-
-
+人类具有AGI，因此当AI代理处于困惑状态时，它们可以作为工具来帮助。
 
 ```
 from langchain.chat_models import ChatOpenAI
@@ -26,7 +12,7 @@ from langchain.agents import AgentType
 llm = ChatOpenAI(temperature=0.0)
 math_llm = OpenAI(temperature=0.0)
 tools = load_tools(
-    ["human", "llm-math"], 
+    ["human", "llm-math"],
     llm=math_llm,
 )
 
@@ -39,24 +25,7 @@ agent_chain = initialize_agent(
 
 ```
 
-
-
-
-
-
- In the above code you can see the tool takes input directly from command line.
-You can customize
- `prompt_func`
- and
- `input_func`
- according to your need (as shown below).
- 
-
-
-
-
-
-
+在上面的代码中，您可以看到工具直接从命令行接收输入。您可以根据需要自定义 `prompt_func` 和 `input_func`（如下所示）。
 
 ```
 agent_chain.run("When's my friend Eric's surname?")
@@ -64,73 +33,33 @@ agent_chain.run("When's my friend Eric's surname?")
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new AgentExecutor chain...
-I don't know Eric's surname, so I should ask a human for guidance.
-Action: Human
-Action Input: "What is Eric's surname?"
+我不知道Eric的姓氏，所以我需要向人类寻求帮助。
+行动: 人类
+行动输入："Eric的姓氏是什么？"
 
-What is Eric's surname?
-
-```
-
-
-
-
-
-
-```
-Observation: Zhu
-Thought:I now know Eric's surname is Zhu.
-Final Answer: Eric's surname is Zhu.
-
-> Finished chain.
+Eric的姓氏是什么？
 
 ```
 
+```
+观察结果: Zhu
+想法：我现在知道Eric的姓氏是Zhu。
+最终答案：Eric的姓氏是Zhu。
 
-
-
-
+> 完成链式结构。
 
 ```
-"Eric's surname is Zhu."
+
+```
+"Eric的姓氏是Zhu。"
 
 ```
 
+配置输入函数
 
-
-
-
-
-
- Configuring the Input Function
- [#](#configuring-the-input-function "Permalink to this headline")
----------------------------------------------------------------------------------------------------
-
-
-
- By default, the
- `HumanInputRun`
- tool uses the python
- `input`
- function to get input from the user.
-You can customize the input_func to be anything you’d like.
-For instance, if you want to accept multi-line input, you could do the following:
- 
-
-
-
-
-
-
+默认情况下，`HumanInputRun`工具使用Python的`input`函数从用户处获取输入。您可以自定义`input_func`。例如，如果您想接受多行输入，则可以执行以下操作：
 
 ```
 def get_input() -> str:
@@ -146,7 +75,6 @@ def get_input() -> str:
         contents.append(line)
     return "\n".join(contents)
 
-
 # You can modify the tool when loading
 tools = load_tools(
     ["human", "ddg-search"], 
@@ -156,15 +84,6 @@ tools = load_tools(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # Or you can directly instantiate the tool
 from langchain.tools import HumanInputRun
@@ -172,15 +91,6 @@ from langchain.tools import HumanInputRun
 tool = HumanInputRun(input_func=get_input)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 agent_chain = initialize_agent(
@@ -192,26 +102,10 @@ agent_chain = initialize_agent(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_chain.run("I need help attributing a quote")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -223,11 +117,6 @@ Can you help me attribute a quote?
 Insert your text. Enter 'q' or press Ctrl-D (or Ctrl-Z on Windows) to end.
 
 ```
-
-
-
-
-
 
 ```
 Observation: vini
@@ -242,11 +131,6 @@ Insert your text. Enter 'q' or press Ctrl-D (or Ctrl-Z on Windows) to end.
 
 ```
 
-
-
-
-
-
 ```
 Observation: oh who said it 
 Thought:I can use DuckDuckGo Search to find out who said the quote
@@ -260,20 +144,8 @@ Final Answer: Julius Caesar said the quote "Veni, vidi, vici" which means "I cam
 
 ```
 
-
-
-
-
-
 ```
 'Julius Caesar said the quote "Veni, vidi, vici" which means "I came, I saw, I conquered".'
 
 ```
-
-
-
-
-
-
-
 

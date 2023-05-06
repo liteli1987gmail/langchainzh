@@ -1,13 +1,9 @@
 
 
-
- IMSDb
- [#](#imsdb "Permalink to this headline")
+IMSDb
 =================================================
 
-
-
- This covers how to load IMSDb webpages into a document format that we can use downstream.
+本文介绍如何将IMSDb网页加载到我们可以向下使用的文档格式中。
  
 
 

@@ -1,27 +1,12 @@
 
+向量存储
+======
 
 
- Vectorstore Agent
- [#](#vectorstore-agent "Permalink to this headline")
-=========================================================================
+这篇笔记本展示了一个代理，旨在获取一个或多个向量存储中的信息，可以带有或不带源。
 
-
-
- This notebook showcases an agent designed to retrieve information from one or more vectorstores, either with or without sources.
- 
-
-
-
-
- Create the Vectorstores
- [#](#create-the-vectorstores "Permalink to this headline")
--------------------------------------------------------------------------------------
-
-
-
-
-
-
+创建向量存储
+---------------------------------------------------------------
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -31,15 +16,6 @@ from langchain import OpenAI, VectorDBQA
 llm = OpenAI(temperature=0)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -53,27 +29,11 @@ state_of_union_store = Chroma.from_documents(texts, embeddings, collection_name=
 
 ```
 
-
-
-
-
-
-
-
 ```
 Running Chroma using direct local API.
 Using DuckDB in-memory for database. Data will be transient.
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import WebBaseLoader
@@ -84,40 +44,16 @@ ruff_store = Chroma.from_documents(ruff_texts, embeddings, collection_name="ruff
 
 ```
 
-
-
-
-
-
-
-
 ```
 Running Chroma using direct local API.
 Using DuckDB in-memory for database. Data will be transient.
 
 ```
 
+Initialize Toolkit and Agent[#](#initialize-toolkit-and-agent "Permalink to this headline")
+-------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- Initialize Toolkit and Agent
- [#](#initialize-toolkit-and-agent "Permalink to this headline")
------------------------------------------------------------------------------------------------
-
-
-
- First, we’ll create an agent with a single vectorstore.
- 
-
-
-
-
-
-
+First, we’ll create an agent with a single vectorstore.
 
 ```
 from langchain.agents.agent_toolkits import (
@@ -139,34 +75,13 @@ agent_executor = create_vectorstore_agent(
 
 ```
 
-
-
-
-
-
-
-
- Examples
- [#](#examples "Permalink to this headline")
--------------------------------------------------------
-
-
-
-
-
-
+Examples[#](#examples "Permalink to this headline")
+---------------------------------------------------
 
 ```
 agent_executor.run("What did biden say about ketanji brown jackson is the state of the union address?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -181,36 +96,15 @@ Final Answer: Biden said that Ketanji Brown Jackson is one of the nation's top l
 
 ```
 
-
-
-
-
-
 ```
 "Biden said that Ketanji Brown Jackson is one of the nation's top legal minds and that she will continue Justice Breyer's legacy of excellence."
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_executor.run("What did biden say about ketanji brown jackson is the state of the union address? List the source.")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -225,37 +119,15 @@ Final Answer: Biden said that he nominated Circuit Court of Appeals Judge Ketanj
 
 ```
 
-
-
-
-
-
 ```
 "Biden said that he nominated Circuit Court of Appeals Judge Ketanji Brown Jackson to the United States Supreme Court, and that she is one of the nation's top legal minds who will continue Justice Breyer's legacy of excellence. Sources: ../../state_of_the_union.txt"
 
 ```
 
+Multiple Vectorstores[#](#multiple-vectorstores "Permalink to this headline")
+-----------------------------------------------------------------------------
 
-
-
-
-
-
-
- Multiple Vectorstores
- [#](#multiple-vectorstores "Permalink to this headline")
----------------------------------------------------------------------------------
-
-
-
- We can also easily use this initialize an agent with multiple vectorstores and use the agent to route between them. To do this. This agent is optimized for routing, so it is a different toolkit and initializer.
- 
-
-
-
-
-
-
+We can also easily use this initialize an agent with multiple vectorstores and use the agent to route between them. To do this. This agent is optimized for routing, so it is a different toolkit and initializer.
 
 ```
 from langchain.agents.agent_toolkits import (
@@ -265,15 +137,6 @@ from langchain.agents.agent_toolkits import (
 )
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 ruff_vectorstore_info = VectorStoreInfo(
@@ -293,34 +156,13 @@ agent_executor = create_vectorstore_router_agent(
 
 ```
 
-
-
-
-
-
-
-
- Examples
- [#](#id1 "Permalink to this headline")
---------------------------------------------------
-
-
-
-
-
-
+Examples[#](#id1 "Permalink to this headline")
+----------------------------------------------
 
 ```
 agent_executor.run("What did biden say about ketanji brown jackson is the state of the union address?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -335,36 +177,15 @@ Final Answer: Biden said that Ketanji Brown Jackson is one of the nation's top l
 
 ```
 
-
-
-
-
-
 ```
 "Biden said that Ketanji Brown Jackson is one of the nation's top legal minds and that she will continue Justice Breyer's legacy of excellence."
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_executor.run("What tool does ruff use to run over Jupyter Notebooks?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -379,36 +200,15 @@ Final Answer: Ruff is integrated into nbQA, a tool for running linters and code 
 
 ```
 
-
-
-
-
-
 ```
 'Ruff is integrated into nbQA, a tool for running linters and code formatters over Jupyter Notebooks. After installing ruff and nbqa, you can run Ruff over a notebook like so: > nbqa ruff Untitled.ipynb'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_executor.run("What tool does ruff use to run over Jupyter Notebooks? Did the president mention that tool in the state of the union?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -427,20 +227,8 @@ Final Answer: No, the president did not mention nbQA in the state of the union.
 
 ```
 
-
-
-
-
-
 ```
 'No, the president did not mention nbQA in the state of the union.'
 
 ```
-
-
-
-
-
-
-
 

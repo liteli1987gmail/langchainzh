@@ -1,18 +1,12 @@
 
 
 
- HuggingFace dataset loader
- [#](#huggingface-dataset-loader "Permalink to this headline")
-===========================================================================================
+HuggingFace 数据集加载器
+============================================================
 
+本文介绍如何将Hugging Face Hub的数据集加载到LangChain。
 
-
- This notebook shows how to load Hugging Face Hub datasets to LangChain.
- 
-
-
-
- The Hugging Face Hub hosts a large number of community-curated datasets for a diverse range of tasks such as translation, automatic speech recognition, and image classification.
+Hugging Face Hub托管了大量社区维护的数据集，涵盖了多个任务，例如翻译、自动语音识别和图像分类。
  
 
 

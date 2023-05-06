@@ -1,18 +1,11 @@
 
 
 
- CSV Agent
- [#](#csv-agent "Permalink to this headline")
-=========================================================
+# CSV代理[#](#csv-agent "Permalink to this headline")
 
+本笔记本展示了如何使用代理与CSV交互，主要针对问题回答进行了优化。
 
-
- This notebook shows how to use agents to interact with a csv. It is mostly optimized for question answering.
- 
-
-
-
-**NOTE: this agent calls the Pandas DataFrame agent under the hood, which in turn calls the Python agent, which executes LLM generated Python code - this can be bad if the LLM generated Python code is harmful. Use cautiously.** 
+**注意：此代理在幕后调用Pandas DataFrame代理，后者调用Python代理，执行LLM生成的Python代码 - 如果LLM生成的Python代码有害，则可能会存在风险，请谨慎使用。**
 
 
 

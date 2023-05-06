@@ -1,28 +1,10 @@
+# Word 文档
 
+本节介绍了如何将Word文档加载到我们可以在下游使用的文档格式中。
 
+使用Docx2txt
 
- Word Documents
- [#](#word-documents "Permalink to this headline")
-===================================================================
-
-
-
- This covers how to load Word documents into a document format that we can use downstream.
- 
-
-
-
-
- Using Docx2txt
- [#](#using-docx2txt "Permalink to this headline")
--------------------------------------------------------------------
-
-
-
- Load .docx using
- `Docx2txt`
- into a document.
- 
+使用`Docx2txt`加载 .docx文档 并转换为文档格式。
 
 
 

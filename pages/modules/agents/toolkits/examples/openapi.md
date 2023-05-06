@@ -1,67 +1,27 @@
 
 
+OpenAPI代理[#](#openapi-agents "此标题的永久链接")
+========================================
 
- OpenAPI agents
- [#](#openapi-agents "Permalink to this headline")
-===================================================================
+我们可以构建代理来使用任意的API，包括符合OpenAPI / Swagger规范的API。
 
+第一个例子：分层规划代理[#](#st-example-hierarchical-planning-agent "此标题的永久链接")
+-------------------------------------------------------------------
 
+在这个例子中，我们将考虑一种称为分层规划的方法，这种方法在机器人技术中很常见，并且在最近的LLM X机器人作品中出现。我们将看到它是一种可行的方法，可以开始使用大规模的API规范，并协助对API需要多个步骤的用户查询。
 
- We can construct agents to consume arbitrary APIs, here APIs conformant to the OpenAPI/Swagger specification.
- 
+思想很简单：为了获得长序列行为的连贯代理行为，并节省令牌，我们将分离关注点："规划器"将负责调用哪些端点，而"控制器"将负责如何调用它们。
 
-
-
-
- 1st example: hierarchical planning agent
- [#](#st-example-hierarchical-planning-agent "Permalink to this headline")
----------------------------------------------------------------------------------------------------------------------
-
-
-
- In this example, we’ll consider an approach called hierarchical planning, common in robotics and appearing in recent works for LLMs X robotics. We’ll see it’s a viable approach to start working with a massive API spec AND to assist with user queries that require multiple steps against the API.
- 
-
-
-
- The idea is simple: to get coherent agent behavior over long sequences behavior & to save on tokens, we’ll separate concerns: a “planner” will be responsible for what endpoints to call and a “controller” will be responsible for how to call them.
- 
-
-
-
- In the initial implementation, the planner is an LLM chain that has the name and a short description for each endpoint in context. The controller is an LLM agent that is instantiated with documentation for only the endpoints for a particular plan. There’s a lot left to get this working very robustly :)
- 
-
-
-
+在最初的实现中，规划器是一个LLM链，它具有上下文中每个端点的名称和简短描述。控制器是一个LLM代理，仅针对特定计划的端点实例化文档。还有很多工作需要做，以使其非常强大 :)
 
 ---
 
-
-
-### 
- To start, let’s collect some OpenAPI specs.
- [#](#to-start-let-s-collect-some-openapi-specs "Permalink to this headline")
-
-
-
-
-
-
+### 首先，让我们收集一些OpenAPI规范。[#](#to-start-let-s-collect-some-openapi-specs "此标题的永久链接")
 
 ```
 import os, yaml
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 !wget https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml
@@ -72,13 +32,6 @@ import os, yaml
 !mv openapi.yaml spotify_openapi.yaml
 
 ```
-
-
-
-
-
-
-
 
 ```
 --2023-03-31 15:45:56--  https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml
@@ -116,34 +69,16 @@ openapi.yaml        100%[===================>] 280.03K  --.-KB/s    in 0.02s
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.agents.agent_toolkits.openapi.spec import reduce_openapi_spec
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 with open("openai_openapi.yaml") as f:
     raw_openai_api_spec = yaml.load(f, Loader=yaml.Loader)
 openai_api_spec = reduce_openapi_spec(raw_openai_api_spec)
-    
+
 with open("klarna_openapi.yaml") as f:
     raw_klarna_api_spec = yaml.load(f, Loader=yaml.Loader)
 klarna_api_spec = reduce_openapi_spec(raw_klarna_api_spec)
@@ -154,44 +89,13 @@ spotify_api_spec = reduce_openapi_spec(raw_spotify_api_spec)
 
 ```
 
-
-
-
-
-
-
 ---
 
+我们将使用Spotify API作为比较复杂的API的一个例子。如果您想复制此过程，则需要进行一些与身份验证相关的设置。
 
+* 您需要在Spotify开发人员控制台中设置一个应用程序，文档在此处记录：[这里](https://developer.spotify.com/documentation/general/guides/authorization/)，以获取凭据：`CLIENT_ID`，`CLIENT_SECRET`和`REDIRECT_URI`。
 
- We’ll work with the Spotify API as one of the examples of a somewhat complex API. There’s a bit of auth-related setup to do if you want to replicate this.
- 
-
-
-* You’ll have to set up an application in the Spotify developer console, documented
- [here](https://developer.spotify.com/documentation/general/guides/authorization/) 
- , to get credentials:
- `CLIENT_ID`
- ,
- `CLIENT_SECRET`
- , and
- `REDIRECT_URI`
- .
-* To get an access tokens (and keep them fresh), you can implement the oauth flows, or you can use
- `spotipy`
- . If you’ve set your Spotify creedentials as environment variables
- `SPOTIPY_CLIENT_ID`
- ,
- `SPOTIPY_CLIENT_SECRET`
- , and
- `SPOTIPY_REDIRECT_URI`
- , you can use the helper functions below:
-
-
-
-
-
-
+* 要获取访问令牌（并保持其更新），您可以实现oauth流程，或者您可以使用`spotipy`。如果您已将您的Spotify凭据设置为环境变量`SPOTIPY_CLIENT_ID`、`SPOTIPY_CLIENT_SECRET`和`SPOTIPY_REDIRECT_URI`，则可以使用下面的辅助函数：
 
 ```
 import spotipy.util as util
@@ -210,21 +114,7 @@ requests_wrapper = RequestsWrapper(headers=headers)
 
 ```
 
-
-
-
-
-
-
-### 
- How big is this spec?
- [#](#how-big-is-this-spec "Permalink to this headline")
-
-
-
-
-
-
+### 这个规范有多大？[#](#how-big-is-this-spec "此标题的永久链接")
 
 ```
 endpoints = [
@@ -237,26 +127,10 @@ len(endpoints)
 
 ```
 
-
-
-
-
-
-
-
 ```
 63
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import tiktoken
@@ -267,38 +141,14 @@ count_tokens(yaml.dump(raw_spotify_api_spec))
 
 ```
 
-
-
-
-
-
-
-
 ```
 80326
 
 ```
 
+### 让我们来看一些例子！[#](#let-s-see-some-examples "此标题的永久链接")
 
-
-
-
-
-
-### 
- Let’s see some examples!
- [#](#let-s-see-some-examples "Permalink to this headline")
-
-
-
- Starting with GPT-4. (Some robustness iterations under way for GPT-3 family.)
- 
-
-
-
-
-
-
+从GPT-4开始。（针对GPT-3家族进行一些鲁棒性迭代。）
 
 ```
 from langchain.llms.openai import OpenAI
@@ -306,13 +156,6 @@ from langchain.agents.agent_toolkits.openapi import planner
 llm = OpenAI(model_name="gpt-4", temperature=0.0)
 
 ```
-
-
-
-
-
-
-
 
 ```
 /Users/jeremywelborn/src/langchain/langchain/llms/openai.py:169: UserWarning: You are trying to use a chat model. This way of initializing it is no longer supported. Instead, please use: `from langchain.chat_models import ChatOpenAI`
@@ -322,28 +165,12 @@ llm = OpenAI(model_name="gpt-4", temperature=0.0)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 spotify_agent = planner.create_openapi_agent(spotify_api_spec, requests_wrapper, llm)
 user_query = "make me a playlist with the first song from kind of blue. call it machine blues."
 spotify_agent.run(user_query)
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -392,37 +219,16 @@ Final Answer: I have created a playlist called "Machine Blues" with the first so
 
 ```
 
-
-
-
-
-
 ```
 'I have created a playlist called "Machine Blues" with the first song from the "Kind of Blue" album.'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 user_query = "give me a song I'd like, make it blues-ey"
 spotify_agent.run(user_query)
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -448,20 +254,10 @@ Thought:
 
 ```
 
-
-
-
-
-
 ```
 Retrying langchain.llms.openai.completion_with_retry.<locals>._completion_with_retry in 4.0 seconds as it raised RateLimitError: That model is currently overloaded with other requests. You can retry your request, or contact us through our help center at help.openai.com if the error persists. (Please include the request ID 2167437a0072228238f3c0c5b3882764 in your message.).
 
 ```
-
-
-
-
-
 
 ```
 Action: requests_get
@@ -485,30 +281,12 @@ Final Answer: The recommended blues song for you is "Get Away Jordan" with the t
 
 ```
 
-
-
-
-
-
 ```
 'The recommended blues song for you is "Get Away Jordan" with the track ID: 03lXHmokj9qsXspNsPoirR.'
 
 ```
 
-
-
-
-
-
-#### 
- Try another API.
- [#](#try-another-api "Permalink to this headline")
-
-
-
-
-
-
+#### 尝试另一个API。[#](#try-another-api "此标题的永久链接")
 
 ```
 headers = {
@@ -518,15 +296,6 @@ openai_requests_wrapper=RequestsWrapper(headers=headers)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # Meta!
 llm = OpenAI(model_name="gpt-4", temperature=0.25)
@@ -535,13 +304,6 @@ user_query = "generate a short piece of advice"
 openai_agent.run(user_query)
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -586,7 +348,7 @@ Action Input: {"url": "https://api.openai.com/v1/models", "output_instructions":
 Observation: babbage, davinci, text-davinci-edit-001, babbage-code-search-code, text-similarity-babbage-001, code-davinci-edit-001, text-davinci-edit-001, ada
 Thought:Action: requests_post
 Action Input: {"url": "https://api.openai.com/v1/completions", "data": {"model": "davinci", "prompt": "Give me a short piece of advice on how to improve communication skills."}, "output_instructions": "Extract the text from the first choice"}
-Observation: "I'd like to broaden my horizon.\n\nI was trying to"
+Observation: "I'd like to broaden my horizon.  I was trying to"
 Thought:I cannot finish executing the plan without knowing some other information.
 
 Final Answer: The generated text is not a piece of advice on improving communication skills. I would need to retry the API call with a different prompt or model to get a more relevant response.
@@ -627,46 +389,17 @@ Final Answer: A short piece of advice for improving communication skills is to m
 
 ```
 
-
-
-
-
-
 ```
 'A short piece of advice for improving communication skills is to make sure to listen.'
 
 ```
 
+需要一些时间才能到达那里！
 
+第二个例子："json浏览器"代理[#](#nd-example-json-explorer-agent "永久链接到此标题")
+----------------------------------------------------------------
 
-
-
-
- Takes awhile to get there!
- 
-
-
-
-
-
-
-
- 2nd example: “json explorer” agent
- [#](#nd-example-json-explorer-agent "Permalink to this headline")
--------------------------------------------------------------------------------------------------------
-
-
-
- Here’s an agent that’s not particularly practical, but neat! The agent has access to 2 toolkits. One comprises tools to interact with json: one tool to list the keys of a json object and another tool to get the value for a given key. The other toolkit comprises
- `requests`
- wrappers to send GET and POST requests. This agent consumes a lot calls to the language model, but does a surprisingly decent job.
- 
-
-
-
-
-
-
+这是一个不太实用但很有趣的代理。代理可以访问两个工具包。其中一个包括与json交互的工具：一个用于列出json对象的键的工具，另一个用于获取给定键的值的工具。另一个工具包包括`requests`包装器以发送GET和POST请求。这个代理消耗了很多调用语言模型的时间，但表现出奇好的效果。
 
 ```
 from langchain.agents import create_openapi_agent
@@ -677,20 +410,10 @@ from langchain.tools.json.tool import JsonSpec
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 with open("openai_openapi.yaml") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 json_spec=JsonSpec(dict_=data, max_value_length=4000)
-
 
 openapi_toolkit = OpenAPIToolkit.from_llm(OpenAI(temperature=0), json_spec, openai_requests_wrapper, verbose=True)
 openapi_agent_executor = create_openapi_agent(
@@ -701,26 +424,10 @@ openapi_agent_executor = create_openapi_agent(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 openapi_agent_executor.run("Make a post request to openai /completions. The prompt should be 'tell me a joke.'")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -824,29 +531,17 @@ Observation: The required parameters for a POST request to the /completions endp
 Thought: I now know the parameters needed to make the request.
 Action: requests_post
 Action Input: { "url": "https://api.openai.com/v1/completions", "data": { "model": "davinci", "prompt": "tell me a joke" } }
-Observation: {"id":"cmpl-70Ivzip3dazrIXU8DSVJGzFJj2rdv","object":"text_completion","created":1680307139,"model":"davinci","choices":[{"text":" with mummy not there”\n\nYou dig deep and come up with,","index":0,"logprobs":null,"finish_reason":"length"}],"usage":{"prompt_tokens":4,"completion_tokens":16,"total_tokens":20}}
+Observation: {"id":"cmpl-70Ivzip3dazrIXU8DSVJGzFJj2rdv","object":"text_completion","created":1680307139,"model":"davinci","choices":[{"text":" with mummy not there”  You dig deep and come up with,","index":0,"logprobs":null,"finish_reason":"length"}],"usage":{"prompt_tokens":4,"completion_tokens":16,"total_tokens":20}}
 
 Thought: I now know the final answer.
-Final Answer: The response of the POST request is {"id":"cmpl-70Ivzip3dazrIXU8DSVJGzFJj2rdv","object":"text_completion","created":1680307139,"model":"davinci","choices":[{"text":" with mummy not there”\n\nYou dig deep and come up with,","index":0,"logprobs":null,"finish_reason":"length"}],"usage":{"prompt_tokens":4,"completion_tokens":16,"total_tokens":20}}
+Final Answer: The response of the POST request is {"id":"cmpl-70Ivzip3dazrIXU8DSVJGzFJj2rdv","object":"text_completion","created":1680307139,"model":"davinci","choices":[{"text":" with mummy not there”  You dig deep and come up with,","index":0,"logprobs":null,"finish_reason":"length"}],"usage":{"prompt_tokens":4,"completion_tokens":16,"total_tokens":20}}
 
 > Finished chain.
 
 ```
 
-
-
-
-
-
 ```
 'The response of the POST request is {"id":"cmpl-70Ivzip3dazrIXU8DSVJGzFJj2rdv","object":"text_completion","created":1680307139,"model":"davinci","choices":[{"text":" with mummy not there”\\n\\nYou dig deep and come up with,","index":0,"logprobs":null,"finish_reason":"length"}],"usage":{"prompt_tokens":4,"completion_tokens":16,"total_tokens":20}}'
 
 ```
-
-
-
-
-
-
-
 

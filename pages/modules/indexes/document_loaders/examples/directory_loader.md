@@ -1,316 +1,90 @@
-
-
-
- Directory Loader
+目录加载器
  [#](#directory-loader "Permalink to this headline")
 =======================================================================
 
 
 
- This covers how to use the DirectoryLoader to load all documents in a directory. Under the hood, by default this uses the
- [UnstructuredLoader](unstructured_file)
-
-
-
-
-
-
-
-
+本文介绍如何使用DirectoryLoader来加载目录中的所有文档。在默认情况下，它使用 `UnstructuredLoader` 进行操作。
+ 
 ```
 from langchain.document_loaders import DirectoryLoader
 
 ```
 
-
-
-
-
-
- We can use the
- `glob`
- parameter to control which files to load. Note that here it doesn’t load the
- `.rst`
- file or the
- `.ipynb`
- files.
+我们可以使用 `glob` 参数来控制加载哪些文件。请注意，这里不加载 `.rst` 文件或 `.ipynb` 文件。
  
-
-
-
-
-
-
+```
+loader = DirectoryLoader('../', glob="**/*.md")
 
 ```
-loader = DirectoryLoader('../', glob="\*\*/\*.md")
-
-```
-
-
-
-
-
-
-
-
-
 
 ```
 docs = loader.load()
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 len(docs)
 
 ```
 
-
-
-
-
-
-
-
-```
-1
-
-```
-
-
-
-
-
-
-
- Show a progress bar
+显示进度条
  [#](#show-a-progress-bar "Permalink to this headline")
 -----------------------------------------------------------------------------
 
-
-
- By default a progress bar will not be shown. To show a progress bar, install the
- `tqdm`
- library (e.g.
- `pip
- 
-
- install
- 
-
- tqdm`
- ), and set the
- `show_progress`
- parameter to
- `True`
- .
- 
-
-
-
-
-
-
+默认情况下，不会显示进度条。要显示进度条，请安装 `tqdm` 库（例如 `pip install tqdm`），并将 `show_progress` 参数设置为 `True` 。
 
 ```
 %pip install tqdm
-loader = DirectoryLoader('../', glob="\*\*/\*.md", show_progress=True)
+loader = DirectoryLoader('../', glob="**/*.md", show_progress=True)
 docs = loader.load()
 
 ```
 
-
-
-
-
-
-
-
-```
-Requirement already satisfied: tqdm in /Users/jon/.pyenv/versions/3.9.16/envs/microbiome-app/lib/python3.9/site-packages (4.65.0)
-
-```
-
-
-
-
-
-
-```
-0it [00:00, ?it/s]
-
-```
-
-
-
-
-
-
-
-
- Change loader class
+更改加载器类
  [#](#change-loader-class "Permalink to this headline")
 -----------------------------------------------------------------------------
 
-
-
- By default this uses the UnstructuredLoader class. However, you can change up the type of loader pretty easily.
- 
-
-
-
-
-
-
+默认情况下，它使用 `UnstructuredLoader` 类。但是，你可以相当容易地改变加载器的类型。
 
 ```
 from langchain.document_loaders import TextLoader
 
 ```
 
-
-
-
-
-
-
-
-
+```
+loader = DirectoryLoader('../', glob="**/*.md", loader_cls=TextLoader)
 
 ```
-loader = DirectoryLoader('../', glob="\*\*/\*.md", loader_cls=TextLoader)
-
-```
-
-
-
-
-
-
-
-
-
 
 ```
 docs = loader.load()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 len(docs)
 
 ```
 
-
-
-
-
-
-
-
-```
-1
-
-```
-
-
-
-
-
-
- If you need to load Python source code files, use the
- `PythonLoader`
- .
- 
-
-
-
-
-
-
+如果您需要加载Python源代码文件，请使用 `PythonLoader`。
 
 ```
 from langchain.document_loaders import PythonLoader
 
 ```
 
-
-
-
-
-
-
-
-
+```
+loader = DirectoryLoader('../../../../../', glob="**/*.py", loader_cls=PythonLoader)
 
 ```
-loader = DirectoryLoader('../../../../../', glob="\*\*/\*.py", loader_cls=PythonLoader)
-
-```
-
-
-
-
-
-
-
-
-
 
 ```
 docs = loader.load()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 len(docs)
 
 ```
-
-
-
-
-
-
-
-
-```
-691
-
-```
-
-
-
-
-
-
-
-

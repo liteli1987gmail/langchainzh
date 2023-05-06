@@ -1,13 +1,6 @@
+# Web Base
 
-
-
- Web Base
- [#](#web-base "Permalink to this headline")
-=======================================================
-
-
-
- This covers how to load all text from webpages into a document format that we can use downstream. For more custom logic for loading webpages look at some child class examples such as IMSDbLoader, AZLyricsLoader, and CollegeConfidentialLoader
+本节介绍了如何将网页中的所有文本加载到我们可以在下游使用的文档格式中。对于更多自定义逻辑加载网页的示例，请查看一些子类示例，如IMSDbLoader、AZLyricsLoader和CollegeConfidentialLoader。
  
 
 

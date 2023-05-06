@@ -1,39 +1,16 @@
+SQL数据库
+===============
 
+这篇笔记本展示了一个代理，它旨在与SQL数据库进行交互。该代理基于[SQLDatabaseChain](https://langchain.readthedocs.io/en/latest/modules/chains/examples/sqlite)并旨在回答有关数据库的更一般的问题，以及从错误中恢复。
 
+请注意，由于此代理正在积极开发中，因此可能并非所有答案都是正确的。此外，无法保证代理不会针对某些问题在您的数据库上执行DML语句。在敏感数据上运行时，请小心！
 
- SQL Database Agent
- [#](#sql-database-agent "Permalink to this headline")
-===========================================================================
+这里使用了示例Chinook数据库。要设置它，请按照https://database.guide/2-sample-databases-sqlite/上的说明操作，
 
+将.db文件放在存储库根目录中的notebooks文件夹中。
 
-
- This notebook showcases an agent designed to interact with a sql databases. The agent builds off of
- [SQLDatabaseChain](https://langchain.readthedocs.io/en/latest/modules/chains/examples/sqlite) 
- and is designed to answer more general questions about a database, as well as recover from errors.
- 
-
-
-
- Note that, as this agent is in active development, all answers might not be correct. Additionally, it is not guaranteed that the agent won’t perform DML statements on your database given certain questions. Be careful running it on sensitive data!
- 
-
-
-
- This uses the example Chinook database. To set it up follow the instructions on https://database.guide/2-sample-databases-sqlite/, placing the .db file in a notebooks folder at the root of this repository.
- 
-
-
-
-
- Initialization
- [#](#initialization "Permalink to this headline")
--------------------------------------------------------------------
-
-
-
-
-
-
+初始化
+---------------------------------------------------------------
 
 ```
 from langchain.agents import create_sql_agent
@@ -43,15 +20,6 @@ from langchain.llms.openai import OpenAI
 from langchain.agents import AgentExecutor
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 db = SQLDatabase.from_uri("sqlite:///../../../../notebooks/Chinook.db")
@@ -65,34 +33,13 @@ agent_executor = create_sql_agent(
 
 ```
 
-
-
-
-
-
-
-
- Example: describing a table
- [#](#example-describing-a-table "Permalink to this headline")
---------------------------------------------------------------------------------------------
-
-
-
-
-
-
+示例：描述一个表
+----------------------------------------------------------------------------------------
 
 ```
 agent_executor.run("Describe the playlisttrack table")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -111,7 +58,7 @@ CREATE TABLE "PlaylistTrack" (
  FOREIGN KEY("PlaylistId") REFERENCES "Playlist" ("PlaylistId")
 )
 
-SELECT \* FROM 'PlaylistTrack' LIMIT 3;
+SELECT * FROM 'PlaylistTrack' LIMIT 3;
 PlaylistId TrackId
 1 3402
 1 3389
@@ -123,49 +70,85 @@ Final Answer: The PlaylistTrack table has two columns, PlaylistId and TrackId, a
 
 ```
 
+```
+'The PlaylistTrack table has two columns, PlaylistId and TrackId, and is linked to the Playlist and Track tables.'
+```
 
+示例：描述一张表，从错误中恢复
+---------------------------------------------------------------------------------------------------------------------------
 
+```
+from langchain.agents import create_sql_agent
+from langchain.agents.agent_toolkits import SQLDatabaseToolkit
+from langchain.sql_database import SQLDatabase
+from langchain.llms.openai import OpenAI
+from langchain.agents import AgentExecutor
 
+```
 
+```
+db = SQLDatabase.from_uri("sqlite:///../../../../notebooks/Chinook.db")
+toolkit = SQLDatabaseToolkit(db=db)
+
+agent_executor = create_sql_agent(
+    llm=OpenAI(temperature=0),
+    toolkit=toolkit,
+    verbose=True
+)
+
+```
+
+Example: describing a table[#](#example-describing-a-table "Permalink to this headline")
+----------------------------------------------------------------------------------------
+
+```
+agent_executor.run("Describe the playlisttrack table")
+
+```
+
+```
+> Entering new AgentExecutor chain...
+Action: list_tables_sql_db
+Action Input: ""
+Observation: Artist, Invoice, Playlist, Genre, Album, PlaylistTrack, Track, InvoiceLine, MediaType, Employee, Customer
+Thought: I should look at the schema of the playlisttrack table
+Action: schema_sql_db
+Action Input: "PlaylistTrack"
+Observation: 
+CREATE TABLE "PlaylistTrack" (
+ "PlaylistId" INTEGER NOT NULL, 
+ "TrackId" INTEGER NOT NULL, 
+ PRIMARY KEY ("PlaylistId", "TrackId"), 
+ FOREIGN KEY("TrackId") REFERENCES "Track" ("TrackId"), 
+ FOREIGN KEY("PlaylistId") REFERENCES "Playlist" ("PlaylistId")
+)
+
+SELECT * FROM 'PlaylistTrack' LIMIT 3;
+PlaylistId TrackId
+1 3402
+1 3389
+1 3390
+Thought: I now know the final answer
+Final Answer: The PlaylistTrack table has two columns, PlaylistId and TrackId, and is linked to the Playlist and Track tables.
+
+> Finished chain.
+
+```
 
 ```
 'The PlaylistTrack table has two columns, PlaylistId and TrackId, and is linked to the Playlist and Track tables.'
 
 ```
 
+Example: describing a table, recovering from an error[#](#example-describing-a-table-recovering-from-an-error "到这个标题的永久链接")
+---------------------------------------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- Example: describing a table, recovering from an error
- [#](#example-describing-a-table-recovering-from-an-error "Permalink to this headline")
------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
- In this example, the agent tries to search for a table that doesn’t exist, but finds the next best result
- 
-
-
-
-
-
-
+在这个例子中，代理尝试搜索一个不存在的表格，但找到了下一个最好的结果
 
 ```
 agent_executor.run("Describe the playlistsong table")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -192,7 +175,7 @@ CREATE TABLE "PlaylistTrack" (
  FOREIGN KEY("PlaylistId") REFERENCES "Playlist" ("PlaylistId")
 )
 
-SELECT \* FROM 'PlaylistTrack' LIMIT 3;
+SELECT * FROM 'PlaylistTrack' LIMIT 3;
 PlaylistId TrackId
 1 3402
 1 3389
@@ -204,44 +187,18 @@ Final Answer: The PlaylistTrack table contains two columns, PlaylistId and Track
 
 ```
 
-
-
-
-
-
 ```
 'The PlaylistTrack table contains two columns, PlaylistId and TrackId, which are both integers and are used to link Playlist and Track tables.'
 
 ```
 
-
-
-
-
-
-
-
- Example: running queries
- [#](#example-running-queries "Permalink to this headline")
---------------------------------------------------------------------------------------
-
-
-
-
-
-
+例子：运行查询[#](#example-running-queries "到这个标题的永久链接")
+-------------------------------------------------
 
 ```
 agent_executor.run("List the total sales per country. Which country's customers spent the most?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -270,12 +227,11 @@ CREATE TABLE "Customer" (
  FOREIGN KEY("SupportRepId") REFERENCES "Employee" ("EmployeeId")
 )
 
-SELECT \* FROM 'Customer' LIMIT 3;
+SELECT * FROM 'Customer' LIMIT 3;
 CustomerId FirstName LastName Company Address City State Country PostalCode Phone Fax Email SupportRepId
 1 Luís Gonçalves Embraer - Empresa Brasileira de Aeronáutica S.A. Av. Brigadeiro Faria Lima, 2170 São José dos Campos SP Brazil 12227-000 +55 (12) 3923-5555 +55 (12) 3923-5566 luisg@embraer.com.br 3
 2 Leonie Köhler None Theodor-Heuss-Straße 34 Stuttgart None Germany 70174 +49 0711 2842222 None leonekohler@surfeu.de 5
 3 François Tremblay None 1498 rue Bélanger Montréal QC Canada H2G 1A7 +1 (514) 721-4711 None ftremblay@gmail.com 3
-
 
 CREATE TABLE "Invoice" (
  "InvoiceId" INTEGER NOT NULL, 
@@ -291,7 +247,7 @@ CREATE TABLE "Invoice" (
  FOREIGN KEY("CustomerId") REFERENCES "Customer" ("CustomerId")
 )
 
-SELECT \* FROM 'Invoice' LIMIT 3;
+SELECT * FROM 'Invoice' LIMIT 3;
 InvoiceId CustomerId InvoiceDate BillingAddress BillingCity BillingState BillingCountry BillingPostalCode Total
 1 2 2009-01-01 00:00:00 Theodor-Heuss-Straße 34 Stuttgart None Germany 70174 1.98
 2 4 2009-01-02 00:00:00 Ullevålsveien 14 Oslo None Norway 0171 3.96
@@ -307,36 +263,15 @@ Final Answer: The customers from the USA spent the most, with a total of $523.06
 
 ```
 
-
-
-
-
-
 ```
 'The customers from the USA spent the most, with a total of $523.06.'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_executor.run("Show the total number of tracks in each playlist. The Playlist name should be included in the result.")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -353,12 +288,11 @@ CREATE TABLE "Playlist" (
  PRIMARY KEY ("PlaylistId")
 )
 
-SELECT \* FROM 'Playlist' LIMIT 3;
+SELECT * FROM 'Playlist' LIMIT 3;
 PlaylistId Name
 1 Music
 2 Movies
 3 TV Shows
-
 
 CREATE TABLE "PlaylistTrack" (
  "PlaylistId" INTEGER NOT NULL, 
@@ -368,7 +302,7 @@ CREATE TABLE "PlaylistTrack" (
  FOREIGN KEY("PlaylistId") REFERENCES "Playlist" ("PlaylistId")
 )
 
-SELECT \* FROM 'PlaylistTrack' LIMIT 3;
+SELECT * FROM 'PlaylistTrack' LIMIT 3;
 PlaylistId TrackId
 1 3402
 1 3389
@@ -390,51 +324,20 @@ Final Answer: The total number of tracks in each playlist are: '90’s Music' (1
 
 ```
 
-
-
-
-
-
 ```
 "The total number of tracks in each playlist are: '90’s Music' (1477), 'Brazilian Music' (39), 'Classical' (75), 'Classical 101 - Deep Cuts' (25), 'Classical 101 - Next Steps' (25), 'Classical 101 - The Basics' (25), 'Grunge' (15), 'Heavy Metal Classic' (26), 'Music' (6580), 'Music Videos' (1)."
 
 ```
 
+从错误中恢复[#](#recovering-from-an-error "到这个标题的永久链接")
+-------------------------------------------------
 
-
-
-
-
-
-
- Recovering from an error
- [#](#recovering-from-an-error "Permalink to this headline")
----------------------------------------------------------------------------------------
-
-
-
- In this example, the agent is able to recover from an error after initially trying to access an attribute (
- `Track.ArtistId`
- ) which doesn’t exist.
- 
-
-
-
-
-
-
+在这个例子中，代理最初尝试访问一个不存在的属性 (`Track.ArtistId`), 但能够从错误中恢复。
 
 ```
 agent_executor.run("Who are the top 3 best selling artists?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -451,12 +354,11 @@ CREATE TABLE "Artist" (
  PRIMARY KEY ("ArtistId")
 )
 
-SELECT \* FROM 'Artist' LIMIT 3;
+SELECT * FROM 'Artist' LIMIT 3;
 ArtistId Name
 1 AC/DC
 2 Accept
 3 Aerosmith
-
 
 CREATE TABLE "Track" (
  "TrackId" INTEGER NOT NULL, 
@@ -474,12 +376,11 @@ CREATE TABLE "Track" (
  FOREIGN KEY("AlbumId") REFERENCES "Album" ("AlbumId")
 )
 
-SELECT \* FROM 'Track' LIMIT 3;
+SELECT * FROM 'Track' LIMIT 3;
 TrackId Name AlbumId MediaTypeId GenreId Composer Milliseconds Bytes UnitPrice
 1 For Those About To Rock (We Salute You) 1 1 1 Angus Young, Malcolm Young, Brian Johnson 343719 11170334 0.99
 2 Balls to the Wall 2 2 1 None 342562 5510424 0.99
 3 Fast As a Shark 3 2 1 F. Baltes, S. Kaufman, U. Dirkscneider & W. Hoffman 230619 3990994 0.99
-
 
 CREATE TABLE "InvoiceLine" (
  "InvoiceLineId" INTEGER NOT NULL, 
@@ -492,7 +393,7 @@ CREATE TABLE "InvoiceLine" (
  FOREIGN KEY("InvoiceId") REFERENCES "Invoice" ("InvoiceId")
 )
 
-SELECT \* FROM 'InvoiceLine' LIMIT 3;
+SELECT * FROM 'InvoiceLine' LIMIT 3;
 InvoiceLineId InvoiceId TrackId UnitPrice Quantity
 1 1 2 0.99 1
 2 1 4 0.99 1
@@ -526,20 +427,8 @@ Final Answer: The top 3 best selling artists are Iron Maiden, U2, and Metallica.
 
 ```
 
-
-
-
-
-
 ```
 'The top 3 best selling artists are Iron Maiden, U2, and Metallica.'
 
 ```
-
-
-
-
-
-
-
 

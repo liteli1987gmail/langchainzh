@@ -1,27 +1,9 @@
-
-
-
- Git
- [#](#git "Permalink to this headline")
+Git
 =============================================
 
+这篇文章展示了如何从Git仓库中加载文本文件。
 
-
- This notebook shows how to load text files from Git repository.
- 
-
-
-
-
- Load existing repository from disk
- [#](#load-existing-repository-from-disk "Permalink to this headline")
------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
+从磁盘加载仓库：
 
 ```
 from git import Repo
@@ -29,122 +11,28 @@ from git import Repo
 repo = Repo.clone_from(
     "https://github.com/hwchase17/langchain", to_path="./example_data/test_repo1"
 )
-branch = repo.head.reference
 
+# 获取当前分支
+branch = repo.head.reference
 ```
 
-
-
-
-
-
-
-
-
+使用GitLoader加载：
 
 ```
 from langchain.document_loaders import GitLoader
 
-```
-
-
-
-
-
-
-
-
-
-
-```
 loader = GitLoader(repo_path="./example_data/test_repo1/", branch=branch)
 
-```
-
-
-
-
-
-
-
-
-
-
-```
 data = loader.load()
-
 ```
 
-
-
-
-
-
-
-
-
-
-```
-len(data)
-
-```
-
-
-
-
-
-
-
-
-
+输出个别文件的内容：
 
 ```
 print(data[0])
-
 ```
 
-
-
-
-
-
-
-
-```
-page_content='.venv\n.github\n.git\n.mypy_cache\n.pytest_cache\nDockerfile' metadata={'file_path': '.dockerignore', 'file_name': '.dockerignore', 'file_type': ''}
-
-```
-
-
-
-
-
-
-
-
- Clone repository from url
- [#](#clone-repository-from-url "Permalink to this headline")
------------------------------------------------------------------------------------------
-
-
-
-
-
-
-
-```
-from langchain.document_loaders import GitLoader
-
-```
-
-
-
-
-
-
-
-
-
+从远程地址克隆仓库：
 
 ```
 loader = GitLoader(
@@ -153,77 +41,14 @@ loader = GitLoader(
     branch="master",
 )
 
-```
-
-
-
-
-
-
-
-
-
-
-```
 data = loader.load()
-
 ```
 
-
-
-
-
-
-
-
-
-
-```
-len(data)
-
-```
-
-
-
-
-
-
-
-
-```
-1074
-
-```
-
-
-
-
-
-
-
-
- Filtering files to load
- [#](#filtering-files-to-load "Permalink to this headline")
--------------------------------------------------------------------------------------
-
-
-
-
-
-
+使用过滤器加载指定类型的文件：
 
 ```
 from langchain.document_loaders import GitLoader
 
-# eg. loading only python files
+# 比如只加载python文件
 loader = GitLoader(repo_path="./example_data/test_repo1/", file_filter=lambda file_path: file_path.endswith(".py"))
-
 ```
-
-
-
-
-
-
-
-

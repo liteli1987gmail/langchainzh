@@ -1,19 +1,9 @@
+iFixit
+============================================================
 
+[iFixit](https://www.ifixit.com) 是最大的开放式修复社区。该网站包含近10万个修复手册、42k设备上的200k问题和答案，并且所有数据都在CC-BY-NC-SA 3.0下获得许可。
 
-
- iFixit
- [#](#ifixit "Permalink to this headline")
-===================================================
-
-
-
-[iFixit](https://www.ifixit.com) 
- is the largest, open repair community on the web. The site contains nearly 100k repair manuals, 200k Questions & Answers on 42k devices, and all the data is licensed under CC-BY-NC-SA 3.0.
- 
-
-
-
- This loader will allow you to download the text of a repair guide, text of Q&A’s and wikis from devices on iFixit using their open APIs. It’s incredibly useful for context related to technical documents and answers to questions about devices in the corpus of data on iFixit.
+该加载器将通过使用iFixit的开放API允许您下载修复指南、QA文本和设备维基的文本。对于有关技术文件的上下文以及关于iFixit数据群中的设备的问题的答案，它非常有用。
  
 
 
