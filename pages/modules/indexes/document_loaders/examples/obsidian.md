@@ -1,73 +1,16 @@
-
-
-
- Obsidian
- [#](#obsidian "Permalink to this headline")
+Obsidian
 =======================================================
 
+本文介绍如何从Obsidian数据库中加载文档。
 
+由于Obsidian只作为Markdown文件夹存储在磁盘上，因此加载器只需要取一个指向此目录的路径。
 
- This notebook covers how to load documents from an Obsidian database.
- 
+Obsidian文件有时还包含元数据，即文件顶部的YAML块。这些值将添加到文档的元数据中。（`ObsidianLoader`还可以传递`collect_metadata = False`参数以禁用此行为。）
 
-
-
- Since Obsidian is just stored on disk as a folder of Markdown files, the loader just takes a path to this directory.
- 
-
-
-
- Obsidian files also sometimes contain
- [metadata](https://help.obsidian.md/Editing+and+formatting/Metadata) 
- which is a YAML block at the top of the file. These values will be added to the document’s metadata. (
- `ObsidianLoader`
- can also be passed a
- `collect_metadata=False`
- argument to disable this behavior.)
- 
-
-
-
-
-
-
+用法：
 
 ```
 from langchain.document_loaders import ObsidianLoader
-
-```
-
-
-
-
-
-
-
-
-
-
-```
 loader = ObsidianLoader("<path-to-obsidian>")
-
-```
-
-
-
-
-
-
-
-
-
-
-```
 docs = loader.load()
-
 ```
-
-
-
-
-
-
-

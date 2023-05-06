@@ -1,26 +1,7 @@
+# Sitemap Loader
+继承自WebBaseLoader，该loader将从给定的URL加载站点地图，并同时进行抓取和加载所有页面，将每个页面返回为文档。
 
-
-
- Sitemap Loader
- [#](#sitemap-loader "Permalink to this headline")
-===================================================================
-
-
-
- Extends from the
- 
- WebBaseLoader
- 
- , this will load a sitemap from a given URL, and then scrape and load all the pages in the sitemap, returning each page as a document.
- 
-
-
-
- The scraping is done concurrently, using
- `WebBaseLoader`
- . There are reasonable limits to concurrent requests, defaulting to 2 per second. If you aren’t concerned about being a good citizen, or you control the server you are scraping and don’t care about load, you can change the
- `requests_per_second`
- parameter to increase the max concurrent requests. Note, while this will speed up the scraping process, but may cause the server to block you. Be careful!
+使用WebBaseLoader并发地进行抓取。同时进行请求有合理的限制，默认为每秒最多 2 次请求。如果您不关心成为良好的用户，或者您控制您正在抓取的服务器而不关心负载，则可以更改“requests_per_second”参数以增加最大并发请求。请注意，虽然这将加速抓取过程，但可能会导致服务器阻止您。请小心用！
  
 
 

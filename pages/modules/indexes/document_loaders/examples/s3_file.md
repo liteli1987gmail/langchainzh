@@ -1,83 +1,29 @@
+s3 File
+==========================================================
 
-
-
- s3 File
- [#](#s3-file "Permalink to this headline")
-=====================================================
-
-
-
- This covers how to load document objects from an s3 file object.
- 
-
-
-
-
-
-
+本文介绍如何从s3文件对象加载文档对象。
+示例代码：
 
 ```
 from langchain.document_loaders import S3FileLoader
-
 ```
 
-
-
-
-
-
-
-
-
+需要安装`boto3`包：
 
 ```
-#!pip install boto3
-
+!pip install boto3
 ```
 
-
-
-
-
-
-
-
-
+初始化载入器：
 
 ```
 loader = S3FileLoader("testing-hwc", "fake.docx")
-
 ```
 
-
-
-
-
-
-
-
-
+加载并返回文档对象：
 
 ```
 loader.load()
-
 ```
 
-
-
-
-
-
-
-
-```
-[Document(page_content='Lorem ipsum dolor sit amet.', lookup_str='', metadata={'source': '/var/folders/y6/8_bzdg295ld6s1_97_12m4lr0000gn/T/tmpxvave6wl/fake.docx'}, lookup_index=0)]
-
-```
-
-
-
-
-
-
-
+返回结果是一个Document对象列表，其中每个对象包含文档内容和元数据。

@@ -1,13 +1,13 @@
 
 
 
- DataFrame Loader
+DataFrame加载程序
  [#](#dataframe-loader "Permalink to this headline")
 =======================================================================
 
 
 
- This notebook goes over how to load data from a pandas dataframe
+这篇笔记介绍如何从pandas数据框中加载数据。
  
 
 
@@ -51,10 +51,7 @@ df.head()
 
 
 
-
-
-
-
+```
 
  .dataframe tbody tr th:only-of-type {
  vertical-align: middle;
@@ -68,6 +65,7 @@ df.head()
  text-align: right;
  }
  
+
 
 
 |  | 
@@ -124,6 +122,7 @@ df.head()
  94
   |
 
+```
 
 
 

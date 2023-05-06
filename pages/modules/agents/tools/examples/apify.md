@@ -1,51 +1,20 @@
 
 
+Apify[#](#apify "Permalink to this headline")
+=============================================
 
- Apify
- [#](#apify "Permalink to this headline")
-=================================================
+本笔记本演示了如何使用[Apify集成](../../../../ecosystem/apify）进行LangChain。
 
+[Apify](https://apify.com) 是一个用于网络抓取和数据提取的云平台，提供了一个由一千多个现成的应用程序组成的[生态系统](https://apify.com/store)，这些应用程序称为各种网络抓取、爬行和数据提取用例的*演员*。例如，您可以使用它来提取Google搜索结果、Instagram和Facebook配置文件、来自Amazon或Shopify的产品、Google Maps评论等等。
 
+在本例中，我们将使用[网站内容爬虫](https://apify.com/apify/website-content-crawler)演员，它可以深度爬行文档、知识库、帮助中心或博客等网站，并从网页中提取文本内容。然后我们将这些文档提供给向量索引，并从中回答问题。
 
- This notebook shows how to use the
- [Apify integration](../../../../ecosystem/apify)
- for LangChain.
- 
+```
+#!pip install apify-client
 
+```
 
-
-[Apify](https://apify.com) 
- is a cloud platform for web scraping and data extraction,
-which provides an
- [ecosystem](https://apify.com/store) 
- of more than a thousand
-ready-made apps called
- *Actors* 
- for various web scraping, crawling, and data extraction use cases.
-For example, you can use it to extract Google Search results, Instagram and Facebook profiles, products from Amazon or Shopify, Google Maps reviews, etc. etc.
- 
-
-
-
- In this example, we’ll use the
- [Website Content Crawler](https://apify.com/apify/website-content-crawler) 
- Actor,
-which can deeply crawl websites such as documentation, knowledge bases, help centers, or blogs,
-and extract text content from the web pages. Then we feed the documents into a vector index and answer questions from it.
- 
-
-
-
- First, import
- `ApifyWrapper`
- into your source code:
- 
-
-
-
-
-
-
+首先，将`ApifyWrapper`导入到您的源代码中：
 
 ```
 from langchain.document_loaders.base import Document
@@ -54,21 +23,7 @@ from langchain.utilities import ApifyWrapper
 
 ```
 
-
-
-
-
-
- Initialize it using your
- [Apify API token](https://console.apify.com/account/integrations) 
- and for the purpose of this example, also with your OpenAI API key:
- 
-
-
-
-
-
-
+使用您的[Apify API令牌](https://console.apify.com/account/integrations)进行初始化，并且为本示例使用您的OpenAI API密钥：
 
 ```
 import os
@@ -79,32 +34,9 @@ apify = ApifyWrapper()
 
 ```
 
+然后运行Actor，等待其完成，并从Apify数据集中获取其结果到LangChain文档加载器。
 
-
-
-
-
- Then run the Actor, wait for it to finish, and fetch its results from the Apify dataset into a LangChain document loader.
- 
-
-
-
- Note that if you already have some results in an Apify dataset, you can load them directly using
- `ApifyDatasetLoader`
- , as shown in
- [this notebook](../../../indexes/document_loaders/examples/apify_dataset)
- . In that notebook, you’ll also find the explanation of the
- `dataset_mapping_function`
- , which is used to map fields from the Apify dataset records to LangChain
- `Document`
- fields.
- 
-
-
-
-
-
-
+请注意，如果您已经在Apify数据集中有一些结果，则可以直接使用`ApifyDatasetLoader`加载它们，如[此笔记本](../../../indexes/document_loaders/examples/apify_dataset）所示。在那个笔记本中，您还会找到`dataset_mapping_function`的说明，它用于将Apify数据集记录中的字段映射到LangChain`Document`字段。
 
 ```
 loader = apify.call_actor(
@@ -117,38 +49,14 @@ loader = apify.call_actor(
 
 ```
 
-
-
-
-
-
- Initialize the vector index from the crawled documents:
- 
-
-
-
-
-
-
+从爬取的文档初始化向量索引：
 
 ```
 index = VectorstoreIndexCreator().from_loaders([loader])
 
 ```
 
-
-
-
-
-
- And finally, query the vector index:
- 
-
-
-
-
-
-
+最后，查询向量索引：
 
 ```
 query = "What is LangChain?"
@@ -156,27 +64,11 @@ result = index.query_with_sources(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(result["answer"])
 print(result["sources"])
 
 ```
-
-
-
-
-
-
-
 
 ```
  LangChain is a standard interface through which you can interact with a variety of large language models (LLMs). It provides modules that can be used to build language model applications, and it also provides chains and agents with memory capabilities.
@@ -184,10 +76,4 @@ print(result["sources"])
 https://python.langchain.com/en/latest/modules/models/llms, https://python.langchain.com/en/latest/getting_started/getting_started
 
 ```
-
-
-
-
-
-
 

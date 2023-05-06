@@ -1,55 +1,20 @@
 
 
+BiliBiliLoader
+=======
 
- Bilibili
- [#](#bilibili "Permalink to this headline")
-=======================================================
+这个加载器使用 [bilibili-api](https://github.com/MoyuScript/bilibili-api) 来从 `B站` 获取文本转录。
 
-
-
- This loader utilizes the
- `bilibili-api`
- to fetch the text transcript from Bilibili, one of the most beloved long-form video sites in China.
- 
-
-
-
- With this BiliBiliLoader, users can easily obtain the transcript of their desired video content on the platform.
- 
-
-
-
-
-
-
-
-```
-from langchain.document_loaders.bilibili import BiliBiliLoader
-
-```
-
-
-
-
-
-
-
-
-
-
+使用这个 BiliBiliLoader，用户可以轻松地获取平台上他们所需的视频内容的文字转录。
 ```
 #!pip install bilibili-api
 
 ```
 
+```
+from langchain.document_loaders.bilibili import BiliBiliLoader
 
-
-
-
-
-
-
-
+```
 
 ```
 loader = BiliBiliLoader(
@@ -58,23 +23,8 @@ loader = BiliBiliLoader(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 loader.load()
 
 ```
-
-
-
-
-
-
 

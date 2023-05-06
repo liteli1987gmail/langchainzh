@@ -1,32 +1,14 @@
 
+# 使用Google搜索组件
 
+本笔记本将介绍如何使用Google搜索组件。
 
- Google Search
- [#](#google-search "Permalink to this headline")
-=================================================================
+首先，您需要设置适当的API密钥和环境变量。
+要设置它，请在[Google Cloud凭据控制台](https://console.cloud.google.com/apis/credentials)中创建GOOGLE_API_KEY，
+并使用[Programmable Search Enginge](https://programmablesearchengine.google.com/controlpanel/create)创建GOOGLE_CSE_ID。
+接下来，最好按照[这里](https://stackoverflow.com/questions/37083058/programmatically-searching-google-in-python-using-custom-search)的说明操作。
 
-
-
- This notebook goes over how to use the google search component.
- 
-
-
-
- First, you need to set up the proper API keys and environment variables. To set it up, create the GOOGLE_API_KEY in the Google Cloud credential console (https://console.cloud.google.com/apis/credentials) and a GOOGLE_CSE_ID using the Programmable Search Enginge (https://programmablesearchengine.google.com/controlpanel/create). Next, it is good to follow the instructions found
- [here](https://stackoverflow.com/questions/37083058/programmatically-searching-google-in-python-using-custom-search) 
- .
- 
-
-
-
- Then we will need to set some environment variables.
- 
-
-
-
-
-
-
+然后，我们需要设置一些环境变量。
 
 ```
 import os
@@ -35,195 +17,77 @@ os.environ["GOOGLE_API_KEY"] = ""
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
+from langchain.tools import Tool
 from langchain.utilities import GoogleSearchAPIWrapper
 
-```
-
-
-
-
-
-
-
-
-
-
-```
 search = GoogleSearchAPIWrapper()
 
-```
-
-
-
-
-
-
-
-
-
-
-```
-search.run("Obama's first name?")
+tool = Tool(
+    name = "Google Search",
+    description="Search Google for recent results.",
+    func=search.run
+)
 
 ```
 
-
-
-
-
-
-
-
 ```
-'1 Child\'s First Name. 2. 6. 7d. Street Address. 71. (Type or print). BARACK. Sex. 3. This Birth. 4. If Twin or Triplet,. Was Child Born. Barack Hussein Obama II is an American retired politician who served as the 44th president of the United States from 2009 to 2017. His full name is Barack Hussein Obama II. Since the “II” is simply because he was named for his father, his last name is Obama. Feb 9, 2015 ... Michael Jordan misspelled Barack Obama\'s first name on 50th-birthday gift ... Knowing Obama is a Chicagoan and huge basketball fan,\xa0... Aug 18, 2017 ... It took him several seconds and multiple clues to remember former President Barack Obama\'s first name. Miller knew that every answer had to end\xa0... First Lady Michelle LaVaughn Robinson Obama is a lawyer, writer, and the wife of the 44th President, Barack Obama. She is the first African-American First\xa0... Barack Obama, in full Barack Hussein Obama II, (born August 4, 1961, Honolulu, Hawaii, U.S.), 44th president of the United States (2009–17) and the first\xa0... When Barack Obama was elected president in 2008, he became the first African American to hold ... The Middle East remained a key foreign policy challenge. Feb 27, 2020 ... President Barack Obama was born Barack Hussein Obama, II, as shown here on his birth certificate here . As reported by Reuters here , his\xa0... Jan 16, 2007 ... 4, 1961, in Honolulu. His first name means "one who is blessed" in Swahili. While Obama\'s father, Barack Hussein Obama Sr., was from Kenya, his\xa0...'
+tool.run("Obama's first name?")
 
 ```
 
+```
+"STATE OF HAWAII. 1 Child's First Name. (Type or print). 2. Sex. BARACK. 3. This Birth. CERTIFICATE OF LIVE BIRTH. FILE. NUMBER 151 le. lb. Middle Name. Barack Hussein Obama II is an American former politician who served as the 44th president of the United States from 2009 to 2017. A member of the Democratic\xa0... When Barack Obama was elected president in 2008, he became the first African American to hold ... The Middle East remained a key foreign policy challenge. Jan 19, 2017 ... Jordan Barack Treasure, New York City, born in 2008 ... Jordan Barack Treasure made national news when he was the focus of a New York newspaper\xa0... Portrait of George Washington, the 1st President of the United States ... Portrait of Barack Obama, the 44th President of the United States\xa0... His full name is Barack Hussein Obama II. Since the “II” is simply because he was named for his father, his last name is Obama. Mar 22, 2008 ... Barry Obama decided that he didn't like his nickname. A few of his friends at Occidental College had already begun to call him Barack (his\xa0... Aug 18, 2017 ... It took him several seconds and multiple clues to remember former President Barack Obama's first name. Miller knew that every answer had to\xa0... Feb 9, 2015 ... Michael Jordan misspelled Barack Obama's first name on 50th-birthday gift ... Knowing Obama is a Chicagoan and huge basketball fan,\xa0... 4 days ago ... Barack Obama, in full Barack Hussein Obama II, (born August 4, 1961, Honolulu, Hawaii, U.S.), 44th president of the United States (2009–17) and\xa0..."
 
+```
 
+# 结果数量
 
-
-
-
- Number of Results
- [#](#number-of-results "Permalink to this headline")
--------------------------------------------------------------------------
-
-
-
- You can use the
- `k`
- parameter to set the number of results
- 
-
-
-
-
-
-
+您可以使用`k`参数来设置结果数量。
 
 ```
 search = GoogleSearchAPIWrapper(k=1)
 
-```
-
-
-
-
-
-
-
-
-
-
-```
-search.run("python")
+tool = Tool(
+    name = "I'm Feeling Lucky",
+    description="Search Google and return the first result.",
+    func=search.run
+)
 
 ```
 
+```
+tool.run("python")
 
-
-
-
-
-
+```
 
 ```
 'The official home of the Python Programming Language.'
 
 ```
 
+# Python编程语言的官方网站
 
+元数据结果
 
+运行通过GoogleSearch查询并返回片段、标题和链接元数据。
 
-
-
- ‘The official home of the Python Programming Language.’
- 
-
-
-
-
-
- Metadata Results
- [#](#metadata-results "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Run query through GoogleSearch and return snippet, title, and link metadata.
- 
-
-
-* Snippet: The description of the result.
-* Title: The title of the result.
-* Link: The link to the result.
-
-
-
-
-
+* 片段：结果的描述。
+* 标题：结果的标题。
+* 链接：结果的链接。
 
 
 ```
 search = GoogleSearchAPIWrapper()
 
-```
+def top5_results(query):
+    return search.results(query, 5)
 
-
-
-
-
-
-
-
-
+tool = Tool(
+    name = "Google Search Snippets",
+    description="Search Google for recent results.",
+    func=top5_results
+)
 
 ```
-search.results("apples", 5)
-
-```
-
-
-
-
-
-
-
-
-```
-[{'snippet': 'Discover the innovative world of Apple and shop everything iPhone, iPad, Apple Watch, Mac, and Apple TV, plus explore accessories, entertainment,\xa0...',
-  'title': 'Apple',
-  'link': 'https://www.apple.com/'},
- {'snippet': "Jul 10, 2022 ... Whether or not you're up on your apple trivia, no doubt you know how delicious this popular fruit is, and how nutritious. Apples are rich in\xa0...",
-  'title': '25 Types of Apples and What to Make With Them - Parade ...',
-  'link': 'https://parade.com/1330308/bethlipton/types-of-apples/'},
- {'snippet': 'An apple is an edible fruit produced by an apple tree (Malus domestica). Apple trees are cultivated worldwide and are the most widely grown species in the\xa0...',
-  'title': 'Apple - Wikipedia',
-  'link': 'https://en.wikipedia.org/wiki/Apple'},
- {'snippet': 'Apples are a popular fruit. They contain antioxidants, vitamins, dietary fiber, and a range of other nutrients. Due to their varied nutrient content,\xa0...',
-  'title': 'Apples: Benefits, nutrition, and tips',
-  'link': 'https://www.medicalnewstoday.com/articles/267290'},
- {'snippet': "An apple is a crunchy, bright-colored fruit, one of the most popular in the United States. You've probably heard the age-old saying, “An apple a day keeps\xa0...",
-  'title': 'Apples: Nutrition & Health Benefits',
-  'link': 'https://www.webmd.com/food-recipes/benefits-apples'}]
-
-```
-
-
-
-
-
-
-
 

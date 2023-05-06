@@ -1,13 +1,8 @@
 
 
+# Stripe
 
- Stripe
- [#](#stripe "Permalink to this headline")
-===================================================
-
-
-
- This notebook covers how to load data from the Stripe REST API into a format that can be ingested into LangChain, along with example usage for vectorization.
+本笔记本介绍了如何从Stripe REST API中加载数据到可以摄取到LangChain的格式，以及矢量化的示例用法。
  
 
 
@@ -27,22 +22,11 @@ from langchain.indexes import VectorstoreIndexCreator
 
 
 
+Stripe API需要访问令牌，该令牌可以在Stripe控制面板中找到。
 
+此文档加载器还需要一个`resource`选项，该选项定义要加载的数据。
 
-
- The Stripe API requires an access token, which can be found inside of the Stripe dashboard.
- 
-
-
-
- This document loader also requires a
- `resource`
- option which defines what data you want to load.
- 
-
-
-
- Following resources are available:
+以下资源可用：
  
 
 

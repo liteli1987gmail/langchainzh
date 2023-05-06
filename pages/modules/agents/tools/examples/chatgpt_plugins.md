@@ -1,30 +1,13 @@
 
 
+ChatGPT插件[#](#chatgpt-plugins "本标题的永久链接")
+=========================================
 
- ChatGPT Plugins
- [#](#chatgpt-plugins "Permalink to this headline")
-=====================================================================
+此示例显示如何在LangChain抽象中使用ChatGPT插件。
 
+注1：目前仅适用于没有身份验证的插件。
 
-
- This example shows how to use ChatGPT Plugins within LangChain abstractions.
- 
-
-
-
- Note 1: This currently only works for plugins with no auth.
- 
-
-
-
- Note 2: There are almost certainly other ways to do this, this is just a first pass. If you have better ideas, please open a PR!
- 
-
-
-
-
-
-
+注2：几乎肯定还有其他方法可以做到这一点，这只是第一次尝试。 如果您有更好的想法，请打开PR！
 
 ```
 from langchain.chat_models import ChatOpenAI
@@ -34,28 +17,10 @@ from langchain.tools import AIPluginTool
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 tool = AIPluginTool.from_plugin_url("https://www.klarna.com/.well-known/ai-plugin.json")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 llm = ChatOpenAI(temperature=0)
@@ -66,13 +31,6 @@ agent_chain = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCR
 agent_chain.run("what t shirts are available in klarna?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -93,19 +51,8 @@ Final Answer: The available t shirts in Klarna are Lacoste Men's Pack of Plain T
 
 ```
 
-
-
-
-
-
 ```
 "The available t shirts in Klarna are Lacoste Men's Pack of Plain T-Shirts, Hanes Men's Ultimate 6pk. Crewneck T-Shirts, Nike Boy's Jordan Stretch T-shirts, Polo Classic Fit Cotton V-Neck T-Shirts 3-Pack, and adidas Comfort T-shirts Men's 3-pack."
 
 ```
-
-
-
-
-
-
 

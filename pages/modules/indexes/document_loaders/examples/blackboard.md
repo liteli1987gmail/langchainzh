@@ -1,21 +1,15 @@
+Blackboard
+==============
 
 
+> [Blackboard Learn](https://en.wikipedia.org/wiki/Blackboard_Learn)（以前称为Blackboard Learning Management System）是由Blackboard Inc.开发的基于Web的虚拟学习环境和学习管理系统。该软件具有课程管理、可定制的开放式架构和可扩展的设计，允许与学生信息系统和身份验证协议集成。它可以安装在本地服务器上，由`Blackboard ASP Solutions`托管，或作为在Amazon Web Services上托管的软件服务提供。其主要目的是在传统上面对面传递的课程中增加在线元素，以及开发几乎没有面对面会议的完全在线课程。
+> 
+> 
+> 
 
- Blackboard
- [#](#blackboard "Permalink to this headline")
-===========================================================
+本文介绍如何从[Blackboard Learn](https://www.anthology.com/products/teaching-and-learning/learning-effectiveness/blackboard-learn)实例中加载数据。
 
-
-
- This covers how to load data from a Blackboard Learn instance.
- 
-
-
-
-
-
-
-
+此加载器不适用于所有`Blackboard`课程。它只适用于使用新`Blackboard`界面的课程。要使用此加载器，您必须具有BbRouter cookie。你可以通过登录课程，然后从浏览器的开发工具中复制BbRouter cookie的值来获取此Cookie。
 ```
 from langchain.document_loaders import BlackboardLoader
 
@@ -27,10 +21,4 @@ loader = BlackboardLoader(
 documents = loader.load()
 
 ```
-
-
-
-
-
-
 

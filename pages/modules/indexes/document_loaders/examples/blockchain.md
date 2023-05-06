@@ -1,66 +1,62 @@
 
-
-
- Blockchain
+区块链
  [#](#blockchain "Permalink to this headline")
 ===========================================================
 
 
 
 
- Overview
+ 概述
  [#](#overview "Permalink to this headline")
 -------------------------------------------------------
 
 
 
- The intention of this notebook is to provide a means of testing functionality in the Langchain Document Loader for Blockchain.
+ 这篇笔记的目的是为Langchain文档加载程序提供一个测试功能的手段，用于区块链。
  
 
 
 
- Initially this Loader supports:
+ 最初，这个加载程序支持：
  
 
 
-* Loading NFTs as Documents from NFT Smart Contracts (ERC721 and ERC1155)
-* Ethereum Maninnet, Ethereum Testnet, Polgyon Mainnet, Polygon Testnet (default is eth-mainnet)
-* Alchemy’s getNFTsForCollection API
+* 从NFT智能合约（ERC721和ERC1155）加载NFT作为文档
+* Ethereum Maninnet，Ethereum Testnet，Polgyon Mainnet，Polygon Testnet（默认为eth-mainnet）
+* Alchemy的getNFTsForCollection API
 
 
 
- It can be extended if the community finds value in this loader. Specifically:
+ 如果社区发现该加载程序有价值，它可以扩展。具体而言：
  
 
 
-* Additional APIs can be added (e.g. Tranction-related APIs)
+* 可以添加其他API（例如交易相关的API）
 
 
 
- This Document Loader Requires:
+ 这个文档加载器需要：
  
 
 
-* A free
- [Alchemy API Key](https://www.alchemy.com/)
+* 免费的 [Alchemy API Key](https://www.alchemy.com/)
 
 
 
- The output takes the following format:
+ 输出采用以下格式：
  
 
 
-* pageContent= Individual NFT
-* metadata={‘source’: ‘0x1a92f7381b9f03921564a437210bb9396471050c’, ‘blockchain’: ‘eth-mainnet’, ‘tokenId’: ‘0x15’})
+* pageContent=个体NFT
+* metadata={'source': '0x1a92f7381b9f03921564a437210bb9396471050c'，'blockchain': 'eth-mainnet'，'tokenId': '0x15'}）
 
 
 
 
 
- Load NFTs into Document Loader
+ 将NFT加载到文档加载器中
  [#](#load-nfts-into-document-loader "Permalink to this headline")
 ---------------------------------------------------------------------------------------------------
-
 
 
 

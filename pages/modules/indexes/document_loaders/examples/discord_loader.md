@@ -1,51 +1,29 @@
 
 
+Discord[#](#discord "Permalink to this headline")
+=================================================
 
- Discord
- [#](#discord "Permalink to this headline")
-=====================================================
+> 
+> [Discord](https://discord.com/)是一个VoIP和即时通讯社交平台。用户可以在私人聊天或作为称为“服务器”的社区的一部分中使用语音、视频、文本消息、媒体和文件进行通信。服务器是一组持久的聊天室和语音频道，可以通过邀请链接访问。
+> 
+> 
+> 
 
+按照以下步骤下载您的`Discord`数据：
 
+- 进入**用户设置**
 
- You can follow the below steps to download your Discord data:
- 
+- 然后进入**隐私与安全**
 
+- 前往**请求我的所有数据**，然后点击**请求数据**按钮
 
-1. Go to your
- **User Settings**
-2. Then go to
- **Privacy and Safety**
-3. Head over to the
- **Request all of my Data** 
- and click on
- **Request Data** 
- button
-
-
-
- It might take 30 days for you to receive your data. You’ll receive an email at the address which is registered with Discord. That email will have a download button using which you would be able to download your personal Discord data.
- 
-
-
-
-
-
-
+可能需要30天才能收到您的数据。您将收到一封电子邮件，该电子邮件将发送到您在Discord注册的地址。该电子邮件将有一个下载按钮，您可以使用该按钮下载您的个人Discord数据。
 
 ```
 import pandas as pd
 import os
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 path = input("Please enter the path to the contents of the Discord \"messages\" folder: ")
@@ -61,38 +39,14 @@ df = pd.concat(li, axis=0, ignore_index=True, sort=False)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.document_loaders.discord import DiscordChatLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 loader = DiscordChatLoader(df, user_id_col="ID")
 print(loader.load())
 
 ```
-
-
-
-
-
-
 

@@ -1,13 +1,7 @@
-
-
-
- Notebook
- [#](#notebook "Permalink to this headline")
+Notebook
 =======================================================
 
-
-
- This notebook covers how to load data from an .ipynb notebook into a format suitable by LangChain.
+本文介绍如何将.ipynb笔记本中的数据加载到适合LangChain使用的格式中。
  
 
 

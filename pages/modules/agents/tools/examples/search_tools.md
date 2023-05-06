@@ -1,20 +1,9 @@
 
 
+搜索工具
+=================
 
- Search Tools
- [#](#search-tools "Permalink to this headline")
-===============================================================
-
-
-
- This notebook shows off usage of various search tools.
- 
-
-
-
-
-
-
+本笔记本展示了各种搜索工具的使用方法。
 
 ```
 from langchain.agents import load_tools
@@ -24,80 +13,30 @@ from langchain.llms import OpenAI
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 llm = OpenAI(temperature=0)
 
 ```
 
+Google Serper API Wrapper[#](#google-serper-api-wrapper "Permalink to this headline")
+-------------------------------------------------------------------------------------
 
-
-
-
-
-
- Google Serper API Wrapper
- [#](#google-serper-api-wrapper "Permalink to this headline")
------------------------------------------------------------------------------------------
-
-
-
- First, let’s try to use the Google Serper API tool.
- 
-
-
-
-
-
-
+First, let’s try to use the Google Serper API tool.
 
 ```
 tools = load_tools(["google-serper"], llm=llm)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent.run("What is the weather in Pomfret?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -112,77 +51,30 @@ Final Answer: The current temperature in Pomfret is 37°F.
 
 ```
 
-
-
-
-
-
 ```
 'The current temperature in Pomfret is 37°F.'
 
 ```
 
+SerpAPI[#](#serpapi "Permalink to this headline")
+-------------------------------------------------
 
-
-
-
-
-
-
- SerpAPI
- [#](#serpapi "Permalink to this headline")
------------------------------------------------------
-
-
-
- Now, let’s use the SerpAPI tool.
- 
-
-
-
-
-
-
+Now, let’s use the SerpAPI tool.
 
 ```
 tools = load_tools(["serpapi"], llm=llm)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent.run("What is the weather in Pomfret?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -197,77 +89,30 @@ Final Answer: Partly cloudy skies during the morning hours will give way to clou
 
 ```
 
-
-
-
-
-
 ```
 'Partly cloudy skies during the morning hours will give way to cloudy skies with light rain and snow developing in the afternoon. High 42F. Winds WNW at 10 to 15 mph.'
 
 ```
 
+GoogleSearchAPIWrapper[#](#googlesearchapiwrapper "Permalink to this headline")
+-------------------------------------------------------------------------------
 
-
-
-
-
-
-
- GoogleSearchAPIWrapper
- [#](#googlesearchapiwrapper "Permalink to this headline")
------------------------------------------------------------------------------------
-
-
-
- Now, let’s use the official Google Search API Wrapper.
- 
-
-
-
-
-
-
+Now, let’s use the official Google Search API Wrapper.
 
 ```
 tools = load_tools(["google-search"], llm=llm)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent.run("What is the weather in Pomfret?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -281,77 +126,30 @@ Final Answer: Showers early becoming a steady light rain later in the day. Near 
 
 ```
 
-
-
-
-
-
 ```
 'Showers early becoming a steady light rain later in the day. Near record high temperatures. High around 60F. Winds SW at 10 to 15 mph. Chance of rain 60%.'
 
 ```
 
+SearxNG Meta Search Engine[#](#searxng-meta-search-engine "Permalink to this headline")
+---------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- SearxNG Meta Search Engine
- [#](#searxng-meta-search-engine "Permalink to this headline")
--------------------------------------------------------------------------------------------
-
-
-
- Here we will be using a self hosted SearxNG meta search engine.
- 
-
-
-
-
-
-
+Here we will be using a self hosted SearxNG meta search engine.
 
 ```
 tools = load_tools(["searx-search"], searx_host="http://localhost:8888", llm=llm)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent.run("What is the weather in Pomfret")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -384,20 +182,8 @@ Final Answer: The current weather in Pomfret is mainly cloudy with snow showers 
 
 ```
 
-
-
-
-
-
 ```
 'The current weather in Pomfret is mainly cloudy with snow showers around in the morning. The temperature is around 40F with winds NNW at 5 to 10 mph. Chance of snow is 40%.'
 
 ```
-
-
-
-
-
-
-
 

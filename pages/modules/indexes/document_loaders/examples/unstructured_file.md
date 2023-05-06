@@ -1,13 +1,9 @@
 
 
 
- Unstructured File Loader
- [#](#unstructured-file-loader "Permalink to this headline")
-=======================================================================================
+# 非结构化文件加载器
 
-
-
- This notebook covers how to use Unstructured to load files of many types. Unstructured currently supports loading of text files, powerpoints, html, pdfs, images, and more.
+本笔记本介绍了如何使用Unstructured来加载多种类型的文件。目前，Unstructured支持加载文本文件、幻灯片、html、pdf、图像等。
  
 
 

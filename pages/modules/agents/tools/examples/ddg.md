@@ -1,13 +1,7 @@
 
+# DuckDuckGo搜索
 
-
- DuckDuckGo Search
- [#](#duckduckgo-search "Permalink to this headline")
-=========================================================================
-
-
-
- This notebook goes over how to use the duck-duck-go search component.
+本笔记本介绍了如何使用"duck-duck-go"搜索组件。
  
 
 

@@ -1,22 +1,18 @@
 
 
+# 使用Jira工具[#](#jira-tool "Permalink to this headline")
 
- Jira
- [#](#jira "Permalink to this headline")
-===============================================
+本笔记本将介绍如何使用Jira工具。
 
+Jira工具允许代理与给定的Jira实例交互，执行诸如搜索问题和创建问题等操作，该工具包装了atlassian-python-api库，了解更多请参见：https://atlassian-python-api.readthedocs.io/jira
 
+要使用此工具，必须首先设置以下环境变量：
 
- This notebook goes over how to use the Jira tool.
-The Jira tool allows agents to interact with a given Jira instance, performing actions such as searching for issues and creating issues, the tool wraps the atlassian-python-api library, for more see: https://atlassian-python-api.readthedocs.io/jira
- 
+`JIRA_API_TOKEN`
 
+`JIRA_USERNAME`
 
-
- To use this tool, you must first set as environment variables:
-JIRA_API_TOKEN
-JIRA_USERNAME
-JIRA_INSTANCE_URL
+`JIRA_INSTANCE_URL`
  
 
 

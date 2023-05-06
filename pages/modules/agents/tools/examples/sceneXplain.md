@@ -1,59 +1,38 @@
 
 
+SceneXplain[#](#scenexplain "此标题的永久链接")
+=======================================
 
- SceneXplain
- [#](#scenexplain "Permalink to this headline")
-=============================================================
+[SceneXplain](https://scenex.jina.ai/)是可通过SceneXplain工具访问的图像字幕服务。
 
-
-
-[SceneXplain](https://scenex.jina.ai/) 
- is an ImageCaptioning service accessible through the SceneXplain Tool.
- 
-
-
-
- To use this tool, you’ll need to make an account and fetch your API Token
- [from the website](https://scenex.jina.ai/api) 
- . Then you can instantiate the tool.
- 
-
-
-
-
-
-
+要使用此工具，您需要创建帐户并从[网站](https://scenex.jina.ai/api)获取API令牌。然后您可以实例化该工具。
 
 ```
 import os
+os.environ["SCENEX_API_KEY"] = "<YOUR_API_KEY>"
+
+```
+
+```
+from langchain.agents import load_tools
+
+tools = load_tools(["sceneXplain"])
+
+```
+
+或者直接实例化该工具。
+
+```
 from langchain.tools import SceneXplainTool
 
-
-os.environ["SCENEX_API_KEY"] = "<YOUR_API_KEY>"
 tool = SceneXplainTool()
 
 ```
 
+在代理中的使用[#](#usage-in-an-agent "此标题的永久链接")
+-----------------------------------------
 
-
-
-
-
-
- Usage in an Agent
- [#](#usage-in-an-agent "Permalink to this headline")
--------------------------------------------------------------------------
-
-
-
- The tool can be used in any LangChain agent as follows:
- 
-
-
-
-
-
-
+该工具可在任何LangChain代理中使用，方法如下：
 
 ```
 from langchain.llms import OpenAI
@@ -62,10 +41,6 @@ from langchain.memory import ConversationBufferMemory
 
 llm = OpenAI(temperature=0)
 memory = ConversationBufferMemory(memory_key="chat_history")
-tools = [
-    tool
-]
-
 agent = initialize_agent(
     tools, llm, memory=memory, agent="conversational-react-description", verbose=True
 )
@@ -79,13 +54,6 @@ output = agent.run(
 print(output)
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -105,11 +73,4 @@ AI: This image appears to be a still from the 1988 Japanese animated fantasy fil
 This image appears to be a still from the 1988 Japanese animated fantasy film My Neighbor Totoro. The film follows two young girls, Satsuki and Mei, as they explore the countryside and befriend the magical forest spirits, including the titular character Totoro.
 
 ```
-
-
-
-
-
-
-
 

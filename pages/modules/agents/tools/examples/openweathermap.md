@@ -1,52 +1,21 @@
+OpenWeatherMap
+=================
 
+本笔记本将介绍如何使用OpenWeatherMap组件获取天气信息。
 
+首先，您需要注册OpenWeatherMap API密钥：
 
- OpenWeatherMap API
- [#](#openweathermap-api "Permalink to this headline")
-===========================================================================
+1. 前往OpenWeatherMap并注册API密钥 [这里](https://openweathermap.org/api/)
+2. 安装pyowm：'pip install pyowm'
 
+然后，我们需要设置一些环境变量：
 
-
- This notebook goes over how to use the OpenWeatherMap component to fetch weather information.
- 
-
-
-
- First, you need to sign up for an OpenWeatherMap API key:
- 
-
-
-1. Go to OpenWeatherMap and sign up for an API key
- [here](https://openweathermap.org/api/)
-2. pip install pyowm
-
-
-
- Then we will need to set some environment variables:
- 
-
-
-1. Save your API KEY into OPENWEATHERMAP_API_KEY env variable
-
-
-
-
-
-
+1. 将您的API KEY保存到OPENWEATHERMAP_API_KEY环境变量中
 
 ```
 pip install pyowm
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import os
@@ -54,68 +23,25 @@ os.environ["OPENWEATHERMAP_API_KEY"] = ""
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.utilities import OpenWeatherMapAPIWrapper
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 weather = OpenWeatherMapAPIWrapper()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 weather_data = weather.run("London,GB")
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(weather_data)
 
 ```
-
-
-
-
-
-
-
 
 ```
 In London,GB, the current weather is as follows:
@@ -132,10 +58,4 @@ Heat index: None
 Cloud cover: 100%
 
 ```
-
-
-
-
-
-
 

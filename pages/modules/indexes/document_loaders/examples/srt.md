@@ -1,15 +1,9 @@
 
 
 
- Subtitle Files
- [#](#subtitle-files "Permalink to this headline")
-===================================================================
+# 字幕文件
 
-
-
- How to load data from subtitle (
- `.srt`
- ) files
+如何从字幕（.srt）文件中加载数据。
  
 
 

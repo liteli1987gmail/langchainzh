@@ -1,79 +1,31 @@
 
+Zapier
+================
 
+完整文档在此处：https://nla.zapier.com/api/v1/docs
 
- Zapier Natural Language Actions API
- [#](#zapier-natural-language-actions-api "Permalink to this headline")
-=============================================================================================================
+**Zapier自然语言操作**通过自然语言API接口为您提供对Zapier平台上5k+应用程序和20k+操作的访问权限。
 
+NLA支持Gmail、Salesforce、Trello、Slack、Asana、HubSpot、Google Sheets、Microsoft Teams等应用程序以及数千个其他应用程序：https://zapier.com/apps。
 
+Zapier NLA处理所有底层API授权和自然语言翻译- >基础API调用- >返回简化输出的操作。关键思想是，您或您的用户通过类似于OAuth的设置窗口公开一组动作，然后可以通过REST API查询和执行。
 
-  
+NLA为签署NLA API请求提供API密钥和OAuth。
 
- Full docs here: https://nla.zapier.com/api/v1/docs
- 
+1. 服务器端（API密钥）：用于快速入门，测试和生产场景，其中LangChain仅使用开发人员Zapier帐户中公开的操作（并将使用开发人员在Zapier.com上连接的帐户）
 
+2. 面向用户（Oauth）：用于部署面向最终用户的应用程序并且LangChain需要访问Zapier.com上最终用户的操作和连接账户的生产场景。
 
+为简洁起见，此快速入门将重点关注服务器端用例。查看完整文档或联系nla@zapier.com获取面向用户的oauth开发者支持。
 
-**Zapier Natural Language Actions** 
- gives you access to the 5k+ apps, 20k+ actions on Zapier’s platform through a natural language API interface.
- 
-
-
-
- NLA supports apps like Gmail, Salesforce, Trello, Slack, Asana, HubSpot, Google Sheets, Microsoft Teams, and thousands more apps: https://zapier.com/apps
- 
-
-
-
- Zapier NLA handles ALL the underlying API auth and translation from natural language –> underlying API call –> return simplified output for LLMs. The key idea is you, or your users, expose a set of actions via an oauth-like setup window, which you can then query and execute via a REST API.
- 
-
-
-
- NLA offers both API Key and OAuth for signing NLA API requests.
- 
-
-
-1. Server-side (API Key): for quickly getting started, testing, and production scenarios where LangChain will only use actions exposed in the developer’s Zapier account (and will use the developer’s connected accounts on Zapier.com)
-2. User-facing (Oauth): for production scenarios where you are deploying an end-user facing application and LangChain needs access to end-user’s exposed actions and connected accounts on Zapier.com
-
-
-
- This quick start will focus on the server-side use case for brevity. Review
- [full docs](https://nla.zapier.com/api/v1/docs) 
- or reach out to nla@zapier.com for user-facing oauth developer support.
- 
-
-
-
- This example goes over how to use the Zapier integration with a
- `SimpleSequentialChain`
- , then an
- `Agent`
- .
-In code, below:
- 
-
-
-
-
-
-
+此示例介绍如何使用Zapier集成`SimpleSequentialChain`，然后使用`Agent`。
+下面是代码：
 
 ```
 %load_ext autoreload
 %autoreload 2
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import os
@@ -86,26 +38,10 @@ os.environ["ZAPIER_NLA_API_KEY"] = os.environ.get("ZAPIER_NLA_API_KEY", "")
 
 ```
 
+使用Agent的示例[#](#example-with-agent "此标题的永久链接")
+---------------------------------------------
 
-
-
-
-
-
- Example with Agent
- [#](#example-with-agent "Permalink to this headline")
----------------------------------------------------------------------------
-
-
-
- Zapier tools can be used with an agent. See the example below.
- 
-
-
-
-
-
-
+Zapier工具可与代理一起使用。请参见下面的示例。
 
 ```
 from langchain.llms import OpenAI
@@ -116,15 +52,6 @@ from langchain.utilities.zapier import ZapierNLAWrapper
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 ## step 0. expose gmail 'find email' and slack 'send channel message' actions
 
@@ -132,15 +59,6 @@ from langchain.utilities.zapier import ZapierNLAWrapper
 # in an oauth scenario, you'd get your own <provider> id (instead of 'demo') which you route your users through first
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 llm = OpenAI(temperature=0)
@@ -150,26 +68,10 @@ agent = initialize_agent(toolkit.get_tools(), llm, agent=AgentType.ZERO_SHOT_REA
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent.run("Summarize the last email I received regarding Silicon Valley Bank. Send the summary to the #test-zapier channel in slack.")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -188,38 +90,15 @@ Final Answer: I have sent a summary of the last email from Silicon Valley Bank t
 
 ```
 
-
-
-
-
-
 ```
 'I have sent a summary of the last email from Silicon Valley Bank to the #test-zapier channel in Slack.'
 
 ```
 
+使用SimpleSequentialChain的示例[#](#example-with-simplesequentialchain "此标题的永久链接")
+=============================================================================
 
-
-
-
-
-
-
-
- Example with SimpleSequentialChain
- [#](#example-with-simplesequentialchain "Permalink to this headline")
-===========================================================================================================
-
-
-
- If you need more explicit control, use a chain, like below.
- 
-
-
-
-
-
-
+如果需要更明确的控制，请使用如下所示的链。
 
 ```
 from langchain.llms import OpenAI
@@ -230,15 +109,6 @@ from langchain.utilities.zapier import ZapierNLAWrapper
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 ## step 0. expose gmail 'find email' and slack 'send direct message' actions
 
@@ -248,15 +118,6 @@ from langchain.utilities.zapier import ZapierNLAWrapper
 actions = ZapierNLAWrapper().list()
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 ## step 1. gmail find email
@@ -269,15 +130,6 @@ def nla_gmail(inputs):
 gmail_chain = TransformChain(input_variables=["instructions"], output_variables=["email_data"], transform=nla_gmail)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 ## step 2. generate draft reply
@@ -294,15 +146,6 @@ reply_chain = LLMChain(llm=OpenAI(temperature=.7), prompt=prompt_template)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 ## step 3. send draft reply via a slack direct message
 
@@ -316,15 +159,6 @@ slack_chain = TransformChain(input_variables=["draft_reply"], output_variables=[
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 ## finally, execute
 
@@ -332,13 +166,6 @@ overall_chain = SimpleSequentialChain(chains=[gmail_chain, reply_chain, slack_ch
 overall_chain.run(GMAIL_SEARCH_INSTRUCTIONS)
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new SimpleSequentialChain chain...
@@ -350,25 +177,14 @@ Thank you for your email and the update regarding your new CEO Tim Mayopoulos. W
 
 Best regards, 
 [Your Name]
-{"message__text": "Dear Silicon Valley Bridge Bank, \n\nThank you for your email and the update regarding your new CEO Tim Mayopoulos. We appreciate your dedication to keeping your clients and partners informed and we look forward to continuing our relationship with you. \n\nBest regards, \n[Your Name]", "message__permalink": "https://langchain.slack.com/archives/D04TKF5BBHU/p1678859968241629", "channel": "D04TKF5BBHU", "message__bot_profile__name": "Zapier", "message__team": "T04F8K3FZB5", "message__bot_id": "B04TRV4R74K", "message__bot_profile__deleted": "false", "message__bot_profile__app_id": "A024R9PQM", "ts_time": "2023-03-15T05:59:28Z", "message__blocks[]block_id": "p7i", "message__blocks[]elements[]elements[]type": "[['text']]", "message__blocks[]elements[]type": "['rich_text_section']"}
+{"message__text": "Dear Silicon Valley Bridge Bank,   Thank you for your email and the update regarding your new CEO Tim Mayopoulos. We appreciate your dedication to keeping your clients and partners informed and we look forward to continuing our relationship with you.   Best regards, \n[Your Name]", "message__permalink": "https://langchain.slack.com/archives/D04TKF5BBHU/p1678859968241629", "channel": "D04TKF5BBHU", "message__bot_profile__name": "Zapier", "message__team": "T04F8K3FZB5", "message__bot_id": "B04TRV4R74K", "message__bot_profile__deleted": "false", "message__bot_profile__app_id": "A024R9PQM", "ts_time": "2023-03-15T05:59:28Z", "message__blocks[]block_id": "p7i", "message__blocks[]elements[]elements[]type": "[['text']]", "message__blocks[]elements[]type": "['rich_text_section']"}
 
 > Finished chain.
 
 ```
 
-
-
-
-
-
 ```
 '{"message__text": "Dear Silicon Valley Bridge Bank, \\n\\nThank you for your email and the update regarding your new CEO Tim Mayopoulos. We appreciate your dedication to keeping your clients and partners informed and we look forward to continuing our relationship with you. \\n\\nBest regards, \\n[Your Name]", "message__permalink": "https://langchain.slack.com/archives/D04TKF5BBHU/p1678859968241629", "channel": "D04TKF5BBHU", "message__bot_profile__name": "Zapier", "message__team": "T04F8K3FZB5", "message__bot_id": "B04TRV4R74K", "message__bot_profile__deleted": "false", "message__bot_profile__app_id": "A024R9PQM", "ts_time": "2023-03-15T05:59:28Z", "message__blocks[]block_id": "p7i", "message__blocks[]elements[]elements[]type": "[[\'text\']]", "message__blocks[]elements[]type": "[\'rich_text_section\']"}'
 
 ```
-
-
-
-
-
-
 

@@ -1,83 +1,20 @@
+ReadTheDocs文档
+==========================================================
 
+本文介绍如何加载作为Read-The-Docs构建的一部分生成的html中的内容。
 
-
- ReadTheDocs Documentation
- [#](#readthedocs-documentation "Permalink to this headline")
-=========================================================================================
-
-
-
- This notebook covers how to load content from html that was generated as part of a Read-The-Docs build.
- 
-
-
-
- For an example of this in the wild, see
- [here](https://github.com/hwchase17/chat-langchain) 
- .
- 
-
-
-
- This assumes that the html has already been scraped into a folder. This can be done by uncommenting and running the following command
- 
-
-
-
-
-
-
-
-```
-#!wget -r -A -P rtdocs https://langchain.readthedocs.io/en/latest/
-
-```
-
-
-
-
-
-
-
-
-
+用法：
 
 ```
 from langchain.document_loaders import ReadTheDocsLoader
-
-```
-
-
-
-
-
-
-
-
-
-
-```
 loader = ReadTheDocsLoader("rtdocs", features='html.parser')
-
-```
-
-
-
-
-
-
-
-
-
-
-```
 docs = loader.load()
-
 ```
 
+前提是html已经被抓取到文件夹中。这可以通过取消注释并运行以下命令来完成： 
 
+```
+#!wget -r -A -P rtdocs https://langchain.readthedocs.io/en/latest/
+```
 
-
-
-
-
+示例可以从[这里](https://github.com/hwchase17/chat-langchain)查看。

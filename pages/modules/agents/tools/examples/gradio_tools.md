@@ -1,78 +1,30 @@
+gradio-tools
+===============
 
+Hugging Face空间中有许多Gradio应用程序。此库可让您的LLM快速访问它们。
 
+具体而言，gradio-tools是一个Python库，用于将Gradio应用程序转换为工具，可以被基于大型语言模型（LLM）的代理利用来完成其任务。例如，LLM可以使用Gradio工具来转录它在网上找到的语音记录，然后为您总结它。或者它可以使用不同的Gradio工具来对您Google Drive上的文件应用OCR，然后回答相关问题。
 
- Gradio Tools
- [#](#gradio-tools "Permalink to this headline")
-===============================================================
-
-
-
- There are many 1000s of Gradio apps on Hugging Face Spaces. This library puts them at the tips of your LLM’s fingers 🦾
- 
-
-
-
- Specifically, gradio-tools is a Python library for converting Gradio apps into tools that can be leveraged by a large language model (LLM)-based agent to complete its task. For example, an LLM could use a Gradio tool to transcribe a voice recording it finds online and then summarize it for you. Or it could use a different Gradio tool to apply OCR to a document on your Google Drive and then answer questions about it.
- 
-
-
-
- It’s very easy to create you own tool if you want to use a space that’s not one of the pre-built tools. Please see this section of the gradio-tools documentation for information on how to do that. All contributions are welcome!
- 
-
-
-
-
-
-
+如果您想使用未预先构建的工具创建自己的工具，则非常容易。请参阅gradio-tools文档的此部分以获取有关如何执行此操作的信息。欢迎所有贡献！
 
 ```
 # !pip install gradio_tools
 
 ```
 
-
-
-
-
-
-
- Using a tool
- [#](#using-a-tool "Permalink to this headline")
----------------------------------------------------------------
-
-
-
-
-
-
+Using a tool[#](#using-a-tool "Permalink to this headline")
+-----------------------------------------------------------
 
 ```
 from gradio_tools.tools import StableDiffusionTool
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 local_file_path = StableDiffusionTool().langchain.run("Please create a photo of a dog riding a skateboard")
 local_file_path
 
 ```
-
-
-
-
-
-
-
 
 ```
 Loaded as API: https://gradio-client-demos-stable-diffusion.hf.space ✔
@@ -81,52 +33,20 @@ Job Status: Status.STARTING eta: None
 
 ```
 
-
-
-
-
-
 ```
 '/Users/harrisonchase/workplace/langchain/docs/modules/agents/tools/examples/b61c1dd9-47e2-46f1-a47c-20d27640993d/tmp4ap48vnm.jpg'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from PIL import Image
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 im = Image.open(local_file_path)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 display(im)
@@ -135,23 +55,8 @@ display(im)
 
 
 
-
-
-<!-- ![../../../../_images/077ed2615e99f80a53ca3d0c7b7f43c25fc4c8f57ddcc6bbe803323006c97303.png](../../../../_images/077ed2615e99f80a53ca3d0c7b7f43c25fc4c8f57ddcc6bbe803323006c97303.png) -->
-
-
-
-
-
- Using within an agent
- [#](#using-within-an-agent "Permalink to this headline")
----------------------------------------------------------------------------------
-
-
-
-
-
-
+跟代理一起使用[#](#using-within-an-agent "Permalink to this headline")
+-----------------------------------------------------------------------------
 
 ```
 from langchain.agents import initialize_agent
@@ -166,7 +71,6 @@ memory = ConversationBufferMemory(memory_key="chat_history")
 tools = [StableDiffusionTool().langchain, ImageCaptioningTool().langchain,
          StableDiffusionPromptGeneratorTool().langchain, TextToVideoTool().langchain]
 
-
 agent = initialize_agent(tools, llm, memory=memory, agent="conversational-react-description", verbose=True)
 output = agent.run(input=("Please create a photo of a dog riding a skateboard "
                           "but improve my prompt prior to using an image generator."
@@ -174,19 +78,11 @@ output = agent.run(input=("Please create a photo of a dog riding a skateboard "
 
 ```
 
-
-
-
-
-
-
-
 ```
 Loaded as API: https://gradio-client-demos-stable-diffusion.hf.space ✔
 Loaded as API: https://taesiri-blip-2.hf.space ✔
 Loaded as API: https://microsoft-promptist.hf.space ✔
 Loaded as API: https://damo-vilab-modelscope-text-to-video-synthesis.hf.space ✔
-
 
 > Entering new AgentExecutor chain...
 
@@ -230,11 +126,4 @@ AI: Here is a video of a painting of a dog sitting on a skateboard.
 > Finished chain.
 
 ```
-
-
-
-
-
-
-
 

@@ -1,34 +1,11 @@
 
 
-
- URL
- [#](#url "Permalink to this headline")
-=============================================
-
-
-
- This covers how to load HTML documents from a list of URLs into a document format that we can use downstream.
- 
-
-
-
-
-
-
+本文介绍如何从URL列表中加载HTML文档，以便我们可以在下游使用。
 
 ```
  from langchain.document_loaders import UnstructuredURLLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 urls = [
@@ -38,94 +15,32 @@ urls = [
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 loader = UnstructuredURLLoader(urls=urls)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 data = loader.load()
 
 ```
 
+Selenium URL 加载器[#](#selenium-url-loader "永久链接到这个标题")
+=====================================================
 
+本文介绍如何使用`SeleniumURLLoader`从URL列表中加载HTML文档。
 
+使用Selenium可以加载需要JavaScript渲染的页面。
 
+设置[#](#setup "永久链接到这个标题")
+-------------------------
 
-
-
-
- Selenium URL Loader
- [#](#selenium-url-loader "Permalink to this headline")
-=============================================================================
-
-
-
- This covers how to load HTML documents from a list of URLs using the
- `SeleniumURLLoader`
- .
- 
-
-
-
- Using selenium allows us to load pages that require JavaScript to render.
- 
-
-
-
-
- Setup
- [#](#setup "Permalink to this headline")
--------------------------------------------------
-
-
-
- To use the
- `SeleniumURLLoader`
- , you will need to install
- `selenium`
- and
- `unstructured`
- .
- 
-
-
-
-
-
-
+要使用`SeleniumURLLoader`，您需要安装`selenium`和`unstructured`。
 
 ```
 from langchain.document_loaders import SeleniumURLLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 urls = [
@@ -135,81 +50,27 @@ urls = [
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 loader = SeleniumURLLoader(urls=urls)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 data = loader.load()
 
 ```
 
+Playwright URL 加载器[#](#playwright-url-loader "永久链接到这个标题")
+=========================================================
 
+本文介绍如何使用`PlaywrightURLLoader`从URL列表中加载HTML文档。
 
+与Selenium类似，Playwright可以加载需要JavaScript渲染的页面。
 
+设置[#](#id1 "永久链接到这个标题")
+-----------------------
 
-
-
-
-
- Playwright URL Loader
- [#](#playwright-url-loader "Permalink to this headline")
-=================================================================================
-
-
-
- This covers how to load HTML documents from a list of URLs using the
- `PlaywrightURLLoader`
- .
- 
-
-
-
- As in the Selenium case, Playwright allows us to load pages that need JavaScript to render.
- 
-
-
-
-
- Setup
- [#](#id1 "Permalink to this headline")
------------------------------------------------
-
-
-
- To use the
- `PlaywrightURLLoader`
- , you will need to install
- `playwright`
- and
- `unstructured`
- . Additionally, you will need to install the Playwright Chromium browser:
- 
-
-
-
-
-
-
+To use the `PlaywrightURLLoader`, you will need to install `playwright` and `unstructured`. Additionally, you will need to install the Playwright Chromium browser:
 
 ```
 # Install playwright
@@ -219,28 +80,10 @@ data = loader.load()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.document_loaders import PlaywrightURLLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 urls = [
@@ -250,38 +93,13 @@ urls = [
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 loader = PlaywrightURLLoader(urls=urls, remove_selectors=["header", "footer"])
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 data = loader.load()
 
 ```
-
-
-
-
-
-
-
 

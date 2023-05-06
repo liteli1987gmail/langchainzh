@@ -1,13 +1,9 @@
 
 
-
- Hacker News
- [#](#hacker-news "Permalink to this headline")
+Hacker News
 =============================================================
 
-
-
- How to pull page data and comments from Hacker News
+本文介绍如何从Hacker News获取页面数据和评论。
  
 
 
