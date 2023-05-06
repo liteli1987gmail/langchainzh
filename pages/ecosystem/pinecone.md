@@ -1,0 +1,30 @@
+
+
+松果[#](#pinecone "本标题的永久链接")
+===========================
+
+本页面介绍如何在LangChain中使用松果生态系统。
+它分为两个部分：安装和设置，然后是对特定松果包装器的引用。
+
+安装和设置[#](#installation-and-setup "本标题的永久链接")
+--------------------------------------------
+
+* 使用`pip install pinecone-client`安装Python SDK。
+
+包装器[#](#wrappers "本标题的永久链接")
+----------------------------
+
+### VectorStore[#](#vectorstore "本标题的永久链接")
+
+存在一个松果索引的包装器，允许您将其用作向量存储，
+无论是用于语义搜索还是示例选择。
+
+要导入此向量存储：
+
+```
+from langchain.vectorstores import Pinecone
+
+```
+
+有关松果包装器的更详细演示，请参见[此笔记本](../modules/indexes/vectorstores/examples/pinecone)
+

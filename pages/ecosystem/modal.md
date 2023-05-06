@@ -1,0 +1,78 @@
+
+
+模态框[#](#modal "此标题的永久链接")
+=========================
+
+本页面介绍了如何在LangChain中使用Modal生态系统。分为两部分：安装和设置，以及对特定Modal包装器的引用。
+
+安装和设置[#](#installation-and-setup "此标题的永久链接")
+--------------------------------------------
+
+* 使用`pip install modal-client`安装
+
+* 运行`modal token new`
+
+定义你的Modal函数和Webhooks[#](#define-your-modal-functions-and-webhooks "此标题的永久链接")
+-----------------------------------------------------------------------------
+
+你必须包含一个提示。有一个严格的响应结构。
+
+```
+class Item(BaseModel):
+    prompt: str
+
+@stub.webhook(method="POST")
+def my_webhook(item: Item):
+    return {"prompt": my_function.call(item.prompt)}
+
+```
+
+使用GPT2的示例：
+
+```
+from pydantic import BaseModel
+
+import modal
+
+stub = modal.Stub("example-get-started")
+
+volume = modal.SharedVolume().persist("gpt2_model_vol")
+CACHE_PATH = "/root/model_cache"
+
+@stub.function(
+    gpu="any",
+    image=modal.Image.debian_slim().pip_install(
+        "tokenizers", "transformers", "torch", "accelerate"
+    ),
+    shared_volumes={CACHE_PATH: volume},
+    retries=3,
+)
+def run_gpt2(text: str):
+    from transformers import GPT2Tokenizer, GPT2LMHeadModel
+    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+    model = GPT2LMHeadModel.from_pretrained('gpt2')
+    encoded_input = tokenizer(text, return_tensors='pt').input_ids
+    output = model.generate(encoded_input, max_length=50, do_sample=True)
+    return tokenizer.decode(output[0], skip_special_tokens=True)
+
+class Item(BaseModel):
+    prompt: str
+
+@stub.webhook(method="POST")
+def get_text(item: Item):
+    return {"prompt": run_gpt2.call(item.prompt)}
+
+```
+
+包装器[#](#wrappers "此标题的永久链接")
+----------------------------
+
+### LLM[#](#llm "Permalink to this headline")
+
+There exists an Modal LLM wrapper, which you can access with
+
+```
+from langchain.llms import Modal
+
+```
+

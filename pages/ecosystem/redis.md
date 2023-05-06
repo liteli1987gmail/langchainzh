@@ -1,0 +1,101 @@
+Redis
+===============
+
+该页面介绍如何在LangChain中使用Redis生态系统。教程分为两个部分：安装和设置，以及指向特定Redis包装器的参考。
+
+安装和设置
+-----------------------
+
+* 使用 `pip install redis` 命令安装Redis Python SDK。
+
+包装器
+
+Cache
+-----------------------
+
+Cache包装器允许 [Redis](https://redis.io) 用作远程、低延迟、内存中的LLM提示和响应缓存。
+
+标准缓存
+-----------------------
+
+标准缓存是Redis的实际使用案例，全球生产中的[开源](https://redis.io)和[企业](https://redis.com)用户都在使用它。
+
+导入缓存：
+
+
+```
+from langchain.cache import RedisCache
+
+```
+
+使用LLM时使用此缓存：
+
+```
+import langchain
+import redis
+
+redis_client = redis.Redis.from_url(...)
+langchain.llm_cache = RedisCache(redis_client)
+
+```
+
+语义缓存
+-----------------------
+
+语义缓存允许用户基于用户输入和先前缓存的结果之间的语义相似性检索缓存提示。在内部，它将Redis混合为缓存和向量存储库。
+
+导入缓存：
+
+```
+from langchain.cache import RedisSemanticCache
+
+```
+
+使用LLM时使用此缓存：
+
+```
+import langchain
+import redis
+
+# use any embedding provider...
+from tests.integration_tests.vectorstores.fake_embeddings import FakeEmbeddings
+
+redis_url = "redis://localhost:6379"
+
+langchain.llm_cache = RedisSemanticCache(
+    embedding=FakeEmbeddings(),
+    redis_url=redis_url
+)
+
+```
+
+向量存储库VectorStore
+-----------------------
+
+向量存储库包装器将Redis转换为用于语义搜索或LLM内容检索的低延迟[向量数据库](https://redis.com/solutions/use-cases/vector-database/)。
+
+导入向量存储库：
+
+```
+from langchain.vectorstores import Redis
+
+```
+
+对于 Redis vectorstore 包装器的更详细步骤，请参见[此笔记本](../modules/indexes/vectorstores/examples/redis)。
+
+### 检索器[#](#retriever "此标题的永久链接")
+
+Redis 向量存储器检索器包装器将向量存储器类泛化为执行低延迟文档检索的功能。要创建检索器，只需在基本向量存储器类上调用 `.as_retriever()`。
+
+### 内存[#](#memory "此标题的永久链接")
+
+Redis 可用于持久化 LLM 会话。
+
+#### 向量存储器检索器内存[#](#vector-store-retriever-memory "此标题的永久链接")
+
+有关 `VectorStoreRetrieverMemory` 包装器的更详细步骤，请参见[此笔记本](../modules/memory/types/vectorstore_retriever_memory)。
+
+#### 聊天消息历史记录内存[#](#chat-message-history-memory "永久链接到此标题")
+
+有关将Redis用于缓存对话消息历史记录的详细示例，请参见[此笔记本](../modules/memory/examples/redis_chat_message_history)。
+
