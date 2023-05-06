@@ -1,0 +1,57 @@
+
+
+GPT4All[#](#gpt4all "Permalink to this headline")
+=================================================
+
+
+本页面介绍如何在LangChain中使用`GPT4All`包装器。教程分为两部分：安装和设置，以及示例中的使用方法。
+
+安装和设置
+
+* 使用 `pip install pyllamacpp` 命令安装Python包。
+* 下载一个 [GPT4All模型](https://github.com/nomic-ai/pyllamacpp#supported-model)，并将其放置在所需的目录中。
+
+用法[#](#usage "Permalink to this headline")
+---------------------------------------------
+
+### GPT4All[#](#id1 "Permalink to this headline")
+
+使用GPT4All包装器，您需要提供预训练模型文件的路径以及模型的配置。
+
+```
+from langchain.llms import GPT4All
+
+# Instantiate the model. Callbacks support token-wise streaming
+model = GPT4All(model="./models/gpt4all-model.bin", n_ctx=512, n_threads=8)
+
+# Generate text
+response = model("Once upon a time, ")
+
+```
+
+您还可以自定义生成参数，例如n_predict、temp、top_p、top_k等。
+
+要流式传输模型的预测结果，请添加CallbackManager。
+
+```
+from langchain.llms import GPT4All
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+
+# There are many CallbackHandlers supported, such as
+# from langchain.callbacks.streamlit import StreamlitCallbackHandler
+
+callbacks = [StreamingStdOutCallbackHandler()]
+model = GPT4All(model="./models/gpt4all-model.bin", n_ctx=512, n_threads=8)
+
+# Generate text. Tokens are streamed through the callback manager.
+model("Once upon a time, ", callbacks=callbacks)
+
+```
+
+模型文件[#](#model-file "Permalink to this headline")
+-------------------------------------------------
+
+您可以在[pyllamacpp](https://github.com/nomic-ai/pyllamacpp)存储库中找到模型文件下载链接。
+
+有关更详细的演示，请参见[此笔记本](../modules/models/llms/integrations/gpt4all)
+

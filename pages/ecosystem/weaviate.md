@@ -1,0 +1,49 @@
+
+
+Weaviate[#](#weaviate "跳转到本标题的永久链接")
+====================================
+
+本页面介绍如何在LangChain中使用Weaviate生态系统。
+
+Weaviate是什么？
+
+**Weaviate简介：**
+
+* Weaviate是一种开源的向量搜索引擎数据库。
+
+* Weaviate允许您以类似于类属性的方式存储JSON文档，并将机器学习向量附加到这些文档中，以在向量空间中表示它们。
+
+* Weaviate可以独立使用（即带上您的向量），也可以与各种模块一起使用，这些模块可以为您进行向量化并扩展核心功能。
+
+* Weaviate具有GraphQL-API，可以轻松访问您的数据。
+
+* 我们的目标是将您的向量搜索设置投入生产，以在数毫秒内查询（请查看我们的[开源基准测试](https://weaviate.io/developers/weaviate/current/benchmarks/)，以查看Weaviate是否适合您的用例）。
+
+* 在不到五分钟的时间内，通过[基础入门指南](https://weaviate.io/developers/weaviate/current/core-knowledge/basics)了解Weaviate。
+
+**详细了解 Weaviate：**
+
+Weaviate 是一款低延迟的矢量搜索引擎，支持不同媒体类型（文本、图像等）。它提供语义搜索、问答提取、分类、可定制模型（PyTorch/TensorFlow/Keras）等功能。Weaviate 从头开始使用 Go 构建，存储对象和向量，允许将矢量搜索与结构化过滤和云原生数据库的容错性相结合。它可以通过 GraphQL、REST 和各种客户端编程语言进行访问。
+
+安装和设置[#](#installation-and-setup "Permalink to this headline")
+--------------------------------------------------------------
+
+* 使用 `pip install weaviate-client` 安装 Python SDK。
+
+包装器[#](#wrappers "Permalink to this headline")
+----------------------------------------------
+
+### 向量存储[#](#vectorstore "Permalink to this headline")
+
+存在一个 Weaviate 索引的包装器，可以将其用作向量存储，无论是用于语义搜索还是示例选择。
+
+导入此向量存储：
+
+```
+from langchain.vectorstores import Weaviate
+
+```
+
+有关 Weaviate 包装器的详细演练，
+请参见 [此笔记本]("../modules/indexes/vectorstores/examples/weaviate")
+
