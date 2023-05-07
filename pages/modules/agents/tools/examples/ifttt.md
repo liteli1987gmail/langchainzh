@@ -24,7 +24,7 @@ IFTTT Webhooks
 * 选择一个与您计划连接的服务具体相关的事件名称。这将使您更容易管理Webhook URL。例如，如果您连接到Spotify，您可以使用“Spotify”作为您的事件名称。
 * Click the “Create Trigger” button to save your settings and create your webhook.
 
-配置“那么”（Then That）
+配置“那么”（Then That)
 
 * 在IFTTT界面中点击“那么”按钮。
 * 搜索您要连接的服务，如Spotify。

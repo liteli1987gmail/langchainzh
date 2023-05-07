@@ -3,7 +3,7 @@
 如何创建ChatGPT克隆版[#](#how-to-create-chatgpt-clone "本标题的永久链接")
 ==========================================================
 
-通过结合（1）特定提示和（2）记忆概念，该链复制了ChatGPT。
+通过结合（1)特定提示和（2)记忆概念，该链复制了ChatGPT。
 
 展示了示例，如https://www.engraved.blog/building-a-virtual-machine-inside/
 

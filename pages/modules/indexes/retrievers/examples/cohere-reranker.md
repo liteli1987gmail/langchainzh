@@ -16,7 +16,7 @@ def pretty_print_docs(docs):
 设置基础向量存储检索器[#](#set-up-the-base-vector-store-retriever "此标题的永久链接")
 ------------------------------------------------------------------
 
-让我们首先初始化一个简单的向量存储检索器，并存储2023年国情咨文演讲（分块）。 我们可以设置检索器以检索大量文档（20）。
+让我们首先初始化一个简单的向量存储检索器，并存储2023年国情咨文演讲（分块)。 我们可以设置检索器以检索大量文档（20)。
 
 ```
 from langchain.text_splitter import RecursiveCharacterTextSplitter

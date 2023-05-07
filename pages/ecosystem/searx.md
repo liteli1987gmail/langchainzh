@@ -11,11 +11,11 @@ SearxNG搜索API[#](#searxng-search-api "此标题的永久链接")
 
 虽然可以将包装器与[公共searx
 实例](https://searx.space/)结合使用，但这些实例经常不允许API
-访问（有关输出格式的说明，请参见下面的注释）并且在请求频率上有限制。建议选择自托管实例。
+访问（有关输出格式的说明，请参见下面的注释)并且在请求频率上有限制。建议选择自托管实例。
 
 ### 自托管实例：[#](#self-hosted-instance "此标题的永久链接")
 
-请参阅[此页](https://searxng.github.io/searxng/admin/installation）了解安装说明。
+请参阅[此页](https://searxng.github.io/searxng/admin/installation)了解安装说明。
 
 当您安装SearxNG时，默认情况下唯一的活动输出格式是HTML格式。
 您需要激活`json`格式才能使用API。这可以通过将以下行添加到`settings.yml`文件中来完成：
@@ -54,7 +54,7 @@ s.run("what is a large language model?")
 
 ### 工具[#](#tool "Permalink to this headline")
 
-你也可以将此包装器作为工具加载（与代理一起使用）。
+你也可以将此包装器作为工具加载（与代理一起使用)。
 
 你可以通过以下方式实现：
 
@@ -77,5 +77,5 @@ tools = load_tools(["searx-search-results-json"],
 
 ```
 
-有关工具的更多信息，请参阅[此页面](../modules/agents/tools/getting_started）
+有关工具的更多信息，请参阅[此页面](../modules/agents/tools/getting_started)
 

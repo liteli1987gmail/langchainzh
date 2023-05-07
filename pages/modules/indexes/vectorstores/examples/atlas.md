@@ -5,7 +5,7 @@ AtlasDB[#](#atlasdb "跳转到标题")
 
 本笔记展示了如何使用与`AtlasDB`相关的功能。
 
-[Atlas](https://docs.nomic.ai/index）是一个由Nomic提供的与小型和互联网规模非结构化数据集交互的平台
+[Atlas](https://docs.nomic.ai/index)是一个由Nomic提供的与小型和互联网规模非结构化数据集交互的平台
 
 ```
 !pip install spacy

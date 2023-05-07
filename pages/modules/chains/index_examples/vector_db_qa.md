@@ -51,7 +51,7 @@ qa.run(query)
 链类型[#](#chain-type "标题的永久链接")
 -----------------------------
 
-你可以轻松地指定不同的链类型来加载和使用RetrievalQA链。有关这些类型的更详细的演示，请参见[这个notebook](question_answering）。
+你可以轻松地指定不同的链类型来加载和使用RetrievalQA链。有关这些类型的更详细的演示，请参见[这个notebook](question_answering)。
 
 有两种加载不同链类型的方法。首先，你可以在`from_chain_type`方法中指定链类型参数。这允许你传入你想要使用的链类型的名称。例如，在下面的例子中，我们将链类型更改为`map_reduce`。
 
@@ -71,7 +71,7 @@ qa.run(query)
 
 ```
 
-以上方法允许你非常简单地更改链类型，但它确实提供了对该链类型参数的许多灵活性。如果你想控制这些参数，你可以直接加载链（就像在[这个notebook](question_answering）中所做的那样），然后将其直接传递给RetrievalQA链的`combine_documents_chain`参数。例如：
+以上方法允许你非常简单地更改链类型，但它确实提供了对该链类型参数的许多灵活性。如果你想控制这些参数，你可以直接加载链（就像在[这个notebook](question_answering)中所做的那样)，然后将其直接传递给RetrievalQA链的`combine_documents_chain`参数。例如：
 
 ```
 from langchain.chains.question_answering import load_qa_chain
@@ -94,7 +94,7 @@ qa.run(query)
 自定义提示[#](#custom-prompts "Permalink to this headline")
 ------------------------------------------------------
 
-您可以传递自定义提示来进行问答。这些提示与您可以传递到[基础问答链](question_answering）中的提示相同。
+您可以传递自定义提示来进行问答。这些提示与您可以传递到[基础问答链](question_answering)中的提示相同。
 
 ```
 from langchain.prompts import PromptTemplate

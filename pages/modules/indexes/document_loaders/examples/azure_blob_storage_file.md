@@ -3,7 +3,7 @@
 Azure Files
 ===============
 > 
->[Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-introduction)是在云中提供的完全托管的文件共享，可通过行业标准的Server Message Block（`SMB`）协议、Network File System (`NFS`)协议和`Azure Files REST API`进行访问。
+>[Azure Files](https://learn.microsoft.com/en-us/azure/storage/files/storage-files-introduction)是在云中提供的完全托管的文件共享，可通过行业标准的Server Message Block（`SMB`)协议、Network File System (`NFS`)协议和`Azure Files REST API`进行访问。
 > 
 > 
 > 

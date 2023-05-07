@@ -12,9 +12,9 @@ Zapier NLA处理所有底层API授权和自然语言翻译- >基础API调用- >�
 
 NLA为签署NLA API请求提供API密钥和OAuth。
 
-1. 服务器端（API密钥）：用于快速入门，测试和生产场景，其中LangChain仅使用开发人员Zapier帐户中公开的操作（并将使用开发人员在Zapier.com上连接的帐户）
+1. 服务器端（API密钥)：用于快速入门，测试和生产场景，其中LangChain仅使用开发人员Zapier帐户中公开的操作（并将使用开发人员在Zapier.com上连接的帐户)
 
-2. 面向用户（Oauth）：用于部署面向最终用户的应用程序并且LangChain需要访问Zapier.com上最终用户的操作和连接账户的生产场景。
+2. 面向用户（Oauth)：用于部署面向最终用户的应用程序并且LangChain需要访问Zapier.com上最终用户的操作和连接账户的生产场景。
 
 为简洁起见，此快速入门将重点关注服务器端用例。查看完整文档或联系nla@zapier.com获取面向用户的oauth开发者支持。
 

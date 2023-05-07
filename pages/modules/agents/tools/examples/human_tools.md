@@ -25,7 +25,7 @@ agent_chain = initialize_agent(
 
 ```
 
-在上面的代码中，您可以看到工具直接从命令行接收输入。您可以根据需要自定义 `prompt_func` 和 `input_func`（如下所示）。
+在上面的代码中，您可以看到工具直接从命令行接收输入。您可以根据需要自定义 `prompt_func` 和 `input_func`（如下所示)。
 
 ```
 agent_chain.run("When's my friend Eric's surname?")

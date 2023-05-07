@@ -31,7 +31,7 @@ memory.load_memory_variables({"input": 'who is sam'})
 
 ```
 
-我们还可以将历史记录作为消息列表获取（如果您正在使用聊天模型，则这非常有用）。
+我们还可以将历史记录作为消息列表获取（如果您正在使用聊天模型，则这非常有用)。
 
 ```
 memory = ConversationKGMemory(llm=llm, return_messages=True)
@@ -50,7 +50,7 @@ memory.load_memory_variables({"input": 'who is sam'})
 
 ```
 
-我们还可以更模块化地从新消息中获取当前实体（将先前的消息用作上下文）。
+我们还可以更模块化地从新消息中获取当前实体（将先前的消息用作上下文)。
 
 ```
 memory.get_current_entities("what's Sams favorite color?")
@@ -62,7 +62,7 @@ memory.get_current_entities("what's Sams favorite color?")
 
 ```
 
-我们还可以更模块化地从新消息中获取知识三元组（将先前的消息用作上下文）。
+我们还可以更模块化地从新消息中获取知识三元组（将先前的消息用作上下文)。
 
 ```
 memory.get_knowledge_triplets("her favorite color is red")

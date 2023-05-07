@@ -30,7 +30,7 @@ doc_result = embeddings.embed_documents([text])
 
 ```
 
-让我们加载带有第一代模型（例如“text-search-ada-doc-001 / text-search-ada-query-001”）的OpenAI嵌入类。注意：这些不是推荐的模型-请参见[此处](https://platform.openai.com/docs/guides/embeddings/what-are-embeddings)。
+让我们加载带有第一代模型（例如“text-search-ada-doc-001 / text-search-ada-query-001”)的OpenAI嵌入类。注意：这些不是推荐的模型-请参见[此处](https://platform.openai.com/docs/guides/embeddings/what-are-embeddings)。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings

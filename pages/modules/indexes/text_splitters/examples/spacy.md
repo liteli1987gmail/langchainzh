@@ -7,7 +7,7 @@ NLTK 的另一种替代方案是使用 Spacy。
 
 - 文本如何被分割：通过 Spacy
 
-- 块大小如何被测量：通过传递的长度函数（默认为字符数）
+- 块大小如何被测量：通过传递的长度函数（默认为字符数)
 
 ```
 # This is a long document we can split up.

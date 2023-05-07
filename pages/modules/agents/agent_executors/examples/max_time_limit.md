@@ -73,7 +73,7 @@ Final Answer: foo
 
 ```
 
-现在让我们再次尝试使用`max_execution_time=1`关键字参数。现在它在1秒后停止（通常只有一个迭代）
+现在让我们再次尝试使用`max_execution_time=1`关键字参数。现在它在1秒后停止（通常只有一个迭代)
 
 ```
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True, max_execution_time=1)

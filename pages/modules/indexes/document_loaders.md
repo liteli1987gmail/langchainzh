@@ -1,0 +1,166 @@
+
+
+文档加载器[#](#document-loaders "此标题的永久链接")
+======================================
+
+注意
+
+[概念指南](https://docs.langchain.com/docs/components/indexing/document-loaders)
+
+将语言模型与自己的文本数据结合使用是区分它们的强大方式。
+这样做的第一步是将数据加载到“文档”中-一种花哨的方式来说一些文本片段。
+该模块旨在使这个过程变得容易。
+
+这样做的主要驱动因素是[Unstructured](https://github.com/Unstructured-IO/unstructured) Python 包。
+该软件包是将所有类型的文件-文本、PowerPoint、图像、HTML、PDF 等-转换为文本数据的好方法。
+
+有关如何设置 Unstructured 的详细说明，请参见[此处](https://github.com/Unstructured-IO/unstructured#coffee-getting-started)的安装指南。
+
+提供以下文档加载器:
+
+* [Airbyte JSON](document_loaders/examples/airbyte_json)
+
+* [Apify Dataset](document_loaders/examples/apify_dataset)
+
+* [Arxiv](document_loaders/examples/arxiv)
+
+* [AWS S3 Directory](document_loaders/examples/aws_s3_directory)
+
+* [AWS S3 File](document_loaders/examples/aws_s3_file)
+
+* [AZLyrics](document_loaders/examples/azlyrics)
+
+* [Azure Blob Storage Container](document_loaders/examples/azure_blob_storage_container)
+
+* [Azure Blob Storage File](document_loaders/examples/azure_blob_storage_file)
+
+* [Bilibili](document_loaders/examples/bilibili)
+
+* [黑板](document_loaders/examples/blackboard)
+
+* [区块链](document_loaders/examples/blockchain)
+
+* [ChatGPT数据](document_loaders/examples/chatgpt_loader)
+
+* [大学机密](document_loaders/examples/college_confidential)
+
+* [Confluence](document_loaders/examples/confluence)
+
+* [CoNLL-U](document_loaders/examples/conll-u)
+
+* [复制粘贴](document_loaders/examples/copypaste)
+
+* [CSV](document_loaders/examples/csv)
+
+* [Diffbot](document_loaders/examples/diffbot)
+
+* [Discord](document_loaders/examples/discord_loader)
+
+* [DuckDB](document_loaders/examples/duckdb)
+
+* [电子邮件](document_loaders/examples/email)
+
+* [EPub](document_loaders/examples/epub)
+
+* [EverNote](document_loaders/examples/evernote)
+
+* [Facebook 聊天](document_loaders/examples/facebook_chat)
+
+* [Figma](document_loaders/examples/figma)
+
+* [文件目录](document_loaders/examples/file_directory)
+
+* [Git](document_loaders/examples/git)
+
+* [GitBook](document_loaders/examples/gitbook)
+
+* [Google BigQuery](document_loaders/examples/google_bigquery)
+
+* [Google Cloud存储目录](document_loaders/examples/google_cloud_storage_directory)
+
+* [Google Cloud存储文件](document_loaders/examples/google_cloud_storage_file)
+
+* [Google Drive](document_loaders/examples/google_drive)
+
+* [Gutenberg](document_loaders/examples/gutenberg)
+
+* [黑客新闻](document_loaders/examples/hacker_news)
+
+* [HTML](document_loaders/examples/html)
+
+* [HuggingFace 数据集](document_loaders/examples/hugging_face_dataset)
+
+* [iFixit](document_loaders/examples/ifixit)
+
+* [图片](document_loaders/examples/image)
+
+* [图片标题](document_loaders/examples/image_captions)
+
+* [IMSDb](document_loaders/examples/imsdb)
+
+* [JSON 文件](document_loaders/examples/json_loader)
+
+* [Jupyter笔记本](document_loaders/examples/jupyter_notebook)
+
+* [Markdown](document_loaders/examples/markdown)
+
+* [MediaWiki转储](document_loaders/examples/mediawikidump)
+
+* [Microsoft OneDrive](document_loaders/examples/microsoft_onedrive)
+
+* [Microsoft PowerPoint](document_loaders/examples/microsoft_powerpoint)
+
+* [Microsoft Word](document_loaders/examples/microsoft_word)
+
+* [现代财政](document_loaders/examples/modern_treasury)
+
+* [Notion DB 1/2](document_loaders/examples/notion)
+
+* [Notion DB 2/2](document_loaders/examples/notiondb)
+
+* [Obsidian](document_loaders/examples/obsidian)
+
+* [Pandas DataFrame](document_loaders/examples/pandas_dataframe)
+
+* [PDF](document_loaders/examples/pdf)
+
+* [Using PyPDFium2](document_loaders/examples/pdf#using-pypdfium2)
+
+* [ReadTheDocs Documentation](document_loaders/examples/readthedocs_documentation)
+
+* [Reddit](document_loaders/examples/reddit)
+
+* [Roam](document_loaders/examples/roam)
+
+* [网站地图](document_loaders/examples/sitemap)
+
+* [Slack](document_loaders/examples/slack)
+
+* [Spreedly](document_loaders/examples/spreedly)
+
+* [Stripe](document_loaders/examples/stripe)
+
+* [字幕](document_loaders/examples/subtitle)
+
+* [Telegram](document_loaders/examples/telegram)
+
+* [TOML](document_loaders/examples/toml)
+
+* [推特](document_loaders/examples/twitter)
+
+* [非结构化文件](document_loaders/examples/unstructured_file)
+
+* [网址](document_loaders/examples/url)
+
+* [Selenium网址加载器](document_loaders/examples/url#selenium-url-loader)
+
+* [Playwright网址加载器](document_loaders/examples/url#playwright-url-loader)
+
+* [WebBase加载器](document_loaders/examples/web_base)
+
+* [WhatsApp聊天记录](document_loaders/examples/whatsapp_chat)
+
+* [维基百科](document_loaders/examples/wikipedia)
+
+* [YouTube剪辑](document_loaders/examples/youtube_transcript)
+

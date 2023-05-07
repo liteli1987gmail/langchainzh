@@ -1,6 +1,6 @@
 
 
-如何（以及为什么）使用虚假LLM[#](#how-and-why-to-use-the-fake-llm "Permalink to this headline")
+如何（以及为什么)使用虚假LLM[#](#how-and-why-to-use-the-fake-llm "Permalink to this headline")
 ==================================================================================
 
 我们提供了一个用于测试的虚假LLM类。这使您可以模拟对LLM的调用，并模拟LLM以特定方式响应时会发生什么。

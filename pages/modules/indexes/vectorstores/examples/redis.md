@@ -4,7 +4,7 @@ Redis[#](#redis "Permalink to this headline")
 =============================================
 
 > 
-> [Redis（远程字典服务器）](https://en.wikipedia.org/wiki/Redis)是一个内存数据结构存储器，用作分布式、内存键-值数据库、缓存和消息代理，可选持久性。
+> [Redis（远程字典服务器)](https://en.wikipedia.org/wiki/Redis)是一个内存数据结构存储器，用作分布式、内存键-值数据库、缓存和消息代理，可选持久性。
 > 
 > 
 > 

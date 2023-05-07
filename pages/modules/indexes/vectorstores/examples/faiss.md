@@ -4,7 +4,7 @@ FAISS[#](#faiss "到此标题的永久链接")
 ============================
 
 > 
-> [Facebook AI 相似度搜索（Faiss）](https://engineering.fb.com/2017/03/29/data-infrastructure/faiss-a-library-for-efficient-similarity-search/)是一种用于稠密向量的高效相似度搜索和聚类的库。它包含了能够搜索任意大小的向量集合的算法，甚至包括可能不适合内存的向量集合。它还包含用于评估和参数调整的支持代码。
+> [Facebook AI 相似度搜索（Faiss)](https://engineering.fb.com/2017/03/29/data-infrastructure/faiss-a-library-for-efficient-similarity-search/)是一种用于稠密向量的高效相似度搜索和聚类的库。它包含了能够搜索任意大小的向量集合的算法，甚至包括可能不适合内存的向量集合。它还包含用于评估和参数调整的支持代码。
 > 
 > 
 > 

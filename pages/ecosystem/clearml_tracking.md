@@ -15,7 +15,7 @@ ClearML集成[#](#clearml-integration "Permalink to this headline")
 
 * OpenAI：https://platform.openai.com/account/api-keys
 
-* SerpAPI（谷歌搜索）：https://serpapi.com/dashboard
+* SerpAPI（谷歌搜索)：https://serpapi.com/dashboard
 
 ```
 import os

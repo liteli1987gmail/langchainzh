@@ -5,7 +5,7 @@ SearxNG搜索API[#](#searxng-search-api "此标题的永久链接")
 
 本笔记介绍如何使用自托管的SearxNG搜索API搜索网络。
 
-您可以[查看此链接](https://docs.searxng.org/dev/search_api）以获取有关Searx API参数的更多信息。
+您可以[查看此链接](https://docs.searxng.org/dev/search_api)以获取有关Searx API参数的更多信息。
 
 ```
 import pprint
@@ -68,7 +68,7 @@ search.run("deep learning", language='es', engines=['wiki'])
 使用元数据获取结果[#](#obtaining-results-with-metadata "跳至此处标题的永久链接")
 ------------------------------------------------------------
 
-在此示例中，我们将使用`categories`参数查找科学论文，并将结果限制为`time_range`（并非所有引擎都支持时间范围选项）。
+在此示例中，我们将使用`categories`参数查找科学论文，并将结果限制为`time_range`（并非所有引擎都支持时间范围选项)。
 
 我们还希望以结构化的方式获取包括元数据在内的结果。为此，我们将使用包装器的`results`方法。
 

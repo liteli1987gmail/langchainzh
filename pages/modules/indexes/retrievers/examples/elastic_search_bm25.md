@@ -29,10 +29,10 @@ retriever = ElasticSearchBM25Retriever.create(elasticsearch_url, "langchain-inde
 
 ```
 
-添加文本（如果必要）[#](#add-texts-if-necessary "本标题的永久链接")
+添加文本（如果必要)[#](#add-texts-if-necessary "本标题的永久链接")
 -------------------------------------------------
 
-我们可以选择向检索器中添加文本（如果它们还没有在其中）
+我们可以选择向检索器中添加文本（如果它们还没有在其中)
 
 ```
 retriever.add_texts(["foo", "bar", "world", "hello", "foo bar"])

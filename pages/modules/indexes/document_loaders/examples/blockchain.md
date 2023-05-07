@@ -21,8 +21,8 @@
  
 
 
-* 从NFT智能合约（ERC721和ERC1155）加载NFT作为文档
-* Ethereum Maninnet，Ethereum Testnet，Polgyon Mainnet，Polygon Testnet（默认为eth-mainnet）
+* 从NFT智能合约（ERC721和ERC1155)加载NFT作为文档
+* Ethereum Maninnet，Ethereum Testnet，Polgyon Mainnet，Polygon Testnet（默认为eth-mainnet)
 * Alchemy的getNFTsForCollection API
 
 
@@ -31,7 +31,7 @@
  
 
 
-* 可以添加其他API（例如交易相关的API）
+* 可以添加其他API（例如交易相关的API)
 
 
 
@@ -48,7 +48,7 @@
 
 
 * pageContent=个体NFT
-* metadata={'source': '0x1a92f7381b9f03921564a437210bb9396471050c'，'blockchain': 'eth-mainnet'，'tokenId': '0x15'}）
+* metadata={'source': '0x1a92f7381b9f03921564a437210bb9396471050c'，'blockchain': 'eth-mainnet'，'tokenId': '0x15'})
 
 
 

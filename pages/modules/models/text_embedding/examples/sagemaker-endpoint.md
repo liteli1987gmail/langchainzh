@@ -3,7 +3,7 @@ SageMaker Endpoints Embeddings类
 
 让我们加载SageMaker Endpoints Embeddings类。 如果您在SageMaker上托管自己的Hugging Face模型，可以使用此类。
 
-有关如何执行此操作的说明，请单击[此处](https://www.philschmid.de/custom-inference-huggingface-sagemaker)。 **注意**：为了处理批处理请求，您需要在自定义的`inference.py`脚本中的`predict_fn（）`函数的返回行中进行调整：
+有关如何执行此操作的说明，请单击[此处](https://www.philschmid.de/custom-inference-huggingface-sagemaker)。 **注意**：为了处理批处理请求，您需要在自定义的`inference.py`脚本中的`predict_fn（)`函数的返回行中进行调整：
 
 将
 

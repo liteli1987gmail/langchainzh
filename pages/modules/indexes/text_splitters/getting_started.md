@@ -9,7 +9,7 @@
 
 * `length_function`: 如何计算块的长度。默认情况下只计算字符数，但通常在此处传递令牌计数器。
 
-* `chunk_size`: 块的最大大小（由长度函数测量）。
+* `chunk_size`: 块的最大大小（由长度函数测量)。
 
 * `chunk_overlap`: the maximum overlap between chunks. It can be nice to have some overlap to maintain some continuity between chunks (eg do a sliding window).
 

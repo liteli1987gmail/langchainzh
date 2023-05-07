@@ -13,7 +13,7 @@ Notion
 
 这将在您的下载文件夹中生成一个.zip文件。将.zip文件移动到该存储库中。
 
-运行以下命令解压缩zip文件（根据需要替换“Export…”为您自己的文件名）。
+运行以下命令解压缩zip文件（根据需要替换“Export…”为您自己的文件名)。
 
 ```
 unzip Export-d3adfe0f-3131-4bf3-8987-a52017fc1bae.zip -d Notion_DB

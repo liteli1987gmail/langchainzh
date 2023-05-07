@@ -10,7 +10,7 @@
 
 首先，我们需要创建一个Chroma VectorStore并用一些数据进行填充。我们创建了一个包含电影摘要的小型演示文档集。
 
-注意：自查询检索器要求您安装`lark`（`pip install lark`）
+注意：自查询检索器要求您安装`lark`（`pip install lark`)
 
 ```
 # !pip install lark

@@ -12,7 +12,7 @@ Elasticsearch
 安装[#](#installation "此标题的永久链接")
 -------------------------------
 
-请查看[Elasticsearch安装说明](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch）。
+请查看[Elasticsearch安装说明](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch)。
 
 要连接到不需要登录凭据的Elasticsearch实例，请将Elasticsearch URL和索引名称与嵌入对象一起传递给构造函数。
 

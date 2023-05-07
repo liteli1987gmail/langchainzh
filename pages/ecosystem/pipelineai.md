@@ -11,7 +11,7 @@ PipelineAI[#](#pipelineai "本标题的永久链接")
 
 * 使用`pip install pipeline-ai`进行安装
 
-* 获取Pipeline Cloud API密钥并将其设置为环境变量（`PIPELINE_API_KEY`）
+* 获取Pipeline Cloud API密钥并将其设置为环境变量（`PIPELINE_API_KEY`)
 
 包装器[#](#wrappers "本标题的永久链接")
 ----------------------------

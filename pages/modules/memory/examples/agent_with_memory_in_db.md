@@ -5,7 +5,7 @@
 
 本文将介绍如何为Agent添加使用外部消息存储的记忆。在阅读本文之前，请先阅读以下两篇文章，因为本文将在它们的基础上进行：
 
-* [LLM Chain添加记忆](adding_memory）
+* [LLM Chain添加记忆](adding_memory)
 
 * 自定义Agent
 

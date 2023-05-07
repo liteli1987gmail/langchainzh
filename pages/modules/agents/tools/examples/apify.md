@@ -3,7 +3,7 @@
 Apify[#](#apify "Permalink to this headline")
 =============================================
 
-本笔记本演示了如何使用[Apify集成](../../../../ecosystem/apify）进行LangChain。
+本笔记本演示了如何使用[Apify集成](../../../../ecosystem/apify)进行LangChain。
 
 [Apify](https://apify.com) 是一个用于网络抓取和数据提取的云平台，提供了一个由一千多个现成的应用程序组成的[生态系统](https://apify.com/store)，这些应用程序称为各种网络抓取、爬行和数据提取用例的*演员*。例如，您可以使用它来提取Google搜索结果、Instagram和Facebook配置文件、来自Amazon或Shopify的产品、Google Maps评论等等。
 
@@ -36,7 +36,7 @@ apify = ApifyWrapper()
 
 然后运行Actor，等待其完成，并从Apify数据集中获取其结果到LangChain文档加载器。
 
-请注意，如果您已经在Apify数据集中有一些结果，则可以直接使用`ApifyDatasetLoader`加载它们，如[此笔记本](../../../indexes/document_loaders/examples/apify_dataset）所示。在那个笔记本中，您还会找到`dataset_mapping_function`的说明，它用于将Apify数据集记录中的字段映射到LangChain`Document`字段。
+请注意，如果您已经在Apify数据集中有一些结果，则可以直接使用`ApifyDatasetLoader`加载它们，如[此笔记本](../../../indexes/document_loaders/examples/apify_dataset)所示。在那个笔记本中，您还会找到`dataset_mapping_function`的说明，它用于将Apify数据集记录中的字段映射到LangChain`Document`字段。
 
 ```
 loader = apify.call_actor(

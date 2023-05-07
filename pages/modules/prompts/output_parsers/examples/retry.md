@@ -104,7 +104,7 @@ Action(action='search', action_input='')
 
 ```
 
-相反，我们可以使用RetryOutputParser，它将提示（以及原始输出）传递以尝试再次获取更好的响应。
+相反，我们可以使用RetryOutputParser，它将提示（以及原始输出)传递以尝试再次获取更好的响应。
 
 ```
 from langchain.output_parsers import RetryWithErrorOutputParser

@@ -10,7 +10,7 @@ StochasticAI[#](#stochasticai "Permalink to this headline")
 
 * 使用`pip install stochasticx`进行安装
 
-* 获取StochasticAI api密钥，并将其设置为环境变量（`STOCHASTICAI_API_KEY`）
+* 获取StochasticAI api密钥，并将其设置为环境变量（`STOCHASTICAI_API_KEY`)
 
 包装器[#](#wrappers "Permalink to this headline")
 ----------------------------------------------

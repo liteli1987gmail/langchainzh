@@ -29,7 +29,7 @@ memory.load_memory_variables({})
 
 ```
 
-我们也可以将历史记录作为消息列表获取（如果您正在使用聊天模型，则这非常有用）。
+我们也可以将历史记录作为消息列表获取（如果您正在使用聊天模型，则这非常有用)。
 
 ```
 memory = ConversationBufferWindowMemory( k=1, return_messages=True)

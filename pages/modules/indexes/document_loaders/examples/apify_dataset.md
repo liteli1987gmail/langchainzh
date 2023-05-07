@@ -14,7 +14,7 @@ Apify数据集[#](#apify-dataset "此标题的永久链接")
 前提条件[#](#prerequisites "此标题的永久链接")
 ----------------------------------
 
-您需要在Apify平台上拥有现有的数据集。如果您没有，请先查看[此笔记本](../../../agents/tools/examples/apify），了解如何使用Apify从文档、知识库、帮助中心或博客中提取内容。
+您需要在Apify平台上拥有现有的数据集。如果您没有，请先查看[此笔记本](../../../agents/tools/examples/apify)，了解如何使用Apify从文档、知识库、帮助中心或博客中提取内容。
 
 ```
 #!pip install apify-client
@@ -41,7 +41,7 @@ from langchain.document_loaders.base import Document
 
 ```
 
-下面代码中的映射函数将把它们转换为LangChain `Document`格式，以便您可以将其进一步与任何LLM模型一起使用（例如用于问答）。
+下面代码中的映射函数将把它们转换为LangChain `Document`格式，以便您可以将其进一步与任何LLM模型一起使用（例如用于问答)。
 
 ```
 loader = ApifyDatasetLoader(
