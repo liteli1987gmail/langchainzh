@@ -4,13 +4,13 @@ AWS S3 文件[#](#aws-s3-file "标题永久链接")
 ===================================
 
 > 
-> [Amazon 简单存储服务（Amazon S3）](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-folders） 是一种对象存储服务。
+> [Amazon 简单存储服务（Amazon S3)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-folders) 是一种对象存储服务。
 > 
 > 
 > 
 
 > 
-> [AWS S3 存储桶](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingBucket）
+> [AWS S3 存储桶](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingBucket)
 > 
 > 
 > 

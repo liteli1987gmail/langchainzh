@@ -5,9 +5,9 @@ PromptLayer
 
 `PromptLayer`记录所有您的`OpenAI API`请求，允许您在`PromptLayer`仪表板中搜索和探索请求历史记录。
 
-此示例演示了如何连接到[PromptLayer]（https://www.promptlayer.com），以开始记录您的OpenAI请求。
+此示例演示了如何连接到[PromptLayer]（https://www.promptlayer.com)，以开始记录您的OpenAI请求。
 
-另一个示例在[这里]（https://python.langchain.com/en/latest/ecosystem/promptlayer.html） 。
+另一个示例在[这里]（https://python.langchain.com/en/latest/ecosystem/promptlayer.html) 。
 
 Install PromptLayer[#](#install-promptlayer "Permalink to this headline")
 -------------------------------------------------------------------------

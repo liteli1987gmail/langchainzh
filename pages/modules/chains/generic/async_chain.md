@@ -2,7 +2,7 @@
 
 LangChain通过利用asyncio库为链提供异步支持。
 
-目前LLMChain（通过arun、apredict、acall）、LLMMathChain（通过arun和acall）、ChatVectorDBChain以及QA chains支持异步方法。其他链的异步支持正在路线图中。
+目前LLMChain（通过arun、apredict、acall)、LLMMathChain（通过arun和acall)、ChatVectorDBChain以及QA chains支持异步方法。其他链的异步支持正在路线图中。
  
 
 

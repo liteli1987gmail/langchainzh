@@ -6,9 +6,9 @@
 
 🧑 摄入自己的数据集的说明
 
-导出您的Slack数据。您可以通过转到Workspace Management页面并单击导入/导出选项（{your_slack_domain}.slack.com/services/export）来完成此操作。然后，选择正确的日期范围，然后单击“Start export”。当导出准备就绪时，Slack会向您发送电子邮件和DM。
+导出您的Slack数据。您可以通过转到Workspace Management页面并单击导入/导出选项（{your_slack_domain}.slack.com/services/export)来完成此操作。然后，选择正确的日期范围，然后单击“Start export”。当导出准备就绪时，Slack会向您发送电子邮件和DM。
 
-下载将在您的下载文件夹中生成.zip文件（或者根据您的操作系统配置，可以在任何地方找到下载文件）。
+下载将在您的下载文件夹中生成.zip文件（或者根据您的操作系统配置，可以在任何地方找到下载文件)。
 
 复制.zip文件的路径，并将其分配为下面的LOCAL_ZIPFILE。
 

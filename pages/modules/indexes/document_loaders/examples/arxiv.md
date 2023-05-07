@@ -37,7 +37,7 @@ Examples[#](#examples "Permalink to this headline")
 
 * 可选的 `load_max_docs`: 默认值为100。用于限制下载文档的数量。下载所有100个文档需要时间，因此在实验中使用较小的数字。
 
-* 可选的 `load_all_available_meta`: 默认值为False。默认情况下，仅下载最重要的字段：`Published`（文档发布/最后更新日期），`Title`，`Authors`，`Summary`。如果为True，则还会下载其他字段。
+* 可选的 `load_all_available_meta`: 默认值为False。默认情况下，仅下载最重要的字段：`Published`（文档发布/最后更新日期)，`Title`，`Authors`，`Summary`。如果为True，则还会下载其他字段。
 
 ```
 from langchain.document_loaders import ArxivLoader

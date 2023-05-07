@@ -13,7 +13,7 @@ from langchain.document_loaders import GCSFileLoader
 # !pip install google-cloud-storage
 ```
 
-指定项目名、存储桶（bucket）和文件名：
+指定项目名、存储桶（bucket)和文件名：
 
 ```
 loader = GCSFileLoader(project_name="aist", bucket="testing-hwc", blob="fake.docx")

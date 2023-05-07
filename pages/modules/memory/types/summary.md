@@ -29,7 +29,7 @@ memory.load_memory_variables({})
 
 ```
 
-我们还可以将历史记录作为消息列表获取（如果您正在与聊天模型一起使用，则此功能非常有用）。
+我们还可以将历史记录作为消息列表获取（如果您正在与聊天模型一起使用，则此功能非常有用)。
 
 ```
 memory = ConversationSummaryMemory(llm=OpenAI(temperature=0), return_messages=True)

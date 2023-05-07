@@ -13,11 +13,11 @@
 
 在高层次上，文本分割器的工作如下：
 
-- 将文本拆分为小的、语义上有意义的块（通常是句子）。
+- 将文本拆分为小的、语义上有意义的块（通常是句子)。
 
-- 开始将这些小块组合成一个较大的块，直到达到一定的大小（由某些函数测量）。
+- 开始将这些小块组合成一个较大的块，直到达到一定的大小（由某些函数测量)。
 
-- 一旦达到该大小，将该块作为自己的文本块，然后开始创建一个新的文本块，其中包含一些重叠（以保持文本块之间的上下文）。
+- 一旦达到该大小，将该块作为自己的文本块，然后开始创建一个新的文本块，其中包含一些重叠（以保持文本块之间的上下文)。
 
 这意味着您可以沿两个不同的轴自定义文本分割器：
 
@@ -27,28 +27,28 @@
 
 有关默认文本分割器和通用功能的介绍请参见：
 
-* [入门指南](text_splitters/getting_started）
+* [入门指南](text_splitters/getting_started)
 
 我们还为所有支持的文本分割器编写了文档。
 请参见下面的列表。
 
-* [字符文本分割器](text_splitters/examples/character_text_splitter）
+* [字符文本分割器](text_splitters/examples/character_text_splitter)
 
-* [Hugging Face长度函数](text_splitters/examples/huggingface_length_function）
+* [Hugging Face长度函数](text_splitters/examples/huggingface_length_function)
 
-* [Latex文本分割器](text_splitters/examples/latex）
+* [Latex文本分割器](text_splitters/examples/latex)
 
-* [Markdown文本分割器](text_splitters/examples/markdown）
+* [Markdown文本分割器](text_splitters/examples/markdown)
 
-* [NLTK文本分割器](text_splitters/examples/nltk）
+* [NLTK文本分割器](text_splitters/examples/nltk)
 
-* [Python 代码文本分割器](text_splitters/examples/python）
+* [Python 代码文本分割器](text_splitters/examples/python)
 
-* [递归字符文本分割器](text_splitters/examples/recursive_text_splitter）
+* [递归字符文本分割器](text_splitters/examples/recursive_text_splitter)
 
-* [Spacy 文本分割器](text_splitters/examples/spacy）
+* [Spacy 文本分割器](text_splitters/examples/spacy)
 
-* [tiktoken (OpenAI) 长度函数](text_splitters/examples/tiktoken）
+* [tiktoken (OpenAI) 长度函数](text_splitters/examples/tiktoken)
 
-* [Tiktoken 文本分割器](text_splitters/examples/tiktoken_splitter）
+* [Tiktoken 文本分割器](text_splitters/examples/tiktoken_splitter)
 

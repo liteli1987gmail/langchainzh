@@ -9,7 +9,7 @@
 
 * [如何编写自定义LLM包装器](examples/custom_llm.html)
 
-* [如何（以及为什么）使用假LLM](examples/fake_llm.html)
+* [如何（以及为什么)使用假LLM](examples/fake_llm.html)
 
 * [如何缓存LLM调用](examples/llm_caching.html)
 

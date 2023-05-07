@@ -30,7 +30,7 @@ from langchain.utilities import GoogleSearchAPIWrapper
 
 ### 工具[#](#tool "此标题的永久链接")
 
-您还可以将此包装器轻松加载为工具（用于与代理一起使用）。
+您还可以将此包装器轻松加载为工具（用于与代理一起使用)。
 您可以使用以下命令完成此操作：
 
 ```

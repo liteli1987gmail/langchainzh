@@ -5,7 +5,7 @@
 
 本笔记本介绍了如何使用LangChain中的LLM类。
 
-LLM类是设计用于与LLMs进行接口交互的类。有许多LLM提供商（OpenAI、Cohere、Hugging Face等）-该类旨在为所有LLM提供商提供标准接口。在本文档的这部分中，我们将重点介绍通用LLM功能。有关使用特定LLM包装器的详细信息，请参见[如何指南](how_to_guides.html)中的示例。
+LLM类是设计用于与LLMs进行接口交互的类。有许多LLM提供商（OpenAI、Cohere、Hugging Face等)-该类旨在为所有LLM提供商提供标准接口。在本文档的这部分中，我们将重点介绍通用LLM功能。有关使用特定LLM包装器的详细信息，请参见[如何指南](how_to_guides.html)中的示例。
 
 对于本笔记本，我们将使用OpenAI LLM包装器进行工作，尽管突出显示的功能对于所有LLM类型都是通用的。
 
@@ -84,9 +84,9 @@ llm_result.llm_output
 
 ```
 
-**标记数量：**您还可以估计模型中一段文本将有多少个标记。这很有用，因为模型具有上下文长度（并且对于更多标记的成本更高），这意味着您需要注意传递的文本的长度。
+**标记数量：**您还可以估计模型中一段文本将有多少个标记。这很有用，因为模型具有上下文长度（并且对于更多标记的成本更高)，这意味着您需要注意传递的文本的长度。
 
-请注意，默认情况下使用 [tiktoken](https://github.com/openai/tiktoken) 进行令牌估计（除了旧版本 <3.8，这些版本使用 Hugging Face tokenizer）
+请注意，默认情况下使用 [tiktoken](https://github.com/openai/tiktoken) 进行令牌估计（除了旧版本 <3.8，这些版本使用 Hugging Face tokenizer)
 
 ```
 llm.get_num_tokens("what a joke")

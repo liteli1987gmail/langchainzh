@@ -4,13 +4,13 @@ AWS S3目录[#](#aws-s3-directory "此标题的永久链接")
 =========================================
 
 > 
-> [Amazon Simple Storage Service（Amazon S3）](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-folders）是一项对象存储服务
+> [Amazon Simple Storage Service（Amazon S3)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-folders)是一项对象存储服务
 > 
 > 
 > 
 
 > 
-> [AWS S3目录](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-folders）
+> [AWS S3目录](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-folders)
 > 
 > 
 > 

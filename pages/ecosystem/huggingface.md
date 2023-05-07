@@ -3,7 +3,7 @@
 拥抱面孔[#](#hugging-face "此标题的永久链接")
 =================================
 
-本页面介绍如何在LangChain中使用拥抱面孔生态系统（包括[拥抱面孔中心](https://huggingface.co)）。  
+本页面介绍如何在LangChain中使用拥抱面孔生态系统（包括[拥抱面孔中心](https://huggingface.co))。  
 它分为两个部分：安装和设置，然后是特定的拥抱面孔包装器的引用。
 
 安装和设置[#](#installation-and-setup "此标题的永久链接")
@@ -13,9 +13,9 @@
 
 * 使用`pip install huggingface_hub`安装中心客户端库
 
-* 创建一个拥抱面孔账户（免费！）
+* 创建一个拥抱面孔账户（免费！)
 
-* 创建一个[访问令牌](https://huggingface.co/docs/hub/security-tokens)并将其设置为环境变量（`HUGGINGFACEHUB_API_TOKEN`）
+* 创建一个[访问令牌](https://huggingface.co/docs/hub/security-tokens)并将其设置为环境变量（`HUGGINGFACEHUB_API_TOKEN`)
 
 如果您想使用Hugging Face Python库进行工作：
 

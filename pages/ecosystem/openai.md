@@ -10,9 +10,9 @@ OpenAI[#](#openai "跳转到此标题的链接")
 
 * 使用`pip install openai`安装Python SDK。
 
-* 获取OpenAI api key并将其设置为环境变量（`OPENAI_API_KEY`）
+* 获取OpenAI api key并将其设置为环境变量（`OPENAI_API_KEY`)
 
-* 如果要使用OpenAI的分词器（仅适用于Python 3.9+），请使用`pip install tiktoken`安装。
+* 如果要使用OpenAI的分词器（仅适用于Python 3.9+)，请使用`pip install tiktoken`安装。
 
 包装器[#](#wrappers "永久链接到此标题")
 ----------------------------

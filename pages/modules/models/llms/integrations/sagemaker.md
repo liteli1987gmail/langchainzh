@@ -2,7 +2,7 @@ SageMaker
 ====================
 
 
-[Amazon SageMaker](https://aws.amazon.com/sagemaker/) 是一个系统，可以使用完全托管的基础设施、工具和工作流程构建、训练和部署任何用例的机器学习（ML）模型。
+[Amazon SageMaker](https://aws.amazon.com/sagemaker/) 是一个系统，可以使用完全托管的基础设施、工具和工作流程构建、训练和部署任何用例的机器学习（ML)模型。
 
 本笔记本将介绍如何使用托管在 `SageMaker endpoint` 上的LLM。
 

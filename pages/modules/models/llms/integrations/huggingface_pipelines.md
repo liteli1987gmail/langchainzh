@@ -5,7 +5,7 @@
 
 Hugging Face 模型可以通过 `HuggingFacePipeline` 类在本地运行。
 
-[Hugging Face 模型中心](https://huggingface.co/models) 托管超过 120k 个模型、20k 个数据集和 50k 个演示应用程序（Spaces），全部都是开源且公开可用的，是一个在线平台，人们可以轻松协作和构建机器学习。
+[Hugging Face 模型中心](https://huggingface.co/models) 托管超过 120k 个模型、20k 个数据集和 50k 个演示应用程序（Spaces)，全部都是开源且公开可用的，是一个在线平台，人们可以轻松协作和构建机器学习。
 
 这些模型可以通过本地管道包装器或通过 HuggingFaceHub 类调用其托管的推断端点从 LangChain 中调用。有关托管管道的更多信息，请参见 [HuggingFaceHub](huggingface_hub.html) 笔记本。
 

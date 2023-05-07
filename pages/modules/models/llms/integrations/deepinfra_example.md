@@ -22,7 +22,7 @@ from langchain import PromptTemplate, LLMChain
 
 请确保从DeepInfra获取API Key。您必须[登录](https://deepinfra.com/login?from=%2Fdash)并获取新令牌。
 
-您将获得1个小时的免费服务器级GPU计算时间，以测试不同的模型（请参见[此处](https://github.com/deepinfra/deepctl#deepctl)）。
+您将获得1个小时的免费服务器级GPU计算时间，以测试不同的模型（请参见[此处](https://github.com/deepinfra/deepctl#deepctl))。
 
 您可以使用 `deepctl auth token` 命令打印您的令牌。
 
@@ -43,7 +43,7 @@ os.environ["DEEPINFRA_API_TOKEN"] = DEEPINFRA_API_TOKEN
 创建DeepInfra实例[#](#create-the-deepinfra-instance "本标题的永久链接")
 -----------------------------------------------------------
 
-确保先通过`deepctl deploy create -m google/flat-t5-xl`部署模型（参见[此处](https://github.com/deepinfra/deepctl#deepctl)）
+确保先通过`deepctl deploy create -m google/flat-t5-xl`部署模型（参见[此处](https://github.com/deepinfra/deepctl#deepctl))
 
 ```
 llm = DeepInfra(model_id="DEPLOYED MODEL ID")

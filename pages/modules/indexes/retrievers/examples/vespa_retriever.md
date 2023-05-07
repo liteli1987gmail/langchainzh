@@ -7,7 +7,7 @@ Vespa.ai作为LangChain检索器
 Vespa.ai是一个高效的结构化文本和向量搜索平台。
 更多信息请参见[Vespa.ai](https://vespa.ai)。
 
-为了创建一个检索器，我们使用[pyvespa](https://pyvespa.readthedocs.io/en/latest/index）来
+为了创建一个检索器，我们使用[pyvespa](https://pyvespa.readthedocs.io/en/latest/index)来
 创建到Vespa服务的连接。
 
 ```
@@ -19,9 +19,9 @@ vespa_app = Vespa(url="https://doc-search.vespa.oath.cloud")
 
 这将创建一个连接到Vespa服务的连接，这里是Vespa文档搜索服务。
 使用pyvespa，您还可以连接到
-[Vespa Cloud实例](https://pyvespa.readthedocs.io/en/latest/deploy-vespa-cloud）
+[Vespa Cloud实例](https://pyvespa.readthedocs.io/en/latest/deploy-vespa-cloud)
 或者本地
-[Docker实例](https://pyvespa.readthedocs.io/en/latest/deploy-docker）。
+[Docker实例](https://pyvespa.readthedocs.io/en/latest/deploy-docker)。
 
 连接到服务后，您可以设置检索器：
 

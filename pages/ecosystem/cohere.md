@@ -10,7 +10,7 @@
 
 * 使用`pip install cohere`安装Python SDK。
 
-* 获取Cohere API密钥并将其设置为环境变量（`COHERE_API_KEY`）
+* 获取Cohere API密钥并将其设置为环境变量（`COHERE_API_KEY`)
 
 包装器[#](#wrappers "永久链结到这个标题")
 -----------------------------

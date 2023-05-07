@@ -22,7 +22,7 @@ from langchain.llms import SelfHostedPipeline, SelfHostedHuggingFaceLLM
 
 ```
 
-有关自托管LLM的更详细演练，请参见[此笔记本](../modules/models/llms/integrations/runhouse）
+有关自托管LLM的更详细演练，请参见[此笔记本](../modules/models/llms/integrations/runhouse)
 
 自托管嵌入[#](#self-hosted-embeddings "Permalink to this headline")
 --------------------------------------------------------------
@@ -36,5 +36,5 @@ from langchain.llms import SelfHostedPipeline, SelfHostedHuggingFaceLLM
 
 ```
 
-有关自托管嵌入的更详细演练，请参见[此笔记本](../modules/models/text_embedding/examples/self-hosted）
+有关自托管嵌入的更详细演练，请参见[此笔记本](../modules/models/text_embedding/examples/self-hosted)
 

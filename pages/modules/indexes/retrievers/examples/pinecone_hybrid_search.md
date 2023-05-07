@@ -69,7 +69,7 @@ embeddings = OpenAIEmbeddings()
 
 To encode the text to sparse values you can either choose SPLADE or BM25. For out of domain tasks we recommend using BM25.
 
-For more information about the sparse encoders you can checkout pinecone-text library [docs](https://pinecone-io.github.io/pinecone-text/pinecone_text）.
+For more information about the sparse encoders you can checkout pinecone-text library [docs](https://pinecone-io.github.io/pinecone-text/pinecone_text).
 
 ```
 from pinecone_text.sparse import BM25Encoder

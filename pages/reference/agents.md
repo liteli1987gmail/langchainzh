@@ -9,9 +9,9 @@ Agents
 
 
 
-* [Agents](modules/agents)
-* [Tools](modules/tools)
-* [Agent Toolkits](modules/agent_toolkits)
+* [Agents](../modules/agents/agents)
+* [Tools](../modules/agents/tools)
+* [Agent Toolkits](../modules/agents/toolkits)
 
 
 

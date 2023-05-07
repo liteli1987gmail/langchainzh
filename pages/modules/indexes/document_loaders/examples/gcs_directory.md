@@ -13,7 +13,7 @@ from langchain.document_loaders import GCSDirectoryLoader
 # !pip install google-cloud-storage
 ```
 
-指定项目名，存储桶（bucket）：
+指定项目名，存储桶（bucket)：
 
 ```
 loader = GCSDirectoryLoader(project_name="aist", bucket="testing-hwc")

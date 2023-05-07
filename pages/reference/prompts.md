@@ -11,9 +11,9 @@
 
 
 
-* [PromptTemplates](modules/prompts)
-* [Example Selector](modules/example_selector)
-* [Output Parsers](modules/output_parsers)
+* [PromptTemplates](../modules/prompts/prompt_templates)
+* [Example Selector](../modules/prompts/example_selectors)
+* [Output Parsers](../modules/prompts/output_parsers)
 
 
 

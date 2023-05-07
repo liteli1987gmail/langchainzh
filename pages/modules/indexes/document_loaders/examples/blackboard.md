@@ -2,7 +2,7 @@ Blackboard
 ==============
 
 
-> [Blackboard Learn](https://en.wikipedia.org/wiki/Blackboard_Learn)（以前称为Blackboard Learning Management System）是由Blackboard Inc.开发的基于Web的虚拟学习环境和学习管理系统。该软件具有课程管理、可定制的开放式架构和可扩展的设计，允许与学生信息系统和身份验证协议集成。它可以安装在本地服务器上，由`Blackboard ASP Solutions`托管，或作为在Amazon Web Services上托管的软件服务提供。其主要目的是在传统上面对面传递的课程中增加在线元素，以及开发几乎没有面对面会议的完全在线课程。
+> [Blackboard Learn](https://en.wikipedia.org/wiki/Blackboard_Learn)（以前称为Blackboard Learning Management System)是由Blackboard Inc.开发的基于Web的虚拟学习环境和学习管理系统。该软件具有课程管理、可定制的开放式架构和可扩展的设计，允许与学生信息系统和身份验证协议集成。它可以安装在本地服务器上，由`Blackboard ASP Solutions`托管，或作为在Amazon Web Services上托管的软件服务提供。其主要目的是在传统上面对面传递的课程中增加在线元素，以及开发几乎没有面对面会议的完全在线课程。
 > 
 > 
 > 

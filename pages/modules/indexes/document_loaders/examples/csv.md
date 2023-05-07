@@ -3,7 +3,7 @@ CSV
 ==============
 
 
-> [（CSV）](https://en.wikipedia.org/wiki/Comma-separated_values)文件是一个使用逗号来分隔值的定界文本文件。该文件的每一行都是一个数据记录。每个记录由一个或多个以逗号分隔的字段组成。
+> [（CSV)](https://en.wikipedia.org/wiki/Comma-separated_values)文件是一个使用逗号来分隔值的定界文本文件。该文件的每一行都是一个数据记录。每个记录由一个或多个以逗号分隔的字段组成。
 > 
 > 
 > 
@@ -35,7 +35,7 @@ print(data)
 Customizing the csv parsing and loading[#](#customizing-the-csv-parsing-and-loading "Permalink to this headline")
 -----------------------------------------------------------------------------------------------------------------
 
-See the [csv module](https://docs.python.org/3/library/csv） documentation for more information of what csv args are supported.
+See the [csv module](https://docs.python.org/3/library/csv) documentation for more information of what csv args are supported.
 
 ```
 loader = CSVLoader(file_path='./example_data/mlb_teams_2012.csv', csv_args={

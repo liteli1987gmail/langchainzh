@@ -13,7 +13,7 @@
 
 * `get_format_instructions() -> str`：一个方法，返回一个包含有关如何格式化语言模型输出的字符串。
 
-* `parse(str) -> Any`：一个方法，接受一个字符串（假定为语言模型的响应）并将其解析为某个结构。
+* `parse(str) -> Any`：一个方法，接受一个字符串（假定为语言模型的响应)并将其解析为某个结构。
 
 And then one optional one:
 

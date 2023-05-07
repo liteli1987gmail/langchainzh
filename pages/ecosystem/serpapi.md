@@ -10,7 +10,7 @@ SerpAPI[#](#serpapi "跳转到此标题的永久链接")
 
 * 使用`pip install google-search-results`安装要求。
 
-* 获取SerpAPI api密钥，将其设置为环境变量（`SERPAPI_API_KEY`）之一。
+* 获取SerpAPI api密钥，将其设置为环境变量（`SERPAPI_API_KEY`)之一。
 
 包装器[#](#wrappers "跳转到此标题的永久链接")
 -------------------------------
@@ -24,7 +24,7 @@ from langchain.utilities import SerpAPIWrapper
 
 ```
 
-更详细的教程可以查看[这个笔记本](../modules/agents/tools/examples/serpapi）。
+更详细的教程可以查看[这个笔记本](../modules/agents/tools/examples/serpapi)。
 
 ### 工具[#](#tool "Permalink to this headline")
 
@@ -37,5 +37,5 @@ tools = load_tools(["serpapi"])
 
 ```
 
-有关更多信息，请参见[此页面](../modules/agents/tools/getting_started）
+有关更多信息，请参见[此页面](../modules/agents/tools/getting_started)
 

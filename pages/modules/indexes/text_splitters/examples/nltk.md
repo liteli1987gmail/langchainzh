@@ -7,7 +7,7 @@ NLTK文本分割器[#](#nltk-text-splitter "本标题的永久链接")
 
 - 文本如何分割：由NLTK进行
 
-- 如何测量块大小：通过传递的长度函数进行测量（默认为字符数）
+- 如何测量块大小：通过传递的长度函数进行测量（默认为字符数)
 
 ```
 # This is a long document we can split up.

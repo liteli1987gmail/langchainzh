@@ -3,11 +3,11 @@
 如何使用异步API进行代理[#](#how-to-use-the-async-api-for-agents "此标题的永久链接")
 =================================================================
 
-LangChain通过利用[asyncio](https://docs.python.org/zh-cn/3/library/asyncio）库为代理提供异步支持。
+LangChain通过利用[asyncio](https://docs.python.org/zh-cn/3/library/asyncio)库为代理提供异步支持。
 
 目前以下`工具`支持异步方法：[`GoogleSerperAPIWrapper`](https://github.com/hwchase17/langchain/blob/master/langchain/utilities/google_serper.py)，[`SerpAPIWrapper`](https://github.com/hwchase17/langchain/blob/master/langchain/serpapi.py)和[`LLMMathChain`](https://github.com/hwchase17/langchain/blob/master/langchain/chains/llm_math/base.py)。其他代理工具的异步支持正在路上。
 
-对于实现了`coroutine`的`Tool`（如上面提到的三种），`AgentExecutor`将直接`await`它们。否则，`AgentExecutor`将通过`asyncio.get_event_loop().run_in_executor`调用`Tool`的`func`，以避免阻塞主循环。
+对于实现了`coroutine`的`Tool`（如上面提到的三种)，`AgentExecutor`将直接`await`它们。否则，`AgentExecutor`将通过`asyncio.get_event_loop().run_in_executor`调用`Tool`的`func`，以避免阻塞主循环。
 
 您可以使用`arun`异步调用`AgentExecutor`。
 

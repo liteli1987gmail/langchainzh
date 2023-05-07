@@ -8,7 +8,7 @@ ForefrontAI
 安装和设置
 ---------------
 
-- 获取ForefrontAI API密钥，并将其设置为环境变量（`FOREFRONTAI_API_KEY`）
+- 获取ForefrontAI API密钥，并将其设置为环境变量（`FOREFRONTAI_API_KEY`)
 
 包装器
 ---------------

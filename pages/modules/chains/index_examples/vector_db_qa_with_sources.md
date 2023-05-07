@@ -61,7 +61,7 @@ chain({"question": "What did the president say about Justice Breyer"}, return_on
 链式类型[#](#chain-type "此标题的永久链接")
 -------------------------------
 
-您可以轻松指定要加载和使用的不同链式类型。有关这些类型的更详细演示，请参见[本笔记本](qa_with_sources）。
+您可以轻松指定要加载和使用的不同链式类型。有关这些类型的更详细演示，请参见[本笔记本](qa_with_sources)。
 
 有两种加载不同链式类型的方法。首先，您可以在`from_chain_type`方法中指定链式类型参数。这允许您传递要使用的链式类型的名称。例如，在下面的示例中，我们将链式类型更改为`map_reduce`。
 
@@ -81,7 +81,7 @@ chain({"question": "What did the president say about Justice Breyer"}, return_on
 
 ```
 
-The above way allows you to really simply change the chain_type, but it does provide a ton of flexibility over parameters to that chain type. If you want to control those parameters, you can load the chain directly (as you did in [this notebook](qa_with_sources）) and then pass that directly to the the RetrievalQAWithSourcesChain chain with the `combine_documents_chain` parameter. For example:
+The above way allows you to really simply change the chain_type, but it does provide a ton of flexibility over parameters to that chain type. If you want to control those parameters, you can load the chain directly (as you did in [this notebook](qa_with_sources)) and then pass that directly to the the RetrievalQAWithSourcesChain chain with the `combine_documents_chain` parameter. For example:
 
 ```
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain

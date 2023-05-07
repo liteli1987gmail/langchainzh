@@ -24,5 +24,5 @@ from langchain.vectorstores import Tair
 
 ```
 
-更详细的Tair包装器操作，请参见[此笔记本](../modules/indexes/vectorstores/examples/tair）
+更详细的Tair包装器操作，请参见[此笔记本](../modules/indexes/vectorstores/examples/tair)
 

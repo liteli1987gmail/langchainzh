@@ -9,7 +9,7 @@ EPub[#](#epub "跳转到本标题的永久链接")
 > 
 > 
 
-本文介绍了如何将`.epub`文档加载到可以向下使用的文档格式中。您需要安装 [`pandocs`](https://pandoc.org/installing） 包才能使此加载程序正常工作。
+本文介绍了如何将`.epub`文档加载到可以向下使用的文档格式中。您需要安装 [`pandocs`](https://pandoc.org/installing) 包才能使此加载程序正常工作。
 
 ```
 #!pip install pandocs

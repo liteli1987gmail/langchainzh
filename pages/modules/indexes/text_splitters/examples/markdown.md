@@ -7,7 +7,7 @@ MarkdownTextSplitter将文本沿Markdown标题、代码块或水平线分割。�
 
 - 文本如何拆分：按照Markdown特定字符列表拆分
 
-- 如何测量块大小：通过传递的长度函数测量（默认为字符数）
+- 如何测量块大小：通过传递的长度函数测量（默认为字符数)
 
 ```
 from langchain.text_splitter import MarkdownTextSplitter

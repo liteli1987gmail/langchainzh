@@ -61,7 +61,7 @@ And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketan
 添加文本[#](#add-texts "Permalink to this headline")
 ------------------------------------------------
 
-您可以使用`add_texts`方法轻松地将文本添加到向量存储中。它将返回文档ID的列表（以防您需要在下游使用它们）。
+您可以使用`add_texts`方法轻松地将文本添加到向量存储中。它将返回文档ID的列表（以防您需要在下游使用它们)。
 
 ```
 docsearch.add_texts(["Ankush went to Princeton"])
@@ -92,7 +92,7 @@ Document(page_content='Ankush went to Princeton', lookup_str='', metadata={}, lo
 来自文档[#](#from-documents "Permalink to this headline")
 -----------------------------------------------------
 
-我们也可以直接从文档初始化向量存储。当我们使用文本拆分器方法直接获取文档时，这非常有用（当原始文档有相关元数据时很方便）。
+我们也可以直接从文档初始化向量存储。当我们使用文本拆分器方法直接获取文档时，这非常有用（当原始文档有相关元数据时很方便)。
 
 ```
 documents = text_splitter.create_documents([state_of_the_union], metadatas=[{"source": "State of the Union"}])

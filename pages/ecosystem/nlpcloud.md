@@ -11,7 +11,7 @@ NLPCloud[#](#nlpcloud "此标题的永久链接")
 
 * 使用`pip install nlpcloud`安装Python SDK
 
-* 获取一个NLPCloud API密钥，并将其设置为环境变量（`NLPCLOUD_API_KEY`）
+* 获取一个NLPCloud API密钥，并将其设置为环境变量（`NLPCLOUD_API_KEY`)
 
 包装器[#](#wrappers "此标题的永久链接")
 ----------------------------
