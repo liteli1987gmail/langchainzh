@@ -1,72 +1,24 @@
 
 
-
- AnalyticDB
- [#](#analyticdb "Permalink to this headline")
-===========================================================
-
-
+分析型数据库[#](#analyticdb "本标题的永久链接")
+=================================
 
 > 
-> 
-> 
-> [AnalyticDB for PostgreSQL](https://www.alibabacloud.com/help/en/analyticdb-for-postgresql/latest/product-introduction-overview) 
->  is a massively parallel processing (MPP) data warehousing service that is designed to analyze large volumes of data online.
->  
-> 
+> [分析型数据库（AnalyticDB）](https://www.alibabacloud.com/help/zh/doc-detail/188196.htm)是一种大规模并行处理（MPP）数据仓库服务，旨在在线分析大量数据。
 > 
 > 
 > 
 
-
-
 > 
-> 
-> 
-> `AnalyticDB
->  
-> 
->  for
->  
-> 
->  PostgreSQL`
->  is developed based on the open source
->  `Greenplum
->  
-> 
->  Database`
->  project and is enhanced with in-depth extensions by
->  `Alibaba
->  
-> 
->  Cloud`
->  . AnalyticDB for PostgreSQL is compatible with the ANSI SQL 2003 syntax and the PostgreSQL and Oracle database ecosystems. AnalyticDB for PostgreSQL also supports row store and column store. AnalyticDB for PostgreSQL processes petabytes of data offline at a high performance level and supports highly concurrent online queries.
->  
-> 
+> `AnalyticDB for PostgreSQL`基于开源的`Greenplum Database`项目开发，并由`阿里云`进行深度扩展。分析型数据库（AnalyticDB）支持ANSI SQL 2003语法以及PostgreSQL和Oracle数据库生态系统。分析型数据库还支持行存储和列存储。分析型数据库处理PB级别的数据时具有高性能，并支持高并发在线查询。
 > 
 > 
 > 
 
+本笔记本演示了如何使用与`AnalyticDB`向量数据库相关的功能。
+要运行，您需要拥有一个正在运行的[分析型数据库](https://www.alibabacloud.com/help/zh/doc-detail/188196.htm)实例：
 
-
- This notebook shows how to use functionality related to the
- `AnalyticDB`
- vector database.
-To run, you should have an
- [AnalyticDB](https://www.alibabacloud.com/help/en/analyticdb-for-postgresql/latest/product-introduction-overview) 
- instance up and running:
- 
-
-
-* Using
- [AnalyticDB Cloud Vector Database](https://www.alibabacloud.com/product/hybriddb-postgresql) 
- . Click here to fast deploy it.
-
-
-
-
-
-
+* 使用[AnalyticDB云向量数据库](https://www.alibabacloud.com/product/hybriddb-postgresql)。 点击此处快速部署。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -75,19 +27,7 @@ from langchain.vectorstores import AnalyticDB
 
 ```
 
-
-
-
-
-
- Split documents and get embeddings by call OpenAI API
- 
-
-
-
-
-
-
+通过调用OpenAI API拆分文档并获取嵌入
 
 ```
 from langchain.document_loaders import TextLoader
@@ -100,17 +40,7 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
- Connect to AnalyticDB by setting related ENVIRONMENTS.
- 
-
-
-
-
+通过设置相关环境连接到AnalyticDB
 
 ```
 export PG_HOST={your_analyticdb_hostname}
@@ -121,17 +51,7 @@ export PG_PASSWORD={database_password}
 
 ```
 
-
-
-
- Then store your embeddings and documents into AnalyticDB
- 
-
-
-
-
-
-
+然后将您的嵌入和文档存储到AnalyticDB中
 
 ```
 import os
@@ -153,19 +73,7 @@ vector_db = AnalyticDB.from_documents(
 
 ```
 
-
-
-
-
-
- Query and retrieve data
- 
-
-
-
-
-
-
+查询和检索数据
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -173,26 +81,10 @@ docs = vector_db.similarity_search(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(docs[0].page_content)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
@@ -204,10 +96,4 @@ One of the most serious constitutional responsibilities a President has is nomin
 And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.
 
 ```
-
-
-
-
-
-
 

@@ -1,40 +1,21 @@
 
 
+如何为Agent添加内存[#](#how-to-add-memory-to-an-agent "本标题的永久链接")
+==========================================================
 
- How to add Memory to an Agent
- [#](#how-to-add-memory-to-an-agent "Permalink to this headline")
-=================================================================================================
+本笔记本介绍如何为Agent添加内存。在阅读本笔记本之前，请先阅读以下笔记本，因为本笔记本是在它们的基础上构建的：
 
+* [向LLM链添加内存](adding_memory）
 
+* 自定义Agent
 
- This notebook goes over adding memory to an Agent. Before going through this notebook, please walkthrough the following notebooks, as this will build on top of both of them:
- 
+为了为Agent添加内存，我们需要执行以下步骤：
 
+- 我们将创建一个具有内存的LLMChain。
 
-* [Adding memory to an LLM Chain](adding_memory)
-* Custom Agents
+- 我们将使用该LLMChain创建自定义Agent。
 
-
-
- In order to add a memory to an agent we are going to the the following steps:
- 
-
-
-1. We are going to create an LLMChain with memory.
-2. We are going to use that LLMChain to create a custom Agent.
-
-
-
- For the purposes of this exercise, we are going to create a simple custom Agent that has access to a search tool and utilizes the
- `ConversationBufferMemory`
- class.
- 
-
-
-
-
-
-
+为了完成此练习，我们将创建一个简单的自定义Agent，该Agent可以访问搜索工具，并使用`ConversationBufferMemory`类。
 
 ```
 from langchain.agents import ZeroShotAgent, Tool, AgentExecutor
@@ -43,15 +24,6 @@ from langchain import OpenAI, LLMChain
 from langchain.utilities import GoogleSearchAPIWrapper
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 search = GoogleSearchAPIWrapper()
@@ -65,21 +37,7 @@ tools = [
 
 ```
 
-
-
-
-
-
- Notice the usage of the
- `chat_history`
- variable in the PromptTemplate, which matches up with the dynamic key name in the ConversationBufferMemory.
- 
-
-
-
-
-
-
+请注意，在PromptTemplate中使用`chat_history`变量，该变量与ConversationBufferMemory中的动态键名匹配。
 
 ```
 prefix = """Have a conversation with a human, answering the following questions as best you can. You have access to the following tools:"""
@@ -99,19 +57,7 @@ memory = ConversationBufferMemory(memory_key="chat_history")
 
 ```
 
-
-
-
-
-
- We can now construct the LLMChain, with the Memory object, and then create the agent.
- 
-
-
-
-
-
-
+现在，我们可以使用Memory对象构建LLMChain，然后创建代理。
 
 ```
 llm_chain = LLMChain(llm=OpenAI(temperature=0), prompt=prompt)
@@ -120,26 +66,10 @@ agent_chain = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbo
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_chain.run(input="How many people live in canada?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -153,41 +83,17 @@ Final Answer: The current population of Canada is 38,566,192 as of Saturday, Dec
 
 ```
 
-
-
-
-
-
 ```
 'The current population of Canada is 38,566,192 as of Saturday, December 31, 2022, based on Worldometer elaboration of the latest United Nations data.'
 
 ```
 
-
-
-
-
-
- To test the memory of this agent, we can ask a followup question that relies on information in the previous exchange to be answered correctly.
- 
-
-
-
-
-
-
+要测试此代理的记忆力，我们可以提出一个后续问题，该问题依赖于先前交换中的信息才能正确回答。
 
 ```
 agent_chain.run(input="what is their national anthem called?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -201,34 +107,14 @@ Final Answer: The national anthem of Canada is called "O Canada".
 
 ```
 
-
-
-
-
-
 ```
 'The national anthem of Canada is called "O Canada".'
 
 ```
 
+我们可以看到代理记住了先前的问题是关于加拿大的，并正确地询问Google搜索加拿大的国歌是什么。
 
-
-
-
-
- We can see that the agent remembered that the previous question was about Canada, and properly asked Google Search what the name of Canada’s national anthem was.
- 
-
-
-
- For fun, let’s compare this to an agent that does NOT have memory.
- 
-
-
-
-
-
-
+为了好玩，让我们将其与没有记忆的代理进行比较。
 
 ```
 prefix = """Have a conversation with a human, answering the following questions as best you can. You have access to the following tools:"""
@@ -249,26 +135,10 @@ agent_without_memory = AgentExecutor.from_agent_and_tools(agent=agent, tools=too
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_without_memory.run("How many people live in canada?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -282,36 +152,15 @@ Final Answer: The current population of Canada is 38,566,192 as of Saturday, Dec
 
 ```
 
-
-
-
-
-
 ```
 'The current population of Canada is 38,566,192 as of Saturday, December 31, 2022, based on Worldometer elaboration of the latest United Nations data.'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_without_memory.run("what is their national anthem called?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -325,19 +174,8 @@ Final Answer: The national anthem of [country] is [name of anthem].
 
 ```
 
-
-
-
-
-
 ```
 'The national anthem of [country] is [name of anthem].'
 
 ```
-
-
-
-
-
-
 

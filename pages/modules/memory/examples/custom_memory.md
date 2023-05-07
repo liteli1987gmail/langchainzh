@@ -1,27 +1,11 @@
 
 
+如何创建自定义的Memory类[#](#how-to-create-a-custom-memory-class "Permalink to this headline")
+=====================================================================================
 
- How to create a custom Memory class
- [#](#how-to-create-a-custom-memory-class "Permalink to this headline")
-=============================================================================================================
+虽然LangChain中有几种预定义的内存类型，但你很可能想要添加自己的内存类型，以便为你的应用程序提供最佳性能。本笔记将介绍如何实现此操作。
 
-
-
- Although there are a few predefined types of memory in LangChain, it is highly possible you will want to add your own type of memory that is optimal for your application. This notebook covers how to do that.
- 
-
-
-
- For this notebook, we will add a custom memory type to
- `ConversationChain`
- . In order to add a custom memory class, we need to import the base memory class and subclass it.
- 
-
-
-
-
-
-
+在本笔记中，我们将向`ConversationChain`添加自定义内存类型。为了添加自定义内存类，我们需要导入基础内存类并对其进行子类化。
 
 ```
 from langchain import OpenAI, ConversationChain
@@ -31,27 +15,11 @@ from typing import List, Dict, Any
 
 ```
 
+在此示例中，我们将编写一个自定义内存类，该类使用spacy提取实体并将有关它们的信息保存在简单的哈希表中。然后，在对话期间，我们将查看输入文本，提取任何实体，并将有关它们的任何信息放入上下文中。
 
+* 请注意，此实现非常简单和脆弱，可能在生产环境中无用。它的目的是展示您可以添加自定义内存实现。
 
-
-
-
- In this example, we will write a custom memory class that uses spacy to extract entities and save information about them in a simple hash table. Then, during the conversation, we will look at the input text, extract any entities, and put any information about them into the context.
- 
-
-
-* Please note that this implementation is pretty simple and brittle and probably not useful in a production setting. Its purpose is to showcase that you can add custom memory implementations.
-
-
-
- For this, we will need spacy.
- 
-
-
-
-
-
-
+为此，我们需要使用spacy。
 
 ```
 # !pip install spacy
@@ -59,29 +27,11 @@ from typing import List, Dict, Any
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 import spacy
 nlp = spacy.load('en_core_web_lg')
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 class SpacyEntityMemory(BaseMemory, BaseModel):
@@ -91,7 +41,7 @@ class SpacyEntityMemory(BaseMemory, BaseModel):
     entities: dict = {}
     # Define key to pass information about entities into prompt.
     memory_key: str = "entities"
-        
+
     def clear(self):
         self.entities = {}
 
@@ -124,19 +74,7 @@ class SpacyEntityMemory(BaseMemory, BaseModel):
 
 ```
 
-
-
-
-
-
- We now define a prompt that takes in information about entities as well as user input
- 
-
-
-
-
-
-
+现在我们定义一个提示，以输入有关实体的信息以及用户输入
 
 ```
 from langchain.prompts.prompt import PromptTemplate
@@ -155,19 +93,7 @@ prompt = PromptTemplate(
 
 ```
 
-
-
-
-
-
- And now we put it all together!
- 
-
-
-
-
-
-
+现在我们将它们组合在一起！
 
 ```
 llm = OpenAI(temperature=0)
@@ -175,31 +101,12 @@ conversation = ConversationChain(llm=llm, prompt=prompt, verbose=True, memory=Sp
 
 ```
 
-
-
-
-
-
- In the first example, with no prior knowledge about Harrison, the “Relevant entity information” section is empty.
- 
-
-
-
-
-
-
+在第一个示例中，没有关于Harrison的先前知识，"相关实体信息"部分为空。
 
 ```
 conversation.predict(input="Harrison likes machine learning")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -207,7 +114,6 @@ Prompt after formatting:
 The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know. You are provided with information about entities the Human mentions, if relevant.
 
 Relevant entity information:
-
 
 Conversation:
 Human: Harrison likes machine learning
@@ -217,41 +123,17 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " That's great to hear! Machine learning is a fascinating field of study. It involves using algorithms to analyze data and make predictions. Have you ever studied machine learning, Harrison?"
 
 ```
 
-
-
-
-
-
- Now in the second example, we can see that it pulls in information about Harrison.
- 
-
-
-
-
-
-
+现在在第二个示例中，我们可以看到它提取了有关Harrison的信息。
 
 ```
 conversation.predict(input="What do you think Harrison's favorite subject in college was?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -269,24 +151,10 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' From what I know about Harrison, I believe his favorite subject in college was machine learning. He has expressed a strong interest in the subject and has mentioned it often.'
 
 ```
 
-
-
-
-
-
- Again, please note that this implementation is pretty simple and brittle and probably not useful in a production setting. Its purpose is to showcase that you can add custom memory implementations.
- 
-
-
-
+再次提醒，此实现方式相当简单且脆弱，可能在生产环境中无用。它的目的是展示您可以添加自定义内存实现。
 

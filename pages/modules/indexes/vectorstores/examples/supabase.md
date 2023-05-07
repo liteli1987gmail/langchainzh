@@ -1,61 +1,27 @@
 
-
-
- SupabaseVectorStore
- [#](#supabasevectorstore "Permalink to this headline")
-=============================================================================
-
+Supabase
+===
 
 
 > 
-> 
-> 
-> [Supabase](https://supabase.com/docs) 
->  is an open source Firebase alternative.
->  
-> 
+> [Supabase](https://supabase.com/docs)是一种开源的Firebase替代方案。
 > 
 > 
 > 
 
+这个笔记本展示了如何使用`Supabase`和`pgvector`作为你的VectorStore。
 
+运行这个笔记本，请确保：
 
- This notebook shows how to use
- `Supabase`
- and
- `pgvector`
- as your VectorStore.
- 
+* `pgvector`扩展已启用
 
+* 你已经安装了`supabase-py`包
 
+* 你已经在你的数据库中创建了一个`match_documents`函数
 
- To run this notebook, please ensure:
- 
+* 你的`public`模式中存在一个类似下面的`documents`表。
 
-
-* the
- `pgvector`
- extension is enabled
-* you have installed the
- `supabase-py`
- package
-* that you have created a
- `match_documents`
- function in your database
-* that you have a
- `documents`
- table in your
- `public`
- schema similar to the one below.
-
-
-
- The following function determines cosine similarity, but you can adjust to your needs.
- 
-
-
-
-
+The following function determines cosine similarity, but you can adjust to your needs.
 
 ```
        -- Enable the pgvector extension to work with embedding vectors
@@ -98,13 +64,6 @@
 
 ```
 
-
-
-
-
-
-
-
 ```
 # with pip
 !pip install supabase
@@ -114,21 +73,7 @@
 
 ```
 
-
-
-
-
-
- We want to use
- `OpenAIEmbeddings`
- so we have to get the OpenAI API Key.
- 
-
-
-
-
-
-
+We want to use `OpenAIEmbeddings` so we have to get the OpenAI API Key.
 
 ```
 import os
@@ -138,42 +83,15 @@ os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 os.environ['SUPABASE_URL'] = getpass.getpass('Supabase URL:')
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 os.environ['SUPABASE_SERVICE_KEY'] = getpass.getpass('Supabase Service Key:')
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # If you're storing your Supabase and OpenAI API keys in a .env file, you can load them with dotenv
@@ -183,26 +101,10 @@ load_dotenv()
 
 ```
 
-
-
-
-
-
-
-
 ```
 True
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import os
@@ -214,15 +116,6 @@ supabase: Client = create_client(supabase_url, supabase_key)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
@@ -231,26 +124,10 @@ from langchain.document_loaders import TextLoader
 
 ```
 
-
-
-
-
-
-
-
 ```
 2023-04-19 20:12:28,593:INFO - NumExpr defaulting to 8 threads.
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -264,15 +141,6 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # We're using the default `documents` table here. You can modify this by passing in a `table_name` argument to the `from_documents` method.
 vector_store = SupabaseVectorStore.from_documents(
@@ -281,41 +149,16 @@ vector_store = SupabaseVectorStore.from_documents(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 query = "What did the president say about Ketanji Brown Jackson"
 matched_docs = vector_store.similarity_search(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(matched_docs[0].page_content)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
@@ -328,116 +171,43 @@ And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketan
 
 ```
 
-
-
-
-
-
-
- Similarity search with score
- [#](#similarity-search-with-score "Permalink to this headline")
------------------------------------------------------------------------------------------------
-
-
-
-
-
-
+Similarity search with score[#](#similarity-search-with-score "Permalink to this headline")
+-------------------------------------------------------------------------------------------
 
 ```
 matched_docs = vector_store.similarity_search_with_relevance_scores(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 matched_docs[0]
 
 ```
 
-
-
-
-
-
-
-
 ```
-(Document(page_content='Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. \n\nTonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. \n\nOne of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. \n\nAnd I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.', metadata={'source': '../../../state_of_the_union.txt'}),
+(Document(page_content='Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections.   Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service.   One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court.   And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.', metadata={'source': '../../../state_of_the_union.txt'}),
  0.802509746274066)
 
 ```
 
+Retriever options[#](#retriever-options "Permalink to this headline")
+---------------------------------------------------------------------
 
+This section goes over different options for how to use SupabaseVectorStore as a retriever.
 
+### Maximal Marginal Relevance Searches[#](#maximal-marginal-relevance-searches "Permalink to this headline")
 
-
-
-
-
- Retriever options
- [#](#retriever-options "Permalink to this headline")
--------------------------------------------------------------------------
-
-
-
- This section goes over different options for how to use SupabaseVectorStore as a retriever.
- 
-
-
-
-### 
- Maximal Marginal Relevance Searches
- [#](#maximal-marginal-relevance-searches "Permalink to this headline")
-
-
-
- In addition to using similarity search in the retriever object, you can also use
- `mmr`
- .
- 
-
-
-
-
-
-
+In addition to using similarity search in the retriever object, you can also use `mmr`.
 
 ```
 retriever = vector_store.as_retriever(search_type="mmr")
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 matched_docs = retriever.get_relevant_documents(query)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 for i, d in enumerate(matched_docs):
@@ -445,13 +215,6 @@ for i, d in enumerate(matched_docs):
     print(d.page_content)
 
 ```
-
-
-
-
-
-
-
 
 ```
 ## Document 0
@@ -529,12 +292,4 @@ I’ve worked on these issues a long time.
 I know what works: Investing in crime preventionand community police officers who’ll walk the beat, who’ll know the neighborhood, and who can restore trust and safety.
 
 ```
-
-
-
-
-
-
-
-
 

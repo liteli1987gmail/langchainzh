@@ -1,39 +1,18 @@
 
 
+API链[#](#api-chains "此标题的永久链接")
+===============================
 
- API Chains
- [#](#api-chains "Permalink to this headline")
-===========================================================
-
-
-
- This notebook showcases using LLMs to interact with APIs to retrieve relevant information.
- 
-
-
-
-
-
-
+本笔记本展示了使用LLMs与API交互以检索相关信息的方法。
 
 ```
 from langchain.chains.api.prompt import API_RESPONSE_PROMPT
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.chains import APIChain
 from langchain.prompts.prompt import PromptTemplate
-
 
 from langchain.llms import OpenAI
 
@@ -41,21 +20,8 @@ llm = OpenAI(temperature=0)
 
 ```
 
-
-
-
-
-
-
- OpenMeteo Example
- [#](#openmeteo-example "Permalink to this headline")
--------------------------------------------------------------------------
-
-
-
-
-
-
+OpenMeteo示例[#](#openmeteo-example "此标题的永久链接")
+---------------------------------------------
 
 ```
 from langchain.chains.api import open_meteo_docs
@@ -63,26 +29,10 @@ chain_new = APIChain.from_llm_and_api_docs(llm, open_meteo_docs.OPEN_METEO_DOCS,
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chain_new.run('What is the weather like right now in Munich, Germany in degrees Farenheit?')
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new APIChain chain...
@@ -93,47 +43,19 @@ https://api.open-meteo.com/v1/forecast?latitude=48.1351&longitude=11.5820&temper
 
 ```
 
-
-
-
-
-
 ```
 ' The current temperature in Munich, Germany is 33.4 degrees Farenheit with a windspeed of 6.8 km/h and a wind direction of 198 degrees. The weathercode is 2.'
 
 ```
 
-
-
-
-
-
-
-
- TMDB Example
- [#](#tmdb-example "Permalink to this headline")
----------------------------------------------------------------
-
-
-
-
-
-
+TMDB示例[#](#tmdb-example "此标题的永久链接")
+-----------------------------------
 
 ```
 import os
 os.environ['TMDB_BEARER_TOKEN'] = ""
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.chains.api import tmdb_docs
@@ -142,26 +64,10 @@ chain = APIChain.from_llm_and_api_docs(llm, tmdb_docs.TMDB_DOCS, headers=headers
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chain.run("Search for 'Avatar'")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new APIChain chain...
@@ -170,42 +76,18 @@ chain.run("Search for 'Avatar'")
 
 ```
 
-
-
-
-
-
 ```
 > Finished chain.
 
 ```
-
-
-
-
-
 
 ```
 ' This response contains 57 movies related to the search query "Avatar". The first movie in the list is the 2009 movie "Avatar" starring Sam Worthington. Other movies in the list include sequels to Avatar, documentaries, and live performances.'
 
 ```
 
-
-
-
-
-
-
-
- Listen API Example
- [#](#listen-api-example "Permalink to this headline")
----------------------------------------------------------------------------
-
-
-
-
-
-
+Listen API示例[#](#listen-api-example "此标题的永久链接")
+-----------------------------------------------
 
 ```
 import os
@@ -222,11 +104,4 @@ chain = APIChain.from_llm_and_api_docs(llm, podcast_docs.PODCAST_DOCS, headers=h
 chain.run("Search for 'silicon valley bank' podcast episodes, audio length is more than 30 minutes, return only 1 results")
 
 ```
-
-
-
-
-
-
-
 

@@ -1,56 +1,22 @@
 
 
-
- Redis
- [#](#redis "Permalink to this headline")
-=================================================
-
-
+Redis[#](#redis "Permalink to this headline")
+=============================================
 
 > 
-> 
-> 
-> [Redis (Remote Dictionary Server)](https://en.wikipedia.org/wiki/Redis) 
->  is an in-memory data structure store, used as a distributed, in-memory key–value database, cache and message broker, with optional durability.
->  
-> 
+> [Redis（远程字典服务器）](https://en.wikipedia.org/wiki/Redis)是一个内存数据结构存储器，用作分布式、内存键-值数据库、缓存和消息代理，可选持久性。
 > 
 > 
 > 
 
-
-
- This notebook shows how to use functionality related to the
- [Redis vector database](https://redis.com/solutions/use-cases/vector-database/) 
- .
- 
-
-
-
-
-
-
+本笔记本展示如何使用与[Redis向量数据库](https://redis.com/solutions/use-cases/vector-database/)相关的功能。
 
 ```
 !pip install redis
 
 ```
 
-
-
-
-
-
- We want to use
- `OpenAIEmbeddings`
- so we have to get the OpenAI API Key.
- 
-
-
-
-
-
-
+我们想要使用`OpenAIEmbeddings`，因此我们必须获取OpenAI API密钥。
 
 ```
 import os
@@ -60,30 +26,12 @@ os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores.redis import Redis
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -97,54 +45,20 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 rds = Redis.from_documents(docs, embeddings, redis_url="redis://localhost:6379",  index_name='link')
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 rds.index_name
 
 ```
 
-
-
-
-
-
-
-
 ```
 'link'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -152,13 +66,6 @@ results = rds.similarity_search(query)
 print(results[0].page_content)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
@@ -171,40 +78,15 @@ And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketan
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(rds.add_texts(["Ankush went to Princeton"]))
 
 ```
 
-
-
-
-
-
-
-
 ```
 ['doc:link:d7d02e3faf1b40bbbe29a683ff75b280']
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "Princeton"
@@ -213,26 +95,10 @@ print(results[0].page_content)
 
 ```
 
-
-
-
-
-
-
-
 ```
 Ankush went to Princeton
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # Load from existing index
@@ -244,13 +110,6 @@ print(results[0].page_content)
 
 ```
 
-
-
-
-
-
-
-
 ```
 Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
 
@@ -262,89 +121,33 @@ And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketan
 
 ```
 
+RedisVectorStoreRetriever[#](#redisvectorstoreretriever "Permalink to this headline")
+-------------------------------------------------------------------------------------
 
+这里我们讨论使用向量存储作为检索器的不同选项。
 
-
-
-
-
- RedisVectorStoreRetriever
- [#](#redisvectorstoreretriever "Permalink to this headline")
------------------------------------------------------------------------------------------
-
-
-
- Here we go over different options for using the vector store as a retriever.
- 
-
-
-
- There are three different search methods we can use to do retrieval. By default, it will use semantic similarity.
- 
-
-
-
-
-
-
+我们可以使用三种不同的搜索方法来进行检索。默认情况下，它将使用语义相似性。
 
 ```
 retriever = rds.as_retriever()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 docs = retriever.get_relevant_documents(query)
 
 ```
 
-
-
-
-
-
- We can also use similarity_limit as a search method. This is only return documents if they are similar enough
- 
-
-
-
-
-
-
+我们还可以使用similarity_limit作为搜索方法。只有当它们足够相似时，才会返回文档。
 
 ```
 retriever = rds.as_retriever(search_type="similarity_limit")
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # Here we can see it doesn't return any results because there are no relevant documents
 retriever.get_relevant_documents("where did ankush go to college?")
 
 ```
-
-
-
-
-
-
-
 

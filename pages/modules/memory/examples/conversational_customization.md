@@ -1,51 +1,23 @@
 
 
+如何自定义对话记忆[#](#how-to-customize-conversational-memory "此标题的永久链接")
+================================================================
 
- How to customize conversational memory
- [#](#how-to-customize-conversational-memory "Permalink to this headline")
-===================================================================================================================
-
-
-
- This notebook walks through a few ways to customize conversational memory.
- 
-
-
-
-
-
-
+本笔记本演示了几种自定义对话记忆的方法。
 
 ```
 from langchain.llms import OpenAI
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
 
-
 llm = OpenAI(temperature=0)
 
 ```
 
+AI前缀[#](#ai-prefix "此标题的永久链接")
+------------------------------
 
-
-
-
-
-
- AI Prefix
- [#](#ai-prefix "Permalink to this headline")
----------------------------------------------------------
-
-
-
- The first way to do so is by changing the AI prefix in the conversation summary. By default, this is set to “AI”, but you can set this to be anything you want. Note that if you change this, you should also change the prompt used in the chain to reflect this naming change. Let’s walk through an example of that in the example below.
- 
-
-
-
-
-
-
+第一种方法是通过更改对话摘要中的AI前缀来实现。默认情况下，这个前缀设置为“AI”，但您可以将其设置为任何您想要的内容。请注意，如果您更改了这个前缀，您还应该更改用于链中的提示以反映这个命名更改。让我们在下面的示例中举个例子。
 
 ```
 # Here it is by default set to "AI"
@@ -57,26 +29,10 @@ conversation = ConversationChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="Hi there!")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -92,36 +48,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Hi there! It's nice to meet you. How can I help you today?"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="What's the weather?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -139,24 +74,10 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' The current weather is sunny and warm with a temperature of 75 degrees Fahrenheit. The forecast for the next few days is sunny with temperatures in the mid-70s.'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # Now we can override it and set it to "AI Assistant"
@@ -180,26 +101,10 @@ conversation = ConversationChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="Hi there!")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -215,36 +120,15 @@ AI Assistant:
 
 ```
 
-
-
-
-
-
 ```
 " Hi there! It's nice to meet you. How can I help you today?"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="What's the weather?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -262,37 +146,15 @@ AI Assistant:
 
 ```
 
-
-
-
-
-
 ```
 ' The current weather is sunny and warm with a temperature of 75 degrees Fahrenheit. The forecast for the rest of the day is sunny with a high of 78 degrees and a low of 65 degrees.'
 
 ```
 
+人类前缀[#](#human-prefix "此标题的永久链接")
+---------------------------------
 
-
-
-
-
-
-
- Human Prefix
- [#](#human-prefix "Permalink to this headline")
----------------------------------------------------------------
-
-
-
- The next way to do so is by changing the Human prefix in the conversation summary. By default, this is set to “Human”, but you can set this to be anything you want. Note that if you change this, you should also change the prompt used in the chain to reflect this naming change. Let’s walk through an example of that in the example below.
- 
-
-
-
-
-
-
+下一种方法是通过更改对话摘要中的人类前缀来实现。默认情况下，这个前缀设置为“Human”，但您可以将其设置为任何您想要的内容。请注意，如果您更改了这个前缀，您还应该更改用于链中的提示以反映这个命名更改。让我们在下面的示例中举个例子。
 
 ```
 # Now we can override it and set it to "Friend"
@@ -316,26 +178,10 @@ conversation = ConversationChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="Hi there!")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -351,36 +197,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Hi there! It's nice to meet you. How can I help you today?"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="What's the weather?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -398,20 +223,8 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' The weather right now is sunny and warm with a temperature of 75 degrees Fahrenheit. The forecast for the rest of the day is mostly sunny with a high of 82 degrees.'
 
 ```
-
-
-
-
-
-
-
 

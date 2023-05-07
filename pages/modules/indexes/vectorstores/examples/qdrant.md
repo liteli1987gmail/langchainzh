@@ -1,77 +1,32 @@
 
 
-
- Qdrant
- [#](#qdrant "Permalink to this headline")
-===================================================
-
-
+Qdrant[#](#qdrant "跳转到标题锚点")
+============================
 
 > 
-> 
-> 
-> [Qdrant](https://qdrant.tech/documentation/) 
->  (read: quadrant ) is a vector similarity search engine. It provides a production-ready service with a convenient API to store, search, and manage points - vectors with an additional payload.
->  `Qdrant`
->  is tailored to extended filtering support. It makes it useful for all sorts of neural network or semantic-based matching, faceted search, and other applications.
->  
-> 
+> [Qdrant](https://qdrant.tech/documentation/)（读作：quadrant）是一个向量相似性搜索引擎。它提供了一个生产就绪的服务，带有一个方便的API来存储、搜索和管理点——带有额外的负载的向量。 `Qdrant`被定制为支持扩展过滤。它使得它对所有类型的神经网络或基于语义的匹配、分面搜索和其他应用程序都有用。
 > 
 > 
 > 
 
+这个笔记本展示了如何使用与`Qdrant`向量数据库相关的功能。
 
+有各种各样的运行`Qdrant`的方式，根据所选择的方式，会有一些微妙的差异。选项包括：
 
- This notebook shows how to use functionality related to the
- `Qdrant`
- vector database.
- 
+* 本地模式，不需要服务器
 
+* 本地服务器部署
 
+* Qdrant云
 
- There are various modes of how to run
- `Qdrant`
- , and depending on the chosen one, there will be some subtle differences. The options include:
- 
-
-
-* Local mode, no server required
-* On-premise server deployment
-* Qdrant Cloud
-
-
-
- See the
- [installation instructions](https://qdrant.tech/documentation/install/) 
- .
- 
-
-
-
-
-
-
+请参阅[安装说明](https://qdrant.tech/documentation/install/)。
 
 ```
 !pip install qdrant-client
 
 ```
 
-
-
-
-
-
- We want to use
- `OpenAIEmbeddings`
- so we have to get the OpenAI API Key.
- 
-
-
-
-
-
-
+我们想使用`OpenAIEmbeddings`，所以我们必须获取OpenAI API密钥。
 
 ```
 import os
@@ -81,17 +36,6 @@ os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
 
 ```
 
-
-
-
-
-
-
-
-
-
-
-
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
@@ -99,15 +43,6 @@ from langchain.vectorstores import Qdrant
 from langchain.document_loaders import TextLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 loader = TextLoader('../../../state_of_the_union.txt')
@@ -119,43 +54,16 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
+从LangChain连接到Qdrant[#](#从langchain连接到qdrant "标题的永久链接")
+------------------------------------------------------
 
+### 本地模式[#](#本地模式 "标题的永久链接")
 
+Python客户端允许您在本地模式下运行相同的代码，而无需运行Qdrant服务器。这对于测试和调试或者如果您计划仅存储少量向量非常有用。嵌入可能完全在内存中保留或在磁盘上持久化。
 
+#### 内存中[#](#内存中 "标题的永久链接")
 
-
-
- Connecting to Qdrant from LangChain
- [#](#connecting-to-qdrant-from-langchain "Permalink to this headline")
--------------------------------------------------------------------------------------------------------------
-
-
-
-### 
- Local mode
- [#](#local-mode "Permalink to this headline")
-
-
-
- Python client allows you to run the same code in local mode without running the Qdrant server. That’s great for testing things out and debugging or if you plan to store just a small amount of vectors. The embeddings might be fully kepy in memory or persisted on disk.
- 
-
-
-
-#### 
- In-memory
- [#](#in-memory "Permalink to this headline")
-
-
-
- For some testing scenarios and quick experiments, you may prefer to keep all the data in memory only, so it gets lost when the client is destroyed - usually at the end of your script/notebook.
- 
-
-
-
-
-
-
+对于一些测试场景和快速实验，您可能更喜欢仅将所有数据保存在内存中，这样当客户端被销毁时，数据就会丢失 - 通常在脚本/笔记本的末尾。
 
 ```
 qdrant = Qdrant.from_documents(
@@ -166,26 +74,9 @@ qdrant = Qdrant.from_documents(
 
 ```
 
+#### 磁盘存储[#](#磁盘存储 "标题的永久链接")
 
-
-
-
-
-
-#### 
- On-disk storage
- [#](#on-disk-storage "Permalink to this headline")
-
-
-
- Local mode, without using the Qdrant server, may also store your vectors on disk so they’re persisted between runs.
- 
-
-
-
-
-
-
+在不使用Qdrant服务器的本地模式下，可能还会将向量存储在磁盘上，以便在运行之间持久化它们。
 
 ```
 qdrant = Qdrant.from_documents(
@@ -196,31 +87,9 @@ qdrant = Qdrant.from_documents(
 
 ```
 
+### 本地服务器部署[#](#本地服务器部署 "标题的永久链接")
 
-
-
-
-
-
-
-### 
- On-premise server deployment
- [#](#on-premise-server-deployment "Permalink to this headline")
-
-
-
- No matter if you choose to launch Qdrant locally with
- [a Docker container](https://qdrant.tech/documentation/install/) 
- , or select a Kubernetes deployment with
- [the official Helm chart](https://github.com/qdrant/qdrant-helm) 
- , the way you’re going to connect to such an instance will be identical. You’ll need to provide a URL pointing to the service.
- 
-
-
-
-
-
-
+无论您选择使用[Docker容器](https://qdrant.tech/documentation/install/)在本地启动Qdrant，还是选择使用[官方Helm图表](https://github.com/qdrant/qdrant-helm)进行Kubernetes部署，连接到此实例的方式都是相同的。您需要提供指向服务的URL。
 
 ```
 url = "<---qdrant url here --->"
@@ -232,28 +101,9 @@ qdrant = Qdrant.from_documents(
 
 ```
 
+### Qdrant Cloud[#](#qdrant-cloud "本标题的永久链接")
 
-
-
-
-
-
-### 
- Qdrant Cloud
- [#](#qdrant-cloud "Permalink to this headline")
-
-
-
- If you prefer not to keep yourself busy with managing the infrastructure, you can choose to set up a fully-managed Qdrant cluster on
- [Qdrant Cloud](https://cloud.qdrant.io/) 
- . There is a free forever 1GB cluster included for trying out. The main difference with using a managed version of Qdrant is that you’ll need to provide an API key to secure your deployment from being accessed publicly.
- 
-
-
-
-
-
-
+如果您不想忙于管理基础架构，可以选择在[Qdrant Cloud](https://cloud.qdrant.io/)上设置完全托管的Qdrant群集。其中包括一个永久免费的1GB群集，可供试用。使用Qdrant的托管版本的主要区别在于，您需要提供API密钥以保护您的部署不被公开访问。
 
 ```
 url = "<---qdrant cloud cluster url here --->"
@@ -266,52 +116,15 @@ qdrant = Qdrant.from_documents(
 
 ```
 
+重用同一集合[#](#reusing-the-same-collection "本标题的永久链接")
+--------------------------------------------------
 
-
-
-
-
-
-
-
- Reusing the same collection
- [#](#reusing-the-same-collection "Permalink to this headline")
----------------------------------------------------------------------------------------------
-
-
-
- Both
- `Qdrant.from_texts`
- and
- `Qdrant.from_documents`
- methods are great to start using Qdrant with LangChain, but
- **they are going to destroy the collection and create it from scratch** 
- ! If you want to reuse the existing collection, you can always create an instance of
- `Qdrant`
- on your own and pass the
- `QdrantClient`
- instance with the connection details.
- 
-
-
-
-
-
-
+假设你现在是一名优秀的文档撰写者，而且你精通英文和中文。请将以下字符串json里的英语翻译为中文，键名不变,值是html标签，标签的属性不用翻译，只要翻译标签的text。
 
 ```
 del qdrant
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import qdrant_client
@@ -326,29 +139,10 @@ qdrant = Qdrant(
 
 ```
 
+相似度搜索[#](#similarity-search "此标题的永久链接")
+---------------------------------------
 
-
-
-
-
-
-
- Similarity search
- [#](#similarity-search "Permalink to this headline")
--------------------------------------------------------------------------
-
-
-
- The simplest scenario for using Qdrant vector store is to perform a similarity search. Under the hood, our query will be encoded with the
- `embedding_function`
- and used to find similar documents in Qdrant collection.
- 
-
-
-
-
-
-
+使用Qdrant向量存储最简单的场景是执行相似度搜索。在底层，我们的查询将使用`嵌入函数`进行编码，并用于在Qdrant集合中查找相似的文档。
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -356,26 +150,10 @@ found_docs = qdrant.similarity_search(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(found_docs[0].page_content)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
@@ -388,27 +166,10 @@ And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketan
 
 ```
 
+带有分数的相似性搜索[#](#similarity-search-with-score "此标题的永久链接")
+-------------------------------------------------------
 
-
-
-
-
-
-
- Similarity search with score
- [#](#similarity-search-with-score "Permalink to this headline")
------------------------------------------------------------------------------------------------
-
-
-
- Sometimes we might want to perform the search, but also obtain a relevancy score to know how good is a particular result.
- 
-
-
-
-
-
-
+有时我们可能想执行搜索，但也要获得相关性得分，以了解特定结果的好坏程度。
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -416,28 +177,12 @@ found_docs = qdrant.similarity_search_with_score(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 document, score = found_docs[0]
 print(document.page_content)
 print(f"\nScore: {score}")
 
 ```
-
-
-
-
-
-
-
 
 ```
 Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
@@ -452,27 +197,10 @@ Score: 0.8153784913324512
 
 ```
 
+最大边际相关性搜索（MMR）[#](#maximum-marginal-relevance-search-mmr "此标题的永久链接")
+--------------------------------------------------------------------
 
-
-
-
-
-
-
- Maximum marginal relevance search (MMR)
- [#](#maximum-marginal-relevance-search-mmr "Permalink to this headline")
--------------------------------------------------------------------------------------------------------------------
-
-
-
- If you’d like to look up for some similar documents, but you’d also like to receive diverse results, MMR is method you should consider. Maximal marginal relevance optimizes for similarity to query AND diversity among selected documents.
- 
-
-
-
-
-
-
+如果您想查找一些类似的文档，但又希望获得多样化的结果，那么MMR是您应该考虑的方法。最大边际相关性优化了查询相似度和所选文档之间的多样性。
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -480,27 +208,11 @@ found_docs = qdrant.max_marginal_relevance_search(query, k=2, fetch_k=10)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 for i, doc in enumerate(found_docs):
     print(f"{i + 1}.", doc.page_content, "\n")
 
 ```
-
-
-
-
-
-
-
 
 ```
 1. Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
@@ -531,27 +243,10 @@ I know what works: Investing in crime preventionand community police officers wh
 
 ```
 
+Qdrant作为检索器[#](#qdrant-as-a-retriever "本标题的永久链接")
+-------------------------------------------------
 
-
-
-
-
-
-
- Qdrant as a Retriever
- [#](#qdrant-as-a-retriever "Permalink to this headline")
----------------------------------------------------------------------------------
-
-
-
- Qdrant, as all the other vector stores, is a LangChain Retriever, by using cosine similarity.
- 
-
-
-
-
-
-
+Qdrant，与所有其他向量存储一样，通过使用余弦相似度作为LangChain检索器。
 
 ```
 retriever = qdrant.as_retriever()
@@ -559,31 +254,12 @@ retriever
 
 ```
 
-
-
-
-
-
-
-
 ```
 VectorStoreRetriever(vectorstore=<langchain.vectorstores.qdrant.Qdrant object at 0x7fc4e5720a00>, search_type='similarity', search_kwargs={})
 
 ```
 
-
-
-
-
-
- It might be also specified to use MMR as a search strategy, instead of similarity.
- 
-
-
-
-
-
-
+也可以指定使用MMR作为搜索策略，而不是相似度。
 
 ```
 retriever = qdrant.as_retriever(search_type="mmr")
@@ -591,26 +267,10 @@ retriever
 
 ```
 
-
-
-
-
-
-
-
 ```
 VectorStoreRetriever(vectorstore=<langchain.vectorstores.qdrant.Qdrant object at 0x7fc4e5720a00>, search_type='mmr', search_kwargs={})
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -618,42 +278,17 @@ retriever.get_relevant_documents(query)[0]
 
 ```
 
-
-
-
-
-
-
-
 ```
-Document(page_content='Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. \n\nTonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. \n\nOne of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. \n\nAnd I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.', metadata={'source': '../../../state_of_the_union.txt'})
+Document(page_content='Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections.   Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service.   One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court.   And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.', metadata={'source': '../../../state_of_the_union.txt'})
 
 ```
 
+自定义Qdrant[#](#customizing-qdrant "本标题的永久链接")
+--------------------------------------------
 
+Qdrant将您的向量嵌入与可选的类似JSON的有效载荷一起存储。有效载荷是可选的，但由于LangChain假定嵌入是从文档生成的，因此我们保留上下文数据，因此您也可以提取原始文本。
 
-
-
-
-
-
- Customizing Qdrant
- [#](#customizing-qdrant "Permalink to this headline")
----------------------------------------------------------------------------
-
-
-
- Qdrant stores your vector embeddings along with the optional JSON-like payload. Payloads are optional, but since LangChain assumes the embeddings are generated from the documents, we keep the context data, so you can extract the original texts as well.
- 
-
-
-
- By default, your document is going to be stored in the following payload structure:
- 
-
-
-
-
+默认情况下，您的文档将存储在以下有效载荷结构中：
 
 ```
 {
@@ -665,17 +300,7 @@ Document(page_content='Tonight. I call on the Senate to: Pass the Freedom to Vot
 
 ```
 
-
-
-
- You can, however, decide to use different keys for the page content and metadata. That’s useful if you already have a collection that you’d like to reuse. You can always change the
- 
-
-
-
-
-
-
+但是，您可以决定使用不同的键来存储页面内容和元数据。如果您已经有一个要重用的集合，那很有用。您始终可以更改
 
 ```
 Qdrant.from_documents(
@@ -688,22 +313,8 @@ Qdrant.from_documents(
 
 ```
 
-
-
-
-
-
-
-
 ```
 <langchain.vectorstores.qdrant.Qdrant at 0x7fc4e2baa230>
 
 ```
-
-
-
-
-
-
-
 

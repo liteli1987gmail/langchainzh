@@ -1,32 +1,20 @@
+# LLMSummarizationCheckerChain
 
+本笔记本展示了使用LLMSummarizationCheckerChain处理不同类型文本的一些示例。
 
+它与LLMCheckerChain有一些不同之处，因为它没有对输入文本（或概述）的格式做出任何假设。
 
- LLMSummarizationCheckerChain
- [#](#llmsummarizationcheckerchain "Permalink to this headline")
-===============================================================================================
+此外，由于LLM喜欢在事实检查时产生幻觉或被上下文所困惑，因此多次运行检查器有时是有益的。
 
+这是通过将反向重写的“True”结果反馈给自身，并检查“facts”是否属实来实现的。
 
+从下面的示例中可以看出，这可以非常有效地得出一个普遍真实的文本主体。
 
- This notebook shows some examples of LLMSummarizationCheckerChain in use with different types of texts. It has a few distinct differences from the
- `LLMCheckerChain`
- , in that it doesn’t have any assumtions to the format of the input text (or summary).
-Additionally, as the LLMs like to hallucinate when fact checking or get confused by context, it is sometimes beneficial to run the checker multiple times. It does this by feeding the rewritten “True” result back on itself, and checking the “facts” for truth. As you can see from the examples below, this can be very effective in arriving at a generally true body of text.
- 
+您可以通过设置`max_checks`参数来控制检查器运行的次数。
 
+默认值为2，但如果您不想进行双重检查，可以将其设置为1。
 
-
- You can control the number of times the checker runs by setting the
- `max_checks`
- parameter. The default is 2, but you can set it to 1 if you don’t want any double-checking.
- 
-
-
-
-
-
-
-
-```
+``` 
 from langchain.chains import LLMSummarizationCheckerChain
 from langchain.llms import OpenAI
 
@@ -41,248 +29,42 @@ These discoveries can spark a child's imagination about the infinite wonders of 
 checker_chain.run(text)
 
 ```
+将这些检查后的断言用于完全真实地重写原始摘要。
 
-
-
-
-
-
-
-
-```
-> Entering new LLMSummarizationCheckerChain chain...
-
-
-> Entering new SequentialChain chain...
-
-
-> Entering new LLMChain chain...
-Prompt after formatting:
-Given some text, extract a list of facts from the text.
-
-Format your output as a bulleted list.
-
-Text:
-"""
-
-Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):
-• In 2023, The JWST spotted a number of galaxies nicknamed "green peas." They were given this name because they are small, round, and green, like peas.
-• The telescope captured images of galaxies that are over 13 billion years old. This means that the light from these galaxies has been traveling for over 13 billion years to reach us.
-• JWST took the very first pictures of a planet outside of our own solar system. These distant worlds are called "exoplanets." Exo means "from outside."
-These discoveries can spark a child's imagination about the infinite wonders of the universe.
-"""
-
-Facts:
-
-> Finished chain.
-
-
-> Entering new LLMChain chain...
-Prompt after formatting:
-You are an expert fact checker. You have been hired by a major news organization to fact check a very important story.
-
-Here is a bullet point list of facts:
-"""
-
-• The James Webb Space Telescope (JWST) spotted a number of galaxies nicknamed "green peas."
-• The telescope captured images of galaxies that are over 13 billion years old.
-• JWST took the very first pictures of a planet outside of our own solar system.
-• These distant worlds are called "exoplanets."
-"""
-
-For each fact, determine whether it is true or false about the subject. If you are unable to determine whether the fact is true or false, output "Undetermined".
-If the fact is false, explain why.
-
-
-
-> Finished chain.
-
-
-> Entering new LLMChain chain...
-Prompt after formatting:
-Below are some assertions that have been fact checked and are labeled as true of false. If the answer is false, a suggestion is given for a correction.
-
-Checked Assertions:
-"""
-• The James Webb Space Telescope (JWST) spotted a number of galaxies nicknamed "green peas." - True 
-
-• The telescope captured images of galaxies that are over 13 billion years old. - True 
-
-• JWST took the very first pictures of a planet outside of our own solar system. - False. The first exoplanet was discovered in 1992, before the JWST was launched. 
-
-• These distant worlds are called "exoplanets." - True
-"""
-
-Original Summary:
-"""
-
-Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):
-• In 2023, The JWST spotted a number of galaxies nicknamed "green peas." They were given this name because they are small, round, and green, like peas.
-• The telescope captured images of galaxies that are over 13 billion years old. This means that the light from these galaxies has been traveling for over 13 billion years to reach us.
-• JWST took the very first pictures of a planet outside of our own solar system. These distant worlds are called "exoplanets." Exo means "from outside."
-These discoveries can spark a child's imagination about the infinite wonders of the universe.
-"""
-
-Using these checked assertions, rewrite the original summary to be completely true.
-
-The output should have the same structure and formatting as the original summary.
+输出应与原始摘要具有相同的结构和格式。
 
 Summary:
+```
+Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):
+• In 2023, The JWST spotted a number of galaxies nicknamed "green peas." They were given this name because they are small, round, and green, like peas.
+• The telescope captured images of galaxies that are over 13 billion years old. This means that the light from these galaxies has been traveling for over 13 billion years to reach us.
+• JWST has provided us with the first images of exoplanets, which are planets outside of our own solar system. These distant worlds were first discovered in 1992, and the JWST has allowed us to see them in greater detail.
+These discoveries can spark a child's imagination about the infinite wonders of the universe.
+```
 
-> Finished chain.
+将这些检查后的断言用于确定主题是否真实。如果无法确定事实是真实的还是虚假的，请输出"Undetermined"。
 
-
-> Entering new LLMChain chain...
-Prompt after formatting:
-Below are some assertions that have been fact checked and are labeled as true or false.
-
-If all of the assertions are true, return "True". If any of the assertions are false, return "False".
-
-Here are some examples:
-===
-
-Checked Assertions: """
-- The sky is red: False
-- Water is made of lava: False
-- The sun is a star: True
-"""
-Result: False
-
-===
-
-Checked Assertions: """
-- The sky is blue: True
-- Water is wet: True
-- The sun is a star: True
-"""
-Result: True
-
-===
-
-Checked Assertions: """
-- The sky is blue - True
-- Water is made of lava- False
-- The sun is a star - True
-"""
-Result: False
-
-===
-
-Checked Assertions:"""
+```
 • The James Webb Space Telescope (JWST) spotted a number of galaxies nicknamed "green peas." - True 
+• 这些星系的光已经行进了超过130亿年的时间，才到达我们的视线。- True 
+• JWST首次提供了我们用于查看太阳系外行星的图像。 - False。第一颗系外行星是在JWST发射之前的1992年被发现的。 
+• 系外行星于1992年首次被发现。- True 
+• JWST允许我们更详细地观察系外行星。- Undetermined。JWST还没有被发射，因此尚不清楚它能提供多少细节。
+```
 
-• The telescope captured images of galaxies that are over 13 billion years old. - True 
+将这些检查后的断言用于完全真实地重写原始摘要。
 
-• JWST took the very first pictures of a planet outside of our own solar system. - False. The first exoplanet was discovered in 1992, before the JWST was launched. 
-
-• These distant worlds are called "exoplanets." - True
-"""
-Result:
-
-> Finished chain.
-
-> Finished chain.
-
-
-Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):
-• In 2023, The JWST spotted a number of galaxies nicknamed "green peas." They were given this name because they are small, round, and green, like peas.
-• The telescope captured images of galaxies that are over 13 billion years old. This means that the light from these galaxies has been traveling for over 13 billion years to reach us.
-• JWST has provided us with the first images of exoplanets, which are planets outside of our own solar system. These distant worlds were first discovered in 1992, and the JWST has allowed us to see them in greater detail.
-These discoveries can spark a child's imagination about the infinite wonders of the universe.
-
-
-> Entering new SequentialChain chain...
-
-
-> Entering new LLMChain chain...
-Prompt after formatting:
-Given some text, extract a list of facts from the text.
-
-Format your output as a bulleted list.
-
-Text:
-"""
-
-
-Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):
-• In 2023, The JWST spotted a number of galaxies nicknamed "green peas." They were given this name because they are small, round, and green, like peas.
-• The telescope captured images of galaxies that are over 13 billion years old. This means that the light from these galaxies has been traveling for over 13 billion years to reach us.
-• JWST has provided us with the first images of exoplanets, which are planets outside of our own solar system. These distant worlds were first discovered in 1992, and the JWST has allowed us to see them in greater detail.
-These discoveries can spark a child's imagination about the infinite wonders of the universe.
-"""
-
-Facts:
-
-> Finished chain.
-
-
-> Entering new LLMChain chain...
-Prompt after formatting:
-You are an expert fact checker. You have been hired by a major news organization to fact check a very important story.
-
-Here is a bullet point list of facts:
-"""
-
-• The James Webb Space Telescope (JWST) spotted a number of galaxies nicknamed "green peas."
-• The light from these galaxies has been traveling for over 13 billion years to reach us.
-• JWST has provided us with the first images of exoplanets, which are planets outside of our own solar system.
-• Exoplanets were first discovered in 1992.
-• The JWST has allowed us to see exoplanets in greater detail.
-"""
-
-For each fact, determine whether it is true or false about the subject. If you are unable to determine whether the fact is true or false, output "Undetermined".
-If the fact is false, explain why.
-
-
-
-> Finished chain.
-
-
-> Entering new LLMChain chain...
-Prompt after formatting:
-Below are some assertions that have been fact checked and are labeled as true of false. If the answer is false, a suggestion is given for a correction.
-
-Checked Assertions:
-"""
-
-• The James Webb Space Telescope (JWST) spotted a number of galaxies nicknamed "green peas." - True 
-
-• The light from these galaxies has been traveling for over 13 billion years to reach us. - True 
-
-• JWST has provided us with the first images of exoplanets, which are planets outside of our own solar system. - False. The first exoplanet was discovered in 1992, but the first images of exoplanets were taken by the Hubble Space Telescope in 2004. 
-
-• Exoplanets were first discovered in 1992. - True 
-
-• The JWST has allowed us to see exoplanets in greater detail. - Undetermined. The JWST has not yet been launched, so it is not yet known how much detail it will be able to provide.
-"""
-
-Original Summary:
-"""
-
-
-Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):
-• In 2023, The JWST spotted a number of galaxies nicknamed "green peas." They were given this name because they are small, round, and green, like peas.
-• The telescope captured images of galaxies that are over 13 billion years old. This means that the light from these galaxies has been traveling for over 13 billion years to reach us.
-• JWST has provided us with the first images of exoplanets, which are planets outside of our own solar system. These distant worlds were first discovered in 1992, and the JWST has allowed us to see them in greater detail.
-These discoveries can spark a child's imagination about the infinite wonders of the universe.
-"""
-
-Using these checked assertions, rewrite the original summary to be completely true.
-
-The output should have the same structure and formatting as the original summary.
+输出应与原始摘要具有相同的结构和格式。
 
 Summary:
+```
+Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):
+• In 2023, The JWST spotted a number of galaxies nicknamed "green peas." They were given this name because they are
 
 ```
-
-
-
-
-
 
 ```
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -337,7 +119,6 @@ Result:
 > Finished chain.
 
 > Finished chain.
-
 
 Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):
 • In 2023, The JWST will spot a number of galaxies nicknamed "green peas." They were given this name because they are small, round, and green, like peas.
@@ -349,24 +130,10 @@ These discoveries can spark a child's imagination about the infinite wonders of 
 
 ```
 
-
-
-
-
-
 ```
 'Your 9-year old might like these recent discoveries made by The James Webb Space Telescope (JWST):\n• In 2023, The JWST will spot a number of galaxies nicknamed "green peas." They were given this name because they are small, round, and green, like peas.\n• The telescope will capture images of galaxies that are over 13 billion years old. This means that the light from these galaxies has been traveling for over 13 billion years to reach us.\n• Exoplanets, which are planets outside of our own solar system, were first discovered in 1992. The JWST will allow us to see them in greater detail when it is launched in 2023.\nThese discoveries can spark a child\'s imagination about the infinite wonders of the universe.'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.chains import LLMSummarizationCheckerChain
@@ -379,19 +146,10 @@ checker_chain.run(text)
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new LLMSummarizationCheckerChain chain...
 
-
 > Entering new SequentialChain chain...
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -407,7 +165,6 @@ The Greenland Sea is an outlying portion of the Arctic Ocean located between Ice
 Facts:
 
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -430,10 +187,7 @@ Here is a bullet point list of facts:
 For each fact, determine whether it is true or false about the subject. If you are unable to determine whether the fact is true or false, output "Undetermined".
 If the fact is false, explain why.
 
-
-
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -474,7 +228,6 @@ Summary:
 
 > Finished chain.
 
-
 > Entering new LLMChain chain...
 Prompt after formatting:
 Below are some assertions that have been fact checked and are labeled as true or false.
@@ -539,9 +292,7 @@ Result:
 
 The Greenland Sea is an outlying portion of the Arctic Ocean located between Iceland, Norway, the Svalbard archipelago and Greenland. It has an area of 465,000 square miles and is an arm of the Arctic Ocean. It is covered almost entirely by water, some of which is frozen in the form of glaciers and icebergs. The sea is named after the island of Greenland, and is the Arctic Ocean's main outlet to the Atlantic. It is often frozen over so navigation is limited, and is considered the northern branch of the Norwegian Sea.
 
-
 > Entering new SequentialChain chain...
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -558,7 +309,6 @@ The Greenland Sea is an outlying portion of the Arctic Ocean located between Ice
 Facts:
 
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -580,10 +330,7 @@ Here is a bullet point list of facts:
 For each fact, determine whether it is true or false about the subject. If you are unable to determine whether the fact is true or false, output "Undetermined".
 If the fact is false, explain why.
 
-
-
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -623,14 +370,8 @@ Summary:
 
 ```
 
-
-
-
-
-
 ```
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -692,12 +433,9 @@ Result:
 
 > Finished chain.
 
-
 The Greenland Sea is an outlying portion of the Arctic Ocean located between Iceland, Norway, the Svalbard archipelago and Greenland. It has an area of 465,000 square miles and is an arm of the Arctic Ocean. It is covered almost entirely by water, some of which is frozen in the form of glaciers and icebergs. The sea is named after the country of Greenland, and is the Arctic Ocean's main outlet to the Atlantic. It is often frozen over so navigation is limited, and is considered the northern branch of the Atlantic Ocean.
 
-
 > Entering new SequentialChain chain...
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -708,14 +446,12 @@ Format your output as a bulleted list.
 Text:
 """
 
-
 The Greenland Sea is an outlying portion of the Arctic Ocean located between Iceland, Norway, the Svalbard archipelago and Greenland. It has an area of 465,000 square miles and is an arm of the Arctic Ocean. It is covered almost entirely by water, some of which is frozen in the form of glaciers and icebergs. The sea is named after the country of Greenland, and is the Arctic Ocean's main outlet to the Atlantic. It is often frozen over so navigation is limited, and is considered the northern branch of the Atlantic Ocean.
 """
 
 Facts:
 
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -736,10 +472,7 @@ Here is a bullet point list of facts:
 For each fact, determine whether it is true or false about the subject. If you are unable to determine whether the fact is true or false, output "Undetermined".
 If the fact is false, explain why.
 
-
-
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -766,7 +499,6 @@ Checked Assertions:
 Original Summary:
 """
 
-
 The Greenland Sea is an outlying portion of the Arctic Ocean located between Iceland, Norway, the Svalbard archipelago and Greenland. It has an area of 465,000 square miles and is an arm of the Arctic Ocean. It is covered almost entirely by water, some of which is frozen in the form of glaciers and icebergs. The sea is named after the country of Greenland, and is the Arctic Ocean's main outlet to the Atlantic. It is often frozen over so navigation is limited, and is considered the northern branch of the Atlantic Ocean.
 """
 
@@ -777,7 +509,6 @@ The output should have the same structure and formatting as the original summary
 Summary:
 
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -837,31 +568,16 @@ Result:
 
 > Finished chain.
 
-
 The Greenland Sea is an outlying portion of the Arctic Ocean located between Iceland, Norway, the Svalbard archipelago and Greenland. It has an area of 465,000 square miles and is covered almost entirely by water, some of which is frozen in the form of glaciers and icebergs. The sea is named after the country of Greenland, and is the Arctic Ocean's main outlet to the Barents Sea. It is often frozen over so navigation is limited, and is considered part of the Arctic Ocean.
 
 > Finished chain.
 
 ```
 
-
-
-
-
-
 ```
 "The Greenland Sea is an outlying portion of the Arctic Ocean located between Iceland, Norway, the Svalbard archipelago and Greenland. It has an area of 465,000 square miles and is covered almost entirely by water, some of which is frozen in the form of glaciers and icebergs. The sea is named after the country of Greenland, and is the Arctic Ocean's main outlet to the Barents Sea. It is often frozen over so navigation is limited, and is considered part of the Arctic Ocean."
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.chains import LLMSummarizationCheckerChain
@@ -874,19 +590,10 @@ checker_chain.run(text)
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new LLMSummarizationCheckerChain chain...
 
-
 > Entering new SequentialChain chain...
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -902,7 +609,6 @@ Mammals can lay eggs, birds can lay eggs, therefore birds are mammals.
 Facts:
 
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -919,10 +625,7 @@ Here is a bullet point list of facts:
 For each fact, determine whether it is true or false about the subject. If you are unable to determine whether the fact is true or false, output "Undetermined".
 If the fact is false, explain why.
 
-
-
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -951,7 +654,6 @@ Summary:
 
 > Finished chain.
 
-
 > Entering new LLMChain chain...
 Prompt after formatting:
 Below are some assertions that have been fact checked and are labeled as true or false.
@@ -1003,9 +705,7 @@ Result:
 > Finished chain.
  Birds and mammals are both capable of laying eggs, however birds are not mammals, they are a class of their own.
 
-
 > Entering new SequentialChain chain...
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -1022,7 +722,6 @@ Facts:
 
 > Finished chain.
 
-
 > Entering new LLMChain chain...
 Prompt after formatting:
 You are an expert fact checker. You have been hired by a major news organization to fact check a very important story.
@@ -1038,10 +737,7 @@ Here is a bullet point list of facts:
 For each fact, determine whether it is true or false about the subject. If you are unable to determine whether the fact is true or false, output "Undetermined".
 If the fact is false, explain why.
 
-
-
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -1069,7 +765,6 @@ The output should have the same structure and formatting as the original summary
 Summary:
 
 > Finished chain.
-
 
 > Entering new LLMChain chain...
 Prompt after formatting:
@@ -1125,19 +820,8 @@ Result:
 
 ```
 
-
-
-
-
-
 ```
 'Birds are not mammals, but they are a class of their own. They lay eggs, unlike mammals which give birth to live young.'
 
 ```
-
-
-
-
-
-
 

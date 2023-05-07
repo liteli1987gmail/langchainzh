@@ -1,48 +1,22 @@
 
 
+Sequential Chains[#](#sequential-chains "Permalink to this headline")
+=====================================================================
 
- Sequential Chains
- [#](#sequential-chains "Permalink to this headline")
-=========================================================================
+调用语言模型后的下一步是做一系列的调用。当您想要将一个调用的输出作为另一个调用的输入时，这是特别有用的。
 
+在本笔记本中，我们将演示如何使用顺序链来完成一些示例。顺序链被定义为一系列链，按确定的顺序调用。有两种类型的顺序链：
 
+* `SimpleSequentialChain`：最简单的顺序链形式，每个步骤都有一个单一的输入/输出，一个步骤的输出是下一个步骤的输入。
 
- The next step after calling a language model is make a series of calls to a language model. This is particularly useful when you want to take the output from one call and use it as the input to another.
- 
+* `SequentialChain`：更一般的顺序链形式，允许多个输入/输出。
 
+SimpleSequentialChain[#](#simplesequentialchain "Permalink to this headline")
+-----------------------------------------------------------------------------
 
+在这个链式结构中，每个链只有一个输入和一个输出，一个步骤的输出作为下一个步骤的输入。
 
- In this notebook we will walk through some examples for how to do this, using sequential chains. Sequential chains are defined as a series of chains, called in deterministic order. There are two types of sequential chains:
- 
-
-
-* `SimpleSequentialChain`
- : The simplest form of sequential chains, where each step has a singular input/output, and the output of one step is the input to the next.
-* `SequentialChain`
- : A more general form of sequential chains, allowing for multiple inputs/outputs.
-
-
-
-
- SimpleSequentialChain
- [#](#simplesequentialchain "Permalink to this headline")
----------------------------------------------------------------------------------
-
-
-
- In this series of chains, each individual chain has a single input and a single output, and the output of one step is used as input to the next.
- 
-
-
-
- Let’s walk through a toy example of doing this, where the first chain takes in the title of an imaginary play and then generates a synopsis for that title, and the second chain takes in the synopsis of that play and generates an imaginary review for that play.
- 
-
-
-
-
-
-
+我们来看一个玩具例子，第一个链接收一个虚构剧本的标题，然后生成该剧本的概要，第二个链接收该剧本的概要，然后生成一个虚构评论。
 
 ```
 from langchain.llms import OpenAI
@@ -50,15 +24,6 @@ from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # This is an LLMChain to write a synopsis given a title of a play.
@@ -71,15 +36,6 @@ prompt_template = PromptTemplate(input_variables=["title"], template=template)
 synopsis_chain = LLMChain(llm=llm, prompt=prompt_template)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # This is an LLMChain to write a review of a play given a synopsis.
@@ -94,15 +50,6 @@ review_chain = LLMChain(llm=llm, prompt=prompt_template)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # This is the overall chain where we run these two chains in sequence.
 from langchain.chains import SimpleSequentialChain
@@ -110,37 +57,19 @@ overall_chain = SimpleSequentialChain(chains=[synopsis_chain, review_chain], ver
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 review = overall_chain.run("Tragedy at sunset on the beach")
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new SimpleSequentialChain chain...
-
 
 Tragedy at Sunset on the Beach is a story of a young couple, Jack and Sarah, who are in love and looking forward to their future together. On the night of their anniversary, they decide to take a walk on the beach at sunset. As they are walking, they come across a mysterious figure, who tells them that their love will be tested in the near future. 
 
 The figure then tells the couple that the sun will soon set, and with it, a tragedy will strike. If Jack and Sarah can stay together and pass the test, they will be granted everlasting love. However, if they fail, their love will be lost forever.
 
 The play follows the couple as they struggle to stay together and battle the forces that threaten to tear them apart. Despite the tragedy that awaits them, they remain devoted to one another and fight to keep their love alive. In the end, the couple must decide whether to take a chance on their future together or succumb to the tragedy of the sunset.
-
 
 Tragedy at Sunset on the Beach is an emotionally gripping story of love, hope, and sacrifice. Through the story of Jack and Sarah, the audience is taken on a journey of self-discovery and the power of love to overcome even the greatest of obstacles. 
 
@@ -152,26 +81,10 @@ The play's setting of the beach at sunset adds a touch of poignancy and romantic
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(review)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Tragedy at Sunset on the Beach is an emotionally gripping story of love, hope, and sacrifice. Through the story of Jack and Sarah, the audience is taken on a journey of self-discovery and the power of love to overcome even the greatest of obstacles. 
@@ -182,32 +95,12 @@ The play's setting of the beach at sunset adds a touch of poignancy and romantic
 
 ```
 
+顺序链[#](#sequential-chain "Permalink to this headline")
+------------------------------------------------------
 
+当然，并不是所有的顺序链都像传递单个字符串参数并获取单个字符串输出那样简单。在下一个示例中，我们将尝试更复杂的链，涉及多个输入，以及多个最终输出。
 
-
-
-
-
-
- Sequential Chain
- [#](#sequential-chain "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Of course, not all sequential chains will be as simple as passing a single string as an argument and getting a single string as output for all steps in the chain. In this next example, we will experiment with more complex chains that involve multiple inputs, and where there also multiple final outputs.
- 
-
-
-
- Of particular importance is how we name the input/output variable names. In the above example we didn’t have to think about that because we were just passing the output of one chain directly as input to the next, but here we do have worry about that because we have multiple inputs.
- 
-
-
-
-
-
-
+特别重要的是如何命名输入/输出变量名。在上面的例子中，我们不必考虑这个问题，因为我们只是将一个链的输出直接作为下一个链的输入传递，但在这里，我们必须考虑这个问题，因为我们有多个输入。
 
 ```
 # This is an LLMChain to write a synopsis given a title of a play and the era it is set in.
@@ -222,15 +115,6 @@ synopsis_chain = LLMChain(llm=llm, prompt=prompt_template, output_key="synopsis"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # This is an LLMChain to write a review of a play given a synopsis.
 llm = OpenAI(temperature=.7)
@@ -244,15 +128,6 @@ review_chain = LLMChain(llm=llm, prompt=prompt_template, output_key="review")
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # This is the overall chain where we run these two chains in sequence.
 from langchain.chains import SequentialChain
@@ -265,26 +140,10 @@ overall_chain = SequentialChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 overall_chain({"title":"Tragedy at sunset on the beach", "era": "Victorian England"})
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new SequentialChain chain...
@@ -293,49 +152,19 @@ overall_chain({"title":"Tragedy at sunset on the beach", "era": "Victorian Engla
 
 ```
 
-
-
-
-
-
 ```
 {'title': 'Tragedy at sunset on the beach',
  'era': 'Victorian England',
- 'synopsis': "\n\nThe play follows the story of John, a young man from a wealthy Victorian family, who dreams of a better life for himself. He soon meets a beautiful young woman named Mary, who shares his dream. The two fall in love and decide to elope and start a new life together.\n\nOn their journey, they make their way to a beach at sunset, where they plan to exchange their vows of love. Unbeknownst to them, their plans are overheard by John's father, who has been tracking them. He follows them to the beach and, in a fit of rage, confronts them. \n\nA physical altercation ensues, and in the struggle, John's father accidentally stabs Mary in the chest with his sword. The two are left in shock and disbelief as Mary dies in John's arms, her last words being a declaration of her love for him.\n\nThe tragedy of the play comes to a head when John, broken and with no hope of a future, chooses to take his own life by jumping off the cliffs into the sea below. \n\nThe play is a powerful story of love, hope, and loss set against the backdrop of 19th century England.",
- 'review': "\n\nThe latest production from playwright X is a powerful and heartbreaking story of love and loss set against the backdrop of 19th century England. The play follows John, a young man from a wealthy Victorian family, and Mary, a beautiful young woman with whom he falls in love. The two decide to elope and start a new life together, and the audience is taken on a journey of hope and optimism for the future.\n\nUnfortunately, their dreams are cut short when John's father discovers them and in a fit of rage, fatally stabs Mary. The tragedy of the play is further compounded when John, broken and without hope, takes his own life. The storyline is not only realistic, but also emotionally compelling, drawing the audience in from start to finish.\n\nThe acting was also commendable, with the actors delivering believable and nuanced performances. The playwright and director have successfully crafted a timeless tale of love and loss that will resonate with audiences for years to come. Highly recommended."}
+ 'synopsis': "  The play follows the story of John, a young man from a wealthy Victorian family, who dreams of a better life for himself. He soon meets a beautiful young woman named Mary, who shares his dream. The two fall in love and decide to elope and start a new life together.  On their journey, they make their way to a beach at sunset, where they plan to exchange their vows of love. Unbeknownst to them, their plans are overheard by John's father, who has been tracking them. He follows them to the beach and, in a fit of rage, confronts them.   A physical altercation ensues, and in the struggle, John's father accidentally stabs Mary in the chest with his sword. The two are left in shock and disbelief as Mary dies in John's arms, her last words being a declaration of her love for him.  The tragedy of the play comes to a head when John, broken and with no hope of a future, chooses to take his own life by jumping off the cliffs into the sea below.   The play is a powerful story of love, hope, and loss set against the backdrop of 19th century England.",
+ 'review': "  The latest production from playwright X is a powerful and heartbreaking story of love and loss set against the backdrop of 19th century England. The play follows John, a young man from a wealthy Victorian family, and Mary, a beautiful young woman with whom he falls in love. The two decide to elope and start a new life together, and the audience is taken on a journey of hope and optimism for the future.  Unfortunately, their dreams are cut short when John's father discovers them and in a fit of rage, fatally stabs Mary. The tragedy of the play is further compounded when John, broken and without hope, takes his own life. The storyline is not only realistic, but also emotionally compelling, drawing the audience in from start to finish.  The acting was also commendable, with the actors delivering believable and nuanced performances. The playwright and director have successfully crafted a timeless tale of love and loss that will resonate with audiences for years to come. Highly recommended."}
 
 ```
 
+### 顺序链中的记忆[#](#memory-in-sequential-chains "Permalink to this headline")
 
+有时您可能想传递一些上下文以在链的每个步骤或链的后面部分中使用，但维护和链接输入/输出变量可能会很快变得混乱。使用 `SimpleMemory` 是一种方便的方式来管理这个问题并清理您的链。
 
-
-
-
-### 
- Memory in Sequential Chains
- [#](#memory-in-sequential-chains "Permalink to this headline")
-
-
-
- Sometimes you may want to pass along some context to use in each step of the chain or in a later part of the chain, but maintaining and chaining together the input/output variables can quickly get messy. Using
- `SimpleMemory`
- is a convenient way to do manage this and clean up your chains.
- 
-
-
-
- For example, using the previous playwright SequentialChain, lets say you wanted to include some context about date, time and location of the play, and using the generated synopsis and review, create some social media post text. You could add these new context variables as
- `input_variables`
- , or we can add a
- `SimpleMemory`
- to the chain to manage this context:
- 
-
-
-
-
-
-
+举个例子，假设你使用之前介绍过的playwright SequentialChain，你想要在剧本中添加一些关于日期、时间和地点的上下文信息，并且使用生成的简介和评论来创建一些社交媒体发布文本。你可以将这些新的上下文变量添加为`input_variables`，或者我们可以添加一个`SimpleMemory`到链中来管理这个上下文：
 
 ```
 from langchain.chains import SequentialChain
@@ -370,24 +199,12 @@ overall_chain({"title":"Tragedy at sunset on the beach", "era": "Victorian Engla
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new SequentialChain chain...
 
 > Finished chain.
 
 ```
-
-
-
-
-
 
 ```
 {'title': 'Tragedy at sunset on the beach',
@@ -397,12 +214,4 @@ overall_chain({"title":"Tragedy at sunset on the beach", "era": "Victorian Engla
  'social_post_text': "\nSpend your Christmas night with us at Theater in the Park and experience the heartbreaking story of love and loss that is 'A Walk on the Beach'. Set in Victorian England, this romantic tragedy follows the story of Frances and Edward, a young couple whose love is tragically cut short. Don't miss this emotional and thought-provoking production that is sure to leave you in tears. #AWalkOnTheBeach #LoveAndLoss #TheaterInThePark #VictorianEngland"}
 
 ```
-
-
-
-
-
-
-
-
 

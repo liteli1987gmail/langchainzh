@@ -1,20 +1,9 @@
 
 
+如何给多输入链添加内存[#](#how-to-add-memory-to-a-multi-input-chain "本标题的永久链接")
+====================================================================
 
- How to add memory to a Multi-Input Chain
- [#](#how-to-add-memory-to-a-multi-input-chain "Permalink to this headline")
-=======================================================================================================================
-
-
-
- Most memory objects assume a single output. In this notebook, we go over how to add memory to a chain that has multiple outputs. As an example of such a chain, we will add memory to a question/answering chain. This chain takes as inputs both related documents and a user question.
- 
-
-
-
-
-
-
+大多数内存对象都假设只有一个输入。在本文中，我们将介绍如何给具有多个输入的链添加内存。作为这样一条链的示例，我们将向问答链添加内存。该链将相关文档和用户问题作为输入。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -26,15 +15,6 @@ from langchain.docstore.document import Document
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 with open('../../state_of_the_union.txt') as f:
     state_of_the_union = f.read()
@@ -45,26 +25,10 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 docsearch = Chroma.from_texts(texts, embeddings, metadatas=[{"source": i} for i in range(len(texts))])
 
 ```
-
-
-
-
-
-
-
 
 ```
 Running Chroma using direct local API.
@@ -72,29 +36,11 @@ Using DuckDB in-memory for database. Data will be transient.
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 query = "What did the president say about Justice Breyer"
 docs = docsearch.similarity_search(query)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.chains.question_answering import load_qa_chain
@@ -103,15 +49,6 @@ from langchain.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 template = """You are a chatbot having a conversation with a human.
@@ -133,63 +70,25 @@ chain = load_qa_chain(OpenAI(temperature=0), chain_type="stuff", memory=memory, 
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 query = "What did the president say about Justice Breyer"
 chain({"input_documents": docs, "human_input": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'output_text': ' Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service.'}
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 print(chain.memory.buffer)
 
 ```
 
-
-
-
-
-
-
-
 ```
 Human: What did the president say about Justice Breyer
 AI:  Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service.
 
 ```
-
-
-
-
-
-
 

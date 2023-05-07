@@ -1,32 +1,13 @@
 
+使用LangChain对向量索引进行文本生成
+=================
 
+本笔记本演示了如何使用LangChain对向量索引进行文本生成。如果我们想要生成能够从大量自定义文本中汲取知识的文本，例如生成具有先前编写的博客文章的理解或能够参考产品文档的产品教程，则这非常有用。
 
- Vector DB Text Generation
- [#](#vector-db-text-generation "Permalink to this headline")
-=========================================================================================
+准备数据[#](#prepare-data "本标题的永久链接")
+---------------------------------
 
-
-
- This notebook walks through how to use LangChain for text generation over a vector index. This is useful if we want to generate text that is able to draw from a large body of custom text, for example, generating blog posts that have an understanding of previous blog posts written, or product tutorials that can refer to product documentation.
- 
-
-
-
-
- Prepare Data
- [#](#prepare-data "Permalink to this headline")
----------------------------------------------------------------
-
-
-
- First, we prepare the data. For this example, we fetch a documentation site that consists of markdown files hosted on Github and split them into small enough Documents.
- 
-
-
-
-
-
-
+首先，我们要准备数据。对于这个示例，我们获取了托管在Github上的由markdown文件组成的文档站点，并将它们分成足够小的文档。
 
 ```
 from langchain.llms import OpenAI
@@ -42,15 +23,6 @@ import tempfile
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 def get_github_docs(repo_owner, repo_name):
     with tempfile.TemporaryDirectory() as d:
@@ -65,8 +37,8 @@ def get_github_docs(repo_owner, repo_name):
             .strip()
         )
         repo_path = pathlib.Path(d)
-        markdown_files = list(repo_path.glob("\*/\*.md")) + list(
-            repo_path.glob("\*/\*.mdx")
+        markdown_files = list(repo_path.glob("*/*.md")) + list(
+            repo_path.glob("*/*.mdx")
         )
         for markdown_file in markdown_files:
             with open(markdown_file, "r") as f:
@@ -84,70 +56,25 @@ for source in sources:
 
 ```
 
-
-
-
-
-
-
-
 ```
 Cloning into '.'...
 
 ```
 
+设置向量数据库[#](#set-up-vector-db "本标题的永久链接")
+----------------------------------------
 
-
-
-
-
-
-
- Set Up Vector DB
- [#](#set-up-vector-db "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Now that we have the documentation content in chunks, let’s put all this information in a vector index for easy retrieval.
- 
-
-
-
-
-
-
+现在，我们将文档的内容划分成块，然后将所有这些信息放入向量索引中以便于检索。
 
 ```
 search_index = Chroma.from_documents(source_chunks, OpenAIEmbeddings())
 
 ```
 
+使用自定义提示设置LLM Chain[#](#set-up-llm-chain-with-custom-prompt "本标题的永久链接")
+----------------------------------------------------------------------
 
-
-
-
-
-
-
- Set Up LLM Chain with Custom Prompt
- [#](#set-up-llm-chain-with-custom-prompt "Permalink to this headline")
--------------------------------------------------------------------------------------------------------------
-
-
-
- Next, let’s set up a simple LLM chain but give it a custom prompt for blog post generation. Note that the custom prompt is parameterized and takes two inputs:
- `context`
- , which will be the documents fetched from the vector search, and
- `topic`
- , which is given by the user.
- 
-
-
-
-
-
-
+Next, let’s set up a simple LLM chain but give it a custom prompt for blog post generation. Note that the custom prompt is parameterized and takes two inputs: `context`, which will be the documents fetched from the vector search, and `topic`, which is given by the user.
 
 ```
 from langchain.chains import LLMChain
@@ -166,31 +93,10 @@ chain = LLMChain(llm=llm, prompt=PROMPT)
 
 ```
 
+Generate Text[#](#generate-text "Permalink to this headline")
+-------------------------------------------------------------
 
-
-
-
-
-
-
- Generate Text
- [#](#generate-text "Permalink to this headline")
------------------------------------------------------------------
-
-
-
- Finally, we write a function to apply our inputs to the chain. The function takes an input parameter
- `topic`
- . We find the documents in the vector index that correspond to that
- `topic`
- , and use them as additional context in our simple LLM chain.
- 
-
-
-
-
-
-
+Finally, we write a function to apply our inputs to the chain. The function takes an input parameter `topic`. We find the documents in the vector index that correspond to that `topic`, and use them as additional context in our simple LLM chain.
 
 ```
 def generate_blog_post(topic):
@@ -200,36 +106,13 @@ def generate_blog_post(topic):
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 generate_blog_post("environment variables")
 
 ```
 
-
-
-
-
-
-
+```
+[{'text': '  Environment variables are a great way to store and access sensitive information in your Deno applications. Deno offers built-in support for environment variables with `Deno.env`, and you can also use a `.env` file to store and access environment variables.  Using `Deno.env` is simple. It has getter and setter methods, so you can easily set and retrieve environment variables. For example, you can set the `FIREBASE_API_KEY` and `FIREBASE_AUTH_DOMAIN` environment variables like this:  ```ts\nDeno.env.set("FIREBASE_API_KEY", "examplekey123");\nDeno.env.set("FIREBASE_AUTH_DOMAIN", "firebasedomain.com");  console.log(Deno.env.get("FIREBASE_API_KEY")); // examplekey123\nconsole.log(Deno.env.get("FIREBASE_AUTH_DOMAIN")); // firebasedomain.com\n```  You can also store environment variables in a `.env` file. This is a great'}, {'text': '  Environment variables are a powerful tool for managing configuration settings in a program. They allow us to set values that can be used by the program, without having to hard-code them into the code. This makes it easier to change settings without having to modify the code.  In Deno, environment variables can be set in a few different ways. The most common way is to use the `VAR=value` syntax. This will set the environment variable `VAR` to the value `value`. This can be used to set any number of environment variables before running a command. For example, if we wanted to set the environment variable `VAR` to `hello` before running a Deno command, we could do so like this:  ```\nVAR=hello deno run main.ts\n```  This will set the environment variable `VAR` to `hello` before running the command. We can then access this variable in our code using the `Deno.env.get()` function. For example, if we ran the following command:  ```\nVAR=hello && deno eval "console.log(\'Deno: \' + Deno.env.get(\'VAR'}, {'text': '  Environment variables are a powerful tool for developers, allowing them to store and access data without having to hard-code it into their applications. In Deno, you can access environment variables using the `Deno.env.get()` function.  For example, if you wanted to access the `HOME` environment variable, you could do so like this:  ```js\n// env.js\nDeno.env.get("HOME");\n```  When running this code, you\'ll need to grant the Deno process access to environment variables. This can be done by passing the `--allow-env` flag to the `deno run` command. You can also specify which environment variables you want to grant access to, like this:  ```shell\n# Allow access to only the HOME env var\ndeno run --allow-env=HOME env.js\n```  It\'s important to note that environment variables are case insensitive on Windows, so Deno also matches them case insensitively (on Windows only).  Another thing to be aware of when using environment variables is subprocess permissions. Subprocesses are powerful and can access system resources regardless of the permissions you granted to the Den'}, {'text': '  Environment variables are an important part of any programming language, and Deno is no exception. Deno is a secure JavaScript and TypeScript runtime built on the V8 JavaScript engine, and it recently added support for environment variables. This feature was added in Deno version 1.6.0, and it is now available for use in Deno applications.  Environment variables are used to store information that can be used by programs. They are typically used to store configuration information, such as the location of a database or the name of a user. In Deno, environment variables are stored in the `Deno.env` object. This object is similar to the `process.env` object in Node.js, and it allows you to access and set environment variables.  The `Deno.env` object is a read-only object, meaning that you cannot directly modify the environment variables. Instead, you must use the `Deno.env.set()` function to set environment variables. This function takes two arguments: the name of the environment variable and the value to set it to. For example, if you wanted to set the `FOO` environment variable to `bar`, you would use the following code:  ```'}]
 
 ```
-[{'text': '\n\nEnvironment variables are a great way to store and access sensitive information in your Deno applications. Deno offers built-in support for environment variables with `Deno.env`, and you can also use a `.env` file to store and access environment variables.\n\nUsing `Deno.env` is simple. It has getter and setter methods, so you can easily set and retrieve environment variables. For example, you can set the `FIREBASE_API_KEY` and `FIREBASE_AUTH_DOMAIN` environment variables like this:\n\n```ts\nDeno.env.set("FIREBASE_API_KEY", "examplekey123");\nDeno.env.set("FIREBASE_AUTH_DOMAIN", "firebasedomain.com");\n\nconsole.log(Deno.env.get("FIREBASE_API_KEY")); // examplekey123\nconsole.log(Deno.env.get("FIREBASE_AUTH_DOMAIN")); // firebasedomain.com\n```\n\nYou can also store environment variables in a `.env` file. This is a great'}, {'text': '\n\nEnvironment variables are a powerful tool for managing configuration settings in a program. They allow us to set values that can be used by the program, without having to hard-code them into the code. This makes it easier to change settings without having to modify the code.\n\nIn Deno, environment variables can be set in a few different ways. The most common way is to use the `VAR=value` syntax. This will set the environment variable `VAR` to the value `value`. This can be used to set any number of environment variables before running a command. For example, if we wanted to set the environment variable `VAR` to `hello` before running a Deno command, we could do so like this:\n\n```\nVAR=hello deno run main.ts\n```\n\nThis will set the environment variable `VAR` to `hello` before running the command. We can then access this variable in our code using the `Deno.env.get()` function. For example, if we ran the following command:\n\n```\nVAR=hello && deno eval "console.log(\'Deno: \' + Deno.env.get(\'VAR'}, {'text': '\n\nEnvironment variables are a powerful tool for developers, allowing them to store and access data without having to hard-code it into their applications. In Deno, you can access environment variables using the `Deno.env.get()` function.\n\nFor example, if you wanted to access the `HOME` environment variable, you could do so like this:\n\n```js\n// env.js\nDeno.env.get("HOME");\n```\n\nWhen running this code, you\'ll need to grant the Deno process access to environment variables. This can be done by passing the `--allow-env` flag to the `deno run` command. You can also specify which environment variables you want to grant access to, like this:\n\n```shell\n# Allow access to only the HOME env var\ndeno run --allow-env=HOME env.js\n```\n\nIt\'s important to note that environment variables are case insensitive on Windows, so Deno also matches them case insensitively (on Windows only).\n\nAnother thing to be aware of when using environment variables is subprocess permissions. Subprocesses are powerful and can access system resources regardless of the permissions you granted to the Den'}, {'text': '\n\nEnvironment variables are an important part of any programming language, and Deno is no exception. Deno is a secure JavaScript and TypeScript runtime built on the V8 JavaScript engine, and it recently added support for environment variables. This feature was added in Deno version 1.6.0, and it is now available for use in Deno applications.\n\nEnvironment variables are used to store information that can be used by programs. They are typically used to store configuration information, such as the location of a database or the name of a user. In Deno, environment variables are stored in the `Deno.env` object. This object is similar to the `process.env` object in Node.js, and it allows you to access and set environment variables.\n\nThe `Deno.env` object is a read-only object, meaning that you cannot directly modify the environment variables. Instead, you must use the `Deno.env.set()` function to set environment variables. This function takes two arguments: the name of the environment variable and the value to set it to. For example, if you wanted to set the `FOO` environment variable to `bar`, you would use the following code:\n\n```'}]
-
-```
-
-
-
-
-
-
-
 

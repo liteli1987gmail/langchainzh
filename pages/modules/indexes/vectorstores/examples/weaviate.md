@@ -1,64 +1,24 @@
 
 
-
- Weaviate
- [#](#weaviate "Permalink to this headline")
-=======================================================
-
-
+Weaviate[#](#weaviate "Permalink to this headline")
+===================================================
 
 > 
-> 
-> 
-> [Weaviate](https://weaviate.io/) 
->  is an open-source vector database. It allows you to store data objects and vector embeddings from your favorite ML-models, and scale seamlessly into billions of data objects.
->  
-> 
+> [Weaviate](https://weaviate.io/) 是一个开源的向量数据库。它允许您存储来自您喜爱的ML模型的数据对象和向量嵌入，并在数十亿个数据对象中无缝扩展。
 > 
 > 
 > 
 
+本笔记本演示了与 `Weaviate` 向量数据库相关的功能。
 
-
- This notebook shows how to use functionality related to the
- `Weaviate`
- vector database.
- 
-
-
-
- See the
- `Weaviate`
-[installation instructions](https://weaviate.io/developers/weaviate/installation) 
- .
- 
-
-
-
-
-
-
+请参阅 `Weaviate` 的 [安装说明](https://weaviate.io/developers/weaviate/installation)。
 
 ```
 !pip install weaviate-client
 
 ```
 
-
-
-
-
-
- We want to use
- `OpenAIEmbeddings`
- so we have to get the OpenAI API Key.
- 
-
-
-
-
-
-
+我们想使用 `OpenAIEmbeddings`，因此我们需要获取 OpenAI API 密钥。
 
 ```
 import os
@@ -68,42 +28,15 @@ os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 WEAVIATE_URL = getpass.getpass('WEAVIATE_URL:')
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 os.environ['WEAVIATE_API_KEY'] = getpass.getpass('WEAVIATE_API_KEY:')
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -112,15 +45,6 @@ from langchain.vectorstores import Weaviate
 from langchain.document_loaders import TextLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -132,15 +56,6 @@ docs = text_splitter.split_documents(documents)
 embeddings = OpenAIEmbeddings()
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import weaviate
@@ -155,15 +70,6 @@ client = weaviate.Client(
 )
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 client.schema.delete_all()
@@ -202,28 +108,10 @@ client.schema.create(schema)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 vectorstore = Weaviate(client, "Paragraph", "content")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -231,23 +119,8 @@ docs = vectorstore.similarity_search(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(docs[0].page_content)
 
 ```
-
-
-
-
-
-
 

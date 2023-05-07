@@ -1,40 +1,16 @@
 
 
+对话缓存窗口内存[#](#conversationbufferwindowmemory "此标题的永久链接")
+=======================================================
 
- ConversationBufferWindowMemory
- [#](#conversationbufferwindowmemory "Permalink to this headline")
-===================================================================================================
+`ConversationBufferWindowMemory`保留了对话随时间推移的交互列表。它仅使用最后K个交互。这可以用于保持最近交互的滑动窗口，以便缓冲区不会过大。
 
-
-
-`ConversationBufferWindowMemory`
- keeps a list of the interactions of the conversation over time. It only uses the last K interactions. This can be useful for keeping a sliding window of the most recent interactions, so the buffer does not get too large
- 
-
-
-
- Let’s first explore the basic functionality of this type of memory.
- 
-
-
-
-
-
-
+让我们先探索这种类型内存的基本功能。
 
 ```
 from langchain.memory import ConversationBufferWindowMemory
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 memory = ConversationBufferWindowMemory( k=1)
@@ -43,45 +19,17 @@ memory.save_context({"input": "not much you"}, {"ouput": "not much"})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory.load_memory_variables({})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'history': 'Human: not much you\nAI: not much'}
 
 ```
 
-
-
-
-
-
- We can also get the history as a list of messages (this is useful if you are using this with a chat model).
- 
-
-
-
-
-
-
+我们也可以将历史记录作为消息列表获取（如果您正在使用聊天模型，则这非常有用）。
 
 ```
 memory = ConversationBufferWindowMemory( k=1, return_messages=True)
@@ -90,26 +38,10 @@ memory.save_context({"input": "not much you"}, {"ouput": "not much"})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory.load_memory_variables({})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'history': [HumanMessage(content='not much you', additional_kwargs={}),
@@ -117,28 +49,10 @@ memory.load_memory_variables({})
 
 ```
 
+在链中使用[#](#using-in-a-chain "此标题的永久链接")
+--------------------------------------
 
-
-
-
-
-
- Using in a chain
- [#](#using-in-a-chain "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Let’s walk through an example, again setting
- `verbose=True`
- so we can see the prompt.
- 
-
-
-
-
-
-
+让我们通过一个例子来演示，再次设置`verbose=True`，以便我们可以看到提示。
 
 ```
 from langchain.llms import OpenAI
@@ -152,13 +66,6 @@ conversation_with_summary = ConversationChain(
 conversation_with_summary.predict(input="Hi, what's up?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -174,36 +81,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Hi there! I'm doing great. I'm currently helping a customer with a technical issue. How about you?"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation_with_summary.predict(input="What's their issues?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -220,36 +106,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " The customer is having trouble connecting to their Wi-Fi network. I'm helping them troubleshoot the issue and get them connected."
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation_with_summary.predict(input="Is it going well?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -268,37 +133,16 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Yes, it's going well so far. We've already identified the problem and are now working on a solution."
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # Notice here that the first interaction does not appear.
 conversation_with_summary.predict(input="What's the solution?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -317,20 +161,8 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " The solution is to reset the router and reconfigure the settings. We're currently in the process of doing that."
 
 ```
-
-
-
-
-
-
-
 

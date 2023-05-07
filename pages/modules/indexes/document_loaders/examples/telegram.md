@@ -1,9 +1,13 @@
 
-# Telegram
 
-> [Telegram Messenger](https://web.telegram.org/a/) 是一个全球可访问的付费/免费、跨平台、加密、基于云端和集中化的即时通讯服务。该应用还提供可选的端到端加密聊天和视频通话、VoIP、文件共享和多种其他功能。
+> 
+> [Telegram Messenger](https://web.telegram.org/a/) is a globally accessible freemium, cross-platform, encrypted, cloud-based and centralized instant messaging service. The application also provides optional end-to-end encrypted chats and video calling, VoIP, file sharing and several other features.
+> 
+> 
+> 
 
-本笔记本介绍了如何从Telegram中加载数据到可以摄取到LangChain的格式。
+This notebook covers how to load data from `Telegram` into a format that can be ingested into LangChain.
+
 ```
 from langchain.document_loaders import TelegramChatLoader
 

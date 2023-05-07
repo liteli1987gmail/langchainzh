@@ -1,42 +1,17 @@
 
 
-
- Question Answering with Sources
- [#](#question-answering-with-sources "Permalink to this headline")
-=====================================================================================================
-
-
-
- This notebook walks through how to use LangChain for question answering with sources over a list of documents. It covers four different chain types:
- `stuff`
- ,
- `map_reduce`
- ,
- `refine`
- ,
- `map-rerank`
- . For a more in depth explanation of what these chain types are, see
- [here](https://docs.langchain.com/docs/components/chains/index_related_chains) 
- .
- 
+用LangChain对一系列文档进行带来源的问答
+====
 
 
 
 
- Prepare Data
- [#](#prepare-data "Permalink to this headline")
----------------------------------------------------------------
+本笔记本介绍如何使用LangChain对一系列文档进行带来源的问答。它涵盖了四种不同的链条类型：`stuff`、`map_reduce`、`refine`、`map-rerank`。有关这些链条类型的更深入解释，请参见[此处](https://docs.langchain.com/docs/components/chains/index_related_chains)。
 
+准备数据
+----
 
-
- First we prepare the data. For this example we do similarity search over a vector database, but these documents could be fetched in any manner (the point of this notebook to highlight what to do AFTER you fetch the documents).
- 
-
-
-
-
-
-
+首先，我们需要准备数据。在此示例中，我们在向量数据库上进行相似性搜索，但这些文档可以以任何方式获取（本笔记本的重点是强调在获取文档后要做什么）。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -49,15 +24,6 @@ from langchain.prompts import PromptTemplate
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 with open("../../state_of_the_union.txt") as f:
     state_of_the_union = f.read()
@@ -68,26 +34,10 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 docsearch = Chroma.from_texts(texts, embeddings, metadatas=[{"source": str(i)} for i in range(len(texts))])
 
 ```
-
-
-
-
-
-
-
 
 ```
 Running Chroma using direct local API.
@@ -95,29 +45,11 @@ Using DuckDB in-memory for database. Data will be transient.
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 query = "What did the president say about Justice Breyer"
 docs = docsearch.similarity_search(query)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
@@ -125,27 +57,10 @@ from langchain.llms import OpenAI
 
 ```
 
+快速入门
+----
 
-
-
-
-
-
-
- Quickstart
- [#](#quickstart "Permalink to this headline")
------------------------------------------------------------
-
-
-
- If you just want to get started as quickly as possible, this is the recommended way to do it:
- 
-
-
-
-
-
-
+如果您只想尽快开始，这是推荐的方法：
 
 ```
 chain = load_qa_with_sources_chain(OpenAI(temperature=0), chain_type="stuff")
@@ -154,62 +69,22 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'output_text': ' The president thanked Justice Breyer for his service.\nSOURCES: 30-pl'}
 
 ```
 
+If you want more control and understanding over what is happening, please see the information below.
 
+The `stuff` Chain[#](#the-stuff-chain "Permalink to this headline")
+-------------------------------------------------------------------
 
-
-
-
- If you want more control and understanding over what is happening, please see the information below.
- 
-
-
-
-
-
- The
- `stuff`
- Chain
- [#](#the-stuff-chain "Permalink to this headline")
--------------------------------------------------------------------------
-
-
-
- This sections shows results of using the
- `stuff`
- Chain to do question answering with sources.
- 
-
-
-
-
-
-
+This sections shows results of using the `stuff` Chain to do question answering with sources.
 
 ```
 chain = load_qa_with_sources_chain(OpenAI(temperature=0), chain_type="stuff")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Justice Breyer"
@@ -217,36 +92,14 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'output_text': ' The president thanked Justice Breyer for his service.\nSOURCES: 30-pl'}
 
 ```
 
+**Custom Prompts**
 
-
-
-
-
-**Custom Prompts** 
-
-
-
-
- You can also use your own prompts with this chain. In this example, we will respond in Italian.
- 
-
-
-
-
-
-
+You can also use your own prompts with this chain. In this example, we will respond in Italian.
 
 ```
 template = """Given the following extracted parts of a long document and a question, create a final answer with references ("SOURCES"). 
@@ -267,57 +120,20 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'output_text': '\nNon so cosa abbia detto il presidente riguardo a Justice Breyer.\nSOURCES: 30, 31, 33'}
 
 ```
 
+The `map_reduce` Chain[#](#the-map-reduce-chain "Permalink to this headline")
+------------------------------------------------------------------------------
 
-
-
-
-
-
-
- The
- `map_reduce`
- Chain
- [#](#the-map-reduce-chain "Permalink to this headline")
-------------------------------------------------------------------------------------
-
-
-
- This sections shows results of using the
- `map_reduce`
- Chain to do question answering with sources.
- 
-
-
-
-
-
-
+This sections shows results of using the `map_reduce` Chain to do question answering with sources.
 
 ```
 chain = load_qa_with_sources_chain(OpenAI(temperature=0), chain_type="map_reduce")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Justice Breyer"
@@ -325,66 +141,24 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'output_text': ' The president thanked Justice Breyer for his service.\nSOURCES: 30-pl'}
 
 ```
 
+**Intermediate Steps**
 
-
-
-
-
-**Intermediate Steps** 
-
-
-
-
- We can also return the intermediate steps for
- `map_reduce`
- chains, should we want to inspect them. This is done with the
- `return_intermediate_steps`
- variable.
- 
-
-
-
-
-
-
+We can also return the intermediate steps for `map_reduce` chains, should we want to inspect them. This is done with the `return_intermediate_steps` variable.
 
 ```
 chain = load_qa_with_sources_chain(OpenAI(temperature=0), chain_type="map_reduce", return_intermediate_steps=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'intermediate_steps': [' "Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service."',
@@ -395,24 +169,9 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
+**Custom Prompts**
 
-
-
-
-
-**Custom Prompts** 
-
-
-
-
- You can also use your own prompts with this chain. In this example, we will respond in Italian.
- 
-
-
-
-
-
-
+You can also use your own prompts with this chain. In this example, we will respond in Italian.
 
 ```
 question_prompt_template = """Use the following portion of a long document to see if any of the text is relevant to answer the question. 
@@ -443,13 +202,6 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'intermediate_steps': ["\nStasera vorrei onorare qualcuno che ha dedicato la sua vita a servire questo paese: il giustizia Stephen Breyer - un veterano dell'esercito, uno studioso costituzionale e un giustizia in uscita della Corte Suprema degli Stati Uniti. Giustizia Breyer, grazie per il tuo servizio.",
   ' Non pertinente.',
@@ -459,67 +211,24 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
+**Batch Size**
 
-
-
-
-
-**Batch Size** 
-
-
-
-
- When using the
- `map_reduce`
- chain, one thing to keep in mind is the batch size you are using during the map step. If this is too high, it could cause rate limiting errors. You can control this by setting the batch size on the LLM used. Note that this only applies for LLMs with this parameter. Below is an example of doing so:
- 
-
-
-
-
+When using the `map_reduce` chain, one thing to keep in mind is the batch size you are using during the map step. If this is too high, it could cause rate limiting errors. You can control this by setting the batch size on the LLM used. Note that this only applies for LLMs with this parameter. Below is an example of doing so:
 
 ```
 llm = OpenAI(batch_size=5, temperature=0)
 
 ```
 
+The `refine` Chain[#](#the-refine-chain "Permalink to this headline")
+---------------------------------------------------------------------
 
-
-
-
-
- The
- `refine`
- Chain
- [#](#the-refine-chain "Permalink to this headline")
----------------------------------------------------------------------------
-
-
-
- This sections shows results of using the
- `refine`
- Chain to do question answering with sources.
- 
-
-
-
-
-
-
+This sections shows results of using the `refine` Chain to do question answering with sources.
 
 ```
 chain = load_qa_with_sources_chain(OpenAI(temperature=0), chain_type="refine")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Justice Breyer"
@@ -527,94 +236,37 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
-{'output_text': "\n\nThe president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked him for his service and praised his career as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He noted Justice Breyer's reputation as a consensus builder and the broad range of support he has received from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also highlighted the importance of securing the border and fixing the immigration system in order to advance liberty and justice, and mentioned the new technology, joint patrols, dedicated immigration judges, and commitments to support partners in South and Central America that have been put in place. He also expressed his commitment to the LGBTQ+ community, noting the need for the bipartisan Equality Act and the importance of protecting transgender Americans from state laws targeting them. He also highlighted his commitment to bipartisanship, noting the 80 bipartisan bills he signed into law last year, and his plans to strengthen the Violence Against Women Act. Additionally, he announced that the Justice Department will name a chief prosecutor for pandemic fraud and his plan to lower the deficit by more than one trillion dollars in a"}
+{'output_text': "  The president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked him for his service and praised his career as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He noted Justice Breyer's reputation as a consensus builder and the broad range of support he has received from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also highlighted the importance of securing the border and fixing the immigration system in order to advance liberty and justice, and mentioned the new technology, joint patrols, dedicated immigration judges, and commitments to support partners in South and Central America that have been put in place. He also expressed his commitment to the LGBTQ+ community, noting the need for the bipartisan Equality Act and the importance of protecting transgender Americans from state laws targeting them. He also highlighted his commitment to bipartisanship, noting the 80 bipartisan bills he signed into law last year, and his plans to strengthen the Violence Against Women Act. Additionally, he announced that the Justice Department will name a chief prosecutor for pandemic fraud and his plan to lower the deficit by more than one trillion dollars in a"}
 
 ```
 
+**Intermediate Steps**
 
-
-
-
-
-**Intermediate Steps** 
-
-
-
-
- We can also return the intermediate steps for
- `refine`
- chains, should we want to inspect them. This is done with the
- `return_intermediate_steps`
- variable.
- 
-
-
-
-
-
-
+We can also return the intermediate steps for `refine` chains, should we want to inspect them. This is done with the `return_intermediate_steps` variable.
 
 ```
 chain = load_qa_with_sources_chain(OpenAI(temperature=0), chain_type="refine", return_intermediate_steps=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'intermediate_steps': ['\nThe president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service.',
-  '\n\nThe president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service, noting his background as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He praised Justice Breyer for being a consensus builder and for receiving a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also noted that in order to advance liberty and justice, it was necessary to secure the border and fix the immigration system, and that the government was taking steps to do both. \n\nSource: 31',
-  '\n\nThe president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service, noting his background as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He praised Justice Breyer for being a consensus builder and for receiving a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also noted that in order to advance liberty and justice, it was necessary to secure the border and fix the immigration system, and that the government was taking steps to do both. He also mentioned the need to pass the bipartisan Equality Act to protect LGBTQ+ Americans, and to strengthen the Violence Against Women Act that he had written three decades ago. \n\nSource: 31, 33',
-  '\n\nThe president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service, noting his background as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He praised Justice Breyer for being a consensus builder and for receiving a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also noted that in order to advance liberty and justice, it was necessary to secure the border and fix the immigration system, and that the government was taking steps to do both. He also mentioned the need to pass the bipartisan Equality Act to protect LGBTQ+ Americans, and to strengthen the Violence Against Women Act that he had written three decades ago. Additionally, he mentioned his plan to lower costs to give families a fair shot, lower the deficit, and go after criminals who stole billions in relief money meant for small businesses and millions of Americans. He also announced that the Justice Department will name a chief prosecutor for pandemic fraud. \n\nSource: 20, 31, 33'],
- 'output_text': '\n\nThe president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service, noting his background as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He praised Justice Breyer for being a consensus builder and for receiving a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also noted that in order to advance liberty and justice, it was necessary to secure the border and fix the immigration system, and that the government was taking steps to do both. He also mentioned the need to pass the bipartisan Equality Act to protect LGBTQ+ Americans, and to strengthen the Violence Against Women Act that he had written three decades ago. Additionally, he mentioned his plan to lower costs to give families a fair shot, lower the deficit, and go after criminals who stole billions in relief money meant for small businesses and millions of Americans. He also announced that the Justice Department will name a chief prosecutor for pandemic fraud. \n\nSource: 20, 31, 33'}
+  '  The president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service, noting his background as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He praised Justice Breyer for being a consensus builder and for receiving a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also noted that in order to advance liberty and justice, it was necessary to secure the border and fix the immigration system, and that the government was taking steps to do both.   Source: 31',
+  '  The president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service, noting his background as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He praised Justice Breyer for being a consensus builder and for receiving a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also noted that in order to advance liberty and justice, it was necessary to secure the border and fix the immigration system, and that the government was taking steps to do both. He also mentioned the need to pass the bipartisan Equality Act to protect LGBTQ+ Americans, and to strengthen the Violence Against Women Act that he had written three decades ago.   Source: 31, 33',
+  '  The president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service, noting his background as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He praised Justice Breyer for being a consensus builder and for receiving a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also noted that in order to advance liberty and justice, it was necessary to secure the border and fix the immigration system, and that the government was taking steps to do both. He also mentioned the need to pass the bipartisan Equality Act to protect LGBTQ+ Americans, and to strengthen the Violence Against Women Act that he had written three decades ago. Additionally, he mentioned his plan to lower costs to give families a fair shot, lower the deficit, and go after criminals who stole billions in relief money meant for small businesses and millions of Americans. He also announced that the Justice Department will name a chief prosecutor for pandemic fraud.   Source: 20, 31, 33'],
+ 'output_text': '  The president said that he was honoring Justice Breyer for his dedication to serving the country and that he was a retiring Justice of the United States Supreme Court. He also thanked Justice Breyer for his service, noting his background as a top litigator in private practice, a former federal public defender, and a family of public school educators and police officers. He praised Justice Breyer for being a consensus builder and for receiving a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. He also noted that in order to advance liberty and justice, it was necessary to secure the border and fix the immigration system, and that the government was taking steps to do both. He also mentioned the need to pass the bipartisan Equality Act to protect LGBTQ+ Americans, and to strengthen the Violence Against Women Act that he had written three decades ago. Additionally, he mentioned his plan to lower costs to give families a fair shot, lower the deficit, and go after criminals who stole billions in relief money meant for small businesses and millions of Americans. He also announced that the Justice Department will name a chief prosecutor for pandemic fraud.   Source: 20, 31, 33'}
 
 ```
 
+**Custom Prompts**
 
-
-
-
-
-**Custom Prompts** 
-
-
-
-
- You can also use your own prompts with this chain. In this example, we will respond in Italian.
- 
-
-
-
-
-
-
+You can also use your own prompts with this chain. In this example, we will respond in Italian.
 
 ```
 refine_template = (
@@ -635,7 +287,6 @@ refine_prompt = PromptTemplate(
     template=refine_template,
 )
 
-
 question_template = (
     "Context information is below. \n"
     "---------------------\n"
@@ -650,76 +301,30 @@ question_prompt = PromptTemplate(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chain = load_qa_with_sources_chain(OpenAI(temperature=0), chain_type="refine", return_intermediate_steps=True, question_prompt=question_prompt, refine_prompt=refine_prompt)
 chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'intermediate_steps': ['\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese e ha onorato la sua carriera.',
-  "\n\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha onorato la sua carriera e ha contribuito a costruire un consenso. Ha ricevuto un ampio sostegno, dall'Ordine Fraterno della Polizia a ex giudici nominati da democratici e repubblicani. Inoltre, ha sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione. Ha anche menzionato le nuove tecnologie come scanner all'avanguardia per rilevare meglio il traffico di droga, le pattuglie congiunte con Messico e Guatemala per catturare più trafficanti di esseri umani, l'istituzione di giudici di immigrazione dedicati per far sì che le famiglie che fuggono da per",
-  "\n\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha onorato la sua carriera e ha contribuito a costruire un consenso. Ha ricevuto un ampio sostegno, dall'Ordine Fraterno della Polizia a ex giudici nominati da democratici e repubblicani. Inoltre, ha sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione. Ha anche menzionato le nuove tecnologie come scanner all'avanguardia per rilevare meglio il traffico di droga, le pattuglie congiunte con Messico e Guatemala per catturare più trafficanti di esseri umani, l'istituzione di giudici di immigrazione dedicati per far sì che le famiglie che fuggono da per",
-  "\n\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha onorato la sua carriera e ha contribuito a costruire un consenso. Ha ricevuto un ampio sostegno, dall'Ordine Fraterno della Polizia a ex giudici nominati da democratici e repubblicani. Inoltre, ha sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione. Ha anche menzionato le nuove tecnologie come scanner all'avanguardia per rilevare meglio il traffico di droga, le pattuglie congiunte con Messico e Guatemala per catturare più trafficanti di esseri umani, l'istituzione di giudici di immigrazione dedicati per far sì che le famiglie che fuggono da per"],
- 'output_text': "\n\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha onorato la sua carriera e ha contribuito a costruire un consenso. Ha ricevuto un ampio sostegno, dall'Ordine Fraterno della Polizia a ex giudici nominati da democratici e repubblicani. Inoltre, ha sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione. Ha anche menzionato le nuove tecnologie come scanner all'avanguardia per rilevare meglio il traffico di droga, le pattuglie congiunte con Messico e Guatemala per catturare più trafficanti di esseri umani, l'istituzione di giudici di immigrazione dedicati per far sì che le famiglie che fuggono da per"}
+  "  Il presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha onorato la sua carriera e ha contribuito a costruire un consenso. Ha ricevuto un ampio sostegno, dall'Ordine Fraterno della Polizia a ex giudici nominati da democratici e repubblicani. Inoltre, ha sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione. Ha anche menzionato le nuove tecnologie come scanner all'avanguardia per rilevare meglio il traffico di droga, le pattuglie congiunte con Messico e Guatemala per catturare più trafficanti di esseri umani, l'istituzione di giudici di immigrazione dedicati per far sì che le famiglie che fuggono da per",
+  "  Il presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha onorato la sua carriera e ha contribuito a costruire un consenso. Ha ricevuto un ampio sostegno, dall'Ordine Fraterno della Polizia a ex giudici nominati da democratici e repubblicani. Inoltre, ha sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione. Ha anche menzionato le nuove tecnologie come scanner all'avanguardia per rilevare meglio il traffico di droga, le pattuglie congiunte con Messico e Guatemala per catturare più trafficanti di esseri umani, l'istituzione di giudici di immigrazione dedicati per far sì che le famiglie che fuggono da per",
+  "  Il presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha onorato la sua carriera e ha contribuito a costruire un consenso. Ha ricevuto un ampio sostegno, dall'Ordine Fraterno della Polizia a ex giudici nominati da democratici e repubblicani. Inoltre, ha sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione. Ha anche menzionato le nuove tecnologie come scanner all'avanguardia per rilevare meglio il traffico di droga, le pattuglie congiunte con Messico e Guatemala per catturare più trafficanti di esseri umani, l'istituzione di giudici di immigrazione dedicati per far sì che le famiglie che fuggono da per"],
+ 'output_text': "  Il presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha onorato la sua carriera e ha contribuito a costruire un consenso. Ha ricevuto un ampio sostegno, dall'Ordine Fraterno della Polizia a ex giudici nominati da democratici e repubblicani. Inoltre, ha sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione. Ha anche menzionato le nuove tecnologie come scanner all'avanguardia per rilevare meglio il traffico di droga, le pattuglie congiunte con Messico e Guatemala per catturare più trafficanti di esseri umani, l'istituzione di giudici di immigrazione dedicati per far sì che le famiglie che fuggono da per"}
 
 ```
 
+The `map-rerank` Chain[#](#the-map-rerank-chain "Permalink to this headline")
+-----------------------------------------------------------------------------
 
-
-
-
-
-
-
- The
- `map-rerank`
- Chain
- [#](#the-map-rerank-chain "Permalink to this headline")
------------------------------------------------------------------------------------
-
-
-
- This sections shows results of using the
- `map-rerank`
- Chain to do question answering with sources.
- 
-
-
-
-
-
-
+This sections shows results of using the `map-rerank` Chain to do question answering with sources.
 
 ```
 chain = load_qa_with_sources_chain(OpenAI(temperature=0), chain_type="map_rerank", metadata_keys=['source'], return_intermediate_steps=True)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Justice Breyer"
@@ -727,52 +332,20 @@ result = chain({"input_documents": docs, "question": query}, return_only_outputs
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result["output_text"]
 
 ```
-
-
-
-
-
-
-
 
 ```
 ' The President thanked Justice Breyer for his service and honored him for dedicating his life to serve the country.'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result["intermediate_steps"]
 
 ```
-
-
-
-
-
-
-
 
 ```
 [{'answer': ' The President thanked Justice Breyer for his service and honored him for dedicating his life to serve the country.',
@@ -783,30 +356,15 @@ result["intermediate_steps"]
 
 ```
 
+**自定义提示**
 
-
-
-
-
-**Custom Prompts** 
-
-
-
-
- You can also use your own prompts with this chain. In this example, we will respond in Italian.
- 
-
-
-
-
-
-
+您也可以使用自己的提示来完成此链。在这个例子中，我们将用意大利语回答。
 
 ```
 from langchain.output_parsers import RegexParser
 
 output_parser = RegexParser(
-    regex=r"(.\*?)\nScore: (.\*)",
+    regex=r"(.*?)\nScore: (.*)",
     output_keys=["answer", "score"],
 )
 
@@ -837,26 +395,10 @@ result = chain({"input_documents": docs, "question": query}, return_only_outputs
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'source': 30,
@@ -870,11 +412,4 @@ result
  'output_text': ' Il presidente ha detto che Justice Breyer ha dedicato la sua vita a servire questo paese e ha onorato la sua carriera.'}
 
 ```
-
-
-
-
-
-
-
 

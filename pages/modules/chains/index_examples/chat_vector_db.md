@@ -1,24 +1,9 @@
 
 
+在文档中聊天，带有聊天记录
+=============
 
- Chat Over Documents with Chat History
- [#](#chat-over-documents-with-chat-history "Permalink to this headline")
-=================================================================================================================
-
-
-
- This notebook goes over how to set up a chain to chat over documents with chat history using a
- `ConversationalRetrievalChain`
- . The only difference between this chain and the
- [RetrievalQAChain](vector_db_qa)
- is that this allows for passing in of a chat history which can be used to allow for follow up questions.
- 
-
-
-
-
-
-
+本笔记本演示了如何使用`ConversationalRetrievalChain`设置聊天过程中带有聊天历史的链。与[RetrievalQAChain](vector_db_qa）唯一的区别是，这个链允许传入聊天历史，以便进行后续提问。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -29,19 +14,7 @@ from langchain.chains import ConversationalRetrievalChain
 
 ```
 
-
-
-
-
-
- Load in documents. You can replace this with a loader for whatever type of data you want
- 
-
-
-
-
-
-
+加载文档。您可以将其替换为您想要的任何类型的数据加载程序
 
 ```
 from langchain.document_loaders import TextLoader
@@ -50,19 +23,7 @@ documents = loader.load()
 
 ```
 
-
-
-
-
-
- If you had multiple loaders that you wanted to combine, you do something like:
- 
-
-
-
-
-
-
+如果您有多个加载程序需要组合，可以执行以下操作：
 
 ```
 # loaders = [....]
@@ -72,19 +33,7 @@ documents = loader.load()
 
 ```
 
-
-
-
-
-
- We now split the documents, create embeddings for them, and put them in a vectorstore. This allows us to do semantic search over them.
- 
-
-
-
-
-
-
+现在我们将文档拆分、创建嵌入并将它们放入向量存储中。这使我们可以在它们之间进行语义搜索。
 
 ```
 text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
@@ -95,31 +44,12 @@ vectorstore = Chroma.from_documents(documents, embeddings)
 
 ```
 
-
-
-
-
-
-
-
 ```
 Using embedded DuckDB without persistence: data will be transient
 
 ```
 
-
-
-
-
-
- We can now create a memory object, which is neccessary to track the inputs/outputs and hold a conversation.
- 
-
-
-
-
-
-
+现在我们可以创建一个内存对象，用于跟踪输入/输出并进行对话。
 
 ```
 from langchain.memory import ConversationBufferMemory
@@ -127,34 +57,12 @@ memory = ConversationBufferMemory(memory_key="chat_history", return_messages=Tru
 
 ```
 
-
-
-
-
-
- We now initialize the
- `ConversationalRetrievalChain`
-
-
-
-
-
-
-
+现在我们初始化`ConversationalRetrievalChain`
 
 ```
 qa = ConversationalRetrievalChain.from_llm(OpenAI(temperature=0), vectorstore.as_retriever(), memory=memory)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -162,40 +70,15 @@ result = qa({"question": query})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result["answer"]
 
 ```
 
-
-
-
-
-
-
-
 ```
 " The president said that Ketanji Brown Jackson is one of the nation's top legal minds, a former top litigator in private practice, a former federal public defender, and from a family of public school educators and police officers. He also said that she is a consensus builder and has received a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans."
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "Did he mention who she suceeded"
@@ -203,71 +86,27 @@ result = qa({"question": query})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result['answer']
 
 ```
-
-
-
-
-
-
-
 
 ```
 ' Ketanji Brown Jackson succeeded Justice Stephen Breyer on the United States Supreme Court.'
 
 ```
 
+传入聊天历史
+------
 
-
-
-
-
-
- Pass in chat history
- [#](#pass-in-chat-history "Permalink to this headline")
--------------------------------------------------------------------------------
-
-
-
- In the above example, we used a Memory object to track chat history. We can also just pass it in explicitly. In order to do this, we need to initialize a chain without any memory object.
- 
-
-
-
-
-
-
+在上面的示例中，我们使用Memory对象来跟踪聊天历史。我们也可以直接传递它。为此，我们需要初始化一个没有任何内存对象的链。
 
 ```
 qa = ConversationalRetrievalChain.from_llm(OpenAI(temperature=0), vectorstore.as_retriever())
 
 ```
 
-
-
-
-
-
- Here’s an example of asking a question with no chat history
- 
-
-
-
-
-
-
+这里是一个没有聊天记录的提问示例
 
 ```
 chat_history = []
@@ -276,45 +115,17 @@ result = qa({"question": query, "chat_history": chat_history})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result["answer"]
 
 ```
-
-
-
-
-
-
-
 
 ```
 " The president said that Ketanji Brown Jackson is one of the nation's top legal minds, a former top litigator in private practice, a former federal public defender, and from a family of public school educators and police officers. He also said that she is a consensus builder and has received a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans."
 
 ```
 
-
-
-
-
-
- Here’s an example of asking a question with some chat history
- 
-
-
-
-
-
-
+这里是一个有一些聊天记录的提问示例
 
 ```
 chat_history = [(query, result["answer"])]
@@ -323,67 +134,25 @@ result = qa({"question": query, "chat_history": chat_history})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result['answer']
 
 ```
-
-
-
-
-
-
-
 
 ```
 ' Ketanji Brown Jackson succeeded Justice Stephen Breyer on the United States Supreme Court.'
 
 ```
 
+返回源文件[#](#return-source-documents "标题的永久链接")
+--------------------------------------------
 
-
-
-
-
-
-
- Return Source Documents
- [#](#return-source-documents "Permalink to this headline")
--------------------------------------------------------------------------------------
-
-
-
- You can also easily return source documents from the ConversationalRetrievalChain. This is useful for when you want to inspect what documents were returned.
- 
-
-
-
-
-
-
+您还可以轻松地从ConversationalRetrievalChain返回源文档。这对于您想要检查哪些文档被返回时非常有用。
 
 ```
 qa = ConversationalRetrievalChain.from_llm(OpenAI(temperature=0), vectorstore.as_retriever(), return_source_documents=True)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 chat_history = []
@@ -392,68 +161,25 @@ result = qa({"question": query, "chat_history": chat_history})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result['source_documents'][0]
 
 ```
 
-
-
-
-
-
-
-
 ```
-Document(page_content='Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. \n\nTonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. \n\nOne of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. \n\nAnd I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.', metadata={'source': '../../state_of_the_union.txt'})
+Document(page_content='Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections.   Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service.   One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court.   And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.', metadata={'source': '../../state_of_the_union.txt'})
 
 ```
 
+带有`search_distance`的ConversationalRetrievalChain[#](#conversationalretrievalchain-with-search-distance "标题的永久链接")
+------------------------------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- ConversationalRetrievalChain with
- `search_distance`
-[#](#conversationalretrievalchain-with-search-distance "Permalink to this headline")
---------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
- If you are using a vector store that supports filtering by search distance, you can add a threshold value parameter.
- 
-
-
-
-
-
-
+如果您正在使用支持按搜索距离过滤的向量存储，则可以添加阈值参数。
 
 ```
 vectordbkwargs = {"search_distance": 0.9}
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 qa = ConversationalRetrievalChain.from_llm(OpenAI(temperature=0), vectorstore.as_retriever(), return_source_documents=True)
@@ -463,28 +189,10 @@ result = qa({"question": query, "chat_history": chat_history, "vectordbkwargs": 
 
 ```
 
+带有`map_reduce`的ConversationalRetrievalChain[#](#conversationalretrievalchain-with-map-reduce "标题的永久链接")
+--------------------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- ConversationalRetrievalChain with
- `map_reduce`
-[#](#conversationalretrievalchain-with-map-reduce "Permalink to this headline")
-----------------------------------------------------------------------------------------------------------------------------------
-
-
-
- We can also use different types of combine document chains with the ConversationalRetrievalChain chain.
- 
-
-
-
-
-
-
+我们还可以使用不同类型的组合文档链与ConversationalRetrievalChain链。
 
 ```
 from langchain.chains import LLMChain
@@ -492,15 +200,6 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.chains.conversational_retrieval.prompts import CONDENSE_QUESTION_PROMPT
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 llm = OpenAI(temperature=0)
@@ -515,15 +214,6 @@ chain = ConversationalRetrievalChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chat_history = []
 query = "What did the president say about Ketanji Brown Jackson"
@@ -531,67 +221,25 @@ result = chain({"question": query, "chat_history": chat_history})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result['answer']
 
 ```
-
-
-
-
-
-
-
 
 ```
 " The president said that Ketanji Brown Jackson is one of the nation's top legal minds, a former top litigator in private practice, a former federal public defender, from a family of public school educators and police officers, a consensus builder, and has received a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans."
 
 ```
 
+带有源问题的ConversationalRetrievalChain问答[#](#conversationalretrievalchain-with-question-answering-with-sources "标题的永久链接")
+---------------------------------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- ConversationalRetrievalChain with Question Answering with sources
- [#](#conversationalretrievalchain-with-question-answering-with-sources "Permalink to this headline")
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
- You can also use this chain with the question answering with sources chain.
- 
-
-
-
-
-
-
+你也可以将这个链与带有来源的问答链一起使用。
 
 ```
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 llm = OpenAI(temperature=0)
@@ -606,15 +254,6 @@ chain = ConversationalRetrievalChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chat_history = []
 query = "What did the president say about Ketanji Brown Jackson"
@@ -622,56 +261,20 @@ result = chain({"question": query, "chat_history": chat_history})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result['answer']
 
 ```
-
-
-
-
-
-
-
 
 ```
 " The president said that Ketanji Brown Jackson is one of the nation's top legal minds, a former top litigator in private practice, a former federal public defender, from a family of public school educators and police officers, a consensus builder, and has received a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. \nSOURCES: ../../state_of_the_union.txt"
 
 ```
 
+ConversationalRetrievalChain 与流式输出到 `stdout`[#](#conversationalretrievalchain-with-streaming-to-stdout "这个标题的永久链接")
+-------------------------------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- ConversationalRetrievalChain with streaming to
- `stdout`
-[#](#conversationalretrievalchain-with-streaming-to-stdout "Permalink to this headline")
----------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
- Output from the chain will be streamed to
- `stdout`
- token by token in this example.
- 
-
-
-
-
-
-
+在这个例子中，链的输出会被逐个 token 地流式输出到 `stdout`。
 
 ```
 from langchain.chains.llm import LLMChain
@@ -692,15 +295,6 @@ qa = ConversationalRetrievalChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chat_history = []
 query = "What did the president say about Ketanji Brown Jackson"
@@ -708,26 +302,10 @@ result = qa({"question": query, "chat_history": chat_history})
 
 ```
 
-
-
-
-
-
-
-
 ```
  The president said that Ketanji Brown Jackson is one of the nation's top legal minds, a former top litigator in private practice, a former federal public defender, and from a family of public school educators and police officers. He also said that she is a consensus builder and has received a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans.
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 chat_history = [(query, result["answer"])]
@@ -736,41 +314,15 @@ result = qa({"question": query, "chat_history": chat_history})
 
 ```
 
-
-
-
-
-
-
-
 ```
  Ketanji Brown Jackson succeeded Justice Stephen Breyer on the United States Supreme Court.
 
 ```
 
+get_chat_history 函数[#](#get-chat-history-function "这个标题的永久链接")
+----------------------------------------------------------------
 
-
-
-
-
-
-
- get_chat_history Function
- [#](#get-chat-history-function "Permalink to this headline")
--------------------------------------------------------------------------------------------
-
-
-
- You can also specify a
- `get_chat_history`
- function, which can be used to format the chat_history string.
- 
-
-
-
-
-
-
+你也可以指定一个 `get_chat_history` 函数，用于格式化聊天历史字符串。
 
 ```
 def get_chat_history(inputs) -> str:
@@ -782,15 +334,6 @@ qa = ConversationalRetrievalChain.from_llm(OpenAI(temperature=0), vectorstore.as
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chat_history = []
 query = "What did the president say about Ketanji Brown Jackson"
@@ -798,36 +341,13 @@ result = qa({"question": query, "chat_history": chat_history})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result['answer']
 
 ```
 
-
-
-
-
-
-
-
 ```
 " The president said that Ketanji Brown Jackson is one of the nation's top legal minds, a former top litigator in private practice, a former federal public defender, and from a family of public school educators and police officers. He also said that she is a consensus builder and has received a broad range of support from the Fraternal Order of Police to former judges appointed by Democrats and Republicans."
 
 ```
-
-
-
-
-
-
-
 

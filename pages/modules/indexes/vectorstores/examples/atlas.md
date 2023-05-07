@@ -1,98 +1,26 @@
 
 
+AtlasDB[#](#atlasdb "跳转到标题")
+============================
 
- AtlasDB
- [#](#atlasdb "Permalink to this headline")
-=====================================================
+本笔记展示了如何使用与`AtlasDB`相关的功能。
 
-
-
- This notebook shows you how to use functionality related to the
- `AtlasDB`
- .
- 
-
-
-
-> 
-> 
-> 
-> [MongoDB‘s](https://www.mongodb.com/) 
-> [Atlas](https://www.mongodb.com/cloud/atlas) 
->  is an on-demand fully managed service.
->  `MongoDB
->  
-> 
->  Atlas`
->  runs on
->  `AWS`
->  ,
->  `Microsoft
->  
-> 
->  Azure`
->  , and
->  `Google
->  
-> 
->  Cloud
->  
-> 
->  Platform`
->  .
->  
-> 
-> 
-> 
-> 
-
-
-
-
-
-
+[Atlas](https://docs.nomic.ai/index）是一个由Nomic提供的与小型和互联网规模非结构化数据集交互的平台
 
 ```
 !pip install spacy
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 !python3 -m spacy download en_core_web_sm
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 !pip install nomic
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import time
@@ -103,28 +31,10 @@ from langchain.document_loaders import TextLoader
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 ATLAS_TEST_API_KEY = '7xDPkYXSYDc1_ErdTPIcoAR9RNd8YDlkS3nVNXcVoIMZ6'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 loader = TextLoader('../../../state_of_the_union.txt')
@@ -133,19 +43,10 @@ text_splitter = SpacyTextSplitter(separator='|')
 texts = []
 for doc in text_splitter.split_documents(documents):
     texts.extend(doc.page_content.split('|'))
-                 
+
 texts = [e.strip() for e in texts]
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 db = AtlasDB.from_texts(texts=texts,
@@ -156,84 +57,42 @@ db = AtlasDB.from_texts(texts=texts,
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 db.project.wait_for_project_lock()
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 db.project
 
 ```
 
-
-
-
-
-
 **[test_index_1677255228.136989](https://atlas.nomic.ai/dashboard/project/ee2354a3-7f9a-4c6b-af43-b0cda09d7198)**
-  
 
  A description for your project 508 datums inserted.
-   
 
  1 index built.
-   
 
-**Projections** 
-* test_index_1677255228.136989_index. Status Completed.
- [view online](https://atlas.nomic.ai/map/ee2354a3-7f9a-4c6b-af43-b0cda09d7198/db996d77-8981-48a0-897a-ff2c22bbf541)
-
-
-
+**Projections**
+* test_index_1677255228.136989_index。状态已完成。[在线查看](https://atlas.nomic.ai/map/ee2354a3-7f9a-4c6b-af43-b0cda09d7198/db996d77-8981-48a0-897a-ff2c22bbf541)
 
 ---
-
-
 
  destroy = function() {
  document.getElementById("iframedb996d77-8981-48a0-897a-ff2c22bbf541").remove()
  }
- 
-#### 
- Projection ID: db996d77-8981-48a0-897a-ff2c22bbf541
 
+#### 投影ID：db996d77-8981-48a0-897a-ff2c22bbf541
 
+Hide embedded project
 
-
- Hide embedded project
- 
-
-[Explore on atlas.nomic.ai](https://atlas.nomic.ai/map/ee2354a3-7f9a-4c6b-af43-b0cda09d7198/db996d77-8981-48a0-897a-ff2c22bbf541) 
-
-
-
-
+[在atlas.nomic.ai上浏览](https://atlas.nomic.ai/map/ee2354a3-7f9a-4c6b-af43-b0cda09d7198/db996d77-8981-48a0-897a-ff2c22bbf541)
 
  .iframe {
- /\* vh can be \*\*very\*\* large in vscode ipynb. \*/
+ /* vh can be **very** large in vscode ipynb. */
  height: min(75vh, 66vw);
  width: 100%;
  }
- 
 
  .actions {
  display: block;
@@ -252,9 +111,4 @@ db.project
  #out:hover::after {
  content: "";
  }
- 
-
-
-
-
 

@@ -1,63 +1,25 @@
 
 
+ElasticSearch BM25[#](#elasticsearch-bm25 "本标题的永久链接")
+=====================================================
 
- ElasticSearch BM25
- [#](#elasticsearch-bm25 "Permalink to this headline")
-===========================================================================
+本笔记本介绍了如何使用一个检索器，其底层使用ElasticSearcha和BM25。
 
-
-
- This notebook goes over how to use a retriever that under the hood uses ElasticSearcha and BM25.
- 
-
-
-
- For more information on the details of BM25 see
- [this blog post](https://www.elastic.co/blog/practical-bm25-part-2-the-bm25-algorithm-and-its-variables) 
- .
- 
-
-
-
-
-
-
+要了解BM25的详细信息，请参阅[此博客文章](https://www.elastic.co/blog/practical-bm25-part-2-the-bm25-algorithm-and-its-variables)。
 
 ```
 from langchain.retrievers import ElasticSearchBM25Retriever
 
 ```
 
-
-
-
-
-
-
- Create New Retriever
- [#](#create-new-retriever "Permalink to this headline")
--------------------------------------------------------------------------------
-
-
-
-
-
-
+创建新的检索器[#](#create-new-retriever "本标题的永久链接")
+--------------------------------------------
 
 ```
 elasticsearch_url="http://localhost:9200"
 retriever = ElasticSearchBM25Retriever.create(elasticsearch_url, "langchain-index-4")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # Alternatively, you can load an existing index
@@ -67,39 +29,15 @@ retriever = ElasticSearchBM25Retriever.create(elasticsearch_url, "langchain-inde
 
 ```
 
+添加文本（如果必要）[#](#add-texts-if-necessary "本标题的永久链接")
+-------------------------------------------------
 
-
-
-
-
-
-
- Add texts (if necessary)
- [#](#add-texts-if-necessary "Permalink to this headline")
--------------------------------------------------------------------------------------
-
-
-
- We can optionally add texts to the retriever (if they aren’t already in there)
- 
-
-
-
-
-
-
+我们可以选择向检索器中添加文本（如果它们还没有在其中）
 
 ```
 retriever.add_texts(["foo", "bar", "world", "hello", "foo bar"])
 
 ```
-
-
-
-
-
-
-
 
 ```
 ['cbd4cb47-8d9f-4f34-b80e-ea871bc49856',
@@ -110,64 +48,24 @@ retriever.add_texts(["foo", "bar", "world", "hello", "foo bar"])
 
 ```
 
+使用检索器[#](#use-retriever "本标题的永久链接")
+-----------------------------------
 
-
-
-
-
-
-
- Use Retriever
- [#](#use-retriever "Permalink to this headline")
------------------------------------------------------------------
-
-
-
- We can now use the retriever!
- 
-
-
-
-
-
-
+现在我们可以使用检索器了！
 
 ```
 result = retriever.get_relevant_documents("foo")
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 result
 
 ```
-
-
-
-
-
-
-
 
 ```
 [Document(page_content='foo', metadata={}),
  Document(page_content='foo bar', metadata={})]
 
 ```
-
-
-
-
-
-
-
 

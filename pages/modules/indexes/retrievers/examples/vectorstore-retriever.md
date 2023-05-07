@@ -1,0 +1,77 @@
+
+
+VectorStore Retriever[#](#vectorstore-retriever "Permalink to this headline")
+=============================================================================
+
+LangChain最支持的索引，因此也是最支持的检索器是VectorStoreRetriever。正如其名称所示，此检索器主要由VectorStore支持。
+
+一旦构建了VectorStore，构建检索器就非常容易。让我们通过一个例子来了解一下。
+
+```
+from langchain.document_loaders import TextLoader
+loader = TextLoader('../../../state_of_the_union.txt')
+
+```
+
+```
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.vectorstores import FAISS
+from langchain.embeddings import OpenAIEmbeddings
+
+documents = loader.load()
+text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+texts = text_splitter.split_documents(documents)
+embeddings = OpenAIEmbeddings()
+db = FAISS.from_documents(texts, embeddings)
+
+```
+
+```
+Exiting: Cleaning up .chroma directory
+
+```
+
+```
+retriever = db.as_retriever()
+
+```
+
+```
+docs = retriever.get_relevant_documents("what did he say about ketanji brown jackson")
+
+```
+
+默认情况下，vectorstore检索器使用相似性搜索。如果底层的vectorstore支持最大边际相关性搜索，则可以指定该搜索类型。
+
+```
+retriever = db.as_retriever(search_type="mmr")
+
+```
+
+```
+docs = retriever.get_relevant_documents("what did he say abotu ketanji brown jackson")
+
+```
+
+您还可以指定搜索kwargs，例如使用检索时的`k`。
+
+```
+retriever = db.as_retriever(search_kwargs={"k": 1})
+
+```
+
+```
+docs = retriever.get_relevant_documents("what did he say abotu ketanji brown jackson")
+
+```
+
+```
+len(docs)
+
+```
+
+```
+1
+
+```
+

@@ -1,22 +1,7 @@
+# BashChain
 
-
-
- BashChain
- [#](#bashchain "Permalink to this headline")
-=========================================================
-
-
-
- This notebook showcases using LLMs and a bash process to perform simple filesystem commands.
- 
-
-
-
-
-
-
-
-```
+这个notebook展示了如何使用LLMs和bash进程执行简单的文件系统命令。
+```python
 from langchain.chains import LLMBashChain
 from langchain.llms import OpenAI
 
@@ -27,62 +12,9 @@ text = "Please write a bash script that prints 'Hello World' to the console."
 bash_chain = LLMBashChain.from_llm(llm, verbose=True)
 
 bash_chain.run(text)
-
 ```
-
-
-
-
-
-
-
-
-```
-> Entering new LLMBashChain chain...
-Please write a bash script that prints 'Hello World' to the console.
-
-```bash
-echo "Hello World"
-```
-Code: ['echo "Hello World"']
-Answer: Hello World
-
-> Finished chain.
-
-```
-
-
-
-
-
-
-```
-'Hello World\n'
-
-```
-
-
-
-
-
-
-
- Customize Prompt
- [#](#customize-prompt "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- You can also customize the prompt that is used. Here is an example prompting to avoid using the ‘echo’ utility
- 
-
-
-
-
-
-
-
-```
+你也可以自定义使用的提示。下面是一个自定义提示的示例，避免使用“echo”实用程序。
+```python
 from langchain.prompts.prompt import PromptTemplate
 from langchain.chains.llm_bash.prompt import BashOutputParser
 
@@ -95,7 +27,7 @@ I need to take the following actions:
 ```bash
 ls
 mkdir myNewDirectory
-cp -r target/\* myNewDirectory
+cp -r target/* myNewDirectory
 ```
 
 Do not use 'echo' when writing the script.
@@ -104,83 +36,10 @@ That is the format. Begin!
 Question: {question}"""
 
 PROMPT = PromptTemplate(input_variables=["question"], template=_PROMPT_TEMPLATE, output_parser=BashOutputParser())
-
 ```
-
-
-
-
-
-
-
-
-
-
-```
-bash_chain = LLMBashChain.from_llm(llm, prompt=PROMPT, verbose=True)
-
-text = "Please write a bash script that prints 'Hello World' to the console."
-
-bash_chain.run(text)
-
-```
-
-
-
-
-
-
-
-
-```
-> Entering new LLMBashChain chain...
-Please write a bash script that prints 'Hello World' to the console.
-
-```bash
-printf "Hello World\n"
-```
-Code: ['printf "Hello World\\n"']
-Answer: Hello World
-
-> Finished chain.
-
-```
-
-
-
-
-
-
-```
-'Hello World\n'
-
-```
-
-
-
-
-
-
-
-
- Persistent Terminal
- [#](#persistent-terminal "Permalink to this headline")
------------------------------------------------------------------------------
-
-
-
- By default, the chain will run in a separate subprocess each time it is called. This behavior can be changed by instantiating with a persistent bash process.
- 
-
-
-
-
-
-
-
-```
+默认情况下，该链将在每次调用时在单独的子进程中运行。这可以通过使用持久的bash进程实例化来更改。
+```python
 from langchain.utilities.bash import BashProcess
-
 
 persistent_process = BashProcess(persistent=True)
 bash_chain = LLMBashChain.from_llm(llm, bash_process=persistent_process, verbose=True)
@@ -188,96 +47,5 @@ bash_chain = LLMBashChain.from_llm(llm, bash_process=persistent_process, verbose
 text = "List the current directory then move up a level."
 
 bash_chain.run(text)
-
+bash_chain.run(text) # 运行相同的命令，查看状态是否在调用之间保持不变
 ```
-
-
-
-
-
-
-
-
-```
-> Entering new LLMBashChain chain...
-List the current directory then move up a level.
-
-```bash
-ls
-cd ..
-```
-Code: ['ls', 'cd ..']
-Answer: api.ipynb llm_summarization_checker.ipynb
-constitutional_chain.ipynb moderation.ipynb
-llm_bash.ipynb openai_openapi.yaml
-llm_checker.ipynb openapi.ipynb
-llm_math.ipynb pal.ipynb
-llm_requests.ipynb sqlite.ipynb
-> Finished chain.
-
-```
-
-
-
-
-
-
-```
-'api.ipynb\t\t\tllm_summarization_checker.ipynb\r\nconstitutional_chain.ipynb\tmoderation.ipynb\r\nllm_bash.ipynb\t\t\topenai_openapi.yaml\r\nllm_checker.ipynb\t\topenapi.ipynb\r\nllm_math.ipynb\t\t\tpal.ipynb\r\nllm_requests.ipynb\t\tsqlite.ipynb'
-
-```
-
-
-
-
-
-
-
-
-
-
-```
-# Run the same command again and see that the state is maintained between calls
-bash_chain.run(text)
-
-```
-
-
-
-
-
-
-
-
-```
-> Entering new LLMBashChain chain...
-List the current directory then move up a level.
-
-```bash
-ls
-cd ..
-```
-Code: ['ls', 'cd ..']
-Answer: examples getting_started.ipynb index_examples
-generic how_to_guides.rst
-> Finished chain.
-
-```
-
-
-
-
-
-
-```
-'examples\t\tgetting_started.ipynb\tindex_examples\r\ngeneric\t\t\thow_to_guides.rst'
-
-```
-
-
-
-
-
-
-
-

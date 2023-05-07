@@ -1,100 +1,34 @@
+SelfQueryRetriever
+===
 
+在笔记本中，我们将演示`SelfQueryRetriever`，正如其名，它具有查询自身的能力。具体而言，给定任何自然语言查询，检索器使用查询构造的LLM链来编写结构化查询，然后将该结构化查询应用于其底层VectorStore。这使得检索器不仅可以使用用户输入的查询与存储文档的内容进行语义相似性比较，还可以从用户查询中提取存储文档的元数据的过滤器并执行这些过滤器。
 
+创建Pinecone索引[#](#creating-a-pinecone-index "本标题的永久链接")
+------------------------------------------------------
 
- Self-querying retriever
- [#](#self-querying-retriever "Permalink to this headline")
-=====================================================================================
+首先，我们需要创建一个Pinecone VectorStore，并使用一些数据填充它。我们已经创建了一个包含电影摘要的小型演示文档集。
 
-
-
- In the notebook we’ll demo the
- `SelfQueryRetriever`
- , which, as the name suggests, has the ability to query itself. Specifically, given any natural language query, the retriever uses a query-constructing LLM chain to write a structured query and then applies that structured query to it’s underlying VectorStore. This allows the retriever to not only use the user-input query for semantic similarity comparison with the contents of stored documented, but to also extract filters from the user query on the metadata of stored documents and to execute those filter.
- 
-
-
-
-
- Creating a Pinecone index
- [#](#creating-a-pinecone-index "Permalink to this headline")
------------------------------------------------------------------------------------------
-
-
-
- First we’ll want to create a Pinecone VectorStore and seed it with some data. We’ve created a small demo set of documents that contain summaries of movies.
- 
-
-
-
- NOTE: The self-query retriever currently only has built-in support for Pinecone VectorStore.
- 
-
-
-
- NOTE: The self-query retriever requires you to have
- `lark`
- installed (
- `pip
- 
-
- install
- 
-
- lark`
- )
- 
-
-
-
-
-
-
+注意：自查询检索器需要您安装`lark`（`pip install lark`）
 
 ```
 # !pip install lark
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 import os
 
 import pinecone
 
-
 pinecone.init(api_key=os.environ["PINECONE_API_KEY"], environment=os.environ["PINECONE_ENV"])
 
 ```
-
-
-
-
-
-
-
 
 ```
 /Users/harrisonchase/.pyenv/versions/3.9.1/envs/langchain/lib/python3.9/site-packages/pinecone/index.py:4: TqdmExperimentalWarning: Using `tqdm.autonotebook.tqdm` in notebook mode. Use `tqdm.tqdm` instead to force console mode (e.g. in jupyter console)
   from tqdm.autonotebook import tqdm
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.schema import Document
@@ -106,15 +40,6 @@ embeddings = OpenAIEmbeddings()
 pinecone.create_index("langchain-self-retriever-demo", dimension=1536)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 docs = [
@@ -131,28 +56,10 @@ vectorstore = Pinecone.from_documents(
 
 ```
 
+创建我们的自查询检索器[#](#creating-our-self-querying-retriever "本标题的永久链接")
+----------------------------------------------------------------
 
-
-
-
-
-
-
-
- Creating our self-querying retriever
- [#](#creating-our-self-querying-retriever "Permalink to this headline")
-===============================================================================================================
-
-
-
- Now we can instantiate our retriever. To do this we’ll need to provide some information upfront about the metadata fields that our documents support and a short description of the document contents.
- 
-
-
-
-
-
-
+Now we can instantiate our retriever. To do this we’ll need to provide some information upfront about the metadata fields that our documents support and a short description of the document contents.
 
 ```
 from langchain.llms import OpenAI
@@ -187,27 +94,10 @@ retriever = SelfQueryRetriever.from_llm(llm, vectorstore, document_content_descr
 
 ```
 
+Testing it out[#](#testing-it-out "Permalink to this headline")
+---------------------------------------------------------------
 
-
-
-
-
-
-
- Testing it out
- [#](#testing-it-out "Permalink to this headline")
-===================================================================
-
-
-
- And now we can try actually using our retriever!
- 
-
-
-
-
-
-
+And now we can try actually using our retriever!
 
 ```
 # This example only specifies a relevant query
@@ -215,22 +105,10 @@ retriever.get_relevant_documents("What are some movies about dinosaurs")
 
 ```
 
-
-
-
-
-
-
-
 ```
 query='dinosaur' filter=None
 
 ```
-
-
-
-
-
 
 ```
 [Document(page_content='A bunch of scientists bring back dinosaurs and mayhem breaks loose', metadata={'genre': ['action', 'science fiction'], 'rating': 7.7, 'year': 1993.0}),
@@ -240,37 +118,16 @@ query='dinosaur' filter=None
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # This example only specifies a filter
 retriever.get_relevant_documents("I want to watch a movie rated higher than 8.5")
 
 ```
 
-
-
-
-
-
-
-
 ```
 query=' ' filter=Comparison(comparator=<Comparator.GT: 'gt'>, attribute='rating', value=8.5)
 
 ```
-
-
-
-
-
 
 ```
 [Document(page_content='A psychologist / detective gets lost in a series of dreams within dreams within dreams and Inception reused the idea', metadata={'director': 'Satoshi Kon', 'rating': 8.6, 'year': 2006.0}),
@@ -278,51 +135,21 @@ query=' ' filter=Comparison(comparator=<Comparator.GT: 'gt'>, attribute='rating'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # This example specifies a query and a filter
 retriever.get_relevant_documents("Has Greta Gerwig directed any movies about women")
 
 ```
 
-
-
-
-
-
-
-
 ```
 query='women' filter=Comparison(comparator=<Comparator.EQ: 'eq'>, attribute='director', value='Greta Gerwig')
 
 ```
 
-
-
-
-
-
 ```
 [Document(page_content='A bunch of normal-sized women are supremely wholesome and some men pine after them', metadata={'director': 'Greta Gerwig', 'rating': 8.3, 'year': 2019.0})]
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # This example specifies a composite filter
@@ -330,36 +157,15 @@ retriever.get_relevant_documents("What's a highly rated (above 8.5) science fict
 
 ```
 
-
-
-
-
-
-
-
 ```
 query=' ' filter=Operation(operator=<Operator.AND: 'and'>, arguments=[Comparison(comparator=<Comparator.EQ: 'eq'>, attribute='genre', value='science fiction'), Comparison(comparator=<Comparator.GT: 'gt'>, attribute='rating', value=8.5)])
 
 ```
 
-
-
-
-
-
 ```
 [Document(page_content='Three men walk into the Zone, three men walk out of the Zone', metadata={'director': 'Andrei Tarkovsky', 'genre': ['science fiction', 'thriller'], 'rating': 9.9, 'year': 1979.0})]
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # This example specifies a query and composite filter
@@ -367,31 +173,13 @@ retriever.get_relevant_documents("What's a movie after 1990 but before 2005 that
 
 ```
 
-
-
-
-
-
-
-
 ```
 query='toys' filter=Operation(operator=<Operator.AND: 'and'>, arguments=[Comparison(comparator=<Comparator.GT: 'gt'>, attribute='year', value=1990.0), Comparison(comparator=<Comparator.LT: 'lt'>, attribute='year', value=2005.0), Comparison(comparator=<Comparator.EQ: 'eq'>, attribute='genre', value='animated')])
 
 ```
 
-
-
-
-
-
 ```
 [Document(page_content='Toys come alive and have a blast doing so', metadata={'genre': 'animated', 'year': 1995.0})]
 
 ```
-
-
-
-
-
-
 

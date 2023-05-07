@@ -1,38 +1,13 @@
 
 
+递归字符文本分割器[#](#recursivecharactertextsplitter "此标题的永久链接")
+========================================================
 
- RecursiveCharacterTextSplitter
- [#](#recursivecharactertextsplitter "Permalink to this headline")
-===================================================================================================
+此文本分割器是通用文本的推荐分割器。它由字符列表参数化。它尝试按顺序在它们上进行分割，直到块足够小。默认列表为`["  ", "\n", " ", ""]`。这样做的效果是尽可能地保持所有段落（然后是句子，然后是单词）在一起，因为它们通常看起来是最强的语义相关的文本片段。
 
+- 文本如何分割：通过字符列表
 
-
- This text splitter is the recommended one for generic text. It is parameterized by a list of characters. It tries to split on them in order until the chunks are small enough. The default list is
- `["\n\n",
- 
-
- "\n",
- 
-
- "
- 
-
- ",
- 
-
- ""]`
- . This has the effect of trying to keep all paragraphs (and then sentences, and then words) together as long as possible, as those would generically seem to be the strongest semantically related pieces of text.
- 
-
-
-1. How the text is split: by list of characters
-2. How the chunk size is measured: by length function passed in (defaults to number of characters)
-
-
-
-
-
-
+- 如何测量块大小：通过传递的长度函数（默认为字符数）
 
 ```
 # This is a long document we can split up.
@@ -41,28 +16,10 @@ with open('../../../state_of_the_union.txt') as f:
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 text_splitter = RecursiveCharacterTextSplitter(
@@ -74,15 +31,6 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 texts = text_splitter.create_documents([state_of_the_union])
 print(texts[0])
@@ -90,22 +38,9 @@ print(texts[1])
 
 ```
 
-
-
-
-
-
-
-
 ```
 page_content='Madam Speaker, Madam Vice President, our First Lady and Second Gentleman. Members of Congress and' lookup_str='' metadata={} lookup_index=0
 page_content='of Congress and the Cabinet. Justices of the Supreme Court. My fellow Americans.' lookup_str='' metadata={} lookup_index=0
 
 ```
-
-
-
-
-
-
 

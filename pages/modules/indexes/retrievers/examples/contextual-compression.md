@@ -1,49 +1,22 @@
 
 
+上下文压缩检索器[#](#contextual-compression-retriever "本标题的永久链接")
+=========================================================
 
- Contextual Compression Retriever
- [#](#contextual-compression-retriever "Permalink to this headline")
-=======================================================================================================
-
-
-
- This notebook introduces the concept of DocumentCompressors and the ContextualCompressionRetriever. The core idea is simple: given a specific query, we should be able to return only the documents relevant to that query, and only the parts of those documents that are relevant. The ContextualCompressionsRetriever is a wrapper for another retriever that iterates over the initial output of the base retriever and filters and compresses those initial documents, so that only the most relevant information is returned.
- 
-
-
-
-
-
-
+本文介绍了DocumentCompressors和ContextualCompressionRetriever的概念。核心思想很简单：给定一个特定的查询，我们应该能够仅返回与该查询相关的文档，以及仅返回相关部分的这些文档。ContextualCompressionsRetriever是另一个检索器的包装器，它迭代基础检索器的初始输出，并过滤和压缩这些初始文档，以便仅返回最相关的信息。
 
 ```
 # Helper function for printing docs
 
 def pretty_print_docs(docs):
-    print(f"\n{'-' \* 100}\n".join([f"Document {i+1}:\n\n" + d.page_content for i, d in enumerate(docs)]))
+    print(f"\n{'-' * 100}\n".join([f"Document {i+1}:  " + d.page_content for i, d in enumerate(docs)]))
 
 ```
 
+使用原始向量存储检索器[#](#using-a-vanilla-vector-store-retriever "本标题的永久链接")
+------------------------------------------------------------------
 
-
-
-
-
-
- Using a vanilla vector store retriever
- [#](#using-a-vanilla-vector-store-retriever "Permalink to this headline")
--------------------------------------------------------------------------------------------------------------------
-
-
-
- Let’s start by initializing a simple vector store retriever and storing the 2023 State of the Union speech (in chunks). We can see that given an example question our retriever returns one or two relevant docs and a few irrelevant docs. And even the relevant docs have a lot of irrelevant information in them.
- 
-
-
-
-
-
-
+让我们从初始化一个简单的向量存储检索器并存储2023年国情咨文（分块）开始。我们可以看到，给定一个示例问题，我们的检索器返回一个或两个相关文档和一些不相关文档。即使相关文档也有很多不相关的信息。
 
 ```
 from langchain.text_splitter import CharacterTextSplitter
@@ -60,13 +33,6 @@ docs = retriever.get_relevant_documents("What did the president say about Ketanj
 pretty_print_docs(docs)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Document 1:
@@ -127,32 +93,10 @@ Let’s increase Pell Grants and increase our historic support of HBCUs, and inv
 
 ```
 
+使用LLMChainExtractor添加上下文压缩[#](#adding-contextual-compression-with-an-llmchainextractor "本标题的永久链接")
+--------------------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- Adding contextual compression with an
- `LLMChainExtractor`
-[#](#adding-contextual-compression-with-an-llmchainextractor "Permalink to this headline")
--------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-
- Now let’s wrap our base retriever with a
- `ContextualCompressionRetriever`
- . We’ll add an
- `LLMChainExtractor`
- , which will iterate over the initially returned documents and extract from each only the content that is relevant to the query.
- 
-
-
-
-
-
-
+现在让我们用一个`ContextualCompressionRetriever`包装我们的基础检索器。我们将添加一个`LLMChainExtractor`，它将迭代最初返回的文档，并从每个文档中提取与查询相关的内容。
 
 ```
 from langchain.llms import OpenAI
@@ -168,13 +112,6 @@ pretty_print_docs(compressed_docs)
 
 ```
 
-
-
-
-
-
-
-
 ```
 Document 1:
 
@@ -188,35 +125,12 @@ Document 2:
 
 ```
 
+更多内置压缩器：过滤器[#](#more-built-in-compressors-filters "标题的永久链接")
+------------------------------------------------------------
 
+### `LLMChainFilter`[#](#llmchainfilter "标题的永久链接")
 
-
-
-
-
-
- More built-in compressors: filters
- [#](#more-built-in-compressors-filters "Permalink to this headline")
-----------------------------------------------------------------------------------------------------------
-
-
-
-### 
-`LLMChainFilter`
-[#](#llmchainfilter "Permalink to this headline")
-
-
-
- The
- `LLMChainFilter`
- is slightly simpler but more robust compressor that uses an LLM chain to decide which of the initially retrieved documents to filter out and which ones to return, without manipulating the document contents.
- 
-
-
-
-
-
-
+`LLMChainFilter`是一个稍微简单但更健壮的压缩器，它使用LLM链来决定最初检索到的文档中哪些要被过滤掉，哪些要被返回，而不操作文档内容。
 
 ```
 from langchain.retrievers.document_compressors import LLMChainFilter
@@ -228,13 +142,6 @@ compressed_docs = compression_retriever.get_relevant_documents("What did the pre
 pretty_print_docs(compressed_docs)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Document 1:
@@ -249,28 +156,9 @@ And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketan
 
 ```
 
+### `EmbeddingsFilter`[#](#embeddingsfilter "标题的永久链接")
 
-
-
-
-
-
-### 
-`EmbeddingsFilter`
-[#](#embeddingsfilter "Permalink to this headline")
-
-
-
- Making an extra LLM call over each retrieved document is expensive and slow. The
- `EmbeddingsFilter`
- provides a cheaper and faster option by embedding the documents and query and only returning those documents which have sufficiently similar embeddings to the query.
- 
-
-
-
-
-
-
+对每个检索到的文档进行额外的LLM调用是昂贵且缓慢的。 `EmbeddingsFilter`提供了一种更便宜和更快的选项，通过嵌入文档和查询，并仅返回与查询具有足够相似嵌入的那些文档。
 
 ```
 from langchain.embeddings import OpenAIEmbeddings
@@ -284,13 +172,6 @@ compressed_docs = compression_retriever.get_relevant_documents("What did the pre
 pretty_print_docs(compressed_docs)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Document 1:
@@ -333,42 +214,12 @@ First, beat the opioid epidemic.
 
 ```
 
+将字符串压缩器和文档转换器连在一起[#](#stringing-compressors-and-document-transformers-together "此标题的永久链接")
+==========================================================================================
 
+使用`DocumentCompressorPipeline`，我们还可以轻松地将多个压缩器按顺序组合起来。除了压缩器，我们还可以向管道中添加`BaseDocumentTransformer`，它们不执行任何上下文压缩，只是对一组文档执行一些转换。例如，`TextSplitter`可以用作文档转换器，将文档拆分成较小的片段，`EmbeddingsRedundantFilter`可以用于基于嵌入相似性过滤出冗余文档。
 
-
-
-
-
-
-
-
- Stringing compressors and document transformers together
- [#](#stringing-compressors-and-document-transformers-together "Permalink to this headline")
-=======================================================================================================================================================
-
-
-
- Using the
- `DocumentCompressorPipeline`
- we can also easily combine multiple compressors in sequence. Along with compressors we can add
- `BaseDocumentTransformer`
- s to our pipeline, which don’t perform any contextual compression but simply perform some transformation on a set of documents. For example
- `TextSplitter`
- s can be used as document transformers to split documents into smaller pieces, and the
- `EmbeddingsRedundantFilter`
- can be used to filter out redundant documents based on embedding similarity between documents.
- 
-
-
-
- Below we create a compressor pipeline by first splitting our docs into smaller chunks, then removing redundant documents, and then filtering based on relevance to the query.
- 
-
-
-
-
-
-
+下面我们通过首先将文档拆分成较小的块，然后删除冗余文档，最后基于查询过滤来创建压缩器管道。
 
 ```
 from langchain.document_transformers import EmbeddingsRedundantFilter
@@ -384,15 +235,6 @@ pipeline_compressor = DocumentCompressorPipeline(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 compression_retriever = ContextualCompressionRetriever(base_compressor=pipeline_compressor, base_retriever=retriever)
 
@@ -400,13 +242,6 @@ compressed_docs = compression_retriever.get_relevant_documents("What did the pre
 pretty_print_docs(compressed_docs)
 
 ```
-
-
-
-
-
-
-
 
 ```
 Document 1:
@@ -426,10 +261,4 @@ Document 3:
 A former top litigator in private practice. A former federal public defender. And from a family of public school educators and police officers. A consensus builder
 
 ```
-
-
-
-
-
-
 
