@@ -1,17 +1,26 @@
-Reddit
-==========================================================
 
-Reddit是一家美国社交新闻汇总、内容评级和讨论网站。
 
-此载入器使用Python包'praw'从Subreddit或Reddit用户的帖子中获取文本。
+> 
+> Reddit (reddit) is an American social news aggregation, content rating, and discussion website.
+> 
+> 
+> 
 
-需要先创建[Reddit应用程序](https://www.reddit.com/prefs/apps/)，并使用您的Reddit API凭据初始化载入器。
+This loader fetches the text from the Posts of Subreddits or Reddit users, using the `praw` Python package.
 
-用法：
+Make a [Reddit Application](https://www.reddit.com/prefs/apps/) and initialize the loader with with your Reddit API credentials.
 
 ```
 from langchain.document_loaders import RedditPostsLoader
 
+```
+
+```
+# !pip install praw
+
+```
+
+```
 # load using 'subreddit' mode
 loader = RedditPostsLoader(
     client_id="YOUR CLIENT ID",
@@ -36,7 +45,20 @@ loader = RedditPostsLoader(
 
 # Note: Categories can be only of following value - "controversial" "hot" "new" "rising" "top"
 
-documents = loader.load()
 ```
 
-返回结果是一个Document对象列表，其中每个对象包含帖子的内容、元数据和索引。
+```
+documents = loader.load()
+documents[:5]
+
+```
+
+```
+[Document(page_content='Hello, I am not looking for investment advice. I will apply my own due diligence. However, I am interested if anyone knows as a UK resident how fees and exchange rate differences would impact performance?  I am planning to create a pie of index funds (perhaps UK, US, europe) or find a fund with a good track record of long term growth at low rates.   Does anyone have any ideas?', metadata={'post_subreddit': 'r/investing', 'post_category': 'new', 'post_title': 'Long term retirement funds fees/exchange rate query', 'post_score': 1, 'post_id': '130pa6m', 'post_url': 'https://www.reddit.com/r/investing/comments/130pa6m/long_term_retirement_funds_feesexchange_rate_query/', 'post_author': Redditor(name='Badmanshiz')}),
+ Document(page_content='I much prefer the Roth IRA and would rather rollover my 401k to that every year instead of keeping it in the limited 401k options. But if I rollover, will I be able to continue contributing to my 401k? Or will that close my account? I realize that there are tax implications of doing this but I still think it is the better option.', metadata={'post_subreddit': 'r/investing', 'post_category': 'new', 'post_title': 'Is it possible to rollover my 401k every year?', 'post_score': 3, 'post_id': '130ja0h', 'post_url': 'https://www.reddit.com/r/investing/comments/130ja0h/is_it_possible_to_rollover_my_401k_every_year/', 'post_author': Redditor(name='AnCap_Catholic')}),
+ Document(page_content='Have a general question?  Want to offer some commentary on markets?  Maybe you would just like to throw out a neat fact that doesn\'t warrant a self post?  Feel free to post here!   If your question is "I have $10,000, what do I do?" or other "advice for my personal situation" questions, you should include relevant information, such as the following:  * How old are you? What country do you live in?  \n* Are you employed/making income? How much?  \n* What are your objectives with this money? (Buy a house? Retirement savings?)  \n* What is your time horizon? Do you need this money next month? Next 20yrs?  \n* What is your risk tolerance? (Do you mind risking it at blackjack or do you need to know its 100% safe?)  \n* What are you current holdings? (Do you already have exposure to specific funds and sectors? Any other assets?)  \n* Any big debts (include interest rate) or expenses?  \n* And any other relevant financial information will be useful to give you a proper answer.    Please consider consulting our FAQ first - https://www.reddit.com/r/investing/wiki/faq\nAnd our [side bar](https://www.reddit.com/r/investing/about/sidebar) also has useful resources.    If you are new to investing - please refer to Wiki - [Getting Started](https://www.reddit.com/r/investing/wiki/index/gettingstarted/)  The reading list in the wiki has a list of books ranging from light reading to advanced topics depending on your knowledge level. Link here - [Reading List](https://www.reddit.com/r/investing/wiki/readinglist)  Check the resources in the sidebar.  Be aware that these answers are just opinions of Redditors and should be used as a starting point for your research. You should strongly consider seeing a registered investment adviser if you need professional support before making any financial decisions!', metadata={'post_subreddit': 'r/investing', 'post_category': 'new', 'post_title': 'Daily General Discussion and Advice Thread - April 27, 2023', 'post_score': 5, 'post_id': '130eszz', 'post_url': 'https://www.reddit.com/r/investing/comments/130eszz/daily_general_discussion_and_advice_thread_april/', 'post_author': Redditor(name='AutoModerator')}),
+ Document(page_content="Based on recent news about salt battery advancements and the overall issues of lithium, I was wondering what would be feasible ways to invest into non-lithium based battery technologies? CATL is of course a choice, but the selection of brokers I currently have in my disposal don't provide HK stocks at all.", metadata={'post_subreddit': 'r/investing', 'post_category': 'new', 'post_title': 'Investing in non-lithium battery technologies?', 'post_score': 2, 'post_id': '130d6qp', 'post_url': 'https://www.reddit.com/r/investing/comments/130d6qp/investing_in_nonlithium_battery_technologies/', 'post_author': Redditor(name='-manabreak')}),
+ Document(page_content='Hello everyone,  I would really like to invest in an ETF that follows spy or another big index, as I think this form of investment suits me best.   The problem is, that I live in Denmark where ETFs and funds are taxed annually on unrealised gains at quite a steep rate. This means that an ETF growing say 10% per year will only grow about 6%, which really ruins the long term effects of compounding interest.  However stocks are only taxed on realised gains which is why they look more interesting to hold long term.  I do not like the lack of diversification this brings, as I am looking to spend tonnes of time picking the right long term stocks.  It would be ideal to find a few stocks that over the long term somewhat follows the indexes. Does anyone have suggestions?  I have looked at Nasdaq Inc. which quite closely follows Nasdaq 100.   I really appreciate any help.', metadata={'post_subreddit': 'r/investing', 'post_category': 'new', 'post_title': 'Stocks that track an index', 'post_score': 7, 'post_id': '130auvj', 'post_url': 'https://www.reddit.com/r/investing/comments/130auvj/stocks_that_track_an_index/', 'post_author': Redditor(name='LeAlbertP')})]
+
+```
+

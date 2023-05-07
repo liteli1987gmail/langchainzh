@@ -1,26 +1,11 @@
 
 
+ConversationTokenBufferMemory[#](#conversationtokenbuffermemory "Permalink to this headline")
+=============================================================================================
 
- ConversationTokenBufferMemory
- [#](#conversationtokenbuffermemory "Permalink to this headline")
-=================================================================================================
+`ConversationTokenBufferMemory` 会在内存中保留最近的对话内容，并使用token长度而不是对话数量来决定何时刷新对话。
 
-
-
-`ConversationTokenBufferMemory`
- keeps a buffer of recent interactions in memory, and uses token length rather than number of interactions to determine when to flush interactions.
- 
-
-
-
- Let’s first walk through how to use the utilities
- 
-
-
-
-
-
-
+首先让我们了解如何使用这些工具
 
 ```
 from langchain.memory import ConversationTokenBufferMemory
@@ -29,15 +14,6 @@ llm = OpenAI()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory = ConversationTokenBufferMemory(llm=llm, max_token_limit=10)
 memory.save_context({"input": "hi"}, {"ouput": "whats up"})
@@ -45,45 +21,17 @@ memory.save_context({"input": "not much you"}, {"ouput": "not much"})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory.load_memory_variables({})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'history': 'Human: not much you\nAI: not much'}
 
 ```
 
-
-
-
-
-
- We can also get the history as a list of messages (this is useful if you are using this with a chat model).
- 
-
-
-
-
-
-
+我们也可以将历史记录作为消息列表获取（如果您正在使用聊天模型，则这很有用）。
 
 ```
 memory = ConversationTokenBufferMemory(llm=llm, max_token_limit=10, return_messages=True)
@@ -92,28 +40,10 @@ memory.save_context({"input": "not much you"}, {"ouput": "not much"})
 
 ```
 
+在链式使用中[#](#using-in-a-chain "Permalink to this headline")
+---------------------------------------------------------
 
-
-
-
-
-
- Using in a chain
- [#](#using-in-a-chain "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Let’s walk through an example, again setting
- `verbose=True`
- so we can see the prompt.
- 
-
-
-
-
-
-
+让我们通过一个例子来了解如何使用，再次设置`verbose=True`，以便我们可以看到提示。
 
 ```
 from langchain.chains import ConversationChain
@@ -126,13 +56,6 @@ conversation_with_summary = ConversationChain(
 conversation_with_summary.predict(input="Hi, what's up?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -148,36 +71,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Hi there! I'm doing great, just enjoying the day. How about you?"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation_with_summary.predict(input="Just working on writing some documentation!")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -194,36 +96,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' Sounds like a productive day! What kind of documentation are you writing?'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation_with_summary.predict(input="For LangChain! Have you heard of it?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -242,37 +123,16 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Yes, I have heard of LangChain! It is a decentralized language-learning platform that connects native speakers and learners in real time. Is that the documentation you're writing about?"
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # We can see here that the buffer is updated
 conversation_with_summary.predict(input="Haha nope, although a lot of people confuse it for that")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -289,20 +149,8 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Oh, I see. Is there another language learning platform you're referring to?"
 
 ```
-
-
-
-
-
-
-
 

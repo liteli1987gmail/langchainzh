@@ -1,48 +1,25 @@
 
 
+为Agent添加基于数据库的消息存储[#](#adding-message-memory-backed-by-a-database-to-an-agent "跳转至该标题的永久链接")
+============================================================================================
 
- Adding Message Memory backed by a database to an Agent
- [#](#adding-message-memory-backed-by-a-database-to-an-agent "Permalink to this headline")
-===================================================================================================================================================
+本文将介绍如何为Agent添加使用外部消息存储的记忆。在阅读本文之前，请先阅读以下两篇文章，因为本文将在它们的基础上进行：
 
+* [LLM Chain添加记忆](adding_memory）
 
+* 自定义Agent
 
- This notebook goes over adding memory to an Agent where the memory uses an external message store. Before going through this notebook, please walkthrough the following notebooks, as this will build on top of both of them:
- 
+* 带有记忆的Agent
 
+为Agent添加使用外部消息存储的记忆，我们需要执行以下步骤：
 
-* [Adding memory to an LLM Chain](adding_memory)
-* Custom Agents
-* Agent with Memory
+- 创建`RedisChatMessageHistory`以连接到外部数据库中存储的消息。
 
+- 我们将使用聊天历史记录作为内存来创建一个`LLMChain`。
 
+- 我们将使用`LLMChain`来创建一个自定义的Agent。
 
- In order to add a memory with an external message store to an agent we are going to do the following steps:
- 
-
-
-1. We are going to create a
- `RedisChatMessageHistory`
- to connect to an external database to store the messages in.
-2. We are going to create an
- `LLMChain`
- using that chat history as memory.
-3. We are going to use that
- `LLMChain`
- to create a custom Agent.
-
-
-
- For the purposes of this exercise, we are going to create a simple custom Agent that has access to a search tool and utilizes the
- `ConversationBufferMemory`
- class.
- 
-
-
-
-
-
-
+为了本次练习，我们将创建一个简单的自定义代理，该代理具有访问搜索工具并利用`ConversationBufferMemory`类的功能。
 
 ```
 from langchain.agents import ZeroShotAgent, Tool, AgentExecutor
@@ -53,15 +30,6 @@ from langchain import OpenAI, LLMChain
 from langchain.utilities import GoogleSearchAPIWrapper
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 search = GoogleSearchAPIWrapper()
@@ -75,21 +43,7 @@ tools = [
 
 ```
 
-
-
-
-
-
- Notice the usage of the
- `chat_history`
- variable in the PromptTemplate, which matches up with the dynamic key name in the ConversationBufferMemory.
- 
-
-
-
-
-
-
+请注意，在PromptTemplate中使用了`chat_history`变量，该变量与ConversationBufferMemory中的动态键名匹配。
 
 ```
 prefix = """Have a conversation with a human, answering the following questions as best you can. You have access to the following tools:"""
@@ -108,19 +62,7 @@ prompt = ZeroShotAgent.create_prompt(
 
 ```
 
-
-
-
-
-
- Now we can create the ChatMessageHistory backed by the database.
- 
-
-
-
-
-
-
+现在我们可以创建由数据库支持的ChatMessageHistory。
 
 ```
 message_history = RedisChatMessageHistory(url='redis://localhost:6379/0', ttl=600, session_id='my-session')
@@ -129,19 +71,7 @@ memory = ConversationBufferMemory(memory_key="chat_history", chat_memory=message
 
 ```
 
-
-
-
-
-
- We can now construct the LLMChain, with the Memory object, and then create the agent.
- 
-
-
-
-
-
-
+我们现在可以构建LLMChain，使用Memory对象，然后创建代理。
 
 ```
 llm_chain = LLMChain(llm=OpenAI(temperature=0), prompt=prompt)
@@ -150,26 +80,10 @@ agent_chain = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbo
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_chain.run(input="How many people live in canada?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -183,41 +97,17 @@ Final Answer: The current population of Canada is 38,566,192 as of Saturday, Dec
 
 ```
 
-
-
-
-
-
 ```
 'The current population of Canada is 38,566,192 as of Saturday, December 31, 2022, based on Worldometer elaboration of the latest United Nations data.'
 
 ```
 
-
-
-
-
-
- To test the memory of this agent, we can ask a followup question that relies on information in the previous exchange to be answered correctly.
- 
-
-
-
-
-
-
+要测试此代理的内存，我们可以询问一个后续问题，该问题依赖于先前交换中的信息以正确回答。
 
 ```
 agent_chain.run(input="what is their national anthem called?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -231,34 +121,14 @@ Final Answer: The national anthem of Canada is called "O Canada".
 
 ```
 
-
-
-
-
-
 ```
 'The national anthem of Canada is called "O Canada".'
 
 ```
 
+我们可以看到代理记住了前一个问题是关于加拿大的，并正确地询问Google搜索加拿大的国歌名称是什么。
 
-
-
-
-
- We can see that the agent remembered that the previous question was about Canada, and properly asked Google Search what the name of Canada’s national anthem was.
- 
-
-
-
- For fun, let’s compare this to an agent that does NOT have memory.
- 
-
-
-
-
-
-
+为了好玩，让我们将其与没有内存的代理进行比较。
 
 ```
 prefix = """Have a conversation with a human, answering the following questions as best you can. You have access to the following tools:"""
@@ -279,26 +149,10 @@ agent_without_memory = AgentExecutor.from_agent_and_tools(agent=agent, tools=too
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_without_memory.run("How many people live in canada?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -312,36 +166,15 @@ Final Answer: The current population of Canada is 38,566,192 as of Saturday, Dec
 
 ```
 
-
-
-
-
-
 ```
 'The current population of Canada is 38,566,192 as of Saturday, December 31, 2022, based on Worldometer elaboration of the latest United Nations data.'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 agent_without_memory.run("what is their national anthem called?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new AgentExecutor chain...
@@ -355,19 +188,8 @@ Final Answer: The national anthem of [country] is [name of anthem].
 
 ```
 
-
-
-
-
-
 ```
 'The national anthem of [country] is [name of anthem].'
 
 ```
-
-
-
-
-
-
 

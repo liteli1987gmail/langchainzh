@@ -1,26 +1,11 @@
 
 
+对话摘要缓存内存[#](#conversationsummarybuffermemory "标题的永久链接")
+=======================================================
 
- ConversationSummaryBufferMemory
- [#](#conversationsummarybuffermemory "Permalink to this headline")
-=====================================================================================================
+`ConversationSummaryBufferMemory`结合了前两个想法。它将最近的交互记录缓存在内存中，但不仅仅是完全清除旧的交互，而是将它们编译成一份摘要并同时使用。不过，与之前的实现不同，它使用令牌长度而不是交互数量来确定何时清除交互。
 
-
-
-`ConversationSummaryBufferMemory`
- combines the last two ideas. It keeps a buffer of recent interactions in memory, but rather than just completely flushing old interactions it compiles them into a summary and uses both. Unlike the previous implementation though, it uses token length rather than number of interactions to determine when to flush interactions.
- 
-
-
-
- Let’s first walk through how to use the utilities
- 
-
-
-
-
-
-
+首先让我们了解如何使用这些工具
 
 ```
 from langchain.memory import ConversationSummaryBufferMemory
@@ -29,15 +14,6 @@ llm = OpenAI()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory = ConversationSummaryBufferMemory(llm=llm, max_token_limit=10)
 memory.save_context({"input": "hi"}, {"output": "whats up"})
@@ -45,45 +21,17 @@ memory.save_context({"input": "not much you"}, {"output": "not much"})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory.load_memory_variables({})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'history': 'System: \nThe human says "hi", and the AI responds with "whats up".\nHuman: not much you\nAI: not much'}
 
 ```
 
-
-
-
-
-
- We can also get the history as a list of messages (this is useful if you are using this with a chat model).
- 
-
-
-
-
-
-
+我们还可以将历史记录作为消息列表获取（如果您正在使用聊天模型，则此功能很有用）。
 
 ```
 memory = ConversationSummaryBufferMemory(llm=llm, max_token_limit=10, return_messages=True)
@@ -92,21 +40,7 @@ memory.save_context({"input": "not much you"}, {"output": "not much"})
 
 ```
 
-
-
-
-
-
- We can also utilize the
- `predict_new_summary`
- method directly.
- 
-
-
-
-
-
-
+我们还可以直接利用`predict_new_summary`方法。
 
 ```
 messages = memory.chat_memory.messages
@@ -115,40 +49,15 @@ memory.predict_new_summary(messages, previous_summary)
 
 ```
 
-
-
-
-
-
-
-
 ```
 '\nThe human and AI state that they are not doing much.'
 
 ```
 
+在链式中使用[#](#using-in-a-chain "标题的永久链接")
+--------------------------------------
 
-
-
-
-
-
- Using in a chain
- [#](#using-in-a-chain "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Let’s walk through an example, again setting
- `verbose=True`
- so we can see the prompt.
- 
-
-
-
-
-
-
+让我们通过一个例子来了解，再次设置`verbose=True`，以便我们可以看到提示。
 
 ```
 from langchain.chains import ConversationChain
@@ -161,13 +70,6 @@ conversation_with_summary = ConversationChain(
 conversation_with_summary.predict(input="Hi, what's up?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -183,36 +85,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Hi there! I'm doing great. I'm learning about the latest advances in artificial intelligence. What about you?"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation_with_summary.predict(input="Just working on writing some documentation!")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -229,37 +110,16 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' That sounds like a great use of your time. Do you have experience with writing documentation?'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # We can see here that there is a summary of the conversation and then some previous interactions
 conversation_with_summary.predict(input="For LangChain! Have you heard of it?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -278,37 +138,16 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " No, I haven't heard of LangChain. Can you tell me more about it?"
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # We can see here that the summary and the buffer are updated
 conversation_with_summary.predict(input="Haha nope, although a lot of people confuse it for that")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -327,20 +166,8 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' Oh, okay. What is LangChain?'
 
 ```
-
-
-
-
-
-
-
 

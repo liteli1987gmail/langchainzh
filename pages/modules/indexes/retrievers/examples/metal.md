@@ -1,42 +1,16 @@
 
 
+金属[#](#metal "此标题的永久链接")
+========================
 
- Metal
- [#](#metal "Permalink to this headline")
-=================================================
+本笔记展示了如何使用[Metal](https://docs.getmetal.io/introduction)的检索器。
 
-
-
- This notebook shows how to use
- [Metal’s](https://docs.getmetal.io/introduction) 
- retriever.
- 
-
-
-
- First, you will need to sign up for Metal and get an API key. You can do so
- [here](https://docs.getmetal.io/misc-create-app) 
-
-
-
-
-
-
-
+首先，您需要注册Metal并获取API密钥。您可以在[此处](https://docs.getmetal.io/misc-create-app)完成。
 
 ```
 # !pip install metal_sdk
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from metal_sdk.metal import Metal
@@ -48,39 +22,16 @@ metal = Metal(API_KEY, CLIENT_ID, INDEX_ID);
 
 ```
 
+摄取文档[#](#ingest-documents "此标题的永久链接")
+-------------------------------------
 
-
-
-
-
-
- Ingest Documents
- [#](#ingest-documents "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- You only need to do this if you haven’t already set up an index
- 
-
-
-
-
-
-
+如果您尚未设置索引，则只需执行此操作。
 
 ```
 metal.index( {"text": "foo1"})
 metal.index( {"text": "foo"})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'data': {'id': '642739aa7559b026b4430e42',
@@ -89,78 +40,29 @@ metal.index( {"text": "foo"})
 
 ```
 
+查询[#](#query "此标题的永久链接")
+------------------------
 
-
-
-
-
-
-
- Query
- [#](#query "Permalink to this headline")
--------------------------------------------------
-
-
-
- Now that our index is set up, we can set up a retriever and start querying it.
- 
-
-
-
-
-
-
+现在我们的索引已经设置好，我们可以设置一个检索器并开始查询。
 
 ```
 from langchain.retrievers import MetalRetriever
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 retriever = MetalRetriever(metal, params={"limit": 2})
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 retriever.get_relevant_documents("foo1")
 
 ```
 
-
-
-
-
-
-
-
 ```
 [Document(page_content='foo1', metadata={'dist': '1.19209289551e-07', 'id': '642739a17559b026b4430e40', 'createdAt': '2023-03-31T19:50:57.853Z'}),
  Document(page_content='foo1', metadata={'dist': '4.05311584473e-06', 'id': '642738f67559b026b4430e3c', 'createdAt': '2023-03-31T19:48:06.769Z'})]
 
 ```
-
-
-
-
-
-
-
 

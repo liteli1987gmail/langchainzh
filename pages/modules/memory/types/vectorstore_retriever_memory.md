@@ -1,31 +1,13 @@
 
 
+基于向量存储的记忆[#](#vectorstore-backed-memory "本标题的永久链接")
+===================================================
 
- VectorStore-Backed Memory
- [#](#vectorstore-backed-memory "Permalink to this headline")
-=========================================================================================
+`VectorStoreRetrieverMemory`将记忆存储在VectorDB中，并在每次调用时查询最重要的K个文档。
 
+与大多数其他记忆类不同的是，它不明确跟踪交互的顺序。
 
-
-`VectorStoreRetrieverMemory`
- stores memories in a VectorDB and queries the top-K most “salient” docs every time it is called.
- 
-
-
-
- This differs from most of the other Memory classes in that it doesn’t explicitly track the order of interactions.
- 
-
-
-
- In this case, the “docs” are previous conversation snippets. This can be useful to refer to relevant pieces of information that the AI was told earlier in the conversation.
- 
-
-
-
-
-
-
+在这种情况下，“文档”是先前的对话片段。这可以用来提到AI在对话中早期被告知的相关信息。
 
 ```
 from datetime import datetime
@@ -37,33 +19,16 @@ from langchain.prompts import PromptTemplate
 
 ```
 
+初始化您的VectorStore[#](#initialize-your-vectorstore "本标题的永久链接")
+------------------------------------------------------------
 
-
-
-
-
-
- Initialize your VectorStore
- [#](#initialize-your-vectorstore "Permalink to this headline")
----------------------------------------------------------------------------------------------
-
-
-
- Depending on the store you choose, this step may look different. Consult the relevant VectorStore documentation for more details.
- 
-
-
-
-
-
-
+根据您选择的存储方式，此步骤可能会有所不同。有关更多详细信息，请参阅相关的VectorStore文档。
 
 ```
 import faiss
 
 from langchain.docstore import InMemoryDocstore
 from langchain.vectorstores import FAISS
-
 
 embedding_size = 1536 # Dimensions of the OpenAIEmbeddings
 index = faiss.IndexFlatL2(embedding_size)
@@ -72,27 +37,10 @@ vectorstore = FAISS(embedding_fn, index, InMemoryDocstore({}), {})
 
 ```
 
+创建您的VectorStoreRetrieverMemory[#](#create-your-the-vectorstoreretrievermemory "本标题的永久链接")
+-----------------------------------------------------------------------------------------
 
-
-
-
-
-
-
- Create your the VectorStoreRetrieverMemory
- [#](#create-your-the-vectorstoreretrievermemory "Permalink to this headline")
----------------------------------------------------------------------------------------------------------------------------
-
-
-
- The memory object is instantiated from any VectorStoreRetriever.
- 
-
-
-
-
-
-
+记忆体对象是从任何VectorStoreRetriever实例化的。
 
 ```
 # In actual usage, you would set `k` to be a higher value, but we use k=1 to show that
@@ -107,15 +55,6 @@ memory.save_context({"input": "I don't the Celtics"}, {"output": "ok"}) #
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # Notice the first result returned is the memory pertaining to tax help, which the language model deems more semantically relevant
 # to a 1099 than the other documents, despite them both containing numbers.
@@ -123,42 +62,16 @@ print(memory.load_memory_variables({"prompt": "what sport should i watch?"})["hi
 
 ```
 
-
-
-
-
-
-
-
 ```
 input: My favorite sport is soccer
 output: ...
 
 ```
 
+在链中使用[#](#using-in-a-chain "本标题的永久链接")
+--------------------------------------
 
-
-
-
-
-
-
- Using in a chain
- [#](#using-in-a-chain "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Let’s walk through an example, again setting
- `verbose=True`
- so we can see the prompt.
- 
-
-
-
-
-
-
+让我们通过一个例子来演示，再次设置`verbose=True`以便我们可以看到提示。
 
 ```
 llm = OpenAI(temperature=0) # Can be any valid LLM
@@ -186,13 +99,6 @@ conversation_with_summary.predict(input="Hi, my name is Perry, what's up?")
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new ConversationChain chain...
 Prompt after formatting:
@@ -212,37 +118,16 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Hi Perry, I'm doing well. How about you?"
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # Here, the basketball related content is surfaced
 conversation_with_summary.predict(input="what's my favorite sport?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -263,24 +148,10 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' You told me earlier that your favorite sport is soccer.'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # Even though the language model is stateless, since relavent memory is fetched, it can "reason" about the time.
@@ -288,13 +159,6 @@ AI:
 conversation_with_summary.predict(input="Whats my favorite food")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -315,24 +179,10 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' You said your favorite food is pizza.'
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # The memories from the conversation are automatically stored,
@@ -341,13 +191,6 @@ AI:
 conversation_with_summary.predict(input="What's my name?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -368,20 +211,8 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' Your name is Perry.'
 
 ```
-
-
-
-
-
-
-
 

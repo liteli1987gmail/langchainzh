@@ -1,15 +1,13 @@
 
 
-Twitter[#](#twitter "Permalink to this headline")
-=================================================
-
 > 
-> [Twitter](https://twitter.com/)是一种在线社交媒体和社交网络服务。
+> [Twitter](https://twitter.com/) is an online social media and social networking service.
 > 
 > 
 > 
 
-此加载器从一组Twitter用户的推文中获取文本，使用Python包tweepy。 您必须使用您的Twitter API令牌初始化加载器，并需要传入要提取的Twitter用户名。
+This loader fetches the text from the Tweets of a list of `Twitter` users, using the `tweepy` Python package.
+You must initialize the loader with your `Twitter API` token, and you need to pass in the Twitter username you want to extract.
 
 ```
 from langchain.document_loaders import TwitterTweetLoader

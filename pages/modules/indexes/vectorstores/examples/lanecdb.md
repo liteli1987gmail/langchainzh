@@ -1,54 +1,20 @@
-
-
-
- LanceDB
- [#](#lancedb "Permalink to this headline")
-=====================================================
-
-
+LanceDB[#](#lancedb "Permalink to this headline")
+=================================================
 
 > 
-> 
-> 
-> [LanceDB](https://lancedb.com/) 
->  is an open-source database for vector-search built with persistent storage, which greatly simplifies retrevial, filtering and management of embeddings. Fully open source.
->  
-> 
+> [LanceDB](https://lancedb.com/) 是一个基于持久存储的矢量搜索的开源数据库，极大地简化了嵌入式的检索、过滤和管理。完全开源。
 > 
 > 
 > 
 
-
-
- This notebook shows how to use functionality related to the
- `LanceDB`
- vector database based on the Lance data format.
- 
-
-
-
-
-
-
+此笔记本演示了如何使用基于Lance数据格式的`LanceDB`矢量数据库的功能。
 
 ```
 !pip install lancedb
 
 ```
 
-
-
-
-
-
- We want to use OpenAIEmbeddings so we have to get the OpenAI API Key.
- 
-
-
-
-
-
-
+我们想要使用OpenAIEmbeddings，因此我们必须获取OpenAI API密钥。
 
 ```
 import os
@@ -58,31 +24,11 @@ os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
 
 ```
 
-
-
-
-
-
-
-
-
-
-
-
 ```
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import LanceDB
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -95,15 +41,6 @@ documents = CharacterTextSplitter().split_documents(documents)
 embeddings = OpenAIEmbeddings()
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import lancedb
@@ -120,26 +57,10 @@ docs = docsearch.similarity_search(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(docs[0].page_content)
 
 ```
-
-
-
-
-
-
-
 
 ```
 They were responding to a 9-1-1 call when a man shot and killed them with a stolen gun. 
@@ -190,23 +111,4 @@ Tonight, I’d like to honor someone who has dedicated his life to serve this co
 
 One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. 
 
-And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence. 
-
-A former top litigator in private practice. A former federal public defender. And from a family of public school educators and police officers. A consensus builder. Since she’s been nominated, she’s received a broad range of support—from the Fraternal Order of Police to former judges appointed by Democrats and Republicans. 
-
-And if we are to advance liberty and justice, we need to secure the Border and fix the immigration system. 
-
-We can do both. At our border, we’ve installed new technology like cutting-edge scanners to better detect drug smuggling.  
-
-We’ve set up joint patrols with Mexico and Guatemala to catch more human traffickers.  
-
-We’re putting in place dedicated immigration judges so families fleeing persecution and violence can have their cases heard faster.
-
 ```
-
-
-
-
-
-
-

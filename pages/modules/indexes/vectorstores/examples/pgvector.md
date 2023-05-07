@@ -1,119 +1,49 @@
-
-
-
- PGVector
- [#](#pgvector "Permalink to this headline")
-=======================================================
-
-
+PGVector[#](#pgvector "Permalink to this headline")
+===================================================
 
 > 
-> 
-> 
-> [PGVector](https://github.com/pgvector/pgvector) 
->  is an open-source vector similarity search for
->  `Postgres`
-> 
-> 
+> [PGVector](https://github.com/pgvector/pgvector)是用于`Postgres`的开源向量相似度搜索
 > 
 > 
 > 
 
+它支持：
 
+* 精确和近似最近邻搜索
 
- It supports:
- 
+* L2距离，内积和余弦距离
 
+本笔记本演示了如何使用Postgres向量数据库（`PGVector`）。
 
-* exact and approximate nearest neighbor search
-* L2 distance, inner product, and cosine distance
-
-
-
- This notebook shows how to use the Postgres vector database (
- `PGVector`
- ).
- 
-
-
-
- See the
- [installation instruction](https://github.com/pgvector/pgvector) 
- .
- 
-
-
-
-
-
-
+请参阅[安装指令](https://github.com/pgvector/pgvector)。
 
 ```
 !pip install pgvector
 
 ```
 
-
-
-
-
-
- We want to use
- `OpenAIEmbeddings`
- so we have to get the OpenAI API Key.
- 
-
-
-
-
-
-
+我们想使用`OpenAIEmbeddings`，因此必须获取OpenAI API密钥。
 
 ```
 import os
 import getpass
 
-os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
+os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API密钥：')
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
-## Loading Environment Variables
+## 加载环境变量
 from typing import List, Tuple
 from dotenv import load_dotenv
 load_dotenv()
 
 ```
 
-
-
-
-
-
-
-
 ```
 False
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -123,15 +53,6 @@ from langchain.document_loaders import TextLoader
 from langchain.docstore.document import Document
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 loader = TextLoader('../../../state_of_the_union.txt')
@@ -143,18 +64,9 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
-## PGVector needs the connection string to the database.
-## We will load it from the environment variables.
+## PGVector需要数据库的连接字符串。
+## 我们将从环境变量中加载它。
 import os
 CONNECTION_STRING = PGVector.connection_string_from_db_params(
     driver=os.environ.get("PGVECTOR_DRIVER", "psycopg2"),
@@ -165,37 +77,19 @@ CONNECTION_STRING = PGVector.connection_string_from_db_params(
     password=os.environ.get("PGVECTOR_PASSWORD", "postgres"),
 )
 
-
-## Example
+## 示例
 # postgresql+psycopg2://username:password@localhost:5432/database_name
 
 ```
 
+带分数的相似性搜索[#](#similarity-search-with-score "Permalink to this headline")
+-------------------------------------------------------------------------------------------
 
-
-
-
-
-
- Similarity search with score
- [#](#similarity-search-with-score "Permalink to this headline")
------------------------------------------------------------------------------------------------
-
-
-
-### 
- Similarity Search with Euclidean Distance (Default)
- [#](#similarity-search-with-euclidean-distance-default "Permalink to this headline")
-
-
-
-
-
-
+### 使用欧几里得距离进行相似性搜索（默认）[#](#similarity-search-with-euclidean-distance-default "Permalink to this headline")
 
 ```
-# The PGVector Module will try to create a table with the name of the collection. So, make sure that the collection name is unique and the user has the 
-# permission to create a table.
+# PGVector模块将尝试使用集合名称创建表。因此，请确保集合名称唯一且用户有
+# 权限创建表。
 
 db = PGVector.from_documents(
     embedding=embeddings,
@@ -204,85 +98,29 @@ db = PGVector.from_documents(
     connection_string=CONNECTION_STRING,
 )
 
-query = "What did the president say about Ketanji Brown Jackson"
+query = "总统对Ketanji Brown Jackson说了什么"
 docs_with_score: List[Tuple[Document, float]] = db.similarity_search_with_score(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 for doc, score in docs_with_score:
-    print("-" \* 80)
-    print("Score: ", score)
+    print("-" * 80)
+    print("分数：", score)
     print(doc.page_content)
-    print("-" \* 80)
+    print("-" * 80)
 
 ```
 
-
-
-
-
-
-
-
 ```
 --------------------------------------------------------------------------------
-Score:  0.6076628081132506
-Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
+分数： 0.6076628081132506
+今晚。我呼吁参议院：通过《自由投票法》。通过约翰·刘易斯选票权法案。当你在那里时，通过《揭示法》，以便美国人可以知道谁在资助我们的选举。
 
-Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. 
+今晚，我想向一位献身于为这个国家服务的人致敬：史蒂芬·布雷耶法官——陆军退伍军人，宪法学者，美国最高法院即将退休的法官。布雷耶法官，谢谢您的服务。
 
-One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. 
+总统最重要的宪法责任之一是提名人担任美国最高法院大法官。
 
-And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
-Score:  0.6076628081132506
-Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
-
-Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. 
-
-One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. 
-
-And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
-Score:  0.6076804780049968
-Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
-
-Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. 
-
-One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. 
-
-And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.
---------------------------------------------------------------------------------
---------------------------------------------------------------------------------
-Score:  0.6076804780049968
-Tonight. I call on the Senate to: Pass the Freedom to Vote Act. Pass the John Lewis Voting Rights Act. And while you’re at it, pass the Disclose Act so Americans can know who is funding our elections. 
-
-Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service. 
-
-One of the most serious constitutional responsibilities a President has is nominating someone to serve on the United States Supreme Court. 
-
-And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.
---------------------------------------------------------------------------------
+4天前，当我提名电路法院法官Ketanji Brown Jackson时，我就做到了。
 
 ```
-
-
-
-
-
-
-
-
-

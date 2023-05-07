@@ -1,37 +1,12 @@
-
-
-
- LLMRequestsChain
- [#](#llmrequestschain "Permalink to this headline")
-=======================================================================
-
-
-
- Using the request library to get HTML results from a URL and then an LLM to parse results
- 
-
-
-
-
-
-
-
-```
+# LLMRequestsChain
+使用请求库从URL获取HTML结果，然后使用LLM解析结果
+```python
 from langchain.llms import OpenAI
 from langchain.chains import LLMRequestsChain, LLMChain
-
 ```
 
-
-
-
-
-
-
-
-
-
-```
+定义使用的提示：
+```python
 from langchain.prompts import PromptTemplate
 
 template = """Between >>> and <<< are the raw search result text from google.
@@ -45,72 +20,30 @@ PROMPT = PromptTemplate(
     input_variables=["query", "requests_result"],
     template=template,
 )
-
 ```
 
-
-
-
-
-
-
-
-
-
-```
+实例化LLMRequestsChain：
+```python
 chain = LLMRequestsChain(llm_chain = LLMChain(llm=OpenAI(temperature=0), prompt=PROMPT))
-
 ```
 
-
-
-
-
-
-
-
-
-
-```
+定义输入：
+```python
 question = "What are the Three (3) biggest countries, and their respective sizes?"
 inputs = {
     "query": question,
     "url": "https://www.google.com/search?q=" + question.replace(" ", "+")
 }
-
 ```
 
-
-
-
-
-
-
-
-
-
-```
+运行LLMRequestsChain：
+```python
 chain(inputs)
-
 ```
 
-
-
-
-
-
-
-
+输出如下：
 ```
 {'query': 'What are the Three (3) biggest countries, and their respective sizes?',
  'url': 'https://www.google.com/search?q=What+are+the+Three+(3)+biggest+countries,+and+their+respective+sizes?',
- 'output': ' Russia (17,098,242 km²), Canada (9,984,670 km²), United States (9,826,675 km²)'}
-
+ 'output': '俄罗斯(17,098,242平方公里)，加拿大(9,984,670平方公里)，美国(9,826,675平方公里)'}
 ```
-
-
-
-
-
-
-

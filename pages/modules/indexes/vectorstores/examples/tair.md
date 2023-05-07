@@ -1,23 +1,10 @@
 
 
+Tair[#](#tair "Permalink to this headline")
+===========================================
 
- Tair
- [#](#tair "Permalink to this headline")
-===============================================
-
-
-
- This notebook shows how to use functionality related to the Tair vector database.
-To run, you should have an
- [Tair](https://www.alibabacloud.com/help/en/tair/latest/what-is-tair) 
- instance up and running.
- 
-
-
-
-
-
-
+本笔记展示如何使用与Tair向量数据库相关的功能。
+要运行，请确保已经启动了[Tair](https://www.alibabacloud.com/help/zh/tair/latest/what-is-tair)实例。
 
 ```
 from langchain.embeddings.fake import FakeEmbeddings
@@ -25,15 +12,6 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import Tair
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -46,43 +24,16 @@ embeddings = FakeEmbeddings(size=128)
 
 ```
 
-
-
-
-
-
- Connect to Tair using the
- `TAIR_URL`
- environment variable
- 
-
-
-
-
+使用`TAIR_URL`环境变量或关键字参数`tair_url`连接到Tair。
 
 ```
 export TAIR_URL="redis://{username}:{password}@{tair_address}:{tair_port}"
 
 ```
 
+然后将文档和嵌入存储到Tair中。
 
-
-
- or the keyword argument
- `tair_url`
- .
- 
-
-
-
- Then store documents and embeddings into Tair.
- 
-
-
-
-
-
-
+查询相似的文档。
 
 ```
 tair_url = "redis://localhost:6379"
@@ -98,19 +49,7 @@ vector_store = Tair.from_documents(
 
 ```
 
-
-
-
-
-
- Query similar documents.
- 
-
-
-
-
-
-
+查询相似的文档。
 
 ```
 query = "What did the president say about Ketanji Brown Jackson"
@@ -119,21 +58,8 @@ docs[0]
 
 ```
 
-
-
-
-
-
-
+```
+Document(page_content='We’re going after the criminals who stole billions in relief money meant for small businesses and millions of Americans.    And tonight, I’m announcing that the Justice Department will name a chief prosecutor for pandemic fraud.   By the end of this year, the deficit will be down to less than half what it was before I took office.    The only president ever to cut the deficit by more than one trillion dollars in a single year.   Lowering your costs also means demanding more competition.   I’m a capitalist, but capitalism without competition isn’t capitalism.   It’s exploitation—and it drives up prices.   When corporations don’t have to compete, their profits go up, your prices go up, and small businesses and family farmers and ranchers go under.   We see it happening with ocean carriers moving goods in and out of America.   During the pandemic, these foreign-owned companies raised prices by as much as 1,000% and made record profits.', metadata={'source': '../../../state_of_the_union.txt'})
 
 ```
-Document(page_content='We’re going after the criminals who stole billions in relief money meant for small businesses and millions of Americans.  \n\nAnd tonight, I’m announcing that the Justice Department will name a chief prosecutor for pandemic fraud. \n\nBy the end of this year, the deficit will be down to less than half what it was before I took office.  \n\nThe only president ever to cut the deficit by more than one trillion dollars in a single year. \n\nLowering your costs also means demanding more competition. \n\nI’m a capitalist, but capitalism without competition isn’t capitalism. \n\nIt’s exploitation—and it drives up prices. \n\nWhen corporations don’t have to compete, their profits go up, your prices go up, and small businesses and family farmers and ranchers go under. \n\nWe see it happening with ocean carriers moving goods in and out of America. \n\nDuring the pandemic, these foreign-owned companies raised prices by as much as 1,000% and made record profits.', metadata={'source': '../../../state_of_the_union.txt'})
-
-```
-
-
-
-
-
-
 

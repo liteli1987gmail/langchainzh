@@ -1,25 +1,11 @@
 
 
+实体记忆[#](#entity-memory "永久链接到此标题")
+==================================
 
- Entity Memory
- [#](#entity-memory "Permalink to this headline")
-=================================================================
+本笔记本展示了如何使用记忆模块来记住特定实体的信息。它使用LLMs提取实体的信息，并随着时间的推移逐渐建立对实体的了解（也使用LLMs）。
 
-
-
- This notebook shows how to work with a memory module that remembers things about specific entities. It extracts information on entities (using LLMs) and builds up its knowledge about that entity over time (also using LLMs).
- 
-
-
-
- Let’s first walk through using this functionality.
- 
-
-
-
-
-
-
+让我们首先了解如何使用这个功能。
 
 ```
 from langchain.llms import OpenAI
@@ -27,15 +13,6 @@ from langchain.memory import ConversationEntityMemory
 llm = OpenAI(temperature=0)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 memory = ConversationEntityMemory(llm=llm)
@@ -48,41 +25,16 @@ memory.save_context(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory.load_memory_variables({"input": 'who is Sam'})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'history': 'Human: Deven & Sam are working on a hackathon project\nAI:  That sounds like a great project! What kind of project are they working on?',
  'entities': {'Sam': 'Sam is working on a hackathon project with Deven.'}}
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 memory = ConversationEntityMemory(llm=llm, return_messages=True)
@@ -95,26 +47,10 @@ memory.save_context(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory.load_memory_variables({"input": 'who is Sam'})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'history': [HumanMessage(content='Deven & Sam are working on a hackathon project', additional_kwargs={}),
@@ -123,26 +59,10 @@ memory.load_memory_variables({"input": 'who is Sam'})
 
 ```
 
+在链中使用[#](#using-in-a-chain "永久链接到此标题")
+--------------------------------------
 
-
-
-
-
-
- Using in a chain
- [#](#using-in-a-chain "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Let’s now use it in a chain!
- 
-
-
-
-
-
-
+现在让我们在链中使用它！
 
 ```
 from langchain.chains import ConversationChain
@@ -152,15 +72,6 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 conversation = ConversationChain(
@@ -172,26 +83,10 @@ conversation = ConversationChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="Deven & Sam are working on a hackathon project")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -217,36 +112,15 @@ You:
 
 ```
 
-
-
-
-
-
 ```
 ' That sounds like a great project! What kind of project are they working on?'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.memory.entity_store.store
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'Deven': 'Deven is working on a hackathon project with Sam, which they are entering into a hackathon.',
@@ -254,26 +128,10 @@ conversation.memory.entity_store.store
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="They are trying to add more complex memory structures to Langchain")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -300,36 +158,15 @@ You:
 
 ```
 
-
-
-
-
-
 ```
 ' That sounds like an interesting project! What kind of memory structures are they trying to add?'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="They are adding in a key-value store for entities mentioned so far in the conversation.")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -358,36 +195,15 @@ You:
 
 ```
 
-
-
-
-
-
 ```
 ' That sounds like a great idea! How will the key-value store help with the project?'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="What do you know about Deven & Sam?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -418,50 +234,21 @@ You:
 
 ```
 
-
-
-
-
-
 ```
 ' Deven and Sam are working on a hackathon project together, trying to add more complex memory structures to Langchain, including a key-value store for entities mentioned so far in the conversation. They seem to be working hard on this project and have a great idea for how the key-value store can help.'
 
 ```
 
+检查存储器[#](#inspecting-the-memory-store "永久链接到此标题")
+-------------------------------------------------
 
-
-
-
-
-
-
- Inspecting the memory store
- [#](#inspecting-the-memory-store "Permalink to this headline")
----------------------------------------------------------------------------------------------
-
-
-
- We can also inspect the memory store directly. In the following examaples, we look at it directly, and then go through some examples of adding information and watch how it changes.
- 
-
-
-
-
-
-
+我们还可以直接检查存储器。在以下示例中，我们直接查看它，然后通过一些添加信息的示例来观察它的变化。
 
 ```
 from pprint import pprint
 pprint(conversation.memory.entity_store.store)
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'Daimon': 'Daimon is a company founded by Sam, a successful entrepreneur.',
@@ -484,26 +271,10 @@ pprint(conversation.memory.entity_store.store)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="Sam is the founder of a company called Daimon.")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -535,37 +306,16 @@ You:
 
 ```
 
-
-
-
-
-
 ```
 " That's impressive! It sounds like Sam is a very successful entrepreneur. What kind of company is Daimon?"
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from pprint import pprint
 pprint(conversation.memory.entity_store.store)
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'Daimon': 'Daimon is a company founded by Sam, a successful entrepreneur, who '
@@ -590,26 +340,10 @@ pprint(conversation.memory.entity_store.store)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.predict(input="What do you know about Sam?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -641,20 +375,8 @@ You:
 
 ```
 
-
-
-
-
-
 ```
 ' Sam is the founder of a successful company called Daimon. He is also working on a hackathon project with Deven to add more complex memory structures to Langchain. They seem to have a great idea for how the key-value store can help.'
 
 ```
-
-
-
-
-
-
-
 

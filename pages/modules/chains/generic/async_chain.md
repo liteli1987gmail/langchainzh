@@ -1,40 +1,8 @@
+## 链的异步API
 
+LangChain通过利用asyncio库为链提供异步支持。
 
-
- Async API for Chain
- [#](#async-api-for-chain "Permalink to this headline")
-=============================================================================
-
-
-
- LangChain provides async support for Chains by leveraging the
- [asyncio](https://docs.python.org/3/library/asyncio) 
- library.
- 
-
-
-
- Async methods are currently supported in
- `LLMChain`
- (through
- `arun`
- ,
- `apredict`
- ,
- `acall`
- ) and
- `LLMMathChain`
- (through
- `arun`
- and
- `acall`
- ),
- `ChatVectorDBChain`
- , and
- 
- QA chains
- 
- . Async support for other chains is on the roadmap.
+目前LLMChain（通过arun、apredict、acall）、LLMMathChain（通过arun和acall）、ChatVectorDBChain以及QA chains支持异步方法。其他链的异步支持正在路线图中。
  
 
 

@@ -1,23 +1,9 @@
 
 
+LLM Chain[#](#llm-chain "此标题的永久链接")
+===================================
 
- LLM Chain
- [#](#llm-chain "Permalink to this headline")
-=========================================================
-
-
-
-`LLMChain`
- is perhaps one of the most popular ways of querying an LLM object. It formats the prompt template using the input key values provided (and also memory key values, if available), passes the formatted string to LLM and returns the LLM output. Below we show additional functionalities of
- `LLMChain`
- class.
- 
-
-
-
-
-
-
+`LLMChain` 可能是查询 LLM 对象最流行的方式之一。它使用提供的输入键值（以及可用的内存键值）格式化提示模板，将格式化后的字符串传递给 LLM 并返回 LLM 输出。下面我们展示了 `LLMChain` 类的其他功能。
 
 ```
 from langchain import PromptTemplate, OpenAI, LLMChain
@@ -33,53 +19,17 @@ llm_chain("colorful socks")
 
 ```
 
-
-
-
-
-
-
-
 ```
-{'product': 'colorful socks', 'text': '\n\nSocktastic!'}
+{'product': 'colorful socks', 'text': '  Socktastic!'}
 
 ```
 
+运行 LLM Chain 的其他方法[#](#additional-ways-of-running-llm-chain "此标题的永久链接")
+=======================================================================
 
+除了所有 `Chain` 对象共享的 `__call__` 和 `run` 方法（请参见[入门指南](../getting_started）了解更多信息），`LLMChain` 还提供了几种调用链逻辑的方法：
 
-
-
-
-
-
- Additional ways of running LLM Chain
- [#](#additional-ways-of-running-llm-chain "Permalink to this headline")
-===============================================================================================================
-
-
-
- Aside from
- `__call__`
- and
- `run`
- methods shared by all
- `Chain`
- object (see
- [Getting Started](../getting_started)
- to learn more),
- `LLMChain`
- offers a few more ways of calling the chain logic:
- 
-
-
-* `apply`
- allows you run the chain against a list of inputs:
-
-
-
-
-
-
+* `apply` 允许您对输入列表运行链：
 
 ```
 input_list = [
@@ -92,75 +42,26 @@ llm_chain.apply(input_list)
 
 ```
 
-
-
-
-
-
-
-
 ```
-[{'text': '\n\nSocktastic!'},
- {'text': '\n\nTechCore Solutions.'},
- {'text': '\n\nFootwear Factory.'}]
+[{'text': '  Socktastic!'},
+ {'text': '  TechCore Solutions.'},
+ {'text': '  Footwear Factory.'}]
 
 ```
 
-
-
-
-
-* `generate`
- is similar to
- `apply`
- , except it return an
- `LLMResult`
- instead of string.
- `LLMResult`
- often contains useful generation such as token usages and finish reason.
-
-
-
-
-
-
+* `generate`与`apply`类似，不同之处在于它返回一个`LLMResult`而不是字符串。`LLMResult`通常包含有用的生成信息，例如标记使用和完成原因。
 
 ```
 llm_chain.generate(input_list)
 
 ```
 
-
-
-
-
-
-
-
 ```
-LLMResult(generations=[[Generation(text='\n\nSocktastic!', generation_info={'finish_reason': 'stop', 'logprobs': None})], [Generation(text='\n\nTechCore Solutions.', generation_info={'finish_reason': 'stop', 'logprobs': None})], [Generation(text='\n\nFootwear Factory.', generation_info={'finish_reason': 'stop', 'logprobs': None})]], llm_output={'token_usage': {'prompt_tokens': 36, 'total_tokens': 55, 'completion_tokens': 19}, 'model_name': 'text-davinci-003'})
+LLMResult(generations=[[Generation(text='  Socktastic!', generation_info={'finish_reason': 'stop', 'logprobs': None})], [Generation(text='  TechCore Solutions.', generation_info={'finish_reason': 'stop', 'logprobs': None})], [Generation(text='  Footwear Factory.', generation_info={'finish_reason': 'stop', 'logprobs': None})]], llm_output={'token_usage': {'prompt_tokens': 36, 'total_tokens': 55, 'completion_tokens': 19}, 'model_name': 'text-davinci-003'})
 
 ```
 
-
-
-
-
-* `predict`
- is similar to
- `run`
- method except in 2 ways:
- 
-
-
-	+ Input key is specified as keyword argument instead of a Python dict
-	+ It supports multiple input keys.
-
-
-
-
-
-
+* `predict`与`run`方法类似，不同之处在于输入键是关键字参数而不是Python字典。
 
 ```
 # Single input example
@@ -168,26 +69,10 @@ llm_chain.predict(product="colorful socks")
 
 ```
 
-
-
-
-
-
-
+```
+'  Socktastic!'
 
 ```
-'\n\nSocktastic!'
-
-```
-
-
-
-
-
-
-
-
-
 
 ```
 # Multiple inputs example
@@ -200,58 +85,17 @@ llm_chain.predict(adjective="sad", subject="ducks")
 
 ```
 
-
-
-
-
-
-
-
 ```
-'\n\nQ: What did the duck say when his friend died?\nA: Quack, quack, goodbye.'
+'  Q: What did the duck say when his friend died?\nA: Quack, quack, goodbye.'
 
 ```
 
+解析输出[#](#parsing-the-outputs "Permalink to this headline")
+==========================================================
 
+默认情况下，即使底层`prompt`对象具有输出解析器，`LLMChain`也不会解析输出。如果您想在LLM输出上应用该输出解析器，请使用`predict_and_parse`代替`predict`和`apply_and_parse`代替`apply`。
 
-
-
-
-
-
- Parsing the outputs
- [#](#parsing-the-outputs "Permalink to this headline")
-=============================================================================
-
-
-
- By default,
- `LLMChain`
- does not parse the output even if the underlying
- `prompt`
- object has an output parser. If you would like to apply that output parser on the LLM output, use
- `predict_and_parse`
- instead of
- `predict`
- and
- `apply_and_parse`
- instead of
- `apply`
- .
- 
-
-
-
- With
- `predict`
- :
- 
-
-
-
-
-
-
+使用`predict`：
 
 ```
 from langchain.output_parsers import CommaSeparatedListOutputParser
@@ -265,72 +109,27 @@ llm_chain.predict()
 
 ```
 
-
-
-
-
-
-
-
 ```
-'\n\nRed, orange, yellow, green, blue, indigo, violet'
+'  Red, orange, yellow, green, blue, indigo, violet'
 
 ```
 
-
-
-
-
-
- With
- `predict_and_parser`
- :
- 
-
-
-
-
-
-
+使用`predict_and_parser`：
 
 ```
 llm_chain.predict_and_parse()
 
 ```
 
-
-
-
-
-
-
-
 ```
 ['Red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet']
 
 ```
 
+从字符串初始化[#](#initialize-from-string "Permalink to this headline")
+================================================================
 
-
-
-
-
-
-
- Initialize from string
- [#](#initialize-from-string "Permalink to this headline")
-===================================================================================
-
-
-
- You can also construct an LLMChain from a string template directly.
- 
-
-
-
-
-
-
+您还可以直接从字符串模板构建LLMChain。
 
 ```
 template = """Tell me a {adjective} joke about {subject}."""
@@ -338,35 +137,13 @@ llm_chain = LLMChain.from_string(llm=llm, template=template)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 llm_chain.predict(adjective="sad", subject="ducks")
 
 ```
 
-
-
-
-
-
-
+```
+'  Q: What did the duck say when his friend died?\nA: Quack, quack, goodbye.'
 
 ```
-'\n\nQ: What did the duck say when his friend died?\nA: Quack, quack, goodbye.'
-
-```
-
-
-
-
-
-
 

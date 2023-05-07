@@ -1,6 +1,6 @@
 
 
-本文介绍如何从URL列表中加载HTML文档，以便我们可以在下游使用。
+这涵盖了如何从URL列表中加载HTML文档，以便我们可以在下游使用。
 
 ```
  from langchain.document_loaders import UnstructuredURLLoader
@@ -25,15 +25,15 @@ data = loader.load()
 
 ```
 
-Selenium URL 加载器[#](#selenium-url-loader "永久链接到这个标题")
-=====================================================
+Selenium URL加载器[#](#selenium-url-loader "永久链接")
+===============================================
 
-本文介绍如何使用`SeleniumURLLoader`从URL列表中加载HTML文档。
+这涵盖了如何使用`SeleniumURLLoader`从URL列表中加载HTML文档。
 
-使用Selenium可以加载需要JavaScript渲染的页面。
+使用selenium可以加载需要JavaScript渲染的页面。
 
-设置[#](#setup "永久链接到这个标题")
--------------------------
+设置[#](#setup "永久链接")
+--------------------
 
 要使用`SeleniumURLLoader`，您需要安装`selenium`和`unstructured`。
 
@@ -60,15 +60,15 @@ data = loader.load()
 
 ```
 
-Playwright URL 加载器[#](#playwright-url-loader "永久链接到这个标题")
-=========================================================
+Playwright URL加载器[#](#playwright-url-loader "永久链接")
+===================================================
 
-本文介绍如何使用`PlaywrightURLLoader`从URL列表中加载HTML文档。
+这涵盖了如何使用`PlaywrightURLLoader`从URL列表中加载HTML文档。
 
-与Selenium类似，Playwright可以加载需要JavaScript渲染的页面。
+与Selenium的情况类似，Playwright允许我们加载需要JavaScript渲染的页面。
 
-设置[#](#id1 "永久链接到这个标题")
------------------------
+设置[#](#id1 "永久链接")
+------------------
 
 To use the `PlaywrightURLLoader`, you will need to install `playwright` and `unstructured`. Additionally, you will need to install the Playwright Chromium browser:
 

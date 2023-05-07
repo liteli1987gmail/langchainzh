@@ -1,20 +1,9 @@
 
 
+OpenAPI Chain[#](#openapi-chain "Permalink to this headline")
+=============================================================
 
- OpenAPI Chain
- [#](#openapi-chain "Permalink to this headline")
-=================================================================
-
-
-
- This notebook shows an example of using an OpenAPI chain to call an endpoint in natural language, and get back a response in natural language
- 
-
-
-
-
-
-
+本笔记本演示了使用OpenAPI链调用自然语言端点并返回自然语言响应的示例。
 
 ```
 from langchain.tools import OpenAPISpec, APIOperation
@@ -24,52 +13,20 @@ from langchain.llms import OpenAI
 
 ```
 
+加载规范[#](#load-the-spec "Permalink to this headline")
+----------------------------------------------------
 
-
-
-
-
-
- Load the spec
- [#](#load-the-spec "Permalink to this headline")
------------------------------------------------------------------
-
-
-
- Load a wrapper of the spec (so we can work with it more easily). You can load from a url or from a local file.
- 
-
-
-
-
-
-
+加载规范的包装器（以便我们可以更轻松地使用它）。您可以从URL或本地文件加载。
 
 ```
 spec = OpenAPISpec.from_url("https://www.klarna.com/us/shopping/public/openai/v0/api-docs/")
 
 ```
 
-
-
-
-
-
-
-
 ```
 Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 # Alternative loading from file
@@ -77,73 +34,31 @@ Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performan
 
 ```
 
+选择操作[#](#select-the-operation "Permalink to this headline")
+-----------------------------------------------------------
 
-
-
-
-
-
-
- Select the Operation
- [#](#select-the-operation "Permalink to this headline")
--------------------------------------------------------------------------------
-
-
-
- In order to provide a focused on modular chain, we create a chain specifically only for one of the endpoints. Here we get an API operation from a specified endpoint and method.
- 
-
-
-
-
-
-
+为了提供一个专注于模块化链，我们专门为其中一个端点创建了一个链。在这里，我们从指定的端点和方法获取API操作。
 
 ```
 operation = APIOperation.from_openapi_spec(spec, '/public/openai/v0/products', "get")
 
 ```
 
+构建链[#](#construct-the-chain "Permalink to this headline")
+---------------------------------------------------------
 
+现在我们可以构建与之交互的链。为了构建这样的链，我们将传入：
 
+- 操作端点
 
+- 请求包装器（可用于处理身份验证等）
 
-
-
-
- Construct the chain
- [#](#construct-the-chain "Permalink to this headline")
------------------------------------------------------------------------------
-
-
-
- We can now construct a chain to interact with it. In order to construct such a chain, we will pass in:
- 
-
-
-1. The operation endpoint
-2. A requests wrapper (can be used to handle authentication, etc)
-3. The LLM to use to interact with it
-
-
-
-
-
-
+- 与之交互的LLM
 
 ```
 llm = OpenAI() # Load a Language Model
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 chain = OpenAPIEndpointChain.from_api_operation(
@@ -156,45 +71,28 @@ chain = OpenAPIEndpointChain.from_api_operation(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 output = chain("whats the most expensive shirt?")
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new OpenAPIEndpointChain chain...
-
 
 > Entering new APIRequesterChain chain...
 Prompt after formatting:
 You are a helpful AI Assistant. Please provide JSON arguments to agentFunc() based on the user's instructions.
 
 API_SCHEMA: ```typescript
-/\* API for fetching Klarna product information \*/
+/* API for fetching Klarna product information */
 type productsUsingGET = (_: {
-/\* A precise query that matches one very small category or product that needs to be searched for to find the products the user is looking for. If the user explicitly stated what they want, use that as a query. The query is as specific as possible to the product name or category mentioned by the user in its singular form, and don't contain any clarifiers like latest, newest, cheapest, budget, premium, expensive or similar. The query is always taken from the latest topic, if there is a new topic a new query is started. \*/
+/* A precise query that matches one very small category or product that needs to be searched for to find the products the user is looking for. If the user explicitly stated what they want, use that as a query. The query is as specific as possible to the product name or category mentioned by the user in its singular form, and don't contain any clarifiers like latest, newest, cheapest, budget, premium, expensive or similar. The query is always taken from the latest topic, if there is a new topic a new query is started. */
  q: string,
-/\* number of products returned \*/
+/* number of products returned */
  size?: number,
-/\* (Optional) Minimum price in local currency for the product searched for. Either explicitly stated by the user or implicitly inferred from a combination of the user's request and the kind of product searched for. \*/
+/* (Optional) Minimum price in local currency for the product searched for. Either explicitly stated by the user or implicitly inferred from a combination of the user's request and the kind of product searched for. */
  min_price?: number,
-/\* (Optional) Maximum price in local currency for the product searched for. Either explicitly stated by the user or implicitly inferred from a combination of the user's request and the kind of product searched for. \*/
+/* (Optional) Maximum price in local currency for the product searched for. Either explicitly stated by the user or implicitly inferred from a combination of the user's request and the kind of product searched for. */
  max_price?: number,
 }) => any;
 ```
@@ -227,11 +125,9 @@ Begin
 -----
 ARGS:
 
-
 > Finished chain.
 {"q": "shirt", "size": 1, "max_price": null}
 {"products":[{"name":"Burberry Check Poplin Shirt","url":"https://www.klarna.com/us/shopping/pl/cl10001/3201810981/Clothing/Burberry-Check-Poplin-Shirt/?utm_source=openai&ref-site=openai_plugin","price":"$360.00","attributes":["Material:Cotton","Target Group:Man","Color:Gray,Blue,Beige","Properties:Pockets","Pattern:Checkered"]}]}
-
 
 > Entering new APIResponderChain chain...
 Prompt after formatting:
@@ -240,7 +136,6 @@ You attempted to call an API, which resulted in:
 API_RESPONSE: {"products":[{"name":"Burberry Check Poplin Shirt","url":"https://www.klarna.com/us/shopping/pl/cl10001/3201810981/Clothing/Burberry-Check-Poplin-Shirt/?utm_source=openai&ref-site=openai_plugin","price":"$360.00","attributes":["Material:Cotton","Target Group:Man","Color:Gray,Blue,Beige","Properties:Pockets","Pattern:Checkered"]}]}
 
 USER_COMMENT: "whats the most expensive shirt?"
-
 
 If the API_RESPONSE can answer the USER_COMMENT respond with the following markdown json block:
 Response: ```json
@@ -257,7 +152,6 @@ You MUST respond as a markdown json code block. The person you are responding to
 Begin:
 ---
 
-
 > Finished chain.
 The most expensive shirt in the API response is the Burberry Check Poplin Shirt, which costs $360.00.
 
@@ -265,27 +159,11 @@ The most expensive shirt in the API response is the Burberry Check Poplin Shirt,
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # View intermediate steps
 output["intermediate_steps"]
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'request_args': '{"q": "shirt", "size": 1, "max_price": null}',
@@ -293,27 +171,10 @@ output["intermediate_steps"]
 
 ```
 
+返回原始响应[#](#return-raw-response "链接到此标题的永久链接")
+---------------------------------------------
 
-
-
-
-
-
-
- Return raw response
- [#](#return-raw-response "Permalink to this headline")
------------------------------------------------------------------------------
-
-
-
- We can also run this chain without synthesizing the response. This will have the effect of just returning the raw API output.
- 
-
-
-
-
-
-
+我们也可以运行这个链式操作而不合成响应。这样做的效果就是返回原始的API输出。
 
 ```
 chain = OpenAPIEndpointChain.from_api_operation(
@@ -327,45 +188,28 @@ chain = OpenAPIEndpointChain.from_api_operation(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 output = chain("whats the most expensive shirt?")
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new OpenAPIEndpointChain chain...
-
 
 > Entering new APIRequesterChain chain...
 Prompt after formatting:
 You are a helpful AI Assistant. Please provide JSON arguments to agentFunc() based on the user's instructions.
 
 API_SCHEMA: ```typescript
-/\* API for fetching Klarna product information \*/
+/* API for fetching Klarna product information */
 type productsUsingGET = (_: {
-/\* A precise query that matches one very small category or product that needs to be searched for to find the products the user is looking for. If the user explicitly stated what they want, use that as a query. The query is as specific as possible to the product name or category mentioned by the user in its singular form, and don't contain any clarifiers like latest, newest, cheapest, budget, premium, expensive or similar. The query is always taken from the latest topic, if there is a new topic a new query is started. \*/
+/* A precise query that matches one very small category or product that needs to be searched for to find the products the user is looking for. If the user explicitly stated what they want, use that as a query. The query is as specific as possible to the product name or category mentioned by the user in its singular form, and don't contain any clarifiers like latest, newest, cheapest, budget, premium, expensive or similar. The query is always taken from the latest topic, if there is a new topic a new query is started. */
  q: string,
-/\* number of products returned \*/
+/* number of products returned */
  size?: number,
-/\* (Optional) Minimum price in local currency for the product searched for. Either explicitly stated by the user or implicitly inferred from a combination of the user's request and the kind of product searched for. \*/
+/* (Optional) Minimum price in local currency for the product searched for. Either explicitly stated by the user or implicitly inferred from a combination of the user's request and the kind of product searched for. */
  min_price?: number,
-/\* (Optional) Maximum price in local currency for the product searched for. Either explicitly stated by the user or implicitly inferred from a combination of the user's request and the kind of product searched for. \*/
+/* (Optional) Maximum price in local currency for the product searched for. Either explicitly stated by the user or implicitly inferred from a combination of the user's request and the kind of product searched for. */
  max_price?: number,
 }) => any;
 ```
@@ -398,7 +242,6 @@ Begin
 -----
 ARGS:
 
-
 > Finished chain.
 {"q": "shirt", "max_price": null}
 {"products":[{"name":"Burberry Check Poplin Shirt","url":"https://www.klarna.com/us/shopping/pl/cl10001/3201810981/Clothing/Burberry-Check-Poplin-Shirt/?utm_source=openai&ref-site=openai_plugin","price":"$360.00","attributes":["Material:Cotton","Target Group:Man","Color:Gray,Blue,Beige","Properties:Pockets","Pattern:Checkered"]},{"name":"Burberry Vintage Check Cotton Shirt - Beige","url":"https://www.klarna.com/us/shopping/pl/cl359/3200280807/Children-s-Clothing/Burberry-Vintage-Check-Cotton-Shirt-Beige/?utm_source=openai&ref-site=openai_plugin","price":"$229.02","attributes":["Material:Cotton,Elastane","Color:Beige","Model:Boy","Pattern:Checkered"]},{"name":"Burberry Vintage Check Stretch Cotton Twill Shirt","url":"https://www.klarna.com/us/shopping/pl/cl10001/3202342515/Clothing/Burberry-Vintage-Check-Stretch-Cotton-Twill-Shirt/?utm_source=openai&ref-site=openai_plugin","price":"$309.99","attributes":["Material:Elastane/Lycra/Spandex,Cotton","Target Group:Woman","Color:Beige","Properties:Stretch","Pattern:Checkered"]},{"name":"Burberry Somerton Check Shirt - Camel","url":"https://www.klarna.com/us/shopping/pl/cl10001/3201112728/Clothing/Burberry-Somerton-Check-Shirt-Camel/?utm_source=openai&ref-site=openai_plugin","price":"$450.00","attributes":["Material:Elastane/Lycra/Spandex,Cotton","Target Group:Man","Color:Beige"]},{"name":"Magellan Outdoors Laguna Madre Solid Short Sleeve Fishing Shirt","url":"https://www.klarna.com/us/shopping/pl/cl10001/3203102142/Clothing/Magellan-Outdoors-Laguna-Madre-Solid-Short-Sleeve-Fishing-Shirt/?utm_source=openai&ref-site=openai_plugin","price":"$19.99","attributes":["Material:Polyester,Nylon","Target Group:Man","Color:Red,Pink,White,Blue,Purple,Beige,Black,Green","Properties:Pockets","Pattern:Solid Color"]}]}
@@ -407,26 +250,10 @@ ARGS:
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 output
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'instructions': 'whats the most expensive shirt?',
@@ -436,68 +263,26 @@ output
 
 ```
 
+示例POST消息[#](#example-post-message "链接到此标题的永久链接")
+------------------------------------------------
 
-
-
-
-
-
-
- Example POST message
- [#](#example-post-message "Permalink to this headline")
--------------------------------------------------------------------------------
-
-
-
- For this demo, we will interact with the speak API.
- 
-
-
-
-
-
-
+对于本演示，我们将与speak API交互。
 
 ```
 spec = OpenAPISpec.from_url("https://api.speak.com/openapi.yaml")
 
 ```
 
-
-
-
-
-
-
-
 ```
 Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
 Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 operation = APIOperation.from_openapi_spec(spec, '/v1/public/openai/explain-task', "post")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 llm = OpenAI()
@@ -510,30 +295,13 @@ chain = OpenAPIEndpointChain.from_api_operation(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 output = chain("How would ask for more tea in Delhi?")
 
 ```
 
-
-
-
-
-
-
-
 ```
 > Entering new OpenAPIEndpointChain chain...
-
 
 > Entering new APIRequesterChain chain...
 Prompt after formatting:
@@ -541,15 +309,15 @@ You are a helpful AI Assistant. Please provide JSON arguments to agentFunc() bas
 
 API_SCHEMA: ```typescript
 type explainTask = (_: {
-/\* Description of the task that the user wants to accomplish or do. For example, "tell the waiter they messed up my order" or "compliment someone on their shirt" \*/
+/* Description of the task that the user wants to accomplish or do. For example, "tell the waiter they messed up my order" or "compliment someone on their shirt" */
  task_description?: string,
-/\* The foreign language that the user is learning and asking about. The value can be inferred from question - for example, if the user asks "how do i ask a girl out in mexico city", the value should be "Spanish" because of Mexico City. Always use the full name of the language (e.g. Spanish, French). \*/
+/* The foreign language that the user is learning and asking about. The value can be inferred from question - for example, if the user asks "how do i ask a girl out in mexico city", the value should be "Spanish" because of Mexico City. Always use the full name of the language (e.g. Spanish, French). */
  learning_language?: string,
-/\* The user's native language. Infer this value from the language the user asked their question in. Always use the full name of the language (e.g. Spanish, French). \*/
+/* The user's native language. Infer this value from the language the user asked their question in. Always use the full name of the language (e.g. Spanish, French). */
  native_language?: string,
-/\* A description of any additional context in the user's question that could affect the explanation - e.g. setting, scenario, situation, tone, speaking style and formality, usage notes, or any other qualifiers. \*/
+/* A description of any additional context in the user's question that could affect the explanation - e.g. setting, scenario, situation, tone, speaking style and formality, usage notes, or any other qualifiers. */
  additional_context?: string,
-/\* Full text of the user's question. \*/
+/* Full text of the user's question. */
  full_query?: string,
 }) => any;
 ```
@@ -582,20 +350,17 @@ Begin
 -----
 ARGS:
 
-
 > Finished chain.
 {"task_description": "ask for more tea", "learning_language": "Hindi", "native_language": "English", "full_query": "How would I ask for more tea in Delhi?"}
-{"explanation":"<what-to-say language=\"Hindi\" context=\"None\">\nऔर चाय लाओ। (Aur chai lao.) \n</what-to-say>\n\n<alternatives context=\"None\">\n1. \"चाय थोड़ी ज्यादा मिल सकती है?\" \*(Chai thodi zyada mil sakti hai? - Polite, asking if more tea is available)\*\n2. \"मुझे महसूस हो रहा है कि मुझे कुछ अन्य प्रकार की चाय पीनी चाहिए।\" \*(Mujhe mehsoos ho raha hai ki mujhe kuch anya prakar ki chai peeni chahiye. - Formal, indicating a desire for a different type of tea)\*\n3. \"क्या मुझे or cup में milk/tea powder मिल सकता है?\" \*(Kya mujhe aur cup mein milk/tea powder mil sakta hai? - Very informal/casual tone, asking for an extra serving of milk or tea powder)\*\n</alternatives>\n\n<usage-notes>\nIn India and Indian culture, serving guests with food and beverages holds great importance in hospitality. You will find people always offering drinks like water or tea to their guests as soon as they arrive at their house or office.\n</usage-notes>\n\n<example-convo language=\"Hindi\">\n<context>At home during breakfast.</context>\nPreeti: सर, क्या main aur cups chai lekar aaun? (Sir,kya main aur cups chai lekar aaun? - Sir, should I get more tea cups?)\nRahul: हां,बिल्कुल। और चाय की मात्रा में भी थोड़ा सा इजाफा करना। (Haan,bilkul. Aur chai ki matra mein bhi thoda sa eejafa karna. - Yes, please. And add a little extra in the quantity of tea as well.)\n</example-convo>\n\n\*[Report an issue or leave feedback](https://speak.com/chatgpt?rid=d4mcapbkopo164pqpbk321oc})\*","extra_response_instructions":"Use all information in the API response and fully render all Markdown.\nAlways end your response with a link to report an issue or leave feedback on the plugin."}
-
+{"explanation":"<what-to-say language=\"Hindi\" context=\"None\">\nऔर चाय लाओ। (Aur chai lao.) \n</what-to-say>  <alternatives context=\"None\">\n1. \"चाय थोड़ी ज्यादा मिल सकती है?\" *(Chai thodi zyada mil sakti hai? - Polite, asking if more tea is available)*\n2. \"मुझे महसूस हो रहा है कि मुझे कुछ अन्य प्रकार की चाय पीनी चाहिए।\" *(Mujhe mehsoos ho raha hai ki mujhe kuch anya prakar ki chai peeni chahiye. - Formal, indicating a desire for a different type of tea)*\n3. \"क्या मुझे or cup में milk/tea powder मिल सकता है?\" *(Kya mujhe aur cup mein milk/tea powder mil sakta hai? - Very informal/casual tone, asking for an extra serving of milk or tea powder)*\n</alternatives>  <usage-notes>\nIn India and Indian culture, serving guests with food and beverages holds great importance in hospitality. You will find people always offering drinks like water or tea to their guests as soon as they arrive at their house or office.\n</usage-notes>  <example-convo language=\"Hindi\">\n<context>At home during breakfast.</context>\nPreeti: सर, क्या main aur cups chai lekar aaun? (Sir,kya main aur cups chai lekar aaun? - Sir, should I get more tea cups?)\nRahul: हां,बिल्कुल। और चाय की मात्रा में भी थोड़ा सा इजाफा करना। (Haan,bilkul. Aur chai ki matra mein bhi thoda sa eejafa karna. - Yes, please. And add a little extra in the quantity of tea as well.)\n</example-convo>  *[Report an issue or leave feedback](https://speak.com/chatgpt?rid=d4mcapbkopo164pqpbk321oc})*","extra_response_instructions":"Use all information in the API response and fully render all Markdown.\nAlways end your response with a link to report an issue or leave feedback on the plugin."}
 
 > Entering new APIResponderChain chain...
 Prompt after formatting:
 You are a helpful AI assistant trained to answer user queries from API responses.
 You attempted to call an API, which resulted in:
-API_RESPONSE: {"explanation":"<what-to-say language=\"Hindi\" context=\"None\">\nऔर चाय लाओ। (Aur chai lao.) \n</what-to-say>\n\n<alternatives context=\"None\">\n1. \"चाय थोड़ी ज्यादा मिल सकती है?\" \*(Chai thodi zyada mil sakti hai? - Polite, asking if more tea is available)\*\n2. \"मुझे महसूस हो रहा है कि मुझे कुछ अन्य प्रकार की चाय पीनी चाहिए।\" \*(Mujhe mehsoos ho raha hai ki mujhe kuch anya prakar ki chai peeni chahiye. - Formal, indicating a desire for a different type of tea)\*\n3. \"क्या मुझे or cup में milk/tea powder मिल सकता है?\" \*(Kya mujhe aur cup mein milk/tea powder mil sakta hai? - Very informal/casual tone, asking for an extra serving of milk or tea powder)\*\n</alternatives>\n\n<usage-notes>\nIn India and Indian culture, serving guests with food and beverages holds great importance in hospitality. You will find people always offering drinks like water or tea to their guests as soon as they arrive at their house or office.\n</usage-notes>\n\n<example-convo language=\"Hindi\">\n<context>At home during breakfast.</context>\nPreeti: सर, क्या main aur cups chai lekar aaun? (Sir,kya main aur cups chai lekar aaun? - Sir, should I get more tea cups?)\nRahul: हां,बिल्कुल। और चाय की मात्रा में भी थोड़ा सा इजाफा करना। (Haan,bilkul. Aur chai ki matra mein bhi thoda sa eejafa karna. - Yes, please. And add a little extra in the quantity of tea as well.)\n</example-convo>\n\n\*[Report an issue or leave feedback](https://speak.com/chatgpt?rid=d4mcapbkopo164pqpbk321oc})\*","extra_response_instructions":"Use all information in the API response and fully render all Markdown.\nAlways end your response with a link to report an issue or leave feedback on the plugin."}
+API_RESPONSE: {"explanation":"<what-to-say language=\"Hindi\" context=\"None\">\nऔर चाय लाओ। (Aur chai lao.) \n</what-to-say>  <alternatives context=\"None\">\n1. \"चाय थोड़ी ज्यादा मिल सकती है?\" *(Chai thodi zyada mil sakti hai? - Polite, asking if more tea is available)*\n2. \"मुझे महसूस हो रहा है कि मुझे कुछ अन्य प्रकार की चाय पीनी चाहिए।\" *(Mujhe mehsoos ho raha hai ki mujhe kuch anya prakar ki chai peeni chahiye. - Formal, indicating a desire for a different type of tea)*\n3. \"क्या मुझे or cup में milk/tea powder मिल सकता है?\" *(Kya mujhe aur cup mein milk/tea powder mil sakta hai? - Very informal/casual tone, asking for an extra serving of milk or tea powder)*\n</alternatives>  <usage-notes>\nIn India and Indian culture, serving guests with food and beverages holds great importance in hospitality. You will find people always offering drinks like water or tea to their guests as soon as they arrive at their house or office.\n</usage-notes>  <example-convo language=\"Hindi\">\n<context>At home during breakfast.</context>\nPreeti: सर, क्या main aur cups chai lekar aaun? (Sir,kya main aur cups chai lekar aaun? - Sir, should I get more tea cups?)\nRahul: हां,बिल्कुल। और चाय की मात्रा में भी थोड़ा सा इजाफा करना। (Haan,bilkul. Aur chai ki matra mein bhi thoda sa eejafa karna. - Yes, please. And add a little extra in the quantity of tea as well.)\n</example-convo>  *[Report an issue or leave feedback](https://speak.com/chatgpt?rid=d4mcapbkopo164pqpbk321oc})*","extra_response_instructions":"Use all information in the API response and fully render all Markdown.\nAlways end your response with a link to report an issue or leave feedback on the plugin."}
 
 USER_COMMENT: "How would ask for more tea in Delhi?"
-
 
 If the API_RESPONSE can answer the USER_COMMENT respond with the following markdown json block:
 Response: ```json
@@ -612,7 +377,6 @@ You MUST respond as a markdown json code block.
 Begin:
 ---
 
-
 > Finished chain.
 In Delhi you can ask for more tea by saying 'Chai thodi zyada mil sakti hai?'
 
@@ -620,38 +384,15 @@ In Delhi you can ask for more tea by saying 'Chai thodi zyada mil sakti hai?'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 # Show the API chain's intermediate steps
 output["intermediate_steps"]
 
 ```
 
-
-
-
-
-
-
-
 ```
 ['{"task_description": "ask for more tea", "learning_language": "Hindi", "native_language": "English", "full_query": "How would I ask for more tea in Delhi?"}',
  '{"explanation":"<what-to-say language=\\"Hindi\\" context=\\"None\\">\\nऔर चाय लाओ। (Aur chai lao.) \\n</what-to-say>\\n\\n<alternatives context=\\"None\\">\\n1. \\"चाय थोड़ी ज्यादा मिल सकती है?\\" *(Chai thodi zyada mil sakti hai? - Polite, asking if more tea is available)*\\n2. \\"मुझे महसूस हो रहा है कि मुझे कुछ अन्य प्रकार की चाय पीनी चाहिए।\\" *(Mujhe mehsoos ho raha hai ki mujhe kuch anya prakar ki chai peeni chahiye. - Formal, indicating a desire for a different type of tea)*\\n3. \\"क्या मुझे or cup में milk/tea powder मिल सकता है?\\" *(Kya mujhe aur cup mein milk/tea powder mil sakta hai? - Very informal/casual tone, asking for an extra serving of milk or tea powder)*\\n</alternatives>\\n\\n<usage-notes>\\nIn India and Indian culture, serving guests with food and beverages holds great importance in hospitality. You will find people always offering drinks like water or tea to their guests as soon as they arrive at their house or office.\\n</usage-notes>\\n\\n<example-convo language=\\"Hindi\\">\\n<context>At home during breakfast.</context>\\nPreeti: सर, क्या main aur cups chai lekar aaun? (Sir,kya main aur cups chai lekar aaun? - Sir, should I get more tea cups?)\\nRahul: हां,बिल्कुल। और चाय की मात्रा में भी थोड़ा सा इजाफा करना। (Haan,bilkul. Aur chai ki matra mein bhi thoda sa eejafa karna. - Yes, please. And add a little extra in the quantity of tea as well.)\\n</example-convo>\\n\\n*[Report an issue or leave feedback](https://speak.com/chatgpt?rid=d4mcapbkopo164pqpbk321oc})*","extra_response_instructions":"Use all information in the API response and fully render all Markdown.\\nAlways end your response with a link to report an issue or leave feedback on the plugin."}']
 
 ```
-
-
-
-
-
-
-
 

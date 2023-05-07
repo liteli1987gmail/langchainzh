@@ -1,20 +1,20 @@
 
 
-PDF[#](#pdf "此标题的永久链接")
-=======================
+PDF[#](#pdf "Permalink to this headline")
+=========================================
 
 > 
-> [可移植文档格式（PDF）](https://en.wikipedia.org/wiki/PDF)，标准化为ISO 32000，是由Adobe于1992年开发的一种文件格式，可以以独立于应用软件、硬件和操作系统的方式呈现文档，包括文本格式和图片。
+> [便携式文档格式（PDF）](https://en.wikipedia.org/wiki/PDF)，标准化为ISO 32000，是Adobe于1992年开发的一种文件格式，用于以与应用软件、硬件和操作系统无关的方式呈现文档，包括文本格式和图像。
 > 
 > 
 > 
 
-本文介绍如何将`PDF`文档加载到我们下游使用的文档格式中。
+这涵盖了如何将`PDF`文档加载到我们下游使用的文档格式中。
 
-使用PyPDF[#](#using-pypdf "此标题的永久链接")
------------------------------------
+使用PyPDF[#](#using-pypdf "Permalink to this headline")
+-----------------------------------------------------
 
-使用`pypdf`加载PDF文档到文档数组中，其中每个文档包含页面内容和元数据，以及`page`页码。
+使用`pypdf`将PDF加载到文档数组中，其中每个文档包含页面内容和元数据，包括`page`页数。
 
 ```
 !pip install pypdf
@@ -39,9 +39,9 @@ Document(page_content='LayoutParser : A Uni\x0ced Toolkit for Deep\nLearning Bas
 
 ```
 
-这种方法的优点是可以按页码检索文档。
+这种方法的优点是可以通过页数检索文档。
 
-我们想使用`OpenAIEmbeddings`，因此我们必须获取OpenAI API密钥。
+我们想使用`OpenAIEmbeddings`，所以必须获取OpenAI API密钥。
 
 ```
 import os
@@ -74,10 +74,10 @@ T h e  C o r e  L a y o u t P a r s e r  L i b r a r yOCR ModuleSt or age & Visu
 
 ```
 
-使用MathPix[#](#using-mathpix "此标题的永久链接")
----------------------------------------
+使用MathPix[#](#using-mathpix "Permalink to this headline")
+---------------------------------------------------------
 
-灵感来自Daniel Gross的<https://gist.github.com/danielgross/3ab4104e14faccc12b49200843adab21>
+受 Daniel Gross 的启发，<https://gist.github.com/danielgross/3ab4104e14faccc12b49200843adab21>
 
 ```
 from langchain.document_loaders import MathpixPDFLoader
@@ -94,8 +94,8 @@ data = loader.load()
 
 ```
 
-使用Unstructured[#](#using-unstructured "这个标题的永久链接")
---------------------------------------------------
+使用非结构化数据[#](#using-unstructured "本标题的永久链接")
+-------------------------------------------
 
 ```
 from langchain.document_loaders import UnstructuredPDFLoader
@@ -112,9 +112,9 @@ data = loader.load()
 
 ```
 
-### 保留元素[#](#retain-elements "这个标题的永久链接")
+### 保留元素[#](#retain-elements "本标题的永久链接")
 
-在底层，Unstructured为不同的文本块创建不同的“元素”。默认情况下，我们将它们组合在一起，但您可以通过指定`mode="elements"`轻松保留它们的分离。
+在幕后，非结构化数据为不同的文本块创建不同的“元素”。默认情况下，我们会将它们组合在一起，但是您可以通过指定 `mode="elements"` 来轻松保留它们之间的分隔。
 
 ```
 loader = UnstructuredPDFLoader("example_data/layout-parser-paper.pdf", mode="elements")
@@ -136,11 +136,11 @@ Document(page_content='LayoutParser: A Uniﬁed Toolkit for Deep\nLearning Based
 
 ```
 
-### 使用Unstructured获取远程PDF[#](#fetching-remote-pdfs-using-unstructured "这个标题的永久链接")
+### 使用非结构化数据获取远程 PDF[#](#fetching-remote-pdfs-using-unstructured "本标题的永久链接")
 
-这涵盖了如何将在线pdf加载到我们可以在下游使用的文档格式中。这可以用于各种在线pdf网站，如https://open.umn.edu/opentextbooks/textbooks/和https://arxiv.org/archive/。
+介绍如何将在线 PDF 加载到我们可以在下游使用的文档格式中。这可用于各种在线 PDF 站点，例如 https://open.umn.edu/opentextbooks/textbooks/ 和 https://arxiv.org/archive/
 
-注意：所有其他PDF加载程序也可以用于获取远程PDF，但 `OnlinePDFLoader` 是一个遗留函数，专门与 `UnstructuredPDFLoader` 一起使用。
+注意：所有其他pdf加载程序也可以用于获取远程pdf，但是`OnlinePDFLoader`是一个旧的函数，专门用于`UnstructuredPDFLoader`。
 
 ```
 from langchain.document_loaders import OnlinePDFLoader
@@ -167,8 +167,8 @@ print(data)
 
 ```
 
-使用PDFMiner[#](#using-pdfminer "此标题的永久链接")
------------------------------------------
+使用PDFMiner[#](#using-pdfminer "本节标题的永久链接")
+------------------------------------------
 
 ```
 from langchain.document_loaders import PDFMinerLoader
@@ -185,8 +185,8 @@ data = loader.load()
 
 ```
 
-使用PyPDFium2[#](#using-pypdfium2 "此标题的永久链接")
-===========================================
+使用PyPDFium2[#](#using-pypdfium2 "本节标题的永久链接")
+============================================
 
 ```
 from langchain.document_loaders import PyPDFium2Loader
@@ -203,10 +203,10 @@ data = loader.load()
 
 ```
 
-使用PDFMiner生成HTML文本[#](#using-pdfminer-to-generate-html-text "此标题的永久链接")
------------------------------------------------------------------------
+使用PDFMiner生成HTML文本[#](#using-pdfminer-to-generate-html-text "本节标题的永久链接")
+------------------------------------------------------------------------
 
-这对于将文本语义地分块为各个部分非常有帮助，因为输出的HTML内容可以通过 `BeautifulSoup` 解析，以获取有关字体大小、页码、PDF标题/页脚等更多结构化和丰富信息。
+这对于将文本按语义分块成部分非常有帮助，因为输出的html内容可以通过`BeautifulSoup`解析，以获取有关字体大小、页码、pdf页眉/页脚等更结构化和丰富的信息。
 
 ```
 from langchain.document_loaders import PDFMinerPDFasHTMLLoader
@@ -300,10 +300,10 @@ Document(page_content='Recently, various DL models and datasets have been develo
 
 ```
 
-使用PyMuPDF[#](#using-pymupdf "此标题的永久链接")
----------------------------------------
+使用PyMuPDF[#](#using-pymupdf "本节标题的永久链接")
+----------------------------------------
 
-这是PDF解析选项中最快的，包含有关PDF及其页面的详细元数据，并返回每个页面一个文档。
+这是PDF解析选项中最快的，包含有关PDF及其页面的详细元数据，以及每页返回一个文档。
 
 ```
 from langchain.document_loaders import PyMuPDFLoader
@@ -330,12 +330,12 @@ Document(page_content='LayoutParser: A Uniﬁed Toolkit for Deep\nLearning Based
 
 ```
 
-此外，您可以将[PyMuPDF文档](https://pymupdf.readthedocs.io/en/latest/app1#plain-text/)中的任何选项作为关键字参数传递给`load`调用，并将其传递给`get_text()`调用。
+此外，在`load`调用中，您可以将[PyMuPDF文档](https://pymupdf.readthedocs.io/en/latest/app1#plain-text/)中的任何选项作为关键字参数传递，并将其传递给`get_text()`调用。
 
-PyPDF目录[#](#pypdf-directory "链接到此标题的永久链接")
-------------------------------------------
+PyPDF目录[#](#pypdf-directory "Permalink to this headline")
+---------------------------------------------------------
 
-从目录中加载PDF
+从目录加载PDF文件
 
 ```
 from langchain.document_loaders import PyPDFDirectoryLoader

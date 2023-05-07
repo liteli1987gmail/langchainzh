@@ -1,20 +1,9 @@
 
 
+Postgres聊天消息历史记录[#](#postgres-chat-message-history "此标题的永久链接")
+==============================================================
 
- Postgres Chat Message History
- [#](#postgres-chat-message-history "Permalink to this headline")
-=================================================================================================
-
-
-
- This notebook goes over how to use Postgres to store chat message history.
- 
-
-
-
-
-
-
+本笔记本介绍如何使用Postgres存储聊天消息历史记录。
 
 ```
 from langchain.memory import PostgresChatMessageHistory
@@ -27,23 +16,8 @@ history.add_ai_message("whats up?")
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 history.messages
 
 ```
-
-
-
-
-
-
 

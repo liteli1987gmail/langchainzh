@@ -1,24 +1,13 @@
 
 
+NLTK文本分割器[#](#nltk-text-splitter "本标题的永久链接")
+============================================
 
- NLTK Text Splitter
- [#](#nltk-text-splitter "Permalink to this headline")
-===========================================================================
+我们不仅可以根据“  ”进行分割，还可以使用NLTK根据分词器进行分割。
 
+- 文本如何分割：由NLTK进行
 
-
- Rather than just splitting on “\n\n”, we can use NLTK to split based on tokenizers.
- 
-
-
-1. How the text is split: by NLTK
-2. How the chunk size is measured: by length function passed in (defaults to number of characters)
-
-
-
-
-
-
+- 如何测量块大小：通过传递的长度函数进行测量（默认为字符数）
 
 ```
 # This is a long document we can split up.
@@ -27,42 +16,17 @@ with open('../../../state_of_the_union.txt') as f:
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 from langchain.text_splitter import NLTKTextSplitter
 text_splitter = NLTKTextSplitter(chunk_size=1000)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 texts = text_splitter.split_text(state_of_the_union)
 print(texts[0])
 
 ```
-
-
-
-
-
-
-
 
 ```
 Madam Speaker, Madam Vice President, our First Lady and Second Gentleman.
@@ -100,10 +64,4 @@ From President Zelenskyy to every Ukrainian, their fearlessness, their courage, 
 Groups of citizens blocking tanks with their bodies.
 
 ```
-
-
-
-
-
-
 

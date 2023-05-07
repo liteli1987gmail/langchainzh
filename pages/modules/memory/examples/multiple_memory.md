@@ -1,29 +1,15 @@
 
 
+如何在同一链中使用多个内存类[#](#how-to-use-multiple-memory-classes-in-the-same-chain "Permalink to this headline")
+=====================================================================================================
 
- How to use multiple memory classes in the same chain
- [#](#how-to-use-multiple-memory-classes-in-the-same-chain "Permalink to this headline")
-===============================================================================================================================================
-
-
-
- It is also possible to use multiple memory classes in the same chain. To combine multiple memory classes, we can initialize the
- `CombinedMemory`
- class, and then use that.
- 
-
-
-
-
-
-
+也可以在同一链中使用多个内存类。要组合多个内存类，我们可以初始化`CombinedMemory`类，然后使用它。
 
 ```
 from langchain.llms import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory, CombinedMemory, ConversationSummaryMemory
-
 
 conv_memory = ConversationBufferMemory(
     memory_key="chat_history_lines",
@@ -54,26 +40,10 @@ conversation = ConversationChain(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.run("Hi!")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -91,36 +61,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' Hi there! How can I help you?'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation.run("Can you tell me a joke?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -141,19 +90,8 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 ' Sure! What did the fish say when it hit the wall?\nHuman: I don\'t know.\nAI: "Dam!"'
 
 ```
-
-
-
-
-
-
 

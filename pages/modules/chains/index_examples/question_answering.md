@@ -1,42 +1,16 @@
 
 
+问答
+==
 
- Question Answering
- [#](#question-answering "Permalink to this headline")
-===========================================================================
+[#](#question-answering "本标题的永久链接")
+本笔记本教你如何使用LangChain在文档列表上进行问答。它介绍了四种不同的链式处理方式：`stuff`、`map_reduce`、`refine`、`map_rerank`。有关这些链式处理方式的更详细解释，请参见[此处](https://docs.langchain.com/docs/components/chains/index_related_chains)。
 
+准备数据
+----
 
-
- This notebook walks through how to use LangChain for question answering over a list of documents. It covers four different types of chains:
- `stuff`
- ,
- `map_reduce`
- ,
- `refine`
- ,
- `map_rerank`
- . For a more in depth explanation of what these chain types are, see
- [here](https://docs.langchain.com/docs/components/chains/index_related_chains) 
- .
- 
-
-
-
-
- Prepare Data
- [#](#prepare-data "Permalink to this headline")
----------------------------------------------------------------
-
-
-
- First we prepare the data. For this example we do similarity search over a vector database, but these documents could be fetched in any manner (the point of this notebook to highlight what to do AFTER you fetch the documents).
- 
-
-
-
-
-
-
+[#](#prepare-data "本标题的永久链接")
+首先，我们准备数据。对于此示例，我们在向量数据库上进行相似性搜索，但是这些文档可以以任何方式获取（本笔记本的重点是强调在获取文档后要做什么）。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -48,15 +22,6 @@ from langchain.indexes.vectorstore import VectorstoreIndexCreator
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 with open("../../state_of_the_union.txt") as f:
     state_of_the_union = f.read()
@@ -67,26 +32,10 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 docsearch = Chroma.from_texts(texts, embeddings, metadatas=[{"source": str(i)} for i in range(len(texts))]).as_retriever()
 
 ```
-
-
-
-
-
-
-
 
 ```
 Running Chroma using direct local API.
@@ -94,29 +43,11 @@ Using DuckDB in-memory for database. Data will be transient.
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 query = "What did the president say about Justice Breyer"
 docs = docsearch.get_relevant_documents(query)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.chains.question_answering import load_qa_chain
@@ -124,27 +55,11 @@ from langchain.llms import OpenAI
 
 ```
 
+快速入门
+----
 
-
-
-
-
-
-
- Quickstart
- [#](#quickstart "Permalink to this headline")
------------------------------------------------------------
-
-
-
- If you just want to get started as quickly as possible, this is the recommended way to do it:
- 
-
-
-
-
-
-
+[#](#quickstart "本标题的永久链接")
+如果您只想尽快开始，这是推荐的方法：
 
 ```
 chain = load_qa_chain(OpenAI(temperature=0), chain_type="stuff")
@@ -153,62 +68,22 @@ chain.run(input_documents=docs, question=query)
 
 ```
 
-
-
-
-
-
-
-
 ```
 ' The president said that Justice Breyer has dedicated his life to serve the country and thanked him for his service.'
 
 ```
 
+如果您想更多地控制和理解正在发生的事情，请参见下面的信息。
 
+stuff 链 [#](#the-stuff-chain "永久链接到此标题")
+----------------------------------------
 
-
-
-
- If you want more control and understanding over what is happening, please see the information below.
- 
-
-
-
-
-
- The
- `stuff`
- Chain
- [#](#the-stuff-chain "Permalink to this headline")
--------------------------------------------------------------------------
-
-
-
- This sections shows results of using the
- `stuff`
- Chain to do question answering.
- 
-
-
-
-
-
-
+本节显示使用 stuff 链进行问题解答的结果。
 
 ```
 chain = load_qa_chain(OpenAI(temperature=0), chain_type="stuff")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Justice Breyer"
@@ -216,36 +91,14 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'output_text': ' The president said that Justice Breyer has dedicated his life to serve the country and thanked him for his service.'}
 
 ```
 
+**自定义提示**
 
-
-
-
-
-**Custom Prompts** 
-
-
-
-
- You can also use your own prompts with this chain. In this example, we will respond in Italian.
- 
-
-
-
-
-
-
+您还可以使用自己的提示来使用此链。在此示例中，我们将以意大利语回答。
 
 ```
 prompt_template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer.
@@ -262,57 +115,20 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'output_text': ' Il presidente ha detto che Justice Breyer ha dedicato la sua vita a servire questo paese e ha ricevuto una vasta gamma di supporto.'}
 
 ```
 
+map_reduce 链 [#](#the-map-reduce-chain "永久链接到此标题")
+---------------------------------------------------
 
-
-
-
-
-
-
- The
- `map_reduce`
- Chain
- [#](#the-map-reduce-chain "Permalink to this headline")
-------------------------------------------------------------------------------------
-
-
-
- This sections shows results of using the
- `map_reduce`
- Chain to do question answering.
- 
-
-
-
-
-
-
+本节显示使用 map_reduce 链进行问题解答的结果。
 
 ```
 chain = load_qa_chain(OpenAI(temperature=0), chain_type="map_reduce")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Justice Breyer"
@@ -320,66 +136,24 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'output_text': ' The president said that Justice Breyer is an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court, and thanked him for his service.'}
 
 ```
 
+**中间步骤**
 
-
-
-
-
-**Intermediate Steps** 
-
-
-
-
- We can also return the intermediate steps for
- `map_reduce`
- chains, should we want to inspect them. This is done with the
- `return_map_steps`
- variable.
- 
-
-
-
-
-
-
+如果我们想要检查中间步骤，我们还可以返回 `map_reduce` 链的中间步骤。这是通过 `return_map_steps` 变量完成的。
 
 ```
 chain = load_qa_chain(OpenAI(temperature=0), chain_type="map_reduce", return_map_steps=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'intermediate_steps': [' "Tonight, I’d like to honor someone who has dedicated his life to serve this country: Justice Stephen Breyer—an Army veteran, Constitutional scholar, and retiring Justice of the United States Supreme Court. Justice Breyer, thank you for your service."',
@@ -390,24 +164,9 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
+**自定义提示**
 
-
-
-
-
-**Custom Prompts** 
-
-
-
-
- You can also use your own prompts with this chain. In this example, we will respond in Italian.
- 
-
-
-
-
-
-
+您还可以使用自己的提示来使用此链。在此示例中，我们将以意大利语回答。
 
 ```
 question_prompt_template = """Use the following portion of a long document to see if any of the text is relevant to answer the question. 
@@ -435,13 +194,6 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'intermediate_steps': ["\nStasera vorrei onorare qualcuno che ha dedicato la sua vita a servire questo paese: il giustizia Stephen Breyer - un veterano dell'esercito, uno studioso costituzionale e un giustizia in uscita della Corte Suprema degli Stati Uniti. Giustizia Breyer, grazie per il tuo servizio.",
   '\nNessun testo pertinente.',
@@ -451,67 +203,24 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
+**批处理大小**
 
-
-
-
-
-**Batch Size** 
-
-
-
-
- When using the
- `map_reduce`
- chain, one thing to keep in mind is the batch size you are using during the map step. If this is too high, it could cause rate limiting errors. You can control this by setting the batch size on the LLM used. Note that this only applies for LLMs with this parameter. Below is an example of doing so:
- 
-
-
-
-
+使用`map_reduce`链时，需要注意map步骤中使用的批处理大小。如果太高，可能会导致速率限制错误。您可以通过设置使用的LLM的批处理大小来控制这一点。请注意，这仅适用于具有此参数的LLM。以下是一个示例：
 
 ```
 llm = OpenAI(batch_size=5, temperature=0)
 
 ```
 
+`Refine`链[#](#the-refine-chain "此标题的永久链接")
+------------------------------------------
 
-
-
-
-
- The
- `refine`
- Chain
- [#](#the-refine-chain "Permalink to this headline")
----------------------------------------------------------------------------
-
-
-
- This sections shows results of using the
- `refine`
- Chain to do question answering.
- 
-
-
-
-
-
-
+本节展示了使用`refine`链来进行问答的结果。
 
 ```
 chain = load_qa_chain(OpenAI(temperature=0), chain_type="refine")
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Justice Breyer"
@@ -519,94 +228,37 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
-{'output_text': '\n\nThe president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice, as well as for his support of the Equality Act and his commitment to protecting the rights of LGBTQ+ Americans. He also praised Justice Breyer for his role in helping to pass the Bipartisan Infrastructure Law, which he said would be the most sweeping investment to rebuild America in history and would help the country compete for the jobs of the 21st Century.'}
+{'output_text': '  The president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice, as well as for his support of the Equality Act and his commitment to protecting the rights of LGBTQ+ Americans. He also praised Justice Breyer for his role in helping to pass the Bipartisan Infrastructure Law, which he said would be the most sweeping investment to rebuild America in history and would help the country compete for the jobs of the 21st Century.'}
 
 ```
 
+**中间步骤**
 
-
-
-
-
-**Intermediate Steps** 
-
-
-
-
- We can also return the intermediate steps for
- `refine`
- chains, should we want to inspect them. This is done with the
- `return_refine_steps`
- variable.
- 
-
-
-
-
-
-
+如果需要检查中间步骤，我们还可以返回`refine`链的中间步骤。这是通过`return_refine_steps`变量完成的。
 
 ```
 chain = load_qa_chain(OpenAI(temperature=0), chain_type="refine", return_refine_steps=True)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'intermediate_steps': ['\nThe president said that he wanted to honor Justice Breyer for his dedication to serving the country and his legacy of excellence.',
   '\nThe president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice.',
-  '\n\nThe president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice, as well as for his support of the Equality Act and his commitment to protecting the rights of LGBTQ+ Americans.',
-  '\n\nThe president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice, as well as for his support of the Equality Act and his commitment to protecting the rights of LGBTQ+ Americans. He also praised Justice Breyer for his role in helping to pass the Bipartisan Infrastructure Law, which is the most sweeping investment to rebuild America in history.'],
- 'output_text': '\n\nThe president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice, as well as for his support of the Equality Act and his commitment to protecting the rights of LGBTQ+ Americans. He also praised Justice Breyer for his role in helping to pass the Bipartisan Infrastructure Law, which is the most sweeping investment to rebuild America in history.'}
+  '  The president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice, as well as for his support of the Equality Act and his commitment to protecting the rights of LGBTQ+ Americans.',
+  '  The president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice, as well as for his support of the Equality Act and his commitment to protecting the rights of LGBTQ+ Americans. He also praised Justice Breyer for his role in helping to pass the Bipartisan Infrastructure Law, which is the most sweeping investment to rebuild America in history.'],
+ 'output_text': '  The president said that he wanted to honor Justice Breyer for his dedication to serving the country, his legacy of excellence, and his commitment to advancing liberty and justice, as well as for his support of the Equality Act and his commitment to protecting the rights of LGBTQ+ Americans. He also praised Justice Breyer for his role in helping to pass the Bipartisan Infrastructure Law, which is the most sweeping investment to rebuild America in history.'}
 
 ```
 
+**自定义提示**
 
-
-
-
-
-**Custom Prompts** 
-
-
-
-
- You can also use your own prompts with this chain. In this example, we will respond in Italian.
- 
-
-
-
-
-
-
+您还可以在此链中使用自己的提示。在本例中，我们将用意大利语回答。
 
 ```
 refine_prompt_template = (
@@ -626,7 +278,6 @@ refine_prompt = PromptTemplate(
     template=refine_prompt_template,
 )
 
-
 initial_qa_template = (
     "Context information is below. \n"
     "---------------------\n"
@@ -644,61 +295,24 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'intermediate_steps': ['\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese e ha reso omaggio al suo servizio.',
   "\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha reso omaggio al suo servizio e ha sostenuto la nomina di una top litigatrice in pratica privata, un ex difensore pubblico federale e una famiglia di insegnanti e agenti di polizia delle scuole pubbliche. Ha anche sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere e la risoluzione del sistema di immigrazione.",
   "\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha reso omaggio al suo servizio e ha sostenuto la nomina di una top litigatrice in pratica privata, un ex difensore pubblico federale e una famiglia di insegnanti e agenti di polizia delle scuole pubbliche. Ha anche sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere, la risoluzione del sistema di immigrazione, la protezione degli americani LGBTQ+ e l'approvazione dell'Equality Act. Ha inoltre sottolineato l'importanza di lavorare insieme per sconfiggere l'epidemia di oppiacei.",
-  "\n\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha reso omaggio al suo servizio e ha sostenuto la nomina di una top litigatrice in pratica privata, un ex difensore pubblico federale e una famiglia di insegnanti e agenti di polizia delle scuole pubbliche. Ha anche sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere, la risoluzione del sistema di immigrazione, la protezione degli americani LGBTQ+ e l'approvazione dell'Equality Act. Ha inoltre sottolineato l'importanza di lavorare insieme per sconfiggere l'epidemia di oppiacei e per investire in America, educare gli americani, far crescere la forza lavoro e costruire l'economia dal"],
- 'output_text': "\n\nIl presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha reso omaggio al suo servizio e ha sostenuto la nomina di una top litigatrice in pratica privata, un ex difensore pubblico federale e una famiglia di insegnanti e agenti di polizia delle scuole pubbliche. Ha anche sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere, la risoluzione del sistema di immigrazione, la protezione degli americani LGBTQ+ e l'approvazione dell'Equality Act. Ha inoltre sottolineato l'importanza di lavorare insieme per sconfiggere l'epidemia di oppiacei e per investire in America, educare gli americani, far crescere la forza lavoro e costruire l'economia dal"}
+  "  Il presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha reso omaggio al suo servizio e ha sostenuto la nomina di una top litigatrice in pratica privata, un ex difensore pubblico federale e una famiglia di insegnanti e agenti di polizia delle scuole pubbliche. Ha anche sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere, la risoluzione del sistema di immigrazione, la protezione degli americani LGBTQ+ e l'approvazione dell'Equality Act. Ha inoltre sottolineato l'importanza di lavorare insieme per sconfiggere l'epidemia di oppiacei e per investire in America, educare gli americani, far crescere la forza lavoro e costruire l'economia dal"],
+ 'output_text': "  Il presidente ha detto che Justice Breyer ha dedicato la sua vita al servizio di questo paese, ha reso omaggio al suo servizio e ha sostenuto la nomina di una top litigatrice in pratica privata, un ex difensore pubblico federale e una famiglia di insegnanti e agenti di polizia delle scuole pubbliche. Ha anche sottolineato l'importanza di avanzare la libertà e la giustizia attraverso la sicurezza delle frontiere, la risoluzione del sistema di immigrazione, la protezione degli americani LGBTQ+ e l'approvazione dell'Equality Act. Ha inoltre sottolineato l'importanza di lavorare insieme per sconfiggere l'epidemia di oppiacei e per investire in America, educare gli americani, far crescere la forza lavoro e costruire l'economia dal"}
 
 ```
 
+`map-rerank`链[#](#the-map-rerank-chain "此标题的永久链接")
+--------------------------------------------------
 
-
-
-
-
-
-
- The
- `map-rerank`
- Chain
- [#](#the-map-rerank-chain "Permalink to this headline")
------------------------------------------------------------------------------------
-
-
-
- This sections shows results of using the
- `map-rerank`
- Chain to do question answering with sources.
- 
-
-
-
-
-
-
+本节展示了使用`map-rerank`链来进行带有来源的问答的结果。
 
 ```
 chain = load_qa_chain(OpenAI(temperature=0), chain_type="map_rerank", return_intermediate_steps=True)
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 query = "What did the president say about Justice Breyer"
@@ -706,52 +320,20 @@ results = chain({"input_documents": docs, "question": query}, return_only_output
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 results["output_text"]
 
 ```
-
-
-
-
-
-
-
 
 ```
 ' The President thanked Justice Breyer for his service and honored him for dedicating his life to serve the country.'
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 results["intermediate_steps"]
 
 ```
-
-
-
-
-
-
-
 
 ```
 [{'answer': ' The President thanked Justice Breyer for his service and honored him for dedicating his life to serve the country.',
@@ -762,30 +344,15 @@ results["intermediate_steps"]
 
 ```
 
+**自定义提示**
 
-
-
-
-
-**Custom Prompts** 
-
-
-
-
- You can also use your own prompts with this chain. In this example, we will respond in Italian.
- 
-
-
-
-
-
-
+您还可以使用自己的提示来使用此链。在此示例中，我们将用意大利语回复。
 
 ```
 from langchain.output_parsers import RegexParser
 
 output_parser = RegexParser(
-    regex=r"(.\*?)\nScore: (.\*)",
+    regex=r"(.*?)\nScore: (.*)",
     output_keys=["answer", "score"],
 )
 
@@ -817,13 +384,6 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
 
 ```
 
-
-
-
-
-
-
-
 ```
 {'intermediate_steps': [{'answer': ' Il presidente ha detto che Justice Breyer ha dedicato la sua vita a servire questo paese.',
    'score': '100'},
@@ -834,11 +394,4 @@ chain({"input_documents": docs, "question": query}, return_only_outputs=True)
  'output_text': ' Il presidente ha detto che Justice Breyer ha dedicato la sua vita a servire questo paese.'}
 
 ```
-
-
-
-
-
-
-
 

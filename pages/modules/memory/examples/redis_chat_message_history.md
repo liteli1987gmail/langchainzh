@@ -1,20 +1,9 @@
 
 
+Redis聊天消息历史记录[#](#redis-chat-message-history "Permalink to this headline")
+==========================================================================
 
- Redis Chat Message History
- [#](#redis-chat-message-history "Permalink to this headline")
-===========================================================================================
-
-
-
- This notebook goes over how to use Redis to store chat message history.
- 
-
-
-
-
-
-
+本笔记本介绍如何使用Redis存储聊天消息历史记录。
 
 ```
 from langchain.memory import RedisChatMessageHistory
@@ -27,36 +16,14 @@ history.add_ai_message("whats up?")
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 history.messages
 
 ```
-
-
-
-
-
-
-
 
 ```
 [AIMessage(content='whats up?', additional_kwargs={}),
  HumanMessage(content='hi!', additional_kwargs={})]
 
 ```
-
-
-
-
-
-
 

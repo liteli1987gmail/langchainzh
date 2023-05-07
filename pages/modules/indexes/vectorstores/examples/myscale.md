@@ -1,63 +1,23 @@
-
-
-
- MyScale
- [#](#myscale "Permalink to this headline")
-=====================================================
-
-
+MyScale
+===
 
 > 
-> 
-> 
-> [MyScale](https://docs.myscale.com/en/overview/) 
->  is a cloud-based database optimized for AI applications and solutions, built on the open-source
->  [ClickHouse](https://github.com/ClickHouse/ClickHouse) 
->  .
->  
-> 
+> [MyScale](https://docs.myscale.com/zh/overview/) 是一种云端数据库，专门为 AI 应用和解决方案进行优化，构建在开源的 [ClickHouse](https://github.com/ClickHouse/ClickHouse) 上。
 > 
 > 
 > 
 
+这个笔记本展示了如何使用与 `MyScale` 向量数据库相关的功能。
 
-
- This notebook shows how to use functionality related to the
- `MyScale`
- vector database.
- 
-
-
-
-
- Setting up envrionments
- [#](#setting-up-envrionments "Permalink to this headline")
--------------------------------------------------------------------------------------
-
-
-
-
-
-
+设置环境[#](#setting-up-envrionments "跳转到这个标题的链接")
+----------------------------------------------
 
 ```
 !pip install clickhouse-connect
 
 ```
 
-
-
-
-
-
- We want to use OpenAIEmbeddings so we have to get the OpenAI API Key.
- 
-
-
-
-
-
-
+我们想要使用 OpenAIEmbeddings，因此需要获得 OpenAI API 密钥。
 
 ```
 import os
@@ -67,62 +27,17 @@ os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
 
 ```
 
+有两种设置 myscale 索引参数的方式。
 
+- 环境变量
 
+在运行应用之前，请使用 `export` 设置环境变量：
+`export MYSCALE_URL='<your-endpoints-url>' MYSCALE_PORT=<your-endpoints-port> MYSCALE_USERNAME=<your-username> MYSCALE_PASSWORD=<your-password> ...`
 
+您可以在我们的SaaS上轻松找到您的帐户、密码和其他信息。有关详细信息，请参见[此文档](https://docs.myscale.com/en/cluster-management/)
 
-
- There are two ways to set up parameters for myscale index.
- 
-
-
-1. Environment Variables
- 
-
-
-
- Before you run the app, please set the environment variable with
- `export`
- :
- `export
- 
-
- MYSCALE_URL='<your-endpoints-url>'
- 
-
- MYSCALE_PORT=<your-endpoints-port>
- 
-
- MYSCALE_USERNAME=<your-username>
- 
-
- MYSCALE_PASSWORD=<your-password>
- 
-
- ...`
-
-
-
-
- You can easily find your account, password and other info on our SaaS. For details please refer to
- [this document](https://docs.myscale.com/en/cluster-management/) 
-
-
-
-
- Every attributes under
- `MyScaleSettings`
- can be set with prefix
- `MYSCALE_`
- and is case insensitive.
-2. Create
- `MyScaleSettings`
- object with parameters
- 
-
-
-
-
+`MyScaleSettings`下的每个属性都可以使用前缀`MYSCALE_`设置，并且不区分大小写。
+2. Create `MyScaleSettings` object with parameters
 
 ```
 from langchain.vectorstores import MyScale, MyScaleSettings
@@ -132,12 +47,6 @@ index.add_documents(...)
 
 ```
 
-
-
-
-
-
-
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
@@ -145,15 +54,6 @@ from langchain.vectorstores import MyScale
 from langchain.document_loaders import TextLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -166,15 +66,6 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 for d in docs:
     d.metadata = {'some': 'metadata'}
@@ -185,38 +76,15 @@ docs = docsearch.similarity_search(query)
 
 ```
 
-
-
-
-
-
-
-
 ```
 Inserting data...: 100%|██████████| 42/42 [00:18<00:00,  2.21it/s]
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(docs[0].page_content)
 
 ```
-
-
-
-
-
-
-
 
 ```
 As Frances Haugen, who is here with us tonight, has shown, we must hold social media platforms accountable for the national experiment they’re conducting on our children for profit. 
@@ -237,64 +105,22 @@ Our troops in Iraq and Afghanistan faced many dangers.
 
 ```
 
-
-
-
-
-
-
-
- Get connection info and data schema
- [#](#get-connection-info-and-data-schema "Permalink to this headline")
--------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
+Get connection info and data schema[#](#get-connection-info-and-data-schema "Permalink to this headline")
+---------------------------------------------------------------------------------------------------------
 
 ```
 print(str(docsearch))
 
 ```
 
+Filtering[#](#filtering "Permalink to this headline")
+-----------------------------------------------------
 
+You can have direct access to myscale SQL where statement. You can write `WHERE` clause following standard SQL.
 
+**NOTE**: Please be aware of SQL injection, this interface must not be directly called by end-user.
 
-
-
-
-
- Filtering
- [#](#filtering "Permalink to this headline")
----------------------------------------------------------
-
-
-
- You can have direct access to myscale SQL where statement. You can write
- `WHERE`
- clause following standard SQL.
- 
-
-
-
-**NOTE** 
- : Please be aware of SQL injection, this interface must not be directly called by end-user.
- 
-
-
-
- If you custimized your
- `column_map`
- under your setting, you search with filter like this:
- 
-
-
-
-
-
-
+If you custimized your `column_map` under your setting, you search with filter like this:
 
 ```
 from langchain.vectorstores import MyScale, MyScaleSettings
@@ -314,26 +140,10 @@ docsearch = MyScale.from_documents(docs, embeddings)
 
 ```
 
-
-
-
-
-
-
-
 ```
 Inserting data...: 100%|██████████| 42/42 [00:15<00:00,  2.69it/s]
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 meta = docsearch.metadata_column
@@ -344,13 +154,6 @@ for d, dist in output:
 
 ```
 
-
-
-
-
-
-
-
 ```
 0.252379834651947 {'doc_id': 6, 'some': ''} And I’m taking robus...
 0.25022566318511963 {'doc_id': 1, 'some': ''} Groups of citizens b...
@@ -359,32 +162,11 @@ for d, dist in output:
 
 ```
 
-
-
-
-
-
-
-
- Deleting your data
- [#](#deleting-your-data "Permalink to this headline")
----------------------------------------------------------------------------
-
-
-
-
-
-
+Deleting your data[#](#deleting-your-data "Permalink to this headline")
+-----------------------------------------------------------------------
 
 ```
 docsearch.drop()
 
 ```
-
-
-
-
-
-
-
 

@@ -1,57 +1,54 @@
 
 
+文本分割器[#](#text-splitters "到标题的永久链接")
+====================================
 
-文字分割器
-===================================================================
+注意
 
-[Conceptual Guide](https://docs.langchain.com/docs/components/indexing/text-splitter) 
+[概念指南](https://docs.langchain.com/docs/components/indexing/text-splitters)
 
+当您想处理长篇文本时，需要将文本拆分为块。
+尽管听起来很简单，但这里存在着很多潜在的复杂性。理想情况下，您想将语义相关的文本片段保持在一起。什么是“语义相关”可能取决于文本类型。
+本笔记本展示了几种方法来实现这一点。
 
+在高层次上，文本分割器的工作如下：
 
+- 将文本拆分为小的、语义上有意义的块（通常是句子）。
 
-当您想要处理较长的文本时，有必要将该文本分成若干小块。尽管这听起来很简单，但这里存在许多潜在的复杂性。理想情况下，您希望将语义相关的文本片段放在一起。“语义相关”的含义取决于文本的类型。这本笔记本展示了几种实现这一目标的方法。
+- 开始将这些小块组合成一个较大的块，直到达到一定的大小（由某些函数测量）。
 
-在高级别上，文本分割器的工作原理如下:
+- 一旦达到该大小，将该块作为自己的文本块，然后开始创建一个新的文本块，其中包含一些重叠（以保持文本块之间的上下文）。
 
-把文本分成小块，语义上有意义的块(通常是句子)。
+这意味着您可以沿两个不同的轴自定义文本分割器：
 
-开始将这些小块组合成一个更大的块，直到达到一定的大小(通过某个函数衡量)。
+- 文本如何拆分
 
-一旦你达到了这个大小，让这个块成为它自己的文本块，然后开始创建一个有一些重叠的新文本块(保持块之间的上下文)。
+- 如何测量块大小
 
-这意味着有两个不同的轴，可以沿着它们自定义文本分割器:
+有关默认文本分割器和通用功能的介绍请参见：
 
-1. 文本是如何分割的
+* [入门指南](text_splitters/getting_started）
 
-2. 块大小是如何度量的
+我们还为所有支持的文本分割器编写了文档。
+请参见下面的列表。
 
-有关默认文本分割器和通用功能的介绍，请参见:
- 
+* [字符文本分割器](text_splitters/examples/character_text_splitter）
 
+* [Hugging Face长度函数](text_splitters/examples/huggingface_length_function）
 
+* [Latex文本分割器](text_splitters/examples/latex）
 
-* [Getting Started](text_splitters/getting_started)
+* [Markdown文本分割器](text_splitters/examples/markdown）
 
+* [NLTK文本分割器](text_splitters/examples/nltk）
 
+* [Python 代码文本分割器](text_splitters/examples/python）
 
+* [递归字符文本分割器](text_splitters/examples/recursive_text_splitter）
 
-我们还提供了支持的所有类型的文本分割器的文档。请参阅下面的列表。
- 
+* [Spacy 文本分割器](text_splitters/examples/spacy）
 
+* [tiktoken (OpenAI) 长度函数](text_splitters/examples/tiktoken）
 
-
-* [Character Text Splitter](text_splitters/examples/character_text_splitter)
-* [Hugging Face Length Function](text_splitters/examples/huggingface_length_function)
-* [Latex Text Splitter](text_splitters/examples/latex)
-* [Markdown Text Splitter](text_splitters/examples/markdown)
-* [NLTK Text Splitter](text_splitters/examples/nltk)
-* [Python Code Text Splitter](text_splitters/examples/python)
-* [RecursiveCharacterTextSplitter](text_splitters/examples/recursive_text_splitter)
-* [Spacy Text Splitter](text_splitters/examples/spacy)
-* [tiktoken (OpenAI) Length Function](text_splitters/examples/tiktoken)
-* [TiktokenText Splitter](text_splitters/examples/tiktoken_splitter)
-
-
-
-
+* [Tiktoken 文本分割器](text_splitters/examples/tiktoken_splitter）
 

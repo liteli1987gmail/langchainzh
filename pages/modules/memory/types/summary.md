@@ -1,27 +1,11 @@
 
 
+对话摘要记忆[#](#conversationsummarymemory "此标题的永久链接")
+================================================
 
- ConversationSummaryMemory
- [#](#conversationsummarymemory "Permalink to this headline")
-=========================================================================================
+现在让我们来看一下使用稍微复杂的记忆类型 - `对话摘要记忆`。这种记忆类型可以创建关于对话的摘要，有助于从对话中概括信息。
 
-
-
- Now let’s take a look at using a slightly more complex type of memory -
- `ConversationSummaryMemory`
- . This type of memory creates a summary of the conversation over time. This can be useful for condensing information from the conversation over time.
- 
-
-
-
- Let’s first explore the basic functionality of this type of memory.
- 
-
-
-
-
-
-
+首先，让我们探索该类型记忆的基本功能。
 
 ```
 from langchain.memory import ConversationSummaryMemory
@@ -29,60 +13,23 @@ from langchain.llms import OpenAI
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory = ConversationSummaryMemory(llm=OpenAI(temperature=0))
 memory.save_context({"input": "hi"}, {"ouput": "whats up"})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory.load_memory_variables({})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'history': '\nThe human greets the AI, to which the AI responds.'}
 
 ```
 
-
-
-
-
-
- We can also get the history as a list of messages (this is useful if you are using this with a chat model).
- 
-
-
-
-
-
-
+我们还可以将历史记录作为消息列表获取（如果您正在与聊天模型一起使用，则此功能非常有用）。
 
 ```
 memory = ConversationSummaryMemory(llm=OpenAI(temperature=0), return_messages=True)
@@ -90,47 +37,17 @@ memory.save_context({"input": "hi"}, {"ouput": "whats up"})
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 memory.load_memory_variables({})
 
 ```
-
-
-
-
-
-
-
 
 ```
 {'history': [SystemMessage(content='\nThe human greets the AI, to which the AI responds.', additional_kwargs={})]}
 
 ```
 
-
-
-
-
-
- We can also utilize the
- `predict_new_summary`
- method directly.
- 
-
-
-
-
-
-
+我们还可以直接使用`predict_new_summary`方法。
 
 ```
 messages = memory.chat_memory.messages
@@ -139,40 +56,15 @@ memory.predict_new_summary(messages, previous_summary)
 
 ```
 
-
-
-
-
-
-
-
 ```
 '\nThe human greets the AI, to which the AI responds.'
 
 ```
 
+在链式操作中使用[#](#using-in-a-chain "此标题的永久链接")
+-----------------------------------------
 
-
-
-
-
-
- Using in a chain
- [#](#using-in-a-chain "Permalink to this headline")
------------------------------------------------------------------------
-
-
-
- Let’s walk through an example of using this in a chain, again setting
- `verbose=True`
- so we can see the prompt.
- 
-
-
-
-
-
-
+让我们通过一个示例来演示如何在链式操作中使用它，再次设置`verbose=True`以便查看提示。
 
 ```
 from langchain.llms import OpenAI
@@ -186,13 +78,6 @@ conversation_with_summary = ConversationChain(
 conversation_with_summary.predict(input="Hi, what's up?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -208,36 +93,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Hi there! I'm doing great. I'm currently helping a customer with a technical issue. How about you?"
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation_with_summary.predict(input="Tell me more about it!")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -254,36 +118,15 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " Sure! The customer is having trouble with their computer not connecting to the internet. I'm helping them troubleshoot the issue and figure out what the problem is. So far, we've tried resetting the router and checking the network settings, but the issue still persists. We're currently looking into other possible solutions."
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 conversation_with_summary.predict(input="Very cool -- what is the scope of the project?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 > Entering new ConversationChain chain...
@@ -300,20 +143,8 @@ AI:
 
 ```
 
-
-
-
-
-
 ```
 " The scope of the project is to troubleshoot the customer's computer issue and find a solution that will allow them to connect to the internet. We are currently exploring different possibilities and have already tried resetting the router and checking the network settings, but the issue still persists."
 
 ```
-
-
-
-
-
-
-
 

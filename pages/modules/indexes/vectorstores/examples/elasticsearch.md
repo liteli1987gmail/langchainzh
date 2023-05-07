@@ -1,52 +1,22 @@
 
-
-
- ElasticSearch
- [#](#elasticsearch "Permalink to this headline")
-=================================================================
-
-
-
-[Elasticsearch](https://www.elastic.co/elasticsearch/) 
- is a distributed, RESTful search and analytics engine. It provides a distributed, multitenant-capable full-text search engine with an HTTP web interface and schema-free JSON documents.
- 
-
-
-
- This notebook shows how to use functionality related to the
- `Elasticsearch`
- database.
- 
+Elasticsearch
+=====
 
 
 
 
- Installation
- [#](#installation "Permalink to this headline")
----------------------------------------------------------------
+[Elasticsearch](https://www.elastic.co/elasticsearch/)是一个分布式、RESTful搜索和分析引擎。它提供了一个分布式、多租户能力的全文搜索引擎，具有HTTP网络接口和无模式JSON文档。
 
+此笔记本演示了如何使用与`Elasticsearch`数据库相关的功能。
 
+安装[#](#installation "此标题的永久链接")
+-------------------------------
 
- Check out
- [Elasticsearch installation instructions](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch) 
- .
- 
+请查看[Elasticsearch安装说明](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch）。
 
+要连接到不需要登录凭据的Elasticsearch实例，请将Elasticsearch URL和索引名称与嵌入对象一起传递给构造函数。
 
-
- To connect to an Elasticsearch instance that does not require
-login credentials, pass the Elasticsearch URL and index name along with the
-embedding object to the constructor.
- 
-
-
-
- Example:
- 
-
-
-
-
+示例：
 
 ```
         from langchain import ElasticVectorSearch
@@ -61,29 +31,18 @@ embedding object to the constructor.
 
 ```
 
-
-
-
- To connect to an Elasticsearch instance that requires login credentials,
+To connect to an Elasticsearch instance that requires login credentials,
 including Elastic Cloud, use the Elasticsearch URL format
 https://username:password@es_host:9243. For example, to connect to Elastic
 Cloud, create the Elasticsearch URL with the required authentication details and
 pass it to the ElasticVectorSearch constructor as the named parameter
 elasticsearch_url.
- 
 
-
-
- You can obtain your Elastic Cloud URL and login credentials by logging in to the
+You can obtain your Elastic Cloud URL and login credentials by logging in to the
 Elastic Cloud console at https://cloud.elastic.co, selecting your deployment, and
 navigating to the “Deployments” page.
- 
 
-
-
- To obtain your Elastic Cloud password for the default “elastic” user:
- 
-
+To obtain your Elastic Cloud password for the default “elastic” user:
 
 1. Log in to the Elastic Cloud console at https://cloud.elastic.co
 2. Go to “Security” > “Users”
@@ -91,20 +50,10 @@ navigating to the “Deployments” page.
 4. Click “Reset password”
 5. Follow the prompts to reset the password
 
-
-
- Format for Elastic Cloud URLs is
+Format for Elastic Cloud URLs is
 https://username:password@cluster_id.region_id.gcp.cloud.es.io:9243.
- 
 
-
-
- Example:
- 
-
-
-
-
+Example:
 
 ```
         from langchain import ElasticVectorSearch
@@ -122,26 +71,10 @@ https://username:password@cluster_id.region_id.gcp.cloud.es.io:9243.
 
 ```
 
-
-
-
-
-
-
-
 ```
 !pip install elasticsearch
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import os
@@ -151,24 +84,8 @@ os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
 
 ```
 
-
-
-
-
-
-
-
-
-
- Example
- [#](#example "Permalink to this headline")
------------------------------------------------------
-
-
-
-
-
-
+Example[#](#example "Permalink to this headline")
+-------------------------------------------------
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -177,15 +94,6 @@ from langchain.vectorstores import ElasticVectorSearch
 from langchain.document_loaders import TextLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -198,15 +106,6 @@ embeddings = OpenAIEmbeddings()
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 db = ElasticVectorSearch.from_documents(docs, embeddings, elasticsearch_url="http://localhost:9200")
 
@@ -215,26 +114,10 @@ docs = db.similarity_search(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(docs[0].page_content)
 
 ```
-
-
-
-
-
-
-
 
 ```
 In state after state, new laws have been passed, not only to suppress the vote, but to subvert entire elections. 
@@ -250,11 +133,4 @@ One of the most serious constitutional responsibilities a President has is nomin
 And I did that 4 days ago, when I nominated Circuit Court of Appeals Judge Ketanji Brown Jackson. One of our nation’s top legal minds, who will continue Justice Breyer’s legacy of excellence.
 
 ```
-
-
-
-
-
-
-
 

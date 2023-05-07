@@ -1,50 +1,18 @@
 
 
+松果[#](#pinecone "此标题的永久链接")
+===========================
 
- Pinecone
- [#](#pinecone "Permalink to this headline")
-=======================================================
+[松果](https://docs.pinecone.io/docs/overview)是一个功能广泛的向量数据库。
 
+本笔记本展示了如何使用与`松果`向量数据库相关的功能。
 
-
-[Pinecone](https://docs.pinecone.io/docs/overview) 
- is a vector database with broad functionality.
- 
-
-
-
- This notebook shows how to use functionality related to the
- `Pinecone`
- vector database.
- 
-
-
-
- To use Pinecone, you must have an API key.
-Here are the
- [installation instructions](https://docs.pinecone.io/docs/quickstart) 
- .
- 
-
-
-
-
-
-
+要使用松果，您必须拥有API密钥。以下是[安装说明](https://docs.pinecone.io/docs/quickstart)。
 
 ```
 !pip install pinecone-client
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import os
@@ -54,49 +22,17 @@ PINECONE_API_KEY = getpass.getpass('Pinecone API Key:')
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 PINECONE_ENV = getpass.getpass('Pinecone Environment:')
 
 ```
 
-
-
-
-
-
- We want to use
- `OpenAIEmbeddings`
- so we have to get the OpenAI API Key.
- 
-
-
-
-
-
-
+我们想使用`OpenAI Embeddings`，因此我们必须获取OpenAI API密钥。
 
 ```
 os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -105,15 +41,6 @@ from langchain.vectorstores import Pinecone
 from langchain.document_loaders import TextLoader
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 from langchain.document_loaders import TextLoader
@@ -125,15 +52,6 @@ docs = text_splitter.split_documents(documents)
 embeddings = OpenAIEmbeddings()
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 import pinecone 
@@ -156,23 +74,8 @@ docs = docsearch.similarity_search(query)
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 print(docs[0].page_content)
 
 ```
-
-
-
-
-
-
 

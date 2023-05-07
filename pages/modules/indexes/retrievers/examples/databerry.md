@@ -1,53 +1,21 @@
 
 
+数据莓[#](#databerry "跳转到此标题的固定链接")
+================================
 
- Databerry
- [#](#databerry "Permalink to this headline")
-=========================================================
+这个笔记本展示了如何使用[数据莓](https://www.databerry.ai/)的检索器。
 
+首先，您需要注册数据莓，创建数据存储，添加一些数据并获取数据存储API端点URL。
 
+查询[#](#query "跳转到此标题的固定链接")
+---------------------------
 
- This notebook shows how to use
- [Databerry’s](https://www.databerry.ai/) 
- retriever.
- 
-
-
-
- First, you will need to sign up for Databerry, create a datastore, add some data and get your datastore api endpoint url
- 
-
-
-
-
- Query
- [#](#query "Permalink to this headline")
--------------------------------------------------
-
-
-
- Now that our index is set up, we can set up a retriever and start querying it.
- 
-
-
-
-
-
-
+现在我们的索引已经设置好了，我们可以设置检索器并开始查询。
 
 ```
 from langchain.retrievers import DataberryRetriever
 
 ```
-
-
-
-
-
-
-
-
-
 
 ```
 retriever = DataberryRetriever(
@@ -58,26 +26,10 @@ retriever = DataberryRetriever(
 
 ```
 
-
-
-
-
-
-
-
-
-
 ```
 retriever.get_relevant_documents("What is Daftpage?")
 
 ```
-
-
-
-
-
-
-
 
 ```
 [Document(page_content='✨ Made with DaftpageOpen main menuPricingTemplatesLoginSearchHelpGetting StartedFeaturesAffiliate ProgramGetting StartedDaftpage is a new type of website builder that works like a doc.It makes website building easy, fun and offers tons of powerful features for free. Just type / in your page to get started!DaftpageCopyright © 2022 Daftpage, Inc.All rights reserved.ProductPricingTemplatesHelp & SupportHelp CenterGetting startedBlogCompanyAboutRoadmapTwitterAffiliate Program👾 Discord', metadata={'source': 'https:/daftpage.com/help/getting-started', 'score': 0.8697265}),
@@ -85,11 +37,4 @@ retriever.get_relevant_documents("What is Daftpage?")
  Document(page_content=" is the simplest way to create websites for all purposes in seconds. Without knowing how to code, and for free!Get StartedDaftpage is a new type of website builder that works like a doc.It makes website building easy, fun and offers tons of powerful features for free. Just type / in your page to get started!Start here✨ Create your first site🧱 Add blocks🚀 PublishGuides🔖 Add a custom domainFeatures🔥 Drops🎨 Drawings👻 Ghost mode💀 Skeleton modeCant find the answer you're looking for?mail us at support@daftpage.comJoin the awesome Daftpage community on: 👾 DiscordDaftpageCopyright © 2022 Daftpage, Inc.All rights reserved.ProductPricingTemplatesHelp & SupportHelp CenterGetting startedBlogCompanyAboutRoadmapTwitterAffiliate Program👾 Discord", metadata={'source': 'https:/daftpage.com/help', 'score': 0.8645384})]
 
 ```
-
-
-
-
-
-
-
 
