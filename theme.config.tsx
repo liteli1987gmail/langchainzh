@@ -52,7 +52,7 @@ const config: DocsThemeConfig = {
     extraContent:(
       <div>
         <center>入群学习</center>
-        <img src="http://tuchuang.zaibk.com/2023/05/08/9810fccea7dda.png" alt="A description of your image" />
+        <img src="http://www.xiaohongshu-ai.com.cn/quncode.png" alt="A description of your image" />
       </div>
     ),
 
