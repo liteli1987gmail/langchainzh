@@ -62,7 +62,7 @@ const config: DocsThemeConfig = {
   footer: {
     text: <div><span>MIT {new Date().getFullYear()} © <a href="https://www.Langchain.com.cn" target="_blank">Langchain中文网</a>. 跟着langchain学AI应用开发    </span>
     <span><a href="https://www.Langchain.com" target="_blank">Langchain英文官网    </a></span>
-    <span><a href="http://github.xiaoc.cn/hwchase17/langchain" target="_blank">GitHub    </a></span>
+    <span><a href="https://github.com/hwchase17/langchain" target="_blank">GitHub    </a></span>
     <span><a href="http://www.r-p-a.com/llm-gpt-kaifa/" target="_blank">LLM/GPT应用外包开发    </a></span></div>
   },
   
