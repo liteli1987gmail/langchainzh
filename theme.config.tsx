@@ -53,7 +53,7 @@ const config: DocsThemeConfig = {
     float: true,
     extraContent:(
       <div>
-        <img src="https://picx.zhimg.com/80/v2-fc238e49d02513fefc2cc7abf4f66e69_r.jpg" alt="扫我，入群" />
+        <img src="https://pic1.zhimg.com/80/v2-31131dcb1732cb5bca7c182c9e8da046_r.jpg" alt="扫我，入群" />
       </div>
     ),
 
