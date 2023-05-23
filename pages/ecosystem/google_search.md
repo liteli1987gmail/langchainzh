@@ -26,7 +26,7 @@ from langchain.utilities import GoogleSearchAPIWrapper
 
 ```
 
-有关此包装器的更详细步骤，请参见[此笔记本电脑](../modules/agents/tools/examples/google_search)。
+有关此包装器的更详细步骤，请参见[此教程电脑](../modules/agents/tools/examples/google_search)。
 
 ### 工具[#](#tool "此标题的永久链接")
 

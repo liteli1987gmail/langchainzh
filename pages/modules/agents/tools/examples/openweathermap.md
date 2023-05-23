@@ -1,7 +1,7 @@
 OpenWeatherMap
 =================
 
-本笔记本将介绍如何使用OpenWeatherMap组件获取天气信息。
+本教程将介绍如何使用OpenWeatherMap组件获取天气信息。
 
 首先，您需要注册OpenWeatherMap API密钥：
 

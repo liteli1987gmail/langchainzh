@@ -3,7 +3,7 @@
 API链[#](#api-chains "此标题的永久链接")
 ===============================
 
-本笔记本展示了使用LLMs与API交互以检索相关信息的方法。
+本教程展示了使用LLMs与API交互以检索相关信息的方法。
 
 ```
 from langchain.chains.api.prompt import API_RESPONSE_PROMPT

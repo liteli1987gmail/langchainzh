@@ -3,7 +3,7 @@
 如何向LLMChain添加内存[#](#how-to-add-memory-to-an-llmchain "永久链接到此标题")
 ================================================================
 
-本笔记本将介绍如何使用Memory类与LLMChain。在本次演示中，我们将添加`ConversationBufferMemory`类，但这可以是任何内存类。
+本教程将介绍如何使用Memory类与LLMChain。在本次演示中，我们将添加`ConversationBufferMemory`类，但这可以是任何内存类。
 
 ```
 from langchain.memory import ConversationBufferMemory

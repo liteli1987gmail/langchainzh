@@ -3,23 +3,23 @@
 
 
 
-这个笔记本将介绍如何创建自己的自定义代理人。
+本教程将介绍如何创建自己的自定义代理人。
 
 
 
-一个代理人由三个部分组成：
+一个代理人由二个部分组成：
 - 工具：代理可以使用的工具。
 - 代理人类本身：这决定了采取哪些行动。
 
 
 
 
-在这个笔记本里，我们将介绍如何创建自定义代理人。
+在本教程里，我们将介绍如何创建自定义代理人。
 
 
 
 
-```
+``` python
 from langchain.agents import Tool, AgentExecutor, BaseSingleActionAgent
 from langchain import OpenAI, SerpAPIWrapper
 
@@ -28,7 +28,7 @@ from langchain import OpenAI, SerpAPIWrapper
 
 
 
-```
+``` python
 search = SerpAPIWrapper()
 tools = [
     Tool(
@@ -44,12 +44,67 @@ tools = [
 
 
 
-```
+``` python
 from typing import List, Tuple, Any, Union
 from langchain.schema import AgentAction, AgentFinish
 
 class FakeAgent(BaseSingleActionAgent):
- """Fake Custom Agent."""
+    """Fake Custom Agent."""
     
-    @prop
+    @property
+    def input_keys(self):
+        return ["input"]
+    
+    def plan(
+        self, intermediate_steps: List[Tuple[AgentAction, str]], **kwargs: Any
+    ) -> Union[AgentAction, AgentFinish]:
+        """Given input, decided what to do.
+
+        Args:
+            intermediate_steps: Steps the LLM has taken to date,
+                along with observations
+            **kwargs: User inputs.
+
+        Returns:
+            Action specifying what tool to use.
+        """
+        return AgentAction(tool="Search", tool_input=kwargs["input"], log="")
+
+    async def aplan(
+        self, intermediate_steps: List[Tuple[AgentAction, str]], **kwargs: Any
+    ) -> Union[AgentAction, AgentFinish]:
+        """Given input, decided what to do.
+
+        Args:
+            intermediate_steps: Steps the LLM has taken to date,
+                along with observations
+            **kwargs: User inputs.
+
+        Returns:
+            Action specifying what tool to use.
+        """
+        return AgentAction(tool="Search", tool_input=kwargs["input"], log="")
+```
+
+``` python
+agent = FakeAgent()
+```
+
+``` python
+agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True)
+```
+
+``` python
+agent_executor.run("How many people live in canada as of 2023?")
+```
+
+``` python
+> Entering new AgentExecutor chain...
+The current population of Canada is 38,669,152 as of Monday, April 24, 2023, based on Worldometer elaboration of the latest United Nations data.
+
+> Finished chain.
+```
+
+``` python
+'The current population of Canada is 38,669,152 as of Monday, April 24, 2023, based on Worldometer elaboration of the latest United Nations data.'
 ```

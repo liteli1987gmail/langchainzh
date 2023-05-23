@@ -3,11 +3,11 @@
 入门[#](#getting-started "到此标题的永久链接")
 ===================================
 
-本笔记本介绍了如何使用LangChain中的LLM类。
+本教程介绍了如何使用LangChain中的LLM类。
 
 LLM类是设计用于与LLMs进行接口交互的类。有许多LLM提供商（OpenAI、Cohere、Hugging Face等)-该类旨在为所有LLM提供商提供标准接口。在本文档的这部分中，我们将重点介绍通用LLM功能。有关使用特定LLM包装器的详细信息，请参见[如何指南](how_to_guides.html)中的示例。
 
-对于本笔记本，我们将使用OpenAI LLM包装器进行工作，尽管突出显示的功能对于所有LLM类型都是通用的。
+对于本教程，我们将使用OpenAI LLM包装器进行工作，尽管突出显示的功能对于所有LLM类型都是通用的。
 
 ```
 from langchain.llms import OpenAI

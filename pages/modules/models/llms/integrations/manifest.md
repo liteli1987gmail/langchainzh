@@ -3,7 +3,7 @@
 清单[#](#manifest "此标题的永久链接")
 ===========================
 
-本笔记本介绍了如何使用Manifest和LangChain。
+本教程介绍了如何使用Manifest和LangChain。
 
 有关更详细的信息`清单`，以及如何像本示例中一样在本地hugginface模型中使用它，请参见https://github.com/HazyResearch/manifest
 

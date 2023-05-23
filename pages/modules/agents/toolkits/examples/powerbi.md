@@ -2,7 +2,7 @@ PowerBI数据集代理
 [#](#powerbi-dataset-agent "Permalink to this headline")
 ===========================
 
-本笔记本展示了一个代理，它旨在与Power BI数据集进行交互。代理旨在回答有关数据集的更一般的问题，并从错误中恢复。
+本教程展示了一个代理，它旨在与Power BI数据集进行交互。代理旨在回答有关数据集的更一般的问题，并从错误中恢复。
 
 请注意，由于此代理正在积极开发中，因此可能并非所有答案都是正确的。它在[executequery端点](https://learn.microsoft.com/en-us/rest/api/power-bi/datasets/execute-queries)上运行，该端点不允许删除。
 
@@ -20,7 +20,8 @@ PowerBI数据集代理
 初始化[#](#initialization "此标题的永久链接")
 ----------------------------------
 
-```
+
+```  python
 from langchain.agents.agent_toolkits import create_pbi_agent
 from langchain.agents.agent_toolkits import PowerBIToolkit
 from langchain.utilities.powerbi import PowerBIDataset
@@ -30,7 +31,10 @@ from azure.identity import DefaultAzureCredential
 
 ```
 
-```
+
+
+
+```  python
 fast_llm = AzureOpenAI(temperature=0.5, max_tokens=1000, deployment_name="gpt-35-turbo", verbose=True)
 smart_llm = AzureOpenAI(temperature=0, max_tokens=100, deployment_name="gpt-4", verbose=True)
 
@@ -47,41 +51,56 @@ agent_executor = create_pbi_agent(
 
 ```
 
+
+
 示例：描述表格[#](#example-describing-a-table "此标题的永久链接")
 --------------------------------------------------
 
-```
+
+```  python
 agent_executor.run("Describe table1")
 
 ```
+
+
 
 示例：对表格进行简单的查询[#](#example-simple-query-on-a-table "此标题的永久链接")
 -------------------------------------------------------------
 
 在这个例子中，代理人实际上找出了正确的查询方式来获取表的行数。
 
-```
+
+```  python
 agent_executor.run("How many records are in table1?")
 
 ```
 
+
+
 示例：运行查询[#](#example-running-queries "此标题的永久链接")
 -----------------------------------------------
 
-```
+
+```  python
 agent_executor.run("How many records are there by dimension1 in table2?")
 
 ```
 
-```
+
+
+
+```  python
 agent_executor.run("What unique values are there for dimensions2 in table2")
 
 ```
 
+
+
 示例：添加自己的少样本提示[#](#example-add-your-own-few-shot-prompts "此标题的永久链接")
 -------------------------------------------------------------------
 
-```
+
+```  python
 #fictional example
 few_shots = """
 Question: How many rows are in the table revenue?
@@ -107,8 +126,13 @@ agent_executor = create_pbi_agent(
 
 ```
 
-```
+
+
+
+```  python
 agent_executor.run("What was the maximum of value in revenue in dollars in 2022?")
 
 ```
+
+
 

@@ -5,7 +5,7 @@
 
 [松果](https://docs.pinecone.io/docs/overview)是一个功能广泛的向量数据库。
 
-本笔记本展示了如何使用与`松果`向量数据库相关的功能。
+本教程展示了如何使用与`松果`向量数据库相关的功能。
 
 要使用松果，您必须拥有API密钥。以下是[安装说明](https://docs.pinecone.io/docs/quickstart)。
 

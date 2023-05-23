@@ -5,12 +5,16 @@
 
 本文介绍如何结合代理和向量库。这样做的用例是，您已将数据摄入到向量库中，并希望以代理方式与其进行交互。
 
-建议的方法是创建一个RetrievalQA，然后将其作为整体代理的工具。让我们来看看如何在下面执行此操作。您可以使用多个不同的向量数据库执行此操作，并使用代理作为它们之间路由的方法。有两种不同的方法可以做到这一点-您可以让代理像正常工具一样使用向量库，也可以设置`return_direct=True`，以实际将代理仅用作路由器。
+建议的方法是创建一个`RetrievalQA`，然后将其作为整体代理的工具。
+
+让我们来看看如何在下面执行此操作。您可以使用多个不同的向量数据库执行此操作，并使用代理作为它们之间路由的方法。
+
+有两种不同的方法可以做到这一点-您可以让代理像正常工具一样使用向量库，也可以设置`return_direct=True`，以实际将代理仅用作路由器。
 
 创建向量库[#](#create-the-vectorstore "本标题的永久链接")
 --------------------------------------------
 
-```
+```  python
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.text_splitter import CharacterTextSplitter
@@ -20,7 +24,7 @@ llm = OpenAI(temperature=0)
 
 ```
 
-```
+```  python
 from pathlib import Path
 relevant_parts = []
 for p in Path(".").absolute().parts:
@@ -31,7 +35,7 @@ doc_path = str(Path(*relevant_parts) / "state_of_the_union.txt")
 
 ```
 
-```
+```  python
 from langchain.document_loaders import TextLoader
 loader = TextLoader(doc_path)
 documents = loader.load()
@@ -43,36 +47,35 @@ docsearch = Chroma.from_documents(texts, embeddings, collection_name="state-of-u
 
 ```
 
-```
+```  python
 Running Chroma using direct local API.
 Using DuckDB in-memory for database. Data will be transient.
 
 ```
 
-```
+```  python
 state_of_union = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=docsearch.as_retriever())
 
 ```
 
-```
+```  python
 from langchain.document_loaders import WebBaseLoader
 
 ```
 
-```
+```  python
 loader = WebBaseLoader("https://beta.ruff.rs/docs/faq/")
 
 ```
 
-```
+```  python
 docs = loader.load()
 ruff_texts = text_splitter.split_documents(docs)
 ruff_db = Chroma.from_documents(ruff_texts, embeddings, collection_name="ruff")
 ruff = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=ruff_db.as_retriever())
 
 ```
-
-```
+```  python
 Running Chroma using direct local API.
 Using DuckDB in-memory for database. Data will be transient.
 
@@ -81,7 +84,7 @@ Using DuckDB in-memory for database. Data will be transient.
 创建代理[#](#create-the-agent "本标题的永久链接")
 -------------------------------------
 
-```
+```  python
 # Import things that are needed generically
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
@@ -91,7 +94,7 @@ from langchain import LLMMathChain, SerpAPIWrapper
 
 ```
 
-```
+```  python
 tools = [
     Tool(
         name = "State of Union QA System",
@@ -107,19 +110,19 @@ tools = [
 
 ```
 
-```
+```  python
 # Construct the agent. We will use the default agent type here.
 # See documentation for a full list of options.
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
-```
+```  python
 agent.run("What did biden say about ketanji brown jackson is the state of the union address?")
 
 ```
 
-```
+```  python
 > Entering new AgentExecutor chain...
  I need to find out what Biden said about Ketanji Brown Jackson in the State of the Union address.
 Action: State of Union QA System
@@ -132,17 +135,17 @@ Final Answer: Biden said that Jackson is one of the nation's top legal minds and
 
 ```
 
-```
+```  python
 "Biden said that Jackson is one of the nation's top legal minds and that she will continue Justice Breyer's legacy of excellence."
 
 ```
 
-```
+```  python
 agent.run("Why use ruff over flake8?")
 
 ```
 
-```
+```  python
 > Entering new AgentExecutor chain...
  I need to find out the advantages of using ruff over flake8
 Action: Ruff QA System
@@ -155,7 +158,7 @@ Final Answer: Ruff can be used as a drop-in replacement for Flake8 when used (1)
 
 ```
 
-```
+```  python
 'Ruff can be used as a drop-in replacement for Flake8 when used (1) without or with a small number of plugins, (2) alongside Black, and (3) on Python 3 code. It also re-implements some of the most popular Flake8 plugins and related code quality tools natively, including isort, yesqa, eradicate, and most of the rules implemented in pyupgrade. Ruff also supports automatically fixing its own lint violations, which Flake8 does not.'
 
 ```
@@ -167,7 +170,7 @@ Final Answer: Ruff can be used as a drop-in replacement for Flake8 when used (1)
 
 请注意，在上面的示例中，代理在查询RetrievalQAChain后执行了一些额外的工作。您可以避免这种情况，只需直接返回结果即可。
 
-```
+```  python
 tools = [
     Tool(
         name = "State of Union QA System",
@@ -185,17 +188,17 @@ tools = [
 
 ```
 
-```
+```  python
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
-```
+```  python
 agent.run("What did biden say about ketanji brown jackson in the state of the union address?")
 
 ```
 
-```
+```  python
 > Entering new AgentExecutor chain...
  I need to find out what Biden said about Ketanji Brown Jackson in the State of the Union address.
 Action: State of Union QA System
@@ -206,17 +209,17 @@ Observation:  Biden said that Jackson is one of the nation's top legal minds and
 
 ```
 
-```
+```  python
 " Biden said that Jackson is one of the nation's top legal minds and that she will continue Justice Breyer's legacy of excellence."
 
 ```
 
-```
+```  python
 agent.run("Why use ruff over flake8?")
 
 ```
 
-```
+```  python
 > Entering new AgentExecutor chain...
  I need to find out the advantages of using ruff over flake8
 Action: Ruff QA System
@@ -227,7 +230,7 @@ Observation:  Ruff can be used as a drop-in replacement for Flake8 when used (1)
 
 ```
 
-```
+```  python
 ' Ruff can be used as a drop-in replacement for Flake8 when used (1) without or with a small number of plugins, (2) alongside Black, and (3) on Python 3 code. It also re-implements some of the most popular Flake8 plugins and related code quality tools natively, including isort, yesqa, eradicate, and most of the rules implemented in pyupgrade. Ruff also supports automatically fixing its own lint violations, which Flake8 does not.'
 
 ```
@@ -237,7 +240,7 @@ Observation:  Ruff can be used as a drop-in replacement for Flake8 when used (1)
 
 由于向量存储器在代理中很容易使用，因此可以使用现有的代理框架回答依赖于向量存储器的多跳问题。
 
-```
+```  python
 tools = [
     Tool(
         name = "State of Union QA System",
@@ -253,19 +256,19 @@ tools = [
 
 ```
 
-```
+```  python
 # Construct the agent. We will use the default agent type here.
 # See documentation for a full list of options.
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
-```
+```  python
 agent.run("What tool does ruff use to run over Jupyter Notebooks? Did the president mention that tool in the state of the union?")
 
 ```
 
-```
+```  python
 > Entering new AgentExecutor chain...
  I need to find out what tool ruff uses to run over Jupyter Notebooks, and if the president mentioned it in the state of the union.
 Action: Ruff QA System
@@ -282,7 +285,7 @@ Final Answer: No, the president did not mention nbQA in the state of the union.
 
 ```
 
-```
+```  python
 'No, the president did not mention nbQA in the state of the union.'
 
 ```

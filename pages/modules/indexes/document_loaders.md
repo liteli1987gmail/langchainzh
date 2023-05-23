@@ -100,7 +100,7 @@
 
 * [JSON 文件](document_loaders/examples/json_loader)
 
-* [Jupyter笔记本](document_loaders/examples/jupyter_notebook)
+* [Jupyter教程](document_loaders/examples/jupyter_notebook)
 
 * [Markdown](document_loaders/examples/markdown)
 

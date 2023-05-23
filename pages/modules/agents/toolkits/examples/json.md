@@ -1,6 +1,10 @@
 # JSON代理[#](#json-agent "Permalink to this headline")
 
-本笔记本展示了一个代理，旨在与大型JSON/dict对象进行交互。当您想回答关于JSON blob的问题时，它非常有用，而此JSON blob过大，无法放入LLM的上下文窗口中。代理能够迭代地探索blob以找到需要回答用户问题的内容。
+本教程展示了一个代理，旨在与大型JSON/dict对象进行交互。
+
+当您想回答关于JSON blob的问题时，它非常有用，而此JSON blob过大，无法放入LLM的上下文窗口中。
+
+代理能够迭代地探索blob以找到需要回答用户问题的内容。
 
 在下面的示例中，我们使用OpenAI API的OpenAPI规范，可以在此处找到：[https://github.com/openai/openai-openapi/blob/master/openapi.yaml](https://github.com/openai/openai-openapi/blob/master/openapi.yaml)。
 
@@ -15,8 +19,7 @@
 
 
 
-
-```
+``` python
 import os
 import yaml
 
@@ -29,9 +32,7 @@ from langchain.chains import LLMChain
 from langchain.llms.openai import OpenAI
 from langchain.requests import TextRequestsWrapper
 from langchain.tools.json.tool import JsonSpec
-
-```
-
+ ``` 
 
 
 
@@ -39,9 +40,7 @@ from langchain.tools.json.tool import JsonSpec
 
 
 
-
-
-```
+``` python
 with open("openai_openapi.yml") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 json_spec = JsonSpec(dict_=data, max_value_length=4000)
@@ -52,17 +51,14 @@ json_agent_executor = create_json_agent(
     toolkit=json_toolkit,
     verbose=True
 )
-
-```
-
+ ``` 
 
 
 
 
 
 
-
- Example: getting the required POST parameters for a request
+示例：获取请求所需的POST参数 
  [#](#example-getting-the-required-post-parameters-for-a-request "Permalink to this headline")
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -71,20 +67,15 @@ json_agent_executor = create_json_agent(
 
 
 
-
-```
+``` python
 json_agent_executor.run("What are the required parameters in the request body to the /completions endpoint?")
-
-```
-
+ ``` 
 
 
 
 
 
-
-
-```
+``` python
 > Entering new AgentExecutor chain...
 Action: json_spec_list_keys
 Action Input: data
@@ -137,20 +128,13 @@ Thought: I now know the final answer
 Final Answer: The required parameters in the request body to the /completions endpoint are 'model'.
 
 > Finished chain.
-
-```
-
+ ``` 
 
 
 
-
-
-```
+``` python
 "The required parameters in the request body to the /completions endpoint are 'model'."
-
-```
-
-
+ ``` 
 
 
 

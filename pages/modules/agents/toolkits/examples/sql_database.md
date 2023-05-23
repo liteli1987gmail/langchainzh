@@ -1,7 +1,7 @@
 SQL数据库
 ===============
 
-这篇笔记本展示了一个代理，它旨在与SQL数据库进行交互。该代理基于[SQLDatabaseChain](https://langchain.readthedocs.io/en/latest/modules/chains/examples/sqlite)并旨在回答有关数据库的更一般的问题，以及从错误中恢复。
+这篇教程展示了一个代理，它旨在与SQL数据库进行交互。该代理基于[SQLDatabaseChain](https://langchain.readthedocs.io/en/latest/modules/chains/examples/sqlite)并旨在回答有关数据库的更一般的问题，以及从错误中恢复。
 
 请注意，由于此代理正在积极开发中，因此可能并非所有答案都是正确的。此外，无法保证代理不会针对某些问题在您的数据库上执行DML语句。在敏感数据上运行时，请小心！
 
@@ -12,7 +12,8 @@ SQL数据库
 初始化
 ---------------------------------------------------------------
 
-```
+
+```   python
 from langchain.agents import create_sql_agent
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
 from langchain.sql_database import SQLDatabase
@@ -21,7 +22,9 @@ from langchain.agents import AgentExecutor
 
 ```
 
-```
+
+
+```   python
 db = SQLDatabase.from_uri("sqlite:///../../../../notebooks/Chinook.db")
 toolkit = SQLDatabaseToolkit(db=db)
 
@@ -32,16 +35,20 @@ agent_executor = create_sql_agent(
 )
 
 ```
+
 
 示例：描述一个表
 ----------------------------------------------------------------------------------------
 
-```
+
+```   python
 agent_executor.run("Describe the playlisttrack table")
 
 ```
 
-```
+
+
+```   python
 > Entering new AgentExecutor chain...
 Action: list_tables_sql_db
 Action Input: ""
@@ -70,14 +77,18 @@ Final Answer: The PlaylistTrack table has two columns, PlaylistId and TrackId, a
 
 ```
 
-```
+
+
+```   python
 'The PlaylistTrack table has two columns, PlaylistId and TrackId, and is linked to the Playlist and Track tables.'
 ```
+
 
 示例：描述一张表，从错误中恢复
 ---------------------------------------------------------------------------------------------------------------------------
 
-```
+
+```   python
 from langchain.agents import create_sql_agent
 from langchain.agents.agent_toolkits import SQLDatabaseToolkit
 from langchain.sql_database import SQLDatabase
@@ -86,7 +97,9 @@ from langchain.agents import AgentExecutor
 
 ```
 
-```
+
+
+```   python
 db = SQLDatabase.from_uri("sqlite:///../../../../notebooks/Chinook.db")
 toolkit = SQLDatabaseToolkit(db=db)
 
@@ -98,109 +111,19 @@ agent_executor = create_sql_agent(
 
 ```
 
-Example: describing a table[#](#example-describing-a-table "Permalink to this headline")
-----------------------------------------------------------------------------------------
-
-```
-agent_executor.run("Describe the playlisttrack table")
-
-```
-
-```
-> Entering new AgentExecutor chain...
-Action: list_tables_sql_db
-Action Input: ""
-Observation: Artist, Invoice, Playlist, Genre, Album, PlaylistTrack, Track, InvoiceLine, MediaType, Employee, Customer
-Thought: I should look at the schema of the playlisttrack table
-Action: schema_sql_db
-Action Input: "PlaylistTrack"
-Observation: 
-CREATE TABLE "PlaylistTrack" (
- "PlaylistId" INTEGER NOT NULL, 
- "TrackId" INTEGER NOT NULL, 
- PRIMARY KEY ("PlaylistId", "TrackId"), 
- FOREIGN KEY("TrackId") REFERENCES "Track" ("TrackId"), 
- FOREIGN KEY("PlaylistId") REFERENCES "Playlist" ("PlaylistId")
-)
-
-SELECT * FROM 'PlaylistTrack' LIMIT 3;
-PlaylistId TrackId
-1 3402
-1 3389
-1 3390
-Thought: I now know the final answer
-Final Answer: The PlaylistTrack table has two columns, PlaylistId and TrackId, and is linked to the Playlist and Track tables.
-
-> Finished chain.
-
-```
-
-```
-'The PlaylistTrack table has two columns, PlaylistId and TrackId, and is linked to the Playlist and Track tables.'
-
-```
-
-Example: describing a table, recovering from an error[#](#example-describing-a-table-recovering-from-an-error "到这个标题的永久链接")
----------------------------------------------------------------------------------------------------------------------------
-
-在这个例子中，代理尝试搜索一个不存在的表格，但找到了下一个最好的结果
-
-```
-agent_executor.run("Describe the playlistsong table")
-
-```
-
-```
-> Entering new AgentExecutor chain...
-Action: list_tables_sql_db
-Action Input: ""
-Observation: Genre, PlaylistTrack, MediaType, Invoice, InvoiceLine, Track, Playlist, Customer, Album, Employee, Artist
-Thought: I should look at the schema of the PlaylistSong table
-Action: schema_sql_db
-Action Input: "PlaylistSong"
-Observation: Error: table_names {'PlaylistSong'} not found in database
-Thought: I should check the spelling of the table
-Action: list_tables_sql_db
-Action Input: ""
-Observation: Genre, PlaylistTrack, MediaType, Invoice, InvoiceLine, Track, Playlist, Customer, Album, Employee, Artist
-Thought: The table is called PlaylistTrack
-Action: schema_sql_db
-Action Input: "PlaylistTrack"
-Observation: 
-CREATE TABLE "PlaylistTrack" (
- "PlaylistId" INTEGER NOT NULL, 
- "TrackId" INTEGER NOT NULL, 
- PRIMARY KEY ("PlaylistId", "TrackId"), 
- FOREIGN KEY("TrackId") REFERENCES "Track" ("TrackId"), 
- FOREIGN KEY("PlaylistId") REFERENCES "Playlist" ("PlaylistId")
-)
-
-SELECT * FROM 'PlaylistTrack' LIMIT 3;
-PlaylistId TrackId
-1 3402
-1 3389
-1 3390
-Thought: I now know the final answer
-Final Answer: The PlaylistTrack table contains two columns, PlaylistId and TrackId, which are both integers and are used to link Playlist and Track tables.
-
-> Finished chain.
-
-```
-
-```
-'The PlaylistTrack table contains two columns, PlaylistId and TrackId, which are both integers and are used to link Playlist and Track tables.'
-
-```
 
 例子：运行查询[#](#example-running-queries "到这个标题的永久链接")
 -------------------------------------------------
 
-```
+
+```   python
 agent_executor.run("List the total sales per country. Which country's customers spent the most?")
 
 ```
 
-```
+
+
+```   python
 > Entering new AgentExecutor chain...
 Action: list_tables_sql_db
 Action Input: ""
@@ -263,17 +186,23 @@ Final Answer: The customers from the USA spent the most, with a total of $523.06
 
 ```
 
-```
+
+
+```   python
 'The customers from the USA spent the most, with a total of $523.06.'
 
 ```
 
-```
+
+
+```   python
 agent_executor.run("Show the total number of tracks in each playlist. The Playlist name should be included in the result.")
 
 ```
 
-```
+
+
+```   python
 > Entering new AgentExecutor chain...
 Action: list_tables_sql_db
 Action Input: ""
@@ -324,22 +253,28 @@ Final Answer: The total number of tracks in each playlist are: '90’s Music' (1
 
 ```
 
-```
+
+
+```   python
 "The total number of tracks in each playlist are: '90’s Music' (1477), 'Brazilian Music' (39), 'Classical' (75), 'Classical 101 - Deep Cuts' (25), 'Classical 101 - Next Steps' (25), 'Classical 101 - The Basics' (25), 'Grunge' (15), 'Heavy Metal Classic' (26), 'Music' (6580), 'Music Videos' (1)."
 
 ```
+
 
 从错误中恢复[#](#recovering-from-an-error "到这个标题的永久链接")
 -------------------------------------------------
 
 在这个例子中，代理最初尝试访问一个不存在的属性 (`Track.ArtistId`), 但能够从错误中恢复。
 
-```
+
+```   python
 agent_executor.run("Who are the top 3 best selling artists?")
 
 ```
 
-```
+
+
+```   python
 > Entering new AgentExecutor chain...
 Action: list_tables_sql_db
 Action Input: ""
@@ -427,8 +362,11 @@ Final Answer: The top 3 best selling artists are Iron Maiden, U2, and Metallica.
 
 ```
 
-```
+
+
+```   python
 'The top 3 best selling artists are Iron Maiden, U2, and Metallica.'
 
 ```
+
 

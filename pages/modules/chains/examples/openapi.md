@@ -3,7 +3,7 @@
 OpenAPI Chain[#](#openapi-chain "Permalink to this headline")
 =============================================================
 
-本笔记本演示了使用OpenAPI链调用自然语言端点并返回自然语言响应的示例。
+本教程演示了使用OpenAPI链调用自然语言端点并返回自然语言响应的示例。
 
 ```
 from langchain.tools import OpenAPISpec, APIOperation

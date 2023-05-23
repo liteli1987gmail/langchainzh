@@ -24,5 +24,5 @@ from langchain.vectorstores import Qdrant
 
 ```
 
-有关Qdrant包装器的更详细说明，请参见[此笔记本](../modules/indexes/vectorstores/examples/qdrant)
+有关Qdrant包装器的更详细说明，请参见[此教程](../modules/indexes/vectorstores/examples/qdrant)
 

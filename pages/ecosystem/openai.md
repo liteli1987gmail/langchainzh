@@ -33,7 +33,7 @@ from langchain.llms import AzureOpenAI
 
 ```
 
-有关Azure包装器的更详细步骤，请参见[此笔记本](../modules/models/llms/integrations/azure_openai_example)
+有关Azure包装器的更详细步骤，请参见[此教程](../modules/models/llms/integrations/azure_openai_example)
 
 ### 嵌入[#](#embeddings "永久链接到此标题")
 
@@ -44,7 +44,7 @@ from langchain.embeddings import OpenAIEmbeddings
 
 ```
 
-有关此包装器的更详细步骤，请参见[此笔记本](../modules/models/text_embedding/examples/openai)
+有关此包装器的更详细步骤，请参见[此教程](../modules/models/text_embedding/examples/openai)
 
 ### 分词器[#](#tokenizer "永久链接到此标题")
 
@@ -58,7 +58,7 @@ CharacterTextSplitter.from_tiktoken_encoder(...)
 
 ```
 
-有关更详细的步骤，请参见[此笔记本](../modules/indexes/text_splitters/examples/tiktoken)
+有关更详细的步骤，请参见[此教程](../modules/indexes/text_splitters/examples/tiktoken)
 
 ### 审核[#](#moderation "此标题的永久链接")
 
@@ -69,5 +69,5 @@ from langchain.chains import OpenAIModerationChain
 
 ```
 
-有关更详细的步骤，请参见[此笔记本](../modules/chains/examples/moderation)
+有关更详细的步骤，请参见[此教程](../modules/chains/examples/moderation)
 

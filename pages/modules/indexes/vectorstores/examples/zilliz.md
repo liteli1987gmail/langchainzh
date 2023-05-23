@@ -2,7 +2,7 @@
 
 [Zilliz Cloud](https://zilliz.com/doc/quick_start)是一个完全托管在云端的向量数据库和`LF AI Milvus®`服务。
 
-这个笔记本展示了如何使用与Zilliz Cloud向量数据库相关的功能。
+本教程展示了如何使用与Zilliz Cloud向量数据库相关的功能。
 
 要运行，您应该有一个正在运行的"Zilliz Cloud"实例。这里是[安装指南](https://zilliz.com/cloud)。
 

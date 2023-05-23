@@ -1,0 +1,162 @@
+ 会话代理 (Conversation Agent)
+===
+
+此笔记本使用针对对话进行了优化的代理进行演示。
+
+其他代理通常针对使用工具来计算最佳响应进行了优化，这在会话设置中并不理想，
+
+因为您可能希望代理也能够与用户聊天.
+
+这是通过期望与存储器组件一起使用的特定类型的代理（ `conversational-react-description` ）来实现的。
+
+```  python
+from langchain.agents import Tool
+from langchain.agents import AgentType
+from langchain.memory import ConversationBufferMemory
+from langchain import OpenAI
+from langchain.utilities import SerpAPIWrapper
+from langchain.agents import initialize_agent
+
+```
+
+```  python
+search = SerpAPIWrapper()
+tools = [
+    Tool(
+        name = "Current Search",
+        func=search.run,
+        description="useful for when you need to answer questions about current events or the current state of the world"
+    ),
+]
+
+```
+
+
+```  python
+memory = ConversationBufferMemory(memory_key="chat_history")
+
+```
+
+```  python
+llm=OpenAI(temperature=0)
+agent_chain = initialize_agent(tools, llm, agent=AgentType.CONVERSATIONAL_REACT_DESCRIPTION, verbose=True, memory=memory)
+
+```
+
+
+```  python
+
+agent_chain.run(input="hi, i am bob")
+```
+
+
+```  python
+> Entering new AgentExecutor chain...
+
+Thought: Do I need to use a tool? No
+AI: Hi Bob, nice to meet you! How can I help you today?
+
+> Finished chain.
+
+```
+
+```  python
+'Hi Bob, nice to meet you! How can I help you today?'
+
+```
+
+
+```  python
+agent_chain.run(input="what's my name?")
+
+```
+
+```  python
+> Entering new AgentExecutor chain...
+
+Thought: Do I need to use a tool? No
+AI: Your name is Bob!
+
+> Finished chain.
+
+```
+
+
+```  python
+'Your name is Bob!'
+
+```
+
+
+```  python
+
+agent_chain.run("what are some good dinners to make this week, if i like thai food?")
+```
+
+
+```  python
+> Entering new AgentExecutor chain...
+
+Thought: Do I need to use a tool? Yes
+Action: Current Search
+Action Input: Thai food dinner recipes
+Observation: 59 easy Thai recipes for any night of the week · Marion Grasby's Thai spicy chilli and basil fried rice · Thai curry noodle soup · Marion Grasby's Thai Spicy ...
+Thought: Do I need to use a tool? No
+AI: Here are some great Thai dinner recipes you can try this week: Marion Grasby's Thai Spicy Chilli and Basil Fried Rice, Thai Curry Noodle Soup, Thai Green Curry with Coconut Rice, Thai Red Curry with Vegetables, and Thai Coconut Soup. I hope you enjoy them!
+
+> Finished chain.
+
+```
+
+
+```  python
+"Here are some great Thai dinner recipes you can try this week: Marion Grasby's Thai Spicy Chilli and Basil Fried Rice, Thai Curry Noodle Soup, Thai Green Curry with Coconut Rice, Thai Red Curry with Vegetables, and Thai Coconut Soup. I hope you enjoy them!"
+
+```
+
+
+```  python
+agent_chain.run(input="tell me the last letter in my name, and also tell me who won the world cup in 1978?")
+
+```
+
+```  python
+
+> Entering new AgentExecutor chain...
+
+Thought: Do I need to use a tool? Yes
+Action: Current Search
+Action Input: Who won the World Cup in 1978
+Observation: Argentina national football team
+Thought: Do I need to use a tool? No
+AI: The last letter in your name is "b" and the winner of the 1978 World Cup was the Argentina national football team.
+
+> Finished chain.
+```
+
+```  python
+'The last letter in your name is "b" and the winner of the 1978 World Cup was the Argentina national football team.'
+```
+
+```  python
+agent_chain.run(input="whats the current temperature in pomfret?")
+```
+
+```  python
+> Entering new AgentExecutor chain...
+
+Thought: Do I need to use a tool? Yes
+Action: Current Search
+Action Input: Current temperature in Pomfret
+Observation: Partly cloudy skies. High around 70F. Winds W at 5 to 10 mph. Humidity41%.
+Thought: Do I need to use a tool? No
+AI: The current temperature in Pomfret is around 70F with partly cloudy skies and winds W at 5 to 10 mph. The humidity is 41%.
+
+> Finished chain.
+
+```
+
+```  python
+'The current temperature in Pomfret is around 70F with partly cloudy skies and winds W at 5 to 10 mph. The humidity is 41%.'
+
+```

@@ -6,12 +6,12 @@
 
 
 
-本笔记本介绍如何使用LangChain对一系列文档进行带来源的问答。它涵盖了四种不同的链条类型：`stuff`、`map_reduce`、`refine`、`map-rerank`。有关这些链条类型的更深入解释，请参见[此处](https://docs.langchain.com/docs/components/chains/index_related_chains)。
+本教程介绍如何使用LangChain对一系列文档进行带来源的问答。它涵盖了四种不同的链条类型：`stuff`、`map_reduce`、`refine`、`map-rerank`。有关这些链条类型的更深入解释，请参见[此处](https://docs.langchain.com/docs/components/chains/index_related_chains)。
 
 准备数据
 ----
 
-首先，我们需要准备数据。在此示例中，我们在向量数据库上进行相似性搜索，但这些文档可以以任何方式获取（本笔记本的重点是强调在获取文档后要做什么)。
+首先，我们需要准备数据。在此示例中，我们在向量数据库上进行相似性搜索，但这些文档可以以任何方式获取（本教程的重点是强调在获取文档后要做什么)。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings

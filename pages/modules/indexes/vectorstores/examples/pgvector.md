@@ -13,7 +13,7 @@ PGVector[#](#pgvector "Permalink to this headline")
 
 * L2距离，内积和余弦距离
 
-本笔记本演示了如何使用Postgres向量数据库（`PGVector`)。
+本教程演示了如何使用Postgres向量数据库（`PGVector`)。
 
 请参阅[安装指令](https://github.com/pgvector/pgvector)。
 

@@ -4,7 +4,7 @@
 
 PipelineAI允许您在云中规模运行您的ML模型。它还提供API访问[多个LLM模型](https://pipeline.ai)。
 
-这个笔记本介绍了如何使用[PipelineAI](https://docs.pipeline.ai/docs)来使用Langchain。
+本教程介绍了如何使用[PipelineAI](https://docs.pipeline.ai/docs)来使用Langchain。
 
 安装pipeline-ai[#](#install-pipeline-ai "跳转到标题")
 ----------------------------------------------

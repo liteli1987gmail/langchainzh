@@ -78,5 +78,5 @@ from langchain.vectorstores import MyScale
 
 ```
 
-有关MyScale包装器的更详细演示，请参见[此笔记本](../modules/indexes/vectorstores/examples/myscale)
+有关MyScale包装器的更详细演示，请参见[此教程](../modules/indexes/vectorstores/examples/myscale)
 

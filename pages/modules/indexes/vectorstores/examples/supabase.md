@@ -9,9 +9,9 @@ Supabase
 > 
 > 
 
-这个笔记本展示了如何使用`Supabase`和`pgvector`作为你的VectorStore。
+本教程展示了如何使用`Supabase`和`pgvector`作为你的VectorStore。
 
-运行这个笔记本，请确保：
+运行本教程，请确保：
 
 * `pgvector`扩展已启用
 

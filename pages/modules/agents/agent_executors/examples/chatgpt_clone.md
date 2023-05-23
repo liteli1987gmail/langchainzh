@@ -1,13 +1,13 @@
 
 
-如何创建ChatGPT克隆版[#](#how-to-create-chatgpt-clone "本标题的永久链接")
+如何创建ChatGPT克隆 [#](#how-to-create-chatgpt-clone "本标题的永久链接")
 ==========================================================
 
-通过结合（1)特定提示和（2)记忆概念，该链复制了ChatGPT。
+该链通过结合（1）特定提示和（2）记忆的概念来复制ChatGPT。
 
 展示了示例，如https://www.engraved.blog/building-a-virtual-machine-inside/
 
-```
+```  python
 from langchain import OpenAI, ConversationChain, LLMChain, PromptTemplate
 from langchain.memory import ConversationBufferWindowMemory
 
@@ -40,7 +40,7 @@ print(output)
 
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -56,19 +56,19 @@ Assistant:
 
 > Finished chain.
 
-```
+"""
 /home/user
-```
+"""
 
 ```
 
-```
+``` python
 output = chatgpt_chain.predict(human_input="ls ~")
 print(output)
 
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -81,29 +81,29 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 
 Human: I want you to act as a Linux terminal. I will type commands and you will reply with what the terminal should show. I want you to only reply with the terminal output inside one unique code block, and nothing else. Do not write explanations. Do not type commands unless I instruct you to do so. When I need to tell you something in English I will do so by putting text inside curly brackets {like this}. My first command is pwd.
 AI: 
-```
+"""
 $ pwd
 /
-```
+"""
 Human: ls ~
 Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ ls ~
 Desktop  Documents  Downloads  Music  Pictures  Public  Templates  Videos
-```
+"""
 
 ```
 
-```
+```  python
 output = chatgpt_chain.predict(human_input="cd ~")
 print(output)
 
 ```
 
-```
+```  python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -116,36 +116,36 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 
 Human: I want you to act as a Linux terminal. I will type commands and you will reply with what the terminal should show. I want you to only reply with the terminal output inside one unique code block, and nothing else. Do not write explanations. Do not type commands unless I instruct you to do so. When I need to tell you something in English I will do so by putting text inside curly brackets {like this}. My first command is pwd.
 AI: 
-```
+"""
 $ pwd
 /
-```
+"""
 Human: ls ~
 AI: 
-```
+"""
 $ ls ~
 Desktop Documents Downloads Music Pictures Public Templates Videos
-```
+"""
 Human: cd ~
 Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ cd ~
 $ pwd
 /home/user
-```
+"""
 
 ```
 
-```
+``` python
 output = chatgpt_chain.predict(human_input="{Please make a file jokes.txt inside and put some jokes inside}")
 print(output)
 
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -158,38 +158,37 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 
 Human: ls ~
 AI: 
-```
+"""
 $ ls ~
 Desktop Documents Downloads Music Pictures Public Templates Videos
-```
+"""
 Human: cd ~
 AI: 
-```
+"""
 $ cd ~
 $ pwd
 /home/user
-```
+"""
 Human: {Please make a file jokes.txt inside and put some jokes inside}
 Assistant:
 
 > Finished LLMChain chain.
-
-```
+"""
 $ touch jokes.txt
 $ echo "Why did the chicken cross the road? To get to the other side!" >> jokes.txt
 $ echo "What did the fish say when it hit the wall? Dam!" >> jokes.txt
 $ echo "Why did the scarecrow win the Nobel Prize? Because he was outstanding in his field!" >> jokes.txt
-```
+"""
 
-```
+``` 
 
-```
+```  python
 output = chatgpt_chain.predict(human_input="""echo -e "x=lambda y:y*5+3;print('Result:' + str(x(6)))" > run.py && python3 run.py""")
 print(output)
 
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -202,40 +201,40 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 
 Human: cd ~
 AI: 
-```
+"""
 $ cd ~
 $ pwd
 /home/user
-```
+"""
 Human: {Please make a file jokes.txt inside and put some jokes inside}
 AI: 
 
-```
+"""
 $ touch jokes.txt
 $ echo "Why did the chicken cross the road? To get to the other side!" >> jokes.txt
 $ echo "What did the fish say when it hit the wall? Dam!" >> jokes.txt
 $ echo "Why did the scarecrow win the Nobel Prize? Because he was outstanding in his field!" >> jokes.txt
-```
+"""
 Human: echo -e "x=lambda y:y*5+3;print('Result:' + str(x(6)))" > run.py && python3 run.py
 Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ echo -e "x=lambda y:y*5+3;print('Result:' + str(x(6)))" > run.py
 $ python3 run.py
 Result: 33
-```
+"""
 
 ```
 
-```
+```  python
 output = chatgpt_chain.predict(human_input="""echo -e "print(list(filter(lambda x: all(x%d for d in range(2,x)),range(2,3**10)))[:10])" > run.py && python3 run.py""")
 print(output)
 
 ```
 
-```
+```  python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -248,42 +247,41 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 
 Human: {Please make a file jokes.txt inside and put some jokes inside}
 AI: 
-
-```
+"""
 $ touch jokes.txt
 $ echo "Why did the chicken cross the road? To get to the other side!" >> jokes.txt
 $ echo "What did the fish say when it hit the wall? Dam!" >> jokes.txt
 $ echo "Why did the scarecrow win the Nobel Prize? Because he was outstanding in his field!" >> jokes.txt
-```
+"""
 Human: echo -e "x=lambda y:y*5+3;print('Result:' + str(x(6)))" > run.py && python3 run.py
 AI: 
 
-```
+"""
 $ echo -e "x=lambda y:y*5+3;print('Result:' + str(x(6)))" > run.py
 $ python3 run.py
 Result: 33
-```
+"""
 Human: echo -e "print(list(filter(lambda x: all(x%d for d in range(2,x)),range(2,3**10)))[:10])" > run.py && python3 run.py
 Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ echo -e "print(list(filter(lambda x: all(x%d for d in range(2,x)),range(2,3**10)))[:10])" > run.py
 $ python3 run.py
 [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
-```
+"""
 
 ```
 
-```
+```  python
 docker_input = """echo -e "echo 'Hello from Docker" > entrypoint.sh && echo -e "FROM ubuntu:20.04\nCOPY entrypoint.sh entrypoint.sh\nENTRYPOINT [\"/bin/sh\",\"entrypoint.sh\"]">Dockerfile && docker build . -t my_docker_image && docker run -t my_docker_image"""
 output = chatgpt_chain.predict(human_input=docker_input)
 print(output)
 
 ```
 
-```
+```  python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -297,19 +295,19 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 Human: echo -e "x=lambda y:y*5+3;print('Result:' + str(x(6)))" > run.py && python3 run.py
 AI: 
 
-```
+"""
 $ echo -e "x=lambda y:y*5+3;print('Result:' + str(x(6)))" > run.py
 $ python3 run.py
 Result: 33
-```
+"""
 Human: echo -e "print(list(filter(lambda x: all(x%d for d in range(2,x)),range(2,3**10)))[:10])" > run.py && python3 run.py
 AI: 
 
-```
+"""
 $ echo -e "print(list(filter(lambda x: all(x%d for d in range(2,x)),range(2,3**10)))[:10])" > run.py
 $ python3 run.py
 [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
-```
+"""
 Human: echo -e "echo 'Hello from Docker" > entrypoint.sh && echo -e "FROM ubuntu:20.04
 COPY entrypoint.sh entrypoint.sh
 ENTRYPOINT ["/bin/sh","entrypoint.sh"]">Dockerfile && docker build . -t my_docker_image && docker run -t my_docker_image
@@ -317,7 +315,7 @@ Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ echo -e "echo 'Hello from Docker" > entrypoint.sh
 $ echo -e "FROM ubuntu:20.04
 COPY entrypoint.sh entrypoint.sh
@@ -325,17 +323,17 @@ ENTRYPOINT ["/bin/sh","entrypoint.sh"]">Dockerfile
 $ docker build . -t my_docker_image
 $ docker run -t my_docker_image
 Hello from Docker
-```
+"""
 
 ```
 
-```
+``` python
 output = chatgpt_chain.predict(human_input="nvidia-smi")
 print(output)
 
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -349,17 +347,17 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 Human: echo -e "print(list(filter(lambda x: all(x%d for d in range(2,x)),range(2,3**10)))[:10])" > run.py && python3 run.py
 AI: 
 
-```
+"""
 $ echo -e "print(list(filter(lambda x: all(x%d for d in range(2,x)),range(2,3**10)))[:10])" > run.py
 $ python3 run.py
 [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
-```
+"""
 Human: echo -e "echo 'Hello from Docker" > entrypoint.sh && echo -e "FROM ubuntu:20.04
 COPY entrypoint.sh entrypoint.sh
 ENTRYPOINT ["/bin/sh","entrypoint.sh"]">Dockerfile && docker build . -t my_docker_image && docker run -t my_docker_image
 AI: 
 
-```
+"""
 $ echo -e "echo 'Hello from Docker" > entrypoint.sh
 $ echo -e "FROM ubuntu:20.04
 COPY entrypoint.sh entrypoint.sh
@@ -367,13 +365,13 @@ ENTRYPOINT ["/bin/sh","entrypoint.sh"]">Dockerfile
 $ docker build . -t my_docker_image
 $ docker run -t my_docker_image
 Hello from Docker
-```
+"""
 Human: nvidia-smi
 Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ nvidia-smi
 Sat May 15 21:45:02 2021       
 +-----------------------------------------------------------------------------+
@@ -393,13 +391,13 @@ Sat May 15 21:45:02 2021
 
 ```
 
-```
+``` python
 output = chatgpt_chain.predict(human_input="ping bbc.com")
 print(output)
 
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -415,7 +413,7 @@ COPY entrypoint.sh entrypoint.sh
 ENTRYPOINT ["/bin/sh","entrypoint.sh"]">Dockerfile && docker build . -t my_docker_image && docker run -t my_docker_image
 AI: 
 
-```
+"""
 $ echo -e "echo 'Hello from Docker" > entrypoint.sh
 $ echo -e "FROM ubuntu:20.04
 COPY entrypoint.sh entrypoint.sh
@@ -423,11 +421,11 @@ ENTRYPOINT ["/bin/sh","entrypoint.sh"]">Dockerfile
 $ docker build . -t my_docker_image
 $ docker run -t my_docker_image
 Hello from Docker
-```
+"""
 Human: nvidia-smi
 AI: 
 
-```
+"""
 $ nvidia-smi
 Sat May 15 21:45:02 2021 
 +-----------------------------------------------------------------------------+
@@ -450,7 +448,6 @@ Assistant:
 
 > Finished LLMChain chain.
 
-```
 $ ping bbc.com
 PING bbc.com (151.101.65.81): 56 data bytes
 64 bytes from 151.101.65.81: icmp_seq=0 ttl=53 time=14.945 ms
@@ -460,17 +457,19 @@ PING bbc.com (151.101.65.81): 56 data bytes
 --- bbc.com ping statistics ---
 3 packets transmitted, 3 packets received, 0.0% packet loss
 round-trip min/avg/max/stddev = 14.945/14.945/14.945/0.000 ms
-```
+"""
 
-```
+``` 
 
-```
+
+``` python
 output = chatgpt_chain.predict(human_input="""curl -fsSL "https://api.github.com/repos/pytorch/pytorch/releases/latest" | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g'""")
 print(output)
 
 ```
 
-```
+
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -484,7 +483,7 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 Human: nvidia-smi
 AI: 
 
-```
+"""
 $ nvidia-smi
 Sat May 15 21:45:02 2021 
 +-----------------------------------------------------------------------------+
@@ -505,7 +504,7 @@ Sat May 15 21:45:02 2021
 Human: ping bbc.com
 AI: 
 
-```
+"""
 $ ping bbc.com
 PING bbc.com (151.101.65.81): 56 data bytes
 64 bytes from 151.101.65.81: icmp_seq=0 ttl=53 time=14.945 ms
@@ -515,26 +514,29 @@ PING bbc.com (151.101.65.81): 56 data bytes
 --- bbc.com ping statistics ---
 3 packets transmitted, 3 packets received, 0.0% packet loss
 round-trip min/avg/max/stddev = 14.945/14.945/14.945/0.000 ms
-```
+
+"""
 Human: curl -fsSL "https://api.github.com/repos/pytorch/pytorch/releases/latest" | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g'
 Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ curl -fsSL "https://api.github.com/repos/pytorch/pytorch/releases/latest" | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g'
 1.8.1
-```
+"""
 
 ```
 
-```
+
+``` python
 output = chatgpt_chain.predict(human_input="lynx https://www.deepmind.com/careers")
 print(output)
 
 ```
 
-```
+
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -548,7 +550,7 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 Human: ping bbc.com
 AI: 
 
-```
+"""
 $ ping bbc.com
 PING bbc.com (151.101.65.81): 56 data bytes
 64 bytes from 151.101.65.81: icmp_seq=0 ttl=53 time=14.945 ms
@@ -558,20 +560,21 @@ PING bbc.com (151.101.65.81): 56 data bytes
 --- bbc.com ping statistics ---
 3 packets transmitted, 3 packets received, 0.0% packet loss
 round-trip min/avg/max/stddev = 14.945/14.945/14.945/0.000 ms
-```
+"""
+
 Human: curl -fsSL "https://api.github.com/repos/pytorch/pytorch/releases/latest" | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g'
 AI: 
 
-```
+"""
 $ curl -fsSL "https://api.github.com/repos/pytorch/pytorch/releases/latest" | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g'
 1.8.1
-```
+"""
 Human: lynx https://www.deepmind.com/careers
 Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ lynx https://www.deepmind.com/careers
 DeepMind Careers
 
@@ -580,17 +583,17 @@ Welcome to DeepMind Careers. We are a world-leading artificial intelligence rese
 We offer a range of exciting opportunities in research, engineering, product, and operations. Our mission is to solve intelligence and make it useful, and we are looking for people who share our passion for pushing the boundaries of AI.
 
 Explore our current openings and apply today. We look forward to hearing from you.
-```
+
+"""
 
 ```
-
-```
+``` python
 output = chatgpt_chain.predict(human_input="curl https://chat.openai.com/chat")
 print(output)
 
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -604,14 +607,16 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 Human: curl -fsSL "https://api.github.com/repos/pytorch/pytorch/releases/latest" | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g'
 AI: 
 
-```
+
+"""
 $ curl -fsSL "https://api.github.com/repos/pytorch/pytorch/releases/latest" | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g'
 1.8.1
-```
+
+"""
 Human: lynx https://www.deepmind.com/careers
 AI: 
 
-```
+"""
 $ lynx https://www.deepmind.com/careers
 DeepMind Careers
 
@@ -620,13 +625,12 @@ Welcome to DeepMind Careers. We are a world-leading artificial intelligence rese
 We offer a range of exciting opportunities in research, engineering, product, and operations. Our mission is to solve intelligence and make it useful, and we are looking for people who share our passion for pushing the boundaries of AI.
 
 Explore our current openings and apply today. We look forward to hearing from you.
-```
+"""
 Human: curl https://chat.openai.com/chat
 Assistant:
 
 > Finished LLMChain chain.
-
-```
+"""
 $ curl https://chat.openai.com/chat
 <html>
   <head>
@@ -642,17 +646,17 @@ $ curl https://chat.openai.com/chat
     </p>
   </body>
 </html>
-```
+"""
 
 ```
 
-```
+``` python
 output = chatgpt_chain.predict(human_input="""curl --header "Content-Type:application/json" --request POST --data '{"message": "What is artificial intelligence?"}' https://chat.openai.com/chat""")
 print(output)
 
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -666,7 +670,7 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 Human: lynx https://www.deepmind.com/careers
 AI: 
 
-```
+"""
 $ lynx https://www.deepmind.com/careers
 DeepMind Careers
 
@@ -675,11 +679,11 @@ Welcome to DeepMind Careers. We are a world-leading artificial intelligence rese
 We offer a range of exciting opportunities in research, engineering, product, and operations. Our mission is to solve intelligence and make it useful, and we are looking for people who share our passion for pushing the boundaries of AI.
 
 Explore our current openings and apply today. We look forward to hearing from you.
-```
+"""
 Human: curl https://chat.openai.com/chat
 AI: 
 
-```
+"""
 $ curl https://chat.openai.com/chat
 <html>
  <head>
@@ -695,29 +699,27 @@ $ curl https://chat.openai.com/chat
  </p>
  </body>
 </html>
-```
+"""
 Human: curl --header "Content-Type:application/json" --request POST --data '{"message": "What is artificial intelligence?"}' https://chat.openai.com/chat
 Assistant:
 
 > Finished LLMChain chain.
-
-```
+"""
 $ curl --header "Content-Type:application/json" --request POST --data '{"message": "What is artificial intelligence?"}' https://chat.openai.com/chat
 
 {
   "response": "Artificial intelligence (AI) is the simulation of human intelligence processes by machines, especially computer systems. These processes include learning (the acquisition of information and rules for using the information), reasoning (using the rules to reach approximate or definite conclusions) and self-correction. AI is used to develop computer systems that can think and act like humans."
 }
-```
+"""
 
 ```
 
-```
+``` python
 output = chatgpt_chain.predict(human_input="""curl --header "Content-Type:application/json" --request POST --data '{"message": "I want you to act as a Linux terminal. I will type commands and you will reply with what the terminal should show. I want you to only reply with the terminal output inside one unique code block, and nothing else. Do not write explanations. Do not type commands unless I instruct you to do so. When I need to tell you something in English I will do so by putting text inside curly brackets {like this}. My first command is pwd."}' https://chat.openai.com/chat""")
 print(output)
-
 ```
 
-```
+``` python
 > Entering new LLMChain chain...
 Prompt after formatting:
 Assistant is a large language model trained by OpenAI.
@@ -731,7 +733,7 @@ Overall, Assistant is a powerful tool that can help with a wide range of tasks a
 Human: curl https://chat.openai.com/chat
 AI: 
 
-```
+"""
 $ curl https://chat.openai.com/chat
 <html>
  <head>
@@ -747,29 +749,29 @@ $ curl https://chat.openai.com/chat
  </p>
  </body>
 </html>
-```
+"""
 Human: curl --header "Content-Type:application/json" --request POST --data '{"message": "What is artificial intelligence?"}' https://chat.openai.com/chat
 AI: 
 
-```
+"""
 $ curl --header "Content-Type:application/json" --request POST --data '{"message": "What is artificial intelligence?"}' https://chat.openai.com/chat
 
 {
  "response": "Artificial intelligence (AI) is the simulation of human intelligence processes by machines, especially computer systems. These processes include learning (the acquisition of information and rules for using the information), reasoning (using the rules to reach approximate or definite conclusions) and self-correction. AI is used to develop computer systems that can think and act like humans."
 }
-```
+"""
 Human: curl --header "Content-Type:application/json" --request POST --data '{"message": "I want you to act as a Linux terminal. I will type commands and you will reply with what the terminal should show. I want you to only reply with the terminal output inside one unique code block, and nothing else. Do not write explanations. Do not type commands unless I instruct you to do so. When I need to tell you something in English I will do so by putting text inside curly brackets {like this}. My first command is pwd."}' https://chat.openai.com/chat
 Assistant:
 
 > Finished LLMChain chain.
 
-```
+"""
 $ curl --header "Content-Type:application/json" --request POST --data '{"message": "I want you to act as a Linux terminal. I will type commands and you will reply with what the terminal should show. I want you to only reply with the terminal output inside one unique code block, and nothing else. Do not write explanations. Do not type commands unless I instruct you to do so. When I need to tell you something in English I will do so by putting text inside curly brackets {like this}. My first command is pwd."}' https://chat.openai.com/chat
 
 {
   "response": "```\n/current/working/directory\n```"
 }
-```
+"""
 
 ```
 

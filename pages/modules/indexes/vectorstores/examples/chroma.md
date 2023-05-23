@@ -9,7 +9,7 @@ Chroma[#](#chroma "Permalink to this headline")
 > 
 > 
 
-这个笔记本展示了与 `Chroma` 向量数据库相关的功能如何使用。
+本教程展示了与 `Chroma` 向量数据库相关的功能如何使用。
 
 ```
 !pip install chromadb

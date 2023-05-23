@@ -24,7 +24,7 @@ from langchain.llms import LlamaCpp
 
 ```
 
-有关更详细的步骤，请参见 [此笔记本](../modules/models/llms/integrations/llamacpp)
+有关更详细的步骤，请参见 [此教程](../modules/models/llms/integrations/llamacpp)
 
 ### 嵌入[#](#embeddings "本标题的永久链接")
 
@@ -35,5 +35,5 @@ from langchain.embeddings import LlamaCppEmbeddings
 
 ```
 
-有关更详细的步骤，请参见 [此笔记本](../modules/models/text_embedding/examples/llamacpp)
+有关更详细的步骤，请参见 [此教程](../modules/models/text_embedding/examples/llamacpp)
 

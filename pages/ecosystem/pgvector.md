@@ -33,5 +33,5 @@ from langchain.vectorstores.pgvector import PGVector
 
 ### 用法[#](#usage "此标题的永久链接")
 
-有关 PGVector 包装器的更详细演练，请参见 [此笔记本](../modules/indexes/vectorstores/examples/pgvector)
+有关 PGVector 包装器的更详细演练，请参见 [此教程](../modules/indexes/vectorstores/examples/pgvector)
 

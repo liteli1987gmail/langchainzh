@@ -3,7 +3,7 @@
 Weaviate混合搜索[#](#weaviate-hybrid-search "Permalink to this headline")
 =====================================================================
 
-本笔记本演示了如何使用[Weaviate混合搜索](https://weaviate.io/blog/hybrid-search-explained)作为LangChain检索器。
+本教程演示了如何使用[Weaviate混合搜索](https://weaviate.io/blog/hybrid-search-explained)作为LangChain检索器。
 
 ```
 import weaviate

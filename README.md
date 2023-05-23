@@ -36,6 +36,18 @@ Langchain中文网的目的是帮助中国人阅读 Langchain 的文档。
 
 Langchain 是 Harrison Chase 的开源项目，中文网仅做了翻译工作。一切版权归属Harrison Chase。
 
+^```[^\n]*[\r\n](.*[\r\n])*?^
+
+
+
+```
+
+
+``` python
+
+
+
+```  python
 
 
 此外，我们欢迎任何形式的贡献，包括但不限于代码、文档、测试、警告、错误修复等等。

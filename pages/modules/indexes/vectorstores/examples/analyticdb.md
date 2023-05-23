@@ -15,7 +15,7 @@
 > 
 > 
 
-本笔记本演示了如何使用与`AnalyticDB`向量数据库相关的功能。
+本教程演示了如何使用与`AnalyticDB`向量数据库相关的功能。
 要运行，您需要拥有一个正在运行的[分析型数据库](https://www.alibabacloud.com/help/zh/doc-detail/188196.htm)实例：
 
 * 使用[AnalyticDB云向量数据库](https://www.alibabacloud.com/product/hybriddb-postgresql)。 点击此处快速部署。

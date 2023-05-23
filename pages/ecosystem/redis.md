@@ -81,7 +81,7 @@ from langchain.vectorstores import Redis
 
 ```
 
-对于 Redis vectorstore 包装器的更详细步骤，请参见[此笔记本](../modules/indexes/vectorstores/examples/redis)。
+对于 Redis vectorstore 包装器的更详细步骤，请参见[此教程](../modules/indexes/vectorstores/examples/redis)。
 
 ### 检索器[#](#retriever "此标题的永久链接")
 
@@ -93,9 +93,9 @@ Redis 可用于持久化 LLM 会话。
 
 #### 向量存储器检索器内存[#](#vector-store-retriever-memory "此标题的永久链接")
 
-有关 `VectorStoreRetrieverMemory` 包装器的更详细步骤，请参见[此笔记本](../modules/memory/types/vectorstore_retriever_memory)。
+有关 `VectorStoreRetrieverMemory` 包装器的更详细步骤，请参见[此教程](../modules/memory/types/vectorstore_retriever_memory)。
 
 #### 聊天消息历史记录内存[#](#chat-message-history-memory "永久链接到此标题")
 
-有关将Redis用于缓存对话消息历史记录的详细示例，请参见[此笔记本](../modules/memory/examples/redis_chat_message_history)。
+有关将Redis用于缓存对话消息历史记录的详细示例，请参见[此教程](../modules/memory/examples/redis_chat_message_history)。
 

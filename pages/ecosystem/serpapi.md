@@ -24,7 +24,7 @@ from langchain.utilities import SerpAPIWrapper
 
 ```
 
-更详细的教程可以查看[这个笔记本](../modules/agents/tools/examples/serpapi)。
+更详细的教程可以查看[本教程](../modules/agents/tools/examples/serpapi)。
 
 ### 工具[#](#tool "Permalink to this headline")
 

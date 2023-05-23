@@ -3,7 +3,7 @@
 协同重排[#](#cohere-reranker "此标题的永久链接")
 ====================================
 
-此笔记本演示了如何在检索器中使用[Cohere的重排端点](https://docs.cohere.com/docs/reranking)。 这是在ContextualCompressionRetriever的思想基础上构建的。
+此教程演示了如何在检索器中使用[Cohere的重排端点](https://docs.cohere.com/docs/reranking)。 这是在ContextualCompressionRetriever的思想基础上构建的。
 
 ```
 # Helper function for printing docs

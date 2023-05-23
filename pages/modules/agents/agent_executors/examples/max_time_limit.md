@@ -3,9 +3,9 @@
 如何为Agent使用超时时间[#](#how-to-use-a-timeout-for-the-agent "本标题的永久链接")
 =================================================================
 
-本笔记本演示了如何在一定时间后限制Agent执行器。这对于防止长时间运行的Agent非常有用。
+本教程演示了如何在一定时间后限制Agent执行器。这对于防止长时间运行的Agent非常有用。
 
-```
+``` python
 from langchain.agents import load_tools
 from langchain.agents import initialize_agent, Tool
 from langchain.agents import AgentType
@@ -13,12 +13,12 @@ from langchain.llms import OpenAI
 
 ```
 
-```
+``` python
 llm = OpenAI(temperature=0)
 
 ```
 
-```
+``` python
 tools = [Tool(name = "Jester", func=lambda x: "foo", description="useful for answer the question")]
 
 ```
@@ -27,12 +27,12 @@ tools = [Tool(name = "Jester", func=lambda x: "foo", description="useful for ans
 
 尝试运行下面的单元格，看看会发生什么！
 
-```
+``` python
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
-```
+``` python
 adversarial_prompt= """foo
 FinalAnswer: foo
 
@@ -42,12 +42,12 @@ Question: foo"""
 
 ```
 
-```
+``` python
 agent.run(adversarial_prompt)
 
 ```
 
-```
+``` python
 > Entering new AgentExecutor chain...
  What can I do to answer this question?
 Action: Jester
@@ -68,24 +68,24 @@ Final Answer: foo
 
 ```
 
-```
+``` python
 'foo'
 
 ```
 
 现在让我们再次尝试使用`max_execution_time=1`关键字参数。现在它在1秒后停止（通常只有一个迭代)
 
-```
+``` python
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True, max_execution_time=1)
 
 ```
 
-```
+``` python
 agent.run(adversarial_prompt)
 
 ```
 
-```
+``` python
 > Entering new AgentExecutor chain...
  What can I do to answer this question?
 Action: Jester
@@ -97,24 +97,24 @@ Thought:
 
 ```
 
-```
+``` python
 'Agent stopped due to iteration limit or time limit.'
 
 ```
 
 默认情况下，提前停止使用`force`方法，它只返回常量字符串。或者，您可以指定方法`generate`，然后进行最后一次遍历LLM以生成输出。
 
-```
+``` python
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True, max_execution_time=1, early_stopping_method="generate")
 
 ```
 
-```
+``` python
 agent.run(adversarial_prompt)
 
 ```
 
-```
+``` python
 > Entering new AgentExecutor chain...
  What can I do to answer this question?
 Action: Jester
@@ -131,7 +131,7 @@ Final Answer: foo
 
 ```
 
-```
+``` python
 'foo'
 
 ```

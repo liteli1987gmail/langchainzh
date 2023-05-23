@@ -1,27 +1,27 @@
-自定义MultiAction Agent
+自定义多操作代理 Custom MultiAction Agent
 =======================================================================================
 
 
-本笔记本介绍如何创建您自己的自定义代理。
+本教程介绍如何创建您自己的自定义代理。
 
-代理由三个部分组成：
+代理由两部分组成：
 
-```
+```  python
 - 工具：代理可以使用的工具。
 - 代理类本身：这决定了要采取哪个操作。
 ```
 
 
-在本笔记本中，我们将介绍如何创建一个自定义代理，该代理可以预测/同时执行多个步骤。
+在本教程中，我们将介绍如何创建一个自定义代理，该代理可以预测/同时执行多个步骤。
 
-```
+```  python
 from langchain.agents import Tool, AgentExecutor, BaseMultiActionAgent
 from langchain import OpenAI, SerpAPIWrapper
 
 ```
 
 
-```
+```  python
 def random_word(query: str) -> str:
     print("\n现在我正在做这个！")
     return "foo"
@@ -29,14 +29,98 @@ def random_word(query: str) -> str:
 ```
 
 
-```
+```  python
 search = SerpAPIWrapper()
 tools = [
     Tool(
-        name = "搜索",
+        name = "Search",
         func=search.run,
-        description="在需要回答有关当前事件的问题时非常有用"
+        description="useful for when you need to answer questions about current events"
     ),
     Tool(
-        name = "R",
+        name = "RandomWord",
+        func=random_word,
+        description="call this to get a random word."
+    
+    )
+]
 ```
+
+```  python
+from typing import List, Tuple, Any, Union
+from langchain.schema import AgentAction, AgentFinish
+
+class FakeAgent(BaseMultiActionAgent):
+    """Fake Custom Agent."""
+    
+    @property
+    def input_keys(self):
+        return ["input"]
+    
+    def plan(
+        self, intermediate_steps: List[Tuple[AgentAction, str]], **kwargs: Any
+    ) -> Union[List[AgentAction], AgentFinish]:
+        """Given input, decided what to do.
+
+        Args:
+            intermediate_steps: Steps the LLM has taken to date,
+                along with observations
+            **kwargs: User inputs.
+
+        Returns:
+            Action specifying what tool to use.
+        """
+        if len(intermediate_steps) == 0:
+            return [
+                AgentAction(tool="Search", tool_input=kwargs["input"], log=""),
+                AgentAction(tool="RandomWord", tool_input=kwargs["input"], log=""),
+            ]
+        else:
+            return AgentFinish(return_values={"output": "bar"}, log="")
+
+    async def aplan(
+        self, intermediate_steps: List[Tuple[AgentAction, str]], **kwargs: Any
+    ) -> Union[List[AgentAction], AgentFinish]:
+        """Given input, decided what to do.
+
+        Args:
+            intermediate_steps: Steps the LLM has taken to date,
+                along with observations
+            **kwargs: User inputs.
+
+        Returns:
+            Action specifying what tool to use.
+        """
+        if len(intermediate_steps) == 0:
+            return [
+                AgentAction(tool="Search", tool_input=kwargs["input"], log=""),
+                AgentAction(tool="RandomWord", tool_input=kwargs["input"], log=""),
+            ]
+        else:
+            return AgentFinish(return_values={"output": "bar"}, log="")
+```
+
+```  python
+agent = FakeAgent()
+```
+
+
+```  python
+agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True)
+```
+```  python
+agent_executor.run("How many people live in canada as of 2023?")
+```
+
+```  python
+> Entering new AgentExecutor chain...
+The current population of Canada is 38,669,152 as of Monday, April 24, 2023, based on Worldometer elaboration of the latest United Nations data.
+Now I'm doing this!
+foo
+
+> Finished chain.
+```
+```  python
+'bar'
+```
+

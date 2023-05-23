@@ -3,7 +3,7 @@
 在文档中聊天，带有聊天记录
 =============
 
-本笔记本演示了如何使用`ConversationalRetrievalChain`设置聊天过程中带有聊天历史的链。与[RetrievalQAChain](vector_db_qa)唯一的区别是，这个链允许传入聊天历史，以便进行后续提问。
+本教程演示了如何使用`ConversationalRetrievalChain`设置聊天过程中带有聊天历史的链。与[RetrievalQAChain](vector_db_qa)唯一的区别是，这个链允许传入聊天历史，以便进行后续提问。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings

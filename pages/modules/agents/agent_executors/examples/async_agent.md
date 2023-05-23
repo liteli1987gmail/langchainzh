@@ -16,7 +16,7 @@ LangChain通过利用[asyncio](https://docs.python.org/zh-cn/3/library/asyncio)�
 
 在这个例子中，我们串行和并行地启动代理来回答一些问题。您可以看到，并行执行显著加快了速度。
 
-```
+```  python
 import asyncio
 import time
 
@@ -36,8 +36,7 @@ questions = [
 ]
 
 ```
-
-```
+```  python
 llm = OpenAI(temperature=0)
 tools = load_tools(["google-serper", "llm-math"], llm=llm)
 agent = initialize_agent(
@@ -52,7 +51,7 @@ print(f"Serial executed in {elapsed:0.2f} seconds.")
 
 ```
 
-```
+```  python
 > Entering new AgentExecutor chain...
  I need to find out who won the US Open men's final in 2019 and then calculate his age raised to the 0.334 power.
 Action: Google Serper
@@ -138,7 +137,7 @@ Serial executed in 89.97 seconds.
 
 ```
 
-```
+```  python
 llm = OpenAI(temperature=0)
 tools = load_tools(["google-serper","llm-math"], llm=llm)
 agent = initialize_agent(
@@ -154,7 +153,7 @@ print(f"Concurrent executed in {elapsed:0.2f} seconds.")
 
 ```
 
-```
+```  python
 > Entering new AgentExecutor chain...
 
 > Entering new AgentExecutor chain...

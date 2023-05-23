@@ -14,7 +14,7 @@ Replicate
 设置[#](#setup "永久链接到此标题")
 ------------------------
 
-要运行此笔记本电脑，您需要创建一个[Replicate](https://replicate.com)账户并安装[replicate python客户端](https://github.com/replicate/replicate-python)。
+要运行此教程电脑，您需要创建一个[Replicate](https://replicate.com)账户并安装[replicate python客户端](https://github.com/replicate/replicate-python)。
 
 ```
 !pip install replicate

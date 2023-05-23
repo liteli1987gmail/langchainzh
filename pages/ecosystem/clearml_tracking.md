@@ -9,7 +9,7 @@ ClearML集成[#](#clearml-integration "Permalink to this headline")
 获取API凭据[#](#getting-api-credentials "Permalink to this headline")
 -----------------------------------------------------------------
 
-我们将在此笔记本中使用一些API，以下是列表及其获取方式：
+我们将在此教程中使用一些API，以下是列表及其获取方式：
 
 * ClearML：https://app.clear.ml/settings/workspace-configuration
 
@@ -302,7 +302,7 @@ clearml_callback.flush_tracker(langchain_asset=llm, name="simple_sequential")
 
 此时，您可以访问 https://app.clear.ml 并查看创建的 ClearML 任务。
 
-您应该能够看到此笔记本连同任何 git 信息一起保存。包含使用参数的模型 JSON 作为工件保存，还有控制台日志和在绘图部分下，您将找到代表链流的表格。
+您应该能够看到此教程连同任何 git 信息一起保存。包含使用参数的模型 JSON 作为工件保存，还有控制台日志和在绘图部分下，您将找到代表链流的表格。
 
 最后，如果启用了可视化，这些将作为 HTML 文件存储在调试样本下。
 

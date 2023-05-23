@@ -3,7 +3,7 @@
 搜索工具
 =================
 
-本笔记本展示了各种搜索工具的使用方法。
+本教程展示了各种搜索工具的使用方法。
 
 ```
 from langchain.agents import load_tools

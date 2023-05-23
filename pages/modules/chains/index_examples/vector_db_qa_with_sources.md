@@ -3,7 +3,7 @@ RetrievalQAWithSourcesChain
 ===============
 
 
-本笔记本介绍如何使用索引对问题进行基于来源的问答。它通过使用`RetrievalQAWithSourcesChain`来完成从索引中查找文档的工作。
+本教程介绍如何使用索引对问题进行基于来源的问答。它通过使用`RetrievalQAWithSourcesChain`来完成从索引中查找文档的工作。
 
 ```
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -61,7 +61,7 @@ chain({"question": "What did the president say about Justice Breyer"}, return_on
 链式类型[#](#chain-type "此标题的永久链接")
 -------------------------------
 
-您可以轻松指定要加载和使用的不同链式类型。有关这些类型的更详细演示，请参见[本笔记本](qa_with_sources)。
+您可以轻松指定要加载和使用的不同链式类型。有关这些类型的更详细演示，请参见[本教程](qa_with_sources)。
 
 有两种加载不同链式类型的方法。首先，您可以在`from_chain_type`方法中指定链式类型参数。这允许您传递要使用的链式类型的名称。例如，在下面的示例中，我们将链式类型更改为`map_reduce`。
 

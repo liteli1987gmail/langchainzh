@@ -3,7 +3,7 @@
 ElasticSearch BM25[#](#elasticsearch-bm25 "本标题的永久链接")
 =====================================================
 
-本笔记本介绍了如何使用一个检索器，其底层使用ElasticSearcha和BM25。
+本教程介绍了如何使用一个检索器，其底层使用ElasticSearcha和BM25。
 
 要了解BM25的详细信息，请参阅[此博客文章](https://www.elastic.co/blog/practical-bm25-part-2-the-bm25-algorithm-and-its-variables)。
 

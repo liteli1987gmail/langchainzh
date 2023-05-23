@@ -2,7 +2,7 @@
 Anthropic聊天模型
 =============
 
-本笔记本将介绍如何使用Anthropic聊天模型入门。
+本教程将介绍如何使用Anthropic聊天模型入门。
 
 ```
 from langchain.chat_models import ChatAnthropic

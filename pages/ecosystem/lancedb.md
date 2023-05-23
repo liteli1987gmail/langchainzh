@@ -24,5 +24,5 @@ from langchain.vectorstores import LanceDB
 
 ```
 
-有关LanceDB包装器的更详细演练，请参见此笔记本
+有关LanceDB包装器的更详细演练，请参见此教程
 

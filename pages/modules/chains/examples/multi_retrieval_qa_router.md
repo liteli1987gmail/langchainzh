@@ -3,7 +3,7 @@
 路由器链：使用MultiRetrievalQAChain从多个提示中选择[#](#router-chains-selecting-from-multiple-prompts-with-multiretrievalqachain "Permalink to this headline")
 ===============================================================================================================================================
 
-本笔记本演示如何使用 `RouterChain` 范例创建一个动态选择使用哪个检索系统的链。具体而言，我们展示了如何使用 `MultiRetrievalQAChain` 创建一个问答链，该链选择对于给定问题最相关的检索QA链，然后使用它回答问题。
+本教程演示如何使用 `RouterChain` 范例创建一个动态选择使用哪个检索系统的链。具体而言，我们展示了如何使用 `MultiRetrievalQAChain` 创建一个问答链，该链选择对于给定问题最相关的检索QA链，然后使用它回答问题。
 
 ```
 from langchain.chains.router import MultiRetrievalQAChain

@@ -3,7 +3,7 @@
 使用Chroma进行自查询检索器[#](#self-querying-retriever-with-chroma "这个标题的永久链接")
 =====================================================================
 
-在笔记本中，我们将演示围绕Chroma向量存储器包装的`SelfQueryRetriever`。
+在教程中，我们将演示围绕Chroma向量存储器包装的`SelfQueryRetriever`。
 
 创建Chroma向量存储器[#](#creating-a-chroma-vectorstore "这个标题的永久链接")
 ------------------------------------------------------------
