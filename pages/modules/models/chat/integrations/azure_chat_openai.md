@@ -4,7 +4,7 @@
 托管在Azure上的OpenAI端点
 =============
 
-本笔记本将介绍如何连接到托管在Azure上的OpenAI端点。
+本教程将介绍如何连接到托管在Azure上的OpenAI端点。
 
 ```
 from langchain.chat_models import AzureChatOpenAI

@@ -3,34 +3,34 @@ Pandas Dataframe代理
 [#](#pandas-dataframe-agent "Permalink to this headline")
 ================
 
-本笔记本演示如何使用代理与pandas数据框交互。主要优化问答。
+本教程演示如何使用代理与pandas数据框交互。主要优化问答。
 
 **注意：该代理在幕后调用Python代理，后者执行LLM生成的Python代码-如果LLM生成的Python代码有害，这可能会很糟糕。请谨慎使用。**
 
-```
+```  python
 from langchain.agents import create_pandas_dataframe_agent
-
 ```
 
-```
+
+```  python
 from langchain.llms import OpenAI
 import pandas as pd
 
 df = pd.read_csv('titanic.csv')
-
 ```
 
-```
+
+```  python
 agent = create_pandas_dataframe_agent(OpenAI(temperature=0), df, verbose=True)
-
 ```
 
-```
+
+```  python
 agent.run("how many rows are there?")
-
 ```
 
-```
+
+```  python
 > Entering new AgentExecutor chain...
 Thought: I need to count the number of rows
 Action: python_repl_ast
@@ -40,20 +40,20 @@ Thought: I now know the final answer
 Final Answer: There are 891 rows in the dataframe.
 
 > Finished chain.
-
 ```
 
-```
+
+```  python
 'There are 891 rows in the dataframe.'
-
 ```
 
-```
+
+```  python
 agent.run("how many people have more than 3 siblings")
-
 ```
 
-```
+
+```  python
 > Entering new AgentExecutor chain...
 Thought: I need to count the number of people with more than 3 siblings
 Action: python_repl_ast
@@ -63,20 +63,20 @@ Thought: I now know the final answer
 Final Answer: 30 people have more than 3 siblings.
 
 > Finished chain.
-
 ```
 
-```
+
+```  python
 '30 people have more than 3 siblings.'
-
 ```
 
-```
+
+```  python
 agent.run("whats the square root of the average age?")
-
 ```
 
-```
+
+```  python
 > Entering new AgentExecutor chain...
 Thought: I need to calculate the average age first
 Action: python_repl_ast
@@ -98,11 +98,11 @@ Thought: I now know the final answer
 Final Answer: 5.449689683556195
 
 > Finished chain.
-
 ```
 
-```
+
+```  python
 '5.449689683556195'
-
 ```
+
 

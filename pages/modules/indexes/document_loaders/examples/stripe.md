@@ -2,7 +2,7 @@
 
 # Stripe
 
-本笔记本介绍了如何从Stripe REST API中加载数据到可以摄取到LangChain的格式，以及矢量化的示例用法。
+本教程介绍了如何从Stripe REST API中加载数据到可以摄取到LangChain的格式，以及矢量化的示例用法。
  
 
 

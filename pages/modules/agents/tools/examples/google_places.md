@@ -2,7 +2,7 @@
 
 # Google地点
 
-本笔记本将介绍如何使用Google Places API。
+本教程将介绍如何使用Google Places API。
 
 ```
 #!pip install googlemaps

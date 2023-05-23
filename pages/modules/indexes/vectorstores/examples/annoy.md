@@ -9,7 +9,7 @@
 > 
 > 
 
-本笔记本展示了如何使用与`Annoy`向量数据库相关的功能。
+本教程展示了如何使用与`Annoy`向量数据库相关的功能。
 
 通过[Annoy](https://github.com/spotify/annoy)
 

@@ -25,5 +25,5 @@ from langchain.vectorstores import OpenSearchVectorSearch
 
 ```
 
-如果您需要更详细的OpenSearch包装器演示，请参见[此笔记本](../modules/indexes/vectorstores/examples/opensearch)
+如果您需要更详细的OpenSearch包装器演示，请参见[此教程](../modules/indexes/vectorstores/examples/opensearch)
 

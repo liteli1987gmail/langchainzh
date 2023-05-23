@@ -9,7 +9,7 @@ Redis[#](#redis "Permalink to this headline")
 > 
 > 
 
-本笔记本展示如何使用与[Redis向量数据库](https://redis.com/solutions/use-cases/vector-database/)相关的功能。
+本教程展示如何使用与[Redis向量数据库](https://redis.com/solutions/use-cases/vector-database/)相关的功能。
 
 ```
 !pip install redis

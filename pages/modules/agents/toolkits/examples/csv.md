@@ -3,7 +3,7 @@
 
 # CSV代理[#](#csv-agent "Permalink to this headline")
 
-本笔记本展示了如何使用代理与CSV交互，主要针对问题回答进行了优化。
+本教程展示了如何使用代理与CSV交互，主要针对问题回答进行了优化。
 
 **注意：此代理在幕后调用Pandas DataFrame代理，后者调用Python代理，执行LLM生成的Python代码 - 如果LLM生成的Python代码有害，则可能会存在风险，请谨慎使用。**
 
@@ -14,10 +14,10 @@
 
 
 
-```
+ ```    python
 from langchain.agents import create_csv_agent
 
-```
+ ``` 
 
 
 
@@ -26,12 +26,10 @@ from langchain.agents import create_csv_agent
 
 
 
-
-
-```
+ ```    python
 from langchain.llms import OpenAI
 
-```
+ ``` 
 
 
 
@@ -40,12 +38,10 @@ from langchain.llms import OpenAI
 
 
 
-
-
-```
+ ```    python
 agent = create_csv_agent(OpenAI(temperature=0), 'titanic.csv', verbose=True)
 
-```
+ ``` 
 
 
 
@@ -54,21 +50,17 @@ agent = create_csv_agent(OpenAI(temperature=0), 'titanic.csv', verbose=True)
 
 
 
-
-
-```
+ ```    python
 agent.run("how many rows are there?")
 
-```
+ ``` 
 
 
 
 
 
 
-
-
-```
+ ```    python
 > Entering new AgentExecutor chain...
 Thought: I need to count the number of rows
 Action: python_repl_ast
@@ -79,17 +71,15 @@ Final Answer: There are 891 rows in the dataframe.
 
 > Finished chain.
 
-```
+ ``` 
 
 
 
 
-
-
-```
+ ```    python
 'There are 891 rows in the dataframe.'
 
-```
+ ``` 
 
 
 
@@ -98,21 +88,17 @@ Final Answer: There are 891 rows in the dataframe.
 
 
 
-
-
-```
+ ```    python
 agent.run("how many people have more than 3 sibligngs")
 
-```
+ ``` 
 
 
 
 
 
 
-
-
-```
+ ```    python
 > Entering new AgentExecutor chain...
 Thought: I need to count the number of people with more than 3 siblings
 Action: python_repl_ast
@@ -123,17 +109,15 @@ Final Answer: 30 people have more than 3 siblings.
 
 > Finished chain.
 
-```
+ ``` 
 
 
 
 
-
-
-```
+ ```    python
 '30 people have more than 3 siblings.'
 
-```
+ ``` 
 
 
 
@@ -142,21 +126,17 @@ Final Answer: 30 people have more than 3 siblings.
 
 
 
-
-
-```
+ ```    python
 agent.run("whats the square root of the average age?")
 
-```
+ ``` 
 
 
 
 
 
 
-
-
-```
+ ```    python
 > Entering new AgentExecutor chain...
 Thought: I need to calculate the average age first
 Action: python_repl_ast
@@ -179,19 +159,15 @@ Final Answer: 5.449689683556195
 
 > Finished chain.
 
-```
+ ``` 
 
 
 
 
-
-
-```
+ ```    python
 '5.449689683556195'
 
-```
-
-
+ ``` 
 
 
 

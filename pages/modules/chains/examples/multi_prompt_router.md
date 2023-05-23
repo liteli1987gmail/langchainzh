@@ -3,7 +3,7 @@
 路由器链：使用MultiPromptChain从多个提示中选择[#](#router-chains-selecting-from-multiple-prompts-with-multipromptchain "Permalink to this headline")
 =====================================================================================================================================
 
-这个笔记本演示了如何使用RouterChain范例创建一个链，它动态地选择用于给定输入的提示。具体来说，我们展示了如何使用MultiPromptChain创建一个问答链，该链选择与给定问题最相关的提示，然后使用该提示回答问题。
+本教程演示了如何使用RouterChain范例创建一个链，它动态地选择用于给定输入的提示。具体来说，我们展示了如何使用MultiPromptChain创建一个问答链，该链选择与给定问题最相关的提示，然后使用该提示回答问题。
 
 ```
 from langchain.chains.router import MultiPromptChain

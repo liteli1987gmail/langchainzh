@@ -9,7 +9,7 @@ Facebook聊天[#](#facebook-chat "Permalink to this headline")
 > 
 > 
 
-本笔记本涵盖了如何将数据从[Facebook聊天](https://www.facebook.com/business/help/1646890868956360)加载到可以被LangChain摄取的格式中。
+本教程涵盖了如何将数据从[Facebook聊天](https://www.facebook.com/business/help/1646890868956360)加载到可以被LangChain摄取的格式中。
 
 ```
 #pip install pandas

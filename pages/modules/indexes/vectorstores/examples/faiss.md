@@ -11,7 +11,7 @@ FAISS[#](#faiss "到此标题的永久链接")
 
 [Faiss 文档](https://faiss.ai/)。
 
-这个笔记本展示了如何使用与 `FAISS` 向量数据库相关的功能。
+本教程展示了如何使用与 `FAISS` 向量数据库相关的功能。
 
 ```
 #!pip install faiss

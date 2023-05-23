@@ -45,5 +45,5 @@ from langchain.vectorstores import Weaviate
 ```
 
 有关 Weaviate 包装器的详细演练，
-请参见 [此笔记本]("../modules/indexes/vectorstores/examples/weaviate")
+请参见 [此教程]("../modules/indexes/vectorstores/examples/weaviate")
 

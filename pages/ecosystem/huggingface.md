@@ -66,7 +66,7 @@ from langchain.embeddings import HuggingFaceHubEmbeddings
 
 ```
 
-有关更详细的操作说明，请参见[此笔记本电脑](../modules/models/text_embedding/examples/huggingfacehub)
+有关更详细的操作说明，请参见[此教程电脑](../modules/models/text_embedding/examples/huggingfacehub)
 
 ### 分词器[#](#tokenizer "Permalink to this headline")
 
@@ -81,7 +81,7 @@ CharacterTextSplitter.from_huggingface_tokenizer(...)
 
 ```
 
-有关更详细的操作说明，请参见[此笔记本电脑](../modules/indexes/text_splitters/examples/huggingface_length_function)
+有关更详细的操作说明，请参见[此教程电脑](../modules/indexes/text_splitters/examples/huggingface_length_function)
 
 ### 数据集[#](#datasets "Permalink to this headline")
 

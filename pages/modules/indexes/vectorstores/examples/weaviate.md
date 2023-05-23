@@ -9,7 +9,7 @@ Weaviate[#](#weaviate "Permalink to this headline")
 > 
 > 
 
-本笔记本演示了与 `Weaviate` 向量数据库相关的功能。
+本教程演示了与 `Weaviate` 向量数据库相关的功能。
 
 请参阅 `Weaviate` 的 [安装说明](https://weaviate.io/developers/weaviate/installation)。
 

@@ -2,15 +2,14 @@
 [#](#natural-language-apis "Permalink to this headline")
 ==================
 
-自然语言API工具包（NLAToolkits)使得LangChain代理可以高效地跨终端点进行调用计划和组合。本笔记本演示了Speak、Klarna和Spoonacluar API的样例组合。
+自然语言API工具包（NLAToolkits)使得LangChain代理可以高效地跨终端点进行调用计划和组合。本教程演示了Speak、Klarna和Spoonacluar API的样例组合。
 
-有关包含在NLAToolkit中的OpenAPI链的详细演练，请参见[OpenAPI操作链](openapi)笔记本。
+有关包含在NLAToolkit中的OpenAPI链的详细演练，请参见[OpenAPI操作链](openapi)教程。
 
 首先，导入依赖项并加载LLM
 [#](#first-import-dependencies-and-load-the-llm "Permalink to this headline")
 ------------------------------------------------------------------------------
-
-```
+```  python
 from typing import List, Optional
 from langchain.chains import LLMChain
 from langchain.llms import OpenAI
@@ -19,30 +18,31 @@ from langchain.requests import Requests
 from langchain.tools import APIOperation, OpenAPISpec
 from langchain.agents import AgentType, Tool, initialize_agent
 from langchain.agents.agent_toolkits import NLAToolkit
-
 ```
 
-```
+
+```  python
 # 选择要使用的LLM。在这里，我们使用text-davinci-003
 llm = OpenAI(temperature=0, max_tokens=700) #您可以在不同的核心LLM之间切换。
-
 ```
+
 
 接下来，加载自然语言API工具包
 [#](#next-load-the-natural-language-api-toolkits "Permalink to this headline")
 --------------------------------------------------------------------------------
-
-```
+```  python
 speak_toolkit = NLAToolkit.from_llm_and_url(llm, "https://api.speak.com/openapi.yaml")
 klarna_toolkit = NLAToolkit.from_llm_and_url(llm, "https://www.klarna.com/us/shopping/public/openai/v0/api-docs/")
-
 ```
 
-```
+
+
+```  python
 尝试加载OpenAPI 3.0.1规范。这可能会导致性能降低。将您的OpenAPI规范转换为3.1.*规范以获得更好的支持。
 尝试加载OpenAPI 3.0.1规范。这可能会导致性能降低。将您的OpenAPI规范转换为3.1.*规范以获得更好的支持。
 尝试加载OpenAPI 3.0.1规范。这可能会导致性能降低。将您的OpenAPI规范转换为3.1.*规范以获得更好的支持。
 ```
+
 
 
 
@@ -53,8 +53,7 @@ klarna_toolkit = NLAToolkit.from_llm_and_url(llm, "https://www.klarna.com/us/sho
 
  创建代理
 [#](#create-the-agent "Permalink to this headline")
-
-```
+```  python
 #稍微修改默认代理的说明
 openapi_format_instructions = """使用以下格式：
 
@@ -68,11 +67,10 @@ openapi_format_instructions = """使用以下格式：
 最终答案：原始输入问题的最终答案，具有适当的详细信息
 
 在回答最终答案时，请记住，您回答的人无法看到您的任何思考/操作/操作输入/观察结果，因此如果有任何相关信息，您需要在回答中明确包含它。"""
-
 ```
 
 
-```
+```  python
 natural_language_tools = speak_toolkit.get_tools() + klarna_toolkit.get_tools()
 mrkl = initialize_agent(natural_language_tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
                         verbose=True, agent_kwargs={"format_instructions":openapi_format_instructions})
@@ -80,13 +78,13 @@ mrkl = initialize_agent(natural_language_tools, llm, agent=AgentType.ZERO_SHOT_R
 
 
 
-```
+```  python
 mrkl.run("I have an end of year party for my Italian class and have to buy some Italian clothes for it")
 ```
 
 
 
-```
+```  python
 > Entering new AgentExecutor chain...
  我需要了解哪些意大利服装可用
 操作：Open_AI_Klarna_product_Api.productsUsingGET
@@ -96,13 +94,13 @@ mrkl.run("I have an end of year party for my Italian class and have to buy some 
 最终答案：您可以为您义大利班的年终派对购买两种颜色为意大利蓝色的Alé品牌产品。Alé Colour Block Short Sleeve Jersey Men - Italian Blue售价为86.49美元，Alé Dolid Flash Jersey Men - Italian Blue售价为40.00美元。
 
 > 链结束。
-
 ```
 
 
-```
+```  python
 '您可以为您义大利班的年终派对购买两种颜色为意大利蓝色的Alé品牌产品。Alé Colour Block Short Sleeve Jersey Men - Italian Blue售价为86.49美元，Alé Dolid Flash Jersey Men - Italian Blue售价为40.00美元。'
 ```
+
 
 
 
@@ -126,10 +124,8 @@ mrkl.run("I have an end of year party for my Italian class and have to buy some 
 
 
 
-
-```
+```  python
 spoonacular_api_key = "" # Copy from the API Console
-
 ```
 
 
@@ -141,7 +137,7 @@ spoonacular_api_key = "" # Copy from the API Console
 
 
 
-```
+```  python
 requests = Requests(headers={"x-api-key": spoonacular_api_key})
 spoonacular_toolkit = NLAToolkit.from_llm_and_url(
     llm, 
@@ -149,7 +145,6 @@ spoonacular_toolkit = NLAToolkit.from_llm_and_url(
     requests=requests,
     max_text_length=1800, # If you want to truncate the response text
 )
-
 ```
 
 
@@ -159,7 +154,7 @@ spoonacular_toolkit = NLAToolkit.from_llm_and_url(
 
 
 
-```
+```  python
 Attempting to load an OpenAPI 3.0.0 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
 Unsupported APIPropertyLocation "header" for parameter Content-Type. Valid values are ['path', 'query'] Ignoring optional parameter
 Unsupported APIPropertyLocation "header" for parameter Accept. Valid values are ['path', 'query'] Ignoring optional parameter
@@ -179,7 +174,6 @@ Unsupported APIPropertyLocation "header" for parameter Accept. Valid values are 
 Unsupported APIPropertyLocation "header" for parameter Accept. Valid values are ['path', 'query'] Ignoring optional parameter
 Unsupported APIPropertyLocation "header" for parameter Accept. Valid values are ['path', 'query'] Ignoring optional parameter
 Unsupported APIPropertyLocation "header" for parameter Content-Type. Valid values are ['path', 'query'] Ignoring optional parameter
-
 ```
 
 
@@ -191,13 +185,12 @@ Unsupported APIPropertyLocation "header" for parameter Content-Type. Valid value
 
 
 
-```
+```  python
 natural_language_api_tools = (speak_toolkit.get_tools() 
                               + klarna_toolkit.get_tools() 
                               + spoonacular_toolkit.get_tools()[:30]
                              )
 print(f"{len(natural_language_api_tools)} tools loaded.")
-
 ```
 
 
@@ -207,9 +200,7 @@ print(f"{len(natural_language_api_tools)} tools loaded.")
 
 
 
-```
-34 tools loaded.
-
+```  python34 tools loaded.
 ```
 
 
@@ -221,11 +212,10 @@ print(f"{len(natural_language_api_tools)} tools loaded.")
 
 
 
-```
+```  python
 # Create an agent with the new tools
 mrkl = initialize_agent(natural_language_api_tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, 
                         verbose=True, agent_kwargs={"format_instructions":openapi_format_instructions})
-
 ```
 
 
@@ -237,14 +227,13 @@ mrkl = initialize_agent(natural_language_api_tools, llm, agent=AgentType.ZERO_SH
 
 
 
-```
+```  python
 # Make the query more complex!
 user_input = (
     "I'm learning Italian, and my language class is having an end of year party... "
     " Could you help me find an Italian outfit to wear and"
     " an appropriate recipe to prepare so I can present for the class in Italian?"
 )
-
 ```
 
 
@@ -256,9 +245,8 @@ user_input = (
 
 
 
-```
+```  python
 mrkl.run(user_input)
-
 ```
 
 
@@ -268,7 +256,7 @@ mrkl.run(user_input)
 
 
 
-```
+```  python
 > Entering new AgentExecutor chain...
  I need to find a recipe and an outfit that is Italian-themed.
 Action: spoonacular_API.searchRecipes
@@ -282,7 +270,6 @@ Thought: I now know the final answer.
 Final Answer: To present for your Italian language class, you could wear an Italian Gold Sparkle Perfectina Necklace - Gold, an Italian Design Miami Cuban Link Chain Necklace - Gold, or an Italian Gold Miami Cuban Link Chain Necklace - Gold. For a recipe, you could make Turkey Tomato Cheese Pizza, Broccolini Quinoa Pilaf, Bruschetta Style Pork & Pasta, Salmon Quinoa Risotto, Italian Tuna Pasta, Roasted Brussels Sprouts With Garlic, Asparagus Lemon Risotto, Italian Steamed Artichokes, Crispy Italian Cauliflower Poppers Appetizer, or Pappa Al Pomodoro.
 
 > Finished chain.
-
 ```
 
 
@@ -290,10 +277,10 @@ Final Answer: To present for your Italian language class, you could wear an Ital
 
 
 
-```
+```  python
 'To present for your Italian language class, you could wear an Italian Gold Sparkle Perfectina Necklace - Gold, an Italian Design Miami Cuban Link Chain Necklace - Gold, or an Italian Gold Miami Cuban Link Chain Necklace - Gold. For a recipe, you could make Turkey Tomato Cheese Pizza, Broccolini Quinoa Pilaf, Bruschetta Style Pork & Pasta, Salmon Quinoa Risotto, Italian Tuna Pasta, Roasted Brussels Sprouts With Garlic, Asparagus Lemon Risotto, Italian Steamed Artichokes, Crispy Italian Cauliflower Poppers Appetizer, or Pappa Al Pomodoro.'
-
 ```
+
 
 
 
@@ -311,10 +298,8 @@ Final Answer: To present for your Italian language class, you could wear an Ital
 
 
 
-
-```
+```  python
 natural_language_api_tools[1].run("Tell the LangChain audience to 'enjoy the meal' in Italian, please!")
-
 ```
 
 
@@ -324,10 +309,10 @@ natural_language_api_tools[1].run("Tell the LangChain audience to 'enjoy the mea
 
 
 
-```
+```  python
 "In Italian, you can say 'Buon appetito' to someone to wish them to enjoy their meal. This phrase is commonly used in Italy when someone is about to eat, often at the beginning of a meal. It's similar to saying 'Bon appétit' in French or 'Guten Appetit' in German."
-
 ```
+
 
 
 

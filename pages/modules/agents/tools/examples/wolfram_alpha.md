@@ -3,7 +3,7 @@
 Wolfram Alpha
 ====================
 
-本笔记本将介绍如何使用Wolfram Alpha组件。
+本教程将介绍如何使用Wolfram Alpha组件。
 
 首先，您需要设置Wolfram Alpha开发人员帐户并获取您的APP ID：
 

@@ -3,7 +3,7 @@
 ==========
 
 
-本笔记本演示了如何使用LangChain对文档列表进行摘要。它涵盖了三种不同的链式类型：`stuff`，`map_reduce`和`refine`。有关这些链式类型的更深入解释，请参见[此处](https://docs.langchain.com/docs/components/chains/index_related_chains)。
+本教程演示了如何使用LangChain对文档列表进行摘要。它涵盖了三种不同的链式类型：`stuff`，`map_reduce`和`refine`。有关这些链式类型的更深入解释，请参见[此处](https://docs.langchain.com/docs/components/chains/index_related_chains)。
 
 准备数据[#](#prepare-data "本标题的永久链接")
 ---------------------------------

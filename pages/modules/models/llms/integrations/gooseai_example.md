@@ -5,7 +5,7 @@ GooseAI[#](#gooseai "Permalink to this headline")
 
 `GooseAI`是一个完全托管的NLP-as-a-Service，通过API提供。GooseAI提供访问[这些模型](https://goose.ai/docs/models)。
 
-本笔记本介绍了如何使用[GooseAI](https://goose.ai/)与Langchain。
+本教程介绍了如何使用[GooseAI](https://goose.ai/)与Langchain。
 
 安装openai[#](#install-openai "Permalink to this headline")
 ---------------------------------------------------------
@@ -47,7 +47,7 @@ os.environ["GOOSEAI_API_KEY"] = GOOSEAI_API_KEY
 创建GooseAI实例[#](#create-the-gooseai-instance "此标题的永久链接")
 -------------------------------------------------------
 
-您可以指定不同的参数，如模型名称、生成的最大标记、温度等。
+您可以指定不同的参数，如模型名称、生成的最大标记、温度（temperature）等。
 
 ```
 llm = GooseAI()

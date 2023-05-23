@@ -3,7 +3,7 @@
 Postgres聊天消息历史记录[#](#postgres-chat-message-history "此标题的永久链接")
 ==============================================================
 
-本笔记本介绍如何使用Postgres存储聊天消息历史记录。
+本教程介绍如何使用Postgres存储聊天消息历史记录。
 
 ```
 from langchain.memory import PostgresChatMessageHistory

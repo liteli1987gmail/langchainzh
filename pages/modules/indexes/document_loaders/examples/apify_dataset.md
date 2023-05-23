@@ -9,12 +9,12 @@ Apify数据集[#](#apify-dataset "此标题的永久链接")
 > 
 > 
 
-本笔记本演示了如何将Apify数据集加载到LangChain中。
+本教程演示了如何将Apify数据集加载到LangChain中。
 
 前提条件[#](#prerequisites "此标题的永久链接")
 ----------------------------------
 
-您需要在Apify平台上拥有现有的数据集。如果您没有，请先查看[此笔记本](../../../agents/tools/examples/apify)，了解如何使用Apify从文档、知识库、帮助中心或博客中提取内容。
+您需要在Apify平台上拥有现有的数据集。如果您没有，请先查看[此教程](../../../agents/tools/examples/apify)，了解如何使用Apify从文档、知识库、帮助中心或博客中提取内容。
 
 ```
 #!pip install apify-client

@@ -7,7 +7,7 @@ OpenSearch
 > 
 > 
 
-此笔记本演示了如何使用与`OpenSearch`数据库相关的功能。
+此教程演示了如何使用与`OpenSearch`数据库相关的功能。
 
 要运行，您应该启动并运行opensearch实例：[here](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/index/) `similarity_search`默认执行Approximate k-NN搜索，它使用几个算法之一，如Lucene、Nmslib、Faiss，推荐用于大型数据集。要执行暴力搜索，我们有其他搜索方法，称为脚本评分和无痛脚本。请查看[此文档](https://opensearch.org/docs/latest/search-plugins/knn/index/)了解更多详细信息。
 

@@ -3,7 +3,7 @@
 SVM检索器[#](#svm-retriever "此标题的永久链接")
 ====================================
 
-本笔记本介绍了如何使用一个在底层使用scikit-learn的SVM的检索器。
+本教程介绍了如何使用一个在底层使用scikit-learn的SVM的检索器。
 
 主要基于 https://github.com/karpathy/randomfun/blob/master/knn_vs_svm.ipynb
 

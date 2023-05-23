@@ -3,7 +3,7 @@
 TF-IDF检索器[＃](#tf-idf-retriever "永久链接到此标题")
 ==========================================
 
-本笔记本概述了如何使用使用scikit-learn的TF-IDF的检索器。
+本教程概述了如何使用使用scikit-learn的TF-IDF的检索器。
 
 有关TF-IDF详细信息，请参见[此博客文章](https://medium.com/data-science-bootcamp/tf-idf-basics-of-information-retrieval-48de122b2a4c)。
 

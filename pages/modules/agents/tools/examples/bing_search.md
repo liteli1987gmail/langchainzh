@@ -3,7 +3,7 @@
 必应搜索[#](#bing-search "此标题的固定链接")
 ================================
 
-本笔记本介绍如何使用必应搜索组件。
+本教程介绍如何使用必应搜索组件。
 
 首先，您需要设置正确的API密钥和环境变量。要设置它，请按照[此处](https://levelup.gitconnected.com/api-tutorial-how-to-use-bing-web-search-api-in-python-4165d5592a7e)的说明操作。
 

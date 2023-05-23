@@ -3,9 +3,10 @@
 Python 代理[#](#python-agent "永久链接到此标题")
 ======================================
 
-这个笔记本展示了一个代理程序，旨在编写和执行Python代码来回答问题。
+本教程展示了一个代理程序，旨在编写和执行Python代码来回答问题。
 
-```
+
+```  python
 from langchain.agents.agent_toolkits import create_python_agent
 from langchain.tools.python.tool import PythonREPLTool
 from langchain.python import PythonREPL
@@ -13,7 +14,9 @@ from langchain.llms.openai import OpenAI
 
 ```
 
-```
+
+
+```  python
 agent_executor = create_python_agent(
     llm=OpenAI(temperature=0, max_tokens=1000),
     tool=PythonREPLTool(),
@@ -22,17 +25,21 @@ agent_executor = create_python_agent(
 
 ```
 
+
 斐波那契例子[#](#fibonacci-example "永久链接到此标题")
 ----------------------------------------
 
 这个例子是由[John Wiseman](https://twitter.com/lemonodor/status/1628270074074398720?s=20)创建的。
 
-```
+
+```  python
 agent_executor.run("What is the 10th fibonacci number?")
 
 ```
 
-```
+
+
+```  python
 > Entering new AgentExecutor chain...
  I need to calculate the 10th fibonacci number
 Action: Python REPL
@@ -55,24 +62,30 @@ Final Answer: 55
 
 ```
 
-```
+
+
+```  python
 '55'
 
 ```
+
 
 训练神经网络[#](#training-neural-net "永久链接到此标题")
 ------------------------------------------
 
 这个例子是由[Samee Ur Rehman](https://twitter.com/sameeurehman/status/1630130518133207046?s=20)创建的。
 
-```
+
+```  python
 agent_executor.run("""Understand, write a single neuron neural network in PyTorch.
 Take synthetic data for y=2x. Train for 1000 epochs and print every 100 epochs.
 Return prediction for x = 5""")
 
 ```
 
-```
+
+
+```  python
 > Entering new AgentExecutor chain...
  I need to write a neural network in PyTorch and train it on the given data.
 Action: Python REPL
@@ -131,8 +144,11 @@ Final Answer: The prediction for x = 5 is 10.0.
 
 ```
 
-```
+
+
+```  python
 'The prediction for x = 5 is 10.0.'
 
 ```
+
 

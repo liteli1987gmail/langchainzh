@@ -26,5 +26,5 @@ from langchain.vectorstores import Milvus
 
 ```
 
-有关Miluvs包装器的更详细的演练，请参见[此笔记本](../modules/indexes/vectorstores/examples/milvus)
+有关Miluvs包装器的更详细的演练，请参见[此教程](../modules/indexes/vectorstores/examples/milvus)
 

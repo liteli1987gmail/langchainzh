@@ -1,6 +1,6 @@
 # LLMSummarizationCheckerChain
 
-本笔记本展示了使用LLMSummarizationCheckerChain处理不同类型文本的一些示例。
+本教程展示了使用LLMSummarizationCheckerChain处理不同类型文本的一些示例。
 
 它与LLMCheckerChain有一些不同之处，因为它没有对输入文本（或概述)的格式做出任何假设。
 

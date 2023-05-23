@@ -1,7 +1,7 @@
 Llama-cpp嵌入
 =============
 
-本笔记本将介绍如何在LangChain中使用Llama-cpp嵌入。
+本教程将介绍如何在LangChain中使用Llama-cpp嵌入。
 
 ```
 !pip install llama-cpp-python

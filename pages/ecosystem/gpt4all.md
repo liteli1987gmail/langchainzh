@@ -53,5 +53,5 @@ model("Once upon a time, ", callbacks=callbacks)
 
 您可以在[pyllamacpp](https://github.com/nomic-ai/pyllamacpp)存储库中找到模型文件下载链接。
 
-有关更详细的演示，请参见[此笔记本](../modules/models/llms/integrations/gpt4all)
+有关更详细的演示，请参见[此教程](../modules/models/llms/integrations/gpt4all)
 

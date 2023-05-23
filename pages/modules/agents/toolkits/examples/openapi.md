@@ -18,22 +18,18 @@ OpenAPI代理[#](#openapi-agents "此标题的永久链接")
 
 ### 首先，让我们收集一些OpenAPI规范。[#](#to-start-let-s-collect-some-openapi-specs "此标题的永久链接")
 
-```
+```  python
 import os, yaml
-
-```
-
-```
+ ``` 
+```  python
 !wget https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml
 !mv openapi.yaml openai_openapi.yaml
 !wget https://www.klarna.com/us/shopping/public/openai/v0/api-docs
 !mv api-docs klarna_openapi.yaml
 !wget https://raw.githubusercontent.com/APIs-guru/openapi-directory/main/APIs/spotify.com/1.0.0/openapi.yaml
 !mv openapi.yaml spotify_openapi.yaml
-
-```
-
-```
+ ``` 
+```  python
 --2023-03-31 15:45:56--  https://raw.githubusercontent.com/openai/openai-openapi/master/openapi.yaml
 Resolving raw.githubusercontent.com (raw.githubusercontent.com)... 185.199.110.133, 185.199.109.133, 185.199.111.133, ...
 Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.110.133|:443... connected.
@@ -66,15 +62,11 @@ Saving to: ‘openapi.yaml’
 openapi.yaml        100%[===================>] 280.03K  --.-KB/s    in 0.02s   
 
 2023-03-31 15:45:58 (13.3 MB/s) - ‘openapi.yaml’ saved [286747/286747]
-
-```
-
-```
+ ``` 
+```  python
 from langchain.agents.agent_toolkits.openapi.spec import reduce_openapi_spec
-
-```
-
-```
+ ``` 
+```  python
 with open("openai_openapi.yaml") as f:
     raw_openai_api_spec = yaml.load(f, Loader=yaml.Loader)
 openai_api_spec = reduce_openapi_spec(raw_openai_api_spec)
@@ -86,9 +78,7 @@ klarna_api_spec = reduce_openapi_spec(raw_klarna_api_spec)
 with open("spotify_openapi.yaml") as f:
     raw_spotify_api_spec = yaml.load(f, Loader=yaml.Loader)
 spotify_api_spec = reduce_openapi_spec(raw_spotify_api_spec)
-
-```
-
+ ``` 
 ---
 
 我们将使用Spotify API作为比较复杂的API的一个例子。如果您想复制此过程，则需要进行一些与身份验证相关的设置。
@@ -97,7 +87,7 @@ spotify_api_spec = reduce_openapi_spec(raw_spotify_api_spec)
 
 * 要获取访问令牌（并保持其更新)，您可以实现oauth流程，或者您可以使用`spotipy`。如果您已将您的Spotify凭据设置为环境变量`SPOTIPY_CLIENT_ID`、`SPOTIPY_CLIENT_SECRET`和`SPOTIPY_REDIRECT_URI`，则可以使用下面的辅助函数：
 
-```
+```  python
 import spotipy.util as util
 from langchain.requests import RequestsWrapper
 
@@ -111,12 +101,10 @@ def construct_spotify_auth_headers(raw_spec: dict):
 # Get API credentials.
 headers = construct_spotify_auth_headers(raw_spotify_api_spec)
 requests_wrapper = RequestsWrapper(headers=headers)
-
-```
-
+ ``` 
 ### 这个规范有多大？[#](#how-big-is-this-spec "此标题的永久链接")
 
-```
+```  python
 endpoints = [
     (route, operation)
     for route, operations in raw_spotify_api_spec["paths"].items()
@@ -124,55 +112,41 @@ endpoints = [
     if operation in ["get", "post"]
 ]
 len(endpoints)
-
-```
-
-```
+ ``` 
+```  python
 63
-
-```
-
-```
+ ``` 
+```  python
 import tiktoken
 enc = tiktoken.encoding_for_model('text-davinci-003')
 def count_tokens(s): return len(enc.encode(s))
 
 count_tokens(yaml.dump(raw_spotify_api_spec))
-
-```
-
-```
+ ``` 
+```  python
 80326
-
-```
-
+ ``` 
 ### 让我们来看一些例子！[#](#let-s-see-some-examples "此标题的永久链接")
 
 从GPT-4开始。（针对GPT-3家族进行一些鲁棒性迭代。)
 
-```
+```  python
 from langchain.llms.openai import OpenAI
 from langchain.agents.agent_toolkits.openapi import planner
 llm = OpenAI(model_name="gpt-4", temperature=0.0)
-
-```
-
-```
+ ``` 
+```  python
 /Users/jeremywelborn/src/langchain/langchain/llms/openai.py:169: UserWarning: You are trying to use a chat model. This way of initializing it is no longer supported. Instead, please use: `from langchain.chat_models import ChatOpenAI`
   warnings.warn(
 /Users/jeremywelborn/src/langchain/langchain/llms/openai.py:608: UserWarning: You are trying to use a chat model. This way of initializing it is no longer supported. Instead, please use: `from langchain.chat_models import ChatOpenAI`
   warnings.warn(
-
-```
-
-```
+ ``` 
+```  python
 spotify_agent = planner.create_openapi_agent(spotify_api_spec, requests_wrapper, llm)
 user_query = "make me a playlist with the first song from kind of blue. call it machine blues."
 spotify_agent.run(user_query)
-
-```
-
-```
+ ``` 
+```  python
 > Entering new AgentExecutor chain...
 Action: api_planner
 Action Input: I need to find the right API calls to create a playlist with the first song from Kind of Blue and name it Machine Blues
@@ -216,21 +190,15 @@ Thought:I am finished executing the plan and have created the playlist with the 
 Final Answer: I have created a playlist called "Machine Blues" with the first song from the "Kind of Blue" album.
 
 > Finished chain.
-
-```
-
-```
+ ``` 
+```  python
 'I have created a playlist called "Machine Blues" with the first song from the "Kind of Blue" album.'
-
-```
-
-```
+ ``` 
+```  python
 user_query = "give me a song I'd like, make it blues-ey"
 spotify_agent.run(user_query)
-
-```
-
-```
+ ``` 
+```  python
 > Entering new AgentExecutor chain...
 Action: api_planner
 Action Input: I need to find the right API calls to get a blues song recommendation for the user
@@ -251,15 +219,11 @@ Thought:Action: requests_get
 Action Input: {"url": "https://api.spotify.com/v1/recommendations/available-genre-seeds", "output_instructions": "Extract the list of available genres"}
 Observation: acoustic, afrobeat, alt-rock, alternative, ambient, anime, black-metal, bluegrass, blues, bossanova, brazil, breakbeat, british, cantopop, chicago-house, children, chill, classical, club, comedy, country, dance, dancehall, death-metal, deep-house, detroit-techno, disco, disney, drum-and-bass, dub, dubstep, edm, electro, electronic, emo, folk, forro, french, funk, garage, german, gospel, goth, grindcore, groove, grunge, guitar, happy, hard-rock, hardcore, hardstyle, heavy-metal, hip-hop, holidays, honky-tonk, house, idm, indian, indie, indie-pop, industrial, iranian, j-dance, j-idol, j-pop, j-rock, jazz, k-pop, kids, latin, latino, malay, mandopop, metal, metal-misc, metalcore, minimal-techno, movies, mpb, new-age, new-release, opera, pagode, party, philippines-
 Thought:
-
-```
-
-```
+ ``` 
+```  python
 Retrying langchain.llms.openai.completion_with_retry.<locals>._completion_with_retry in 4.0 seconds as it raised RateLimitError: That model is currently overloaded with other requests. You can retry your request, or contact us through our help center at help.openai.com if the error persists. (Please include the request ID 2167437a0072228238f3c0c5b3882764 in your message.).
-
-```
-
-```
+ ``` 
+```  python
 Action: requests_get
 Action Input: {"url": "https://api.spotify.com/v1/recommendations?seed_genres=blues", "output_instructions": "Extract the list of recommended tracks with their ids and names"}
 Observation: [
@@ -278,34 +242,26 @@ Thought:I am finished executing the plan and have the information the user asked
 Final Answer: The recommended blues song for you is "Get Away Jordan" with the track ID: 03lXHmokj9qsXspNsPoirR.
 
 > Finished chain.
-
-```
-
-```
+ ``` 
+```  python
 'The recommended blues song for you is "Get Away Jordan" with the track ID: 03lXHmokj9qsXspNsPoirR.'
-
-```
-
+ ``` 
 #### 尝试另一个API。[#](#try-another-api "此标题的永久链接")
 
-```
+```  python
 headers = {
     "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"
 }
 openai_requests_wrapper=RequestsWrapper(headers=headers)
-
-```
-
-```
+ ``` 
+```  python
 # Meta!
 llm = OpenAI(model_name="gpt-4", temperature=0.25)
 openai_agent = planner.create_openapi_agent(openai_api_spec, openai_requests_wrapper, llm)
 user_query = "generate a short piece of advice"
 openai_agent.run(user_query)
-
-```
-
-```
+ ``` 
+```  python
 > Entering new AgentExecutor chain...
 Action: api_planner
 Action Input: I need to find the right API calls to generate a short piece of advice
@@ -386,14 +342,10 @@ Thought:I am finished executing the plan and have the information the user asked
 Final Answer: A short piece of advice for improving communication skills is to make sure to listen.
 
 > Finished chain.
-
-```
-
-```
+ ``` 
+```  python
 'A short piece of advice for improving communication skills is to make sure to listen.'
-
-```
-
+ ``` 
 需要一些时间才能到达那里！
 
 第二个例子："json浏览器"代理[#](#nd-example-json-explorer-agent "永久链接到此标题")
@@ -401,16 +353,14 @@ Final Answer: A short piece of advice for improving communication skills is to m
 
 这是一个不太实用但很有趣的代理。代理可以访问两个工具包。其中一个包括与json交互的工具：一个用于列出json对象的键的工具，另一个用于获取给定键的值的工具。另一个工具包包括`requests`包装器以发送GET和POST请求。这个代理消耗了很多调用语言模型的时间，但表现出奇好的效果。
 
-```
+```  python
 from langchain.agents import create_openapi_agent
 from langchain.agents.agent_toolkits import OpenAPIToolkit
 from langchain.llms.openai import OpenAI
 from langchain.requests import TextRequestsWrapper
 from langchain.tools.json.tool import JsonSpec
-
-```
-
-```
+ ``` 
+```  python
 with open("openai_openapi.yaml") as f:
     data = yaml.load(f, Loader=yaml.FullLoader)
 json_spec=JsonSpec(dict_=data, max_value_length=4000)
@@ -421,15 +371,11 @@ openapi_agent_executor = create_openapi_agent(
     toolkit=openapi_toolkit,
     verbose=True
 )
-
-```
-
-```
+ ``` 
+```  python
 openapi_agent_executor.run("Make a post request to openai /completions. The prompt should be 'tell me a joke.'")
-
-```
-
-```
+ ``` 
+```  python
 > Entering new AgentExecutor chain...
 Action: json_explorer
 Action Input: What is the base url for the API?
@@ -537,11 +483,7 @@ Thought: I now know the final answer.
 Final Answer: The response of the POST request is {"id":"cmpl-70Ivzip3dazrIXU8DSVJGzFJj2rdv","object":"text_completion","created":1680307139,"model":"davinci","choices":[{"text":" with mummy not there”  You dig deep and come up with,","index":0,"logprobs":null,"finish_reason":"length"}],"usage":{"prompt_tokens":4,"completion_tokens":16,"total_tokens":20}}
 
 > Finished chain.
-
-```
-
-```
+ ``` 
+```  python
 'The response of the POST request is {"id":"cmpl-70Ivzip3dazrIXU8DSVJGzFJj2rdv","object":"text_completion","created":1680307139,"model":"davinci","choices":[{"text":" with mummy not there”\\n\\nYou dig deep and come up with,","index":0,"logprobs":null,"finish_reason":"length"}],"usage":{"prompt_tokens":4,"completion_tokens":16,"total_tokens":20}}'
-
-```
-
+ ``` 

@@ -7,7 +7,7 @@ LanceDB[#](#lancedb "Permalink to this headline")
 > 
 > 
 
-此笔记本演示了如何使用基于Lance数据格式的`LanceDB`矢量数据库的功能。
+此教程演示了如何使用基于Lance数据格式的`LanceDB`矢量数据库的功能。
 
 ```
 !pip install lancedb

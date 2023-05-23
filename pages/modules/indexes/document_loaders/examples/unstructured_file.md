@@ -3,7 +3,7 @@
 
 # 非结构化文件加载器
 
-本笔记本介绍了如何使用Unstructured来加载多种类型的文件。目前，Unstructured支持加载文本文件、幻灯片、html、pdf、图像等。
+本教程介绍了如何使用Unstructured来加载多种类型的文件。目前，Unstructured支持加载文本文件、幻灯片、html、pdf、图像等。
  
 
 

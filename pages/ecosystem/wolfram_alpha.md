@@ -28,7 +28,7 @@ from langchain.utilities.wolfram_alpha import WolframAlphaAPIWrapper
 
 ```
 
-有关此包装器的更详细说明，请参见[此笔记本](../modules/agents/tools/examples/wolfram_alpha)。
+有关此包装器的更详细说明，请参见[此教程](../modules/agents/tools/examples/wolfram_alpha)。
 
 工具
 ----------------------

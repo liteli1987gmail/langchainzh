@@ -1,7 +1,7 @@
 
 # DuckDuckGo搜索
 
-本笔记本介绍了如何使用"duck-duck-go"搜索组件。
+本教程介绍了如何使用"duck-duck-go"搜索组件。
  
 
 

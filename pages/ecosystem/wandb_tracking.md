@@ -3,7 +3,7 @@
 权重和偏差[#](#weights-biases "这个标题的永久链接")
 =====================================
 
-本笔记本介绍如何跟踪您的LangChain实验并将其汇总到一个集中的Weights and Biases仪表板中。要了解有关prompt工程和回调的更多信息，请参阅此报告，该报告解释了两者以及您可以期望看到的结果仪表板。
+本教程介绍如何跟踪您的LangChain实验并将其汇总到一个集中的Weights and Biases仪表板中。要了解有关prompt工程和回调的更多信息，请参阅此报告，该报告解释了两者以及您可以期望看到的结果仪表板。
 
 在Colab中运行：https://colab.research.google.com/drive/1DXH4beT4HFaRKy_Vm4PoxhXVDRf7Ym8L?usp=sharing
 

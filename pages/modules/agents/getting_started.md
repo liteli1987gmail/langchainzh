@@ -1,12 +1,12 @@
 
 
-入门[#](#getting-started "到这个标题的永久链接")
+快速入门[#](#getting-started "到这个标题的永久链接")
 ====================================
 
 代理使用LLM来确定采取哪些行动以及顺序。
 一个动作可以是使用工具并观察其输出，或返回给用户。
 
-当代理被正确使用时，它们可以非常强大。这个笔记本的目的是向您展示如何通过最简单、最高级别的API轻松使用代理。
+当代理被正确使用时，它们可以非常强大。本教程的目的是向您展示如何通过最简单、最高级别的API轻松使用代理。
 
 为了加载代理，您应该了解以下概念：
 
@@ -14,13 +14,13 @@
 
 * LLM：为代理提供动力的语言模型。
 
-* 代理：要使用的代理。这应该是一个引用支持代理类的字符串。因为这个笔记本专注于最简单、最高级别的API，所以只涵盖使用标准支持的代理。如果您想实现自定义代理，请参阅自定义代理的文档（即将推出)。
+* 代理：要使用的代理。这应该是一个引用支持代理类的字符串。因为本教程专注于最简单、最高级别的API，所以只涵盖使用标准支持的代理。如果您想实现自定义代理，请参阅自定义代理的文档（即将推出)。
 
 **代理人**：支持的代理人清单及其规格，请参见[此处](agents)。
 
 **工具**：预定义工具及其规格的清单，请参见[此处](tools)。
 
-```
+```  python
 from langchain.agents import load_tools
 from langchain.agents import initialize_agent
 from langchain.agents import AgentType
@@ -30,33 +30,33 @@ from langchain.llms import OpenAI
 
 首先，让我们加载我们要使用的语言模型来控制代理人。
 
-```
+```  python
 llm = OpenAI(temperature=0)
 
 ```
 
 接下来，让我们加载一些要使用的工具。请注意，`llm-math`工具使用LLM，因此我们需要传递它。
 
-```
+```  python
 tools = load_tools(["serpapi", "llm-math"], llm=llm)
 
 ```
 
 最后，让我们使用工具、语言模型和我们想要使用的代理人类型初始化一个代理人。
 
-```
+```  python
 agent = initialize_agent(tools, llm, agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION, verbose=True)
 
 ```
 
 现在让我们来测试一下吧！
 
-```
+```  python
 agent.run("Who is Leo DiCaprio's girlfriend? What is her current age raised to the 0.43 power?")
 
 ```
 
-```
+```  python
 > Entering new AgentExecutor chain...
  I need to find out who Leo DiCaprio's girlfriend is and then calculate her age raised to the 0.43 power.
 Action: Search
@@ -78,7 +78,7 @@ Final Answer: Camila Morrone is Leo DiCaprio's girlfriend and her current age ra
 
 ```
 
-```
+```  python
 "Camila Morrone is Leo DiCaprio's girlfriend and her current age raised to the 0.43 power is 3.991298452658078."
 
 ```

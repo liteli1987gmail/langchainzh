@@ -41,7 +41,7 @@ os.environ["CEREBRIUMAI_API_KEY"] = "YOUR_KEY_HERE"
 创建CerebriumAI实例[#](#create-the-cerebriumai-instance "跳转到此标题的链接")
 ----------------------------------------------------------------
 
-您可以指定不同的参数，例如模型终端点URL、最大长度、温度等。您必须提供一个终端点URL。
+您可以指定不同的参数，例如模型终端点URL、最大长度、温度（temperature）等。您必须提供一个终端点URL。
 
 ```
 llm = CerebriumAI(endpoint_url="YOUR ENDPOINT URL HERE")

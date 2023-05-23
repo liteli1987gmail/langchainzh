@@ -26,5 +26,5 @@ from langchain.vectorstores import Pinecone
 
 ```
 
-有关松果包装器的更详细演示，请参见[此笔记本](../modules/indexes/vectorstores/examples/pinecone)
+有关松果包装器的更详细演示，请参见[此教程](../modules/indexes/vectorstores/examples/pinecone)
 

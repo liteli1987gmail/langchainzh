@@ -5,7 +5,7 @@ ForefrontAI[#](#forefrontai "跳转到此标题的永久链接")
 
 `Forefront` 平台可让您微调和使用[开源大型语言模型](https://docs.forefront.ai/forefront/master/models)。
 
-本笔记本将介绍如何使用 Langchain 和[ForefrontAI](https://www.forefront.ai/)。
+本教程将介绍如何使用 Langchain 和[ForefrontAI](https://www.forefront.ai/)。
 
 导入[#](#imports "跳转到此标题的永久链接")
 -----------------------------
@@ -39,7 +39,7 @@ os.environ["FOREFRONTAI_API_KEY"] = FOREFRONTAI_API_KEY
 创建 ForefrontAI 实例[#](#create-the-forefrontai-instance "跳转到此标题的永久链接")
 --------------------------------------------------------------------
 
-您可以指定不同的参数，如模型端点 URL、长度、温度等。您必须提供端点 URL。
+您可以指定不同的参数，如模型端点 URL、长度、温度（temperature）等。您必须提供端点 URL。
 
 ```
 llm = ForefrontAI(endpoint_url="YOUR ENDPOINT URL HERE")

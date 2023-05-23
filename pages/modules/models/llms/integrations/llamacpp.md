@@ -6,7 +6,7 @@ Llama-cpp[#](#llama-cpp "此标题的永久链接")
 [llama-cpp](https://github.com/abetlen/llama-cpp-python) 是 [llama.cpp](https://github.com/ggerganov/llama.cpp) 的 Python 绑定。
 它支持 [多个 LLMs](https://github.com/ggerganov/llama.cpp)。
 
-本笔记本介绍如何在 LangChain 中运行 `llama-cpp`。
+本教程介绍如何在 LangChain 中运行 `llama-cpp`。
 
 ```
 !pip install llama-cpp-python

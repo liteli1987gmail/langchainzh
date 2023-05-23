@@ -9,7 +9,7 @@ Milvus[#](#milvus "Permalink to this headline")
 > 
 > 
 
-这个笔记本展示了如何使用与 Milvus 向量数据库相关的功能。
+本教程展示了如何使用与 Milvus 向量数据库相关的功能。
 
 要运行，您应该有一个[运行中的 Milvus 实例](https://milvus.io/docs/install_standalone-docker.md)。
 

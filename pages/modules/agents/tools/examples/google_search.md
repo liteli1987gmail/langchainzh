@@ -1,7 +1,7 @@
 
 # 使用Google搜索组件
 
-本笔记本将介绍如何使用Google搜索组件。
+本教程将介绍如何使用Google搜索组件。
 
 首先，您需要设置适当的API密钥和环境变量。
 要设置它，请在[Google Cloud凭据控制台](https://console.cloud.google.com/apis/credentials)中创建GOOGLE_API_KEY，

@@ -7,7 +7,7 @@ Elasticsearch
 
 [Elasticsearch](https://www.elastic.co/elasticsearch/)是一个分布式、RESTful搜索和分析引擎。它提供了一个分布式、多租户能力的全文搜索引擎，具有HTTP网络接口和无模式JSON文档。
 
-此笔记本演示了如何使用与`Elasticsearch`数据库相关的功能。
+此教程演示了如何使用与`Elasticsearch`数据库相关的功能。
 
 安装[#](#installation "此标题的永久链接")
 -------------------------------

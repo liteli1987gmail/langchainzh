@@ -3,7 +3,7 @@
 复制粘贴[#](#copy-paste "永久链接至此标题")
 ===============================
 
-本笔记本介绍了如何从想要复制和粘贴的内容中加载文档对象。在这种情况下，您甚至不需要使用DocumentLoader，而是可以直接构造文档。
+本教程介绍了如何从想要复制和粘贴的内容中加载文档对象。在这种情况下，您甚至不需要使用DocumentLoader，而是可以直接构造文档。
 
 ```
 from langchain.docstore.document import Document
