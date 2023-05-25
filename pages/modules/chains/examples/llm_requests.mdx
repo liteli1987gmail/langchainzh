@@ -1,0 +1,72 @@
+
+import Head from 'next/head'
+
+<Head>
+  <script>
+    {
+      `(function() {
+         var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+       })();`
+    }
+  </script>
+</Head>
+
+![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
+
+
+
+# LLMRequestsChain
+使用请求库从URL获取HTML结果，然后使用LLM解析结果
+```python
+from langchain.llms import OpenAI
+from langchain.chains import LLMRequestsChain, LLMChain
+```
+
+定义使用的提示：
+```python
+from langchain.prompts import PromptTemplate
+
+template = """Between >>> and <<< are the raw search result text from google.
+Extract the answer to the question '{query}' or say "not found" if the information is not contained.
+Use the format
+Extracted:<answer or "not found">
+>>> {requests_result} <<<
+Extracted:"""
+
+PROMPT = PromptTemplate(
+    input_variables=["query", "requests_result"],
+    template=template,
+)
+```
+
+实例化LLMRequestsChain：
+```python
+chain = LLMRequestsChain(llm_chain = LLMChain(llm=OpenAI(temperature=0), prompt=PROMPT))
+```
+
+定义输入：
+```python
+question = "What are the Three (3) biggest countries, and their respective sizes?"
+inputs = {
+    "query": question,
+    "url": "https://www.google.com/search?q=" + question.replace(" ", "+")
+}
+```
+
+运行LLMRequestsChain：
+```python
+chain(inputs)
+```
+
+输出如下：
+```
+{'query': 'What are the Three (3) biggest countries, and their respective sizes?',
+ 'url': 'https://www.google.com/search?q=What+are+the+Three+(3)+biggest+countries,+and+their+respective+sizes?',
+ 'output': '俄罗斯(17,098,242平方公里)，加拿大(9,984,670平方公里)，美国(9,826,675平方公里)'}
+```

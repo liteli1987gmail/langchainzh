@@ -1,0 +1,161 @@
+
+import Head from 'next/head'
+
+<Head>
+  <script>
+    {
+      `(function() {
+         var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+       })();`
+    }
+  </script>
+</Head>
+
+![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
+
+
+
+PowerBI数据集代理
+[#](#powerbi-dataset-agent "Permalink to this headline")
+===========================
+
+本教程展示了一个代理，它旨在与Power BI数据集进行交互。代理旨在回答有关数据集的更一般的问题，并从错误中恢复。
+
+请注意，由于此代理正在积极开发中，因此可能并非所有答案都是正确的。它在[executequery端点](https://learn.microsoft.com/en-us/rest/api/power-bi/datasets/execute-queries)上运行，该端点不允许删除。
+
+一些说明
+-------------------------------------------------------
+
+* 它依赖于使用azure.identity包进行身份验证，可以使用`pip install azure-identity`进行安装。或者，您可以在不提供凭据的情况下使用令牌作为字符串创建powerbi数据集。
+
+* 您还可以提供要模拟的用户名，以用于启用RLS的数据集。
+
+* 工具包使用LLM从问题创建查询，代理人用于整体执行。
+
+* 测试主要使用`text-davinci-003`模型进行，Codex模型似乎表现不佳。
+
+初始化[#](#initialization "此标题的永久链接")
+----------------------------------
+
+
+```  python
+from langchain.agents.agent_toolkits import create_pbi_agent
+from langchain.agents.agent_toolkits import PowerBIToolkit
+from langchain.utilities.powerbi import PowerBIDataset
+from langchain.llms.openai import AzureOpenAI
+from langchain.agents import AgentExecutor
+from azure.identity import DefaultAzureCredential
+
+```
+
+
+
+
+```  python
+fast_llm = AzureOpenAI(temperature=0.5, max_tokens=1000, deployment_name="gpt-35-turbo", verbose=True)
+smart_llm = AzureOpenAI(temperature=0, max_tokens=100, deployment_name="gpt-4", verbose=True)
+
+toolkit = PowerBIToolkit(
+    powerbi=PowerBIDataset(dataset_id="<dataset_id>", table_names=['table1', 'table2'], credential=DefaultAzureCredential()), 
+    llm=smart_llm
+)
+
+agent_executor = create_pbi_agent(
+    llm=fast_llm,
+    toolkit=toolkit,
+    verbose=True,
+)
+
+```
+
+
+
+示例：描述表格[#](#example-describing-a-table "此标题的永久链接")
+--------------------------------------------------
+
+
+```  python
+agent_executor.run("Describe table1")
+
+```
+
+
+
+示例：对表格进行简单的查询[#](#example-simple-query-on-a-table "此标题的永久链接")
+-------------------------------------------------------------
+
+在这个例子中，代理人实际上找出了正确的查询方式来获取表的行数。
+
+
+```  python
+agent_executor.run("How many records are in table1?")
+
+```
+
+
+
+示例：运行查询[#](#example-running-queries "此标题的永久链接")
+-----------------------------------------------
+
+
+```  python
+agent_executor.run("How many records are there by dimension1 in table2?")
+
+```
+
+
+
+
+```  python
+agent_executor.run("What unique values are there for dimensions2 in table2")
+
+```
+
+
+
+示例：添加自己的少样本提示[#](#example-add-your-own-few-shot-prompts "此标题的永久链接")
+-------------------------------------------------------------------
+
+
+```  python
+#fictional example
+few_shots = """
+Question: How many rows are in the table revenue?
+DAX: EVALUATE ROW("Number of rows", COUNTROWS(revenue_details))
+----
+Question: How many rows are in the table revenue where year is not empty?
+DAX: EVALUATE ROW("Number of rows", COUNTROWS(FILTER(revenue_details, revenue_details[year] <> "")))
+----
+Question: What was the average of value in revenue in dollars?
+DAX: EVALUATE ROW("Average", AVERAGE(revenue_details[dollar_value]))
+----
+"""
+toolkit = PowerBIToolkit(
+    powerbi=PowerBIDataset(dataset_id="<dataset_id>", table_names=['table1', 'table2'], credential=DefaultAzureCredential()), 
+    llm=smart_llm,
+    examples=few_shots,
+)
+agent_executor = create_pbi_agent(
+    llm=fast_llm,
+    toolkit=toolkit,
+    verbose=True,
+)
+
+```
+
+
+
+
+```  python
+agent_executor.run("What was the maximum of value in revenue in dollars in 2022?")
+
+```
+
+
+

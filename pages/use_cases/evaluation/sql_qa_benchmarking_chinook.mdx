@@ -1,0 +1,391 @@
+
+import Head from 'next/head'
+
+<Head>
+  <script>
+    {
+      `(function() {
+         var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+       })();`
+    }
+  </script>
+</Head>
+
+![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
+
+
+
+
+
+
+SQL问答基准测试：奇努克
+ [#](#sql-question-answering-benchmarking-chinook "Permalink to this headline")
+==============================================================================================================================
+
+> SQL问答基准测试：奇努克  SQL Question Answering Benchmarking: Chinook
+
+在这里，我们将讨论如何在SQL数据库上对问答任务进行性能基准测试。
+
+
+
+强烈建议您在启用跟踪的情况下进行任何评估/基准测试。
+
+请参阅此处[here](https://langchain.readthedocs.io/en/latest/tracing) 了解什么是跟踪以及如何设置它。
+
+
+
+```  python
+# Comment this out if you are NOT using tracing
+import os
+os.environ["LANGCHAIN_HANDLER"] = "langchain"
+
+```
+
+
+
+
+
+
+
+加载数据 Loading the data
+ [#](#loading-the-data "Permalink to this headline")
+-----------------------------------------------------------------------
+
+
+
+首先，让我们加载数据。
+ 
+
+
+
+
+
+
+
+```  python
+from langchain.evaluation.loading import load_dataset
+dataset = load_dataset("sql-qa-chinook")
+
+```
+
+
+
+
+
+```  python
+Downloading and preparing dataset json/LangChainDatasets--sql-qa-chinook to /Users/harrisonchase/.cache/huggingface/datasets/LangChainDatasets___json/LangChainDatasets--sql-qa-chinook-7528565d2d992b47/0.0.0/0f7e3662623656454fcd2b650f34e886a7db4b9104504885bd462096cc7a9f51...
+
+```
+
+
+
+
+```  python
+Dataset json downloaded and prepared to /Users/harrisonchase/.cache/huggingface/datasets/LangChainDatasets___json/LangChainDatasets--sql-qa-chinook-7528565d2d992b47/0.0.0/0f7e3662623656454fcd2b650f34e886a7db4b9104504885bd462096cc7a9f51. Subsequent calls will reuse this data.
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+dataset[0]
+
+```
+
+
+
+
+
+
+
+
+```  python
+{'question': 'How many employees are there?', 'answer': '8'}
+
+```
+
+
+
+
+
+
+
+
+设置链  Setting up a chain
+ [#](#setting-up-a-chain "Permalink to this headline")
+---------------------------------------------------------------------------
+
+
+ 
+这里使用的是Chinook数据库示例。要设置它，请按照https：//database.guide/2-sample-databases-sqlite/上的说明进行操作，将 `.db` 文件放在此存储库根目录的notebooks文件夹中。
+
+
+请注意，这里我们加载一个简单的链。
+
+如果你想尝试更复杂的链或代理，只需以不同的方式创建`chain`对象。
+
+
+
+
+
+
+
+```  python
+from langchain import OpenAI, SQLDatabase, SQLDatabaseChain
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+db = SQLDatabase.from_uri("sqlite:///../../../notebooks/Chinook.db")
+llm = OpenAI(temperature=0)
+
+```
+
+
+
+
+
+
+现在我们可以创建一个SQL数据库链。
+ 
+
+
+
+
+
+
+
+```  python
+chain = SQLDatabaseChain(llm=llm, database=db, input_key="question")
+
+```
+
+
+
+
+
+
+
+
+预测 Make a prediction
+ [#](#make-a-prediction "Permalink to this headline")
+-------------------------------------------------------------------------
+
+
+首先，我们可以一次预测一个数据点。在这种粒度级别上执行此操作允许use详细地探索输出，而且比在多个数据点上运行要便宜得多
+
+
+
+
+
+
+
+```  python
+chain(dataset[0])
+
+```
+
+
+
+
+
+
+
+
+```  python
+{'question': 'How many employees are there?',
+ 'answer': '8',
+ 'result': ' There are 8 employees.'}
+
+```
+
+
+
+
+
+
+
+
+很多预测  Make many predictions
+ [#](#make-many-predictions "Permalink to this headline")
+---------------------------------------------------------------------------------
+
+
+现在我们可以做出预测。注意，我们添加了一个try-except，因为这个链有时会出错（如果SQL写得不正确，等等）
+
+
+
+
+
+
+```  python
+predictions = []
+predicted_dataset = []
+error_dataset = []
+for data in dataset:
+    try:
+        predictions.append(chain(data))
+        predicted_dataset.append(data)
+    except:
+        error_dataset.append(data)
+
+```
+
+
+
+
+
+
+
+
+评估性能 Evaluate performance
+ [#](#evaluate-performance "Permalink to this headline")
+-------------------------------------------------------------------------------
+
+
+
+现在我们可以评估预测。我们可以用一个语言模型来给他们编程评分
+
+
+
+
+
+
+```  python
+from langchain.evaluation.qa import QAEvalChain
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+llm = OpenAI(temperature=0)
+eval_chain = QAEvalChain.from_llm(llm)
+graded_outputs = eval_chain.evaluate(predicted_dataset, predictions, question_key="question", prediction_key="result")
+
+```
+
+
+我们可以将分级输出添加到`predictions`dict中，然后获得等级计数。
+
+
+ 
+
+
+
+
+
+
+
+```  python
+for i, prediction in enumerate(predictions):
+    prediction['grade'] = graded_outputs[i]['text']
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+from collections import Counter
+Counter([pred['grade'] for pred in predictions])
+
+```
+
+
+
+
+
+
+
+
+```  python
+Counter({' CORRECT': 3, ' INCORRECT': 4})
+
+```
+
+
+
+
+我们还可以过滤数据点，找出不正确的例子并查看它们。
+
+
+
+
+
+```  python
+incorrect = [pred for pred in predictions if pred['grade'] == " INCORRECT"]
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+incorrect[0]
+
+```
+
+
+
+
+
+
+
+
+```  python
+{'question': 'How many employees are also customers?',
+ 'answer': 'None',
+ 'result': ' 59 employees are also customers.',
+ 'grade': ' INCORRECT'}
+
+```
+
+
+
+
+
+
+
+
