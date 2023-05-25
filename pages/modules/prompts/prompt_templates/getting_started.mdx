@@ -1,0 +1,327 @@
+
+import Head from 'next/head'
+
+<Head>
+  <script>
+    {
+      `(function() {
+         var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+       })();`
+    }
+  </script>
+</Head>
+
+![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
+
+
+
+
+
+入门指南[#](#getting-started "此标题的永久链接")
+====================================
+
+在本教程中，我们将学习：
+
+* 什么是提示模板，以及为什么需要它，
+
+* 如何创建提示模板，
+
+* 如何将少量示例传递给提示模板，
+
+* 如何为提示模板选择示例。
+
+什么是提示模板？[#](#what-is-a-prompt-template "此标题的永久链接")
+--------------------------------------------------
+
+提示模板是生成提示的可重复方法。它包含一个文本字符串（“模板”)，该字符串可以从最终用户那里接收一组参数并生成提示。
+
+提示模板可能包含：
+
+* 对语言模型的指导，
+
+* 一组少量示例，以帮助语言模型生成更好的响应，
+
+* 对语言模型的提问。
+
+以下代码片段包含提示模板的示例：
+
+```
+from langchain import PromptTemplate
+
+template = """
+I want you to act as a naming consultant for new companies.
+What is a good name for a company that makes {product}?
+"""
+
+prompt = PromptTemplate(
+    input_variables=["product"],
+    template=template,
+)
+prompt.format(product="colorful socks")
+# -> I want you to act as a naming consultant for new companies.
+# -> What is a good name for a company that makes colorful socks?
+
+```
+
+创建提示模板[#](#create-a-prompt-template "此标题的永久链接")
+-----------------------------------------------
+
+您可以使用`PromptTemplate`类创建简单的硬编码提示。提示模板可以使用任意数量的输入变量，并可以进行格式化以生成提示。
+
+```
+from langchain import PromptTemplate
+
+# An example prompt with no input variables
+no_input_prompt = PromptTemplate(input_variables=[], template="Tell me a joke.")
+no_input_prompt.format()
+# -> "Tell me a joke."
+
+# An example prompt with one input variable
+one_input_prompt = PromptTemplate(input_variables=["adjective"], template="Tell me a {adjective} joke.")
+one_input_prompt.format(adjective="funny")
+# -> "Tell me a funny joke."
+
+# An example prompt with multiple input variables
+multiple_input_prompt = PromptTemplate(
+    input_variables=["adjective", "content"], 
+    template="Tell me a {adjective} joke about {content}."
+)
+multiple_input_prompt.format(adjective="funny", content="chickens")
+# -> "Tell me a funny joke about chickens."
+
+```
+
+如果您不想手动指定`input_variables`，您也可以使用`from_template`类方法创建`PromptTemplate`。 `langchain`将根据传递的`template`自动推断`input_variables`。
+
+```
+template = "Tell me a {adjective} joke about {content}."
+
+prompt_template = PromptTemplate.from_template(template)
+prompt_template.input_variables
+# -> ['adjective', 'content']
+prompt_template.format(adjective="funny", content="chickens")
+# -> Tell me a funny joke about chickens.
+
+```
+
+您可以创建自定义提示模板，以任何您想要的方式格式化提示。有关更多信息，请参见[自定义提示模板](examples/custom_prompt_template.html)。
+
+模板格式[#](#template-formats "到这个标题的永久链接")
+---------------------------------------
+
+默认情况下，`PromptTemplate` 会将提供的模板作为 Python f-string 处理。您可以通过 `template_format` 参数指定其他模板格式：
+
+```
+# Make sure jinja2 is installed before running this
+
+jinja2_template = "Tell me a {{ adjective }} joke about {{ content }}"
+prompt_template = PromptTemplate.from_template(template=jinja2_template, template_format="jinja2")
+
+prompt_template.format(adjective="funny", content="chickens")
+# -> Tell me a funny joke about chickens.
+
+```
+
+目前，`PromptTemplate` 仅支持 `jinja2` 和 `f-string` 模板格式。如果您想使用其他模板格式，请随时在 [Github](https://github.com/hwchase17/langchain/issues) 页面上开启一个 issue。
+
+验证模板[#](#validate-template "Permalink to this headline")
+--------------------------------------------------------
+
+默认情况下，`PromptTemplate` 会通过检查 `template` 字符串中定义的变量是否与 `input_variables` 中的变量匹配来验证模板。您可以通过将 `validate_template` 设置为 `False` 来禁用此行为。
+
+```
+template = "I am learning langchain because {reason}."
+
+prompt_template = PromptTemplate(template=template, 
+                                 input_variables=["reason", "foo"]) # ValueError due to extra variables
+prompt_template = PromptTemplate(template=template, 
+                                 input_variables=["reason", "foo"], 
+                                 validate_template=False) # No error
+
+```
+
+序列化提示模板[#](#serialize-prompt-template "此标题的永久链接")
+-------------------------------------------------
+
+您可以将`PromptTemplate`保存到本地文件系统中。 `langchain`会自动通过文件扩展名推断文件格式。当前，`langchain`支持将模板保存为YAML和JSON文件。
+
+```
+prompt_template.save("awesome_prompt.json") # Save to JSON file
+
+```
+
+```
+from langchain.prompts import load_prompt
+loaded_prompt = load_prompt("awesome_prompt.json")
+
+assert prompt_template == loaded_prompt
+
+```
+
+`langchain`还支持从LangChainHub加载提示模板，其中包含您可以在项目中使用的有用提示的集合。您可以在[此处](https://github.com/hwchase17/langchain-hub)了解有关LangChainHub和可用提示的更多信息。
+
+```
+
+from langchain.prompts import load_prompt
+
+prompt = load_prompt("lc://prompts/conversation/prompt.json")
+prompt.format(history="", input="What is 1 + 1?")
+
+```
+
+您可以在[如何序列化提示](examples/prompt_serialization.html)中了解有关序列化提示模板的更多信息。
+
+将少量示例传递给提示模板[#](#pass-few-shot-examples-to-a-prompt-template "此标题的永久链接")
+------------------------------------------------------------------------
+
+few shot examples 是一组示例，可用于帮助语言模型生成更好的响应。
+
+要使用 few shot examples 生成提示，可以使用 `FewShotPromptTemplate`。这个类接受一个 `PromptTemplate` 和一个 few shot examples 列表。然后，它将用 few shot examples 格式化提示模板。
+
+在这个例子中，我们将创建一个提示来生成单词的反义词。
+
+```
+from langchain import PromptTemplate, FewShotPromptTemplate
+
+# First, create the list of few shot examples.
+examples = [
+    {"word": "happy", "antonym": "sad"},
+    {"word": "tall", "antonym": "short"},
+]
+
+# Next, we specify the template to format the examples we have provided.
+# We use the `PromptTemplate` class for this.
+example_formatter_template = """
+Word: {word}
+Antonym: {antonym}\n
+"""
+example_prompt = PromptTemplate(
+    input_variables=["word", "antonym"],
+    template=example_formatter_template,
+)
+
+# Finally, we create the `FewShotPromptTemplate` object.
+few_shot_prompt = FewShotPromptTemplate(
+    # These are the examples we want to insert into the prompt.
+    examples=examples,
+    # This is how we want to format the examples when we insert them into the prompt.
+    example_prompt=example_prompt,
+    # The prefix is some text that goes before the examples in the prompt.
+    # Usually, this consists of intructions.
+    prefix="Give the antonym of every input",
+    # The suffix is some text that goes after the examples in the prompt.
+    # Usually, this is where the user input will go
+    suffix="Word: {input}\nAntonym:",
+    # The input variables are the variables that the overall prompt expects.
+    input_variables=["input"],
+    # The example_separator is the string we will use to join the prefix, examples, and suffix together with.
+    example_separator="  ",
+)
+
+# We can now generate a prompt using the `format` method.
+print(few_shot_prompt.format(input="big"))
+# -> Give the antonym of every input
+# -> 
+# -> Word: happy
+# -> Antonym: sad
+# ->
+# -> Word: tall
+# -> Antonym: short
+# ->
+# -> Word: big
+# -> Antonym:
+
+```
+
+选择提示模板的示例[#](#select-examples-for-a-prompt-template "Permalink to this headline")
+---------------------------------------------------------------------------------
+
+如果你有大量的示例，可以使用 `ExampleSelector` 来选择一组最具信息量的示例，以帮助语言模型生成更好的响应。这将帮助你生成更可能生成良好响应的提示。
+
+在下面的示例中，我们将使用基于输入长度选择示例的 `LengthBasedExampleSelector`。当你担心构建的提示会超过上下文窗口的长度时，这很有用。对于较长的输入，它将选择较少的示例进行包含，而对于较短的输入，它将选择更多的示例。
+
+我们将继续使用前一个部分的示例，但这次我们将使用 `LengthBasedExampleSelector` 来选择示例。
+
+```
+from langchain.prompts.example_selector import LengthBasedExampleSelector
+
+# These are a lot of examples of a pretend task of creating antonyms.
+examples = [
+    {"word": "happy", "antonym": "sad"},
+    {"word": "tall", "antonym": "short"},
+    {"word": "energetic", "antonym": "lethargic"},
+    {"word": "sunny", "antonym": "gloomy"},
+    {"word": "windy", "antonym": "calm"},
+]
+
+# We'll use the `LengthBasedExampleSelector` to select the examples.
+example_selector = LengthBasedExampleSelector(
+    # These are the examples is has available to choose from.
+    examples=examples, 
+    # This is the PromptTemplate being used to format the examples.
+    example_prompt=example_prompt, 
+    # This is the maximum length that the formatted examples should be.
+    # Length is measured by the get_text_length function below.
+    max_length=25,
+)
+
+# We can now use the `example_selector` to create a `FewShotPromptTemplate`.
+dynamic_prompt = FewShotPromptTemplate(
+    # We provide an ExampleSelector instead of examples.
+    example_selector=example_selector,
+    example_prompt=example_prompt,
+    prefix="Give the antonym of every input",
+    suffix="Word: {input}\nAntonym:",
+    input_variables=["input"],
+    example_separator="  ",
+)
+
+# We can now generate a prompt using the `format` method.
+print(dynamic_prompt.format(input="big"))
+# -> Give the antonym of every input
+# ->
+# -> Word: happy
+# -> Antonym: sad
+# ->
+# -> Word: tall
+# -> Antonym: short
+# ->
+# -> Word: energetic
+# -> Antonym: lethargic
+# ->
+# -> Word: sunny
+# -> Antonym: gloomy
+# ->
+# -> Word: windy
+# -> Antonym: calm
+# ->
+# -> Word: big
+# -> Antonym:
+
+```
+
+相比之下，如果我们提供一个非常长的输入，`LengthBasedExampleSelector`将选择较少的示例包含在提示中。
+
+```
+long_string = "big and huge and massive and large and gigantic and tall and much much much much much bigger than everything else"
+print(dynamic_prompt.format(input=long_string))
+# -> Give the antonym of every input
+
+# -> Word: happy
+# -> Antonym: sad
+# ->
+# -> Word: big and huge and massive and large and gigantic and tall and much much much much much bigger than everything else
+# -> Antonym:
+
+```
+
+LangChain带有一些示例选择器，您可以使用它们。有关如何使用它们的更多详细信息，请参见[示例选择器](../example_selectors.html)。
+
+您可以创建自定义示例选择器，根据任何您想要的标准选择示例。有关如何执行此操作的更多详细信息，请参见[创建自定义示例选择器](../example_selectors/examples/custom_example_selector.html)。
+

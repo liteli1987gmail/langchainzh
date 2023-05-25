@@ -1,0 +1,130 @@
+
+import Head from 'next/head'
+
+<Head>
+  <script>
+    {
+      `(function() {
+         var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+       })();`
+    }
+  </script>
+</Head>
+
+![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
+
+
+
+相似度
+=====
+
+SemanticSimilarityExampleSelector根据示例与输入的相似度选择示例。它通过查找嵌入与输入的余弦相似度最大的示例来实现此目的。
+
+```
+from langchain.prompts.example_selector import SemanticSimilarityExampleSelector
+from langchain.vectorstores import Chroma
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.prompts import FewShotPromptTemplate, PromptTemplate
+
+example_prompt = PromptTemplate(
+    input_variables=["input", "output"],
+    template="Input: {input}\nOutput: {output}",
+)
+
+# These are a lot of examples of a pretend task of creating antonyms.
+examples = [
+    {"input": "happy", "output": "sad"},
+    {"input": "tall", "output": "short"},
+    {"input": "energetic", "output": "lethargic"},
+    {"input": "sunny", "output": "gloomy"},
+    {"input": "windy", "output": "calm"},
+]
+
+```
+
+```
+example_selector = SemanticSimilarityExampleSelector.from_examples(
+    # This is the list of examples available to select from.
+    examples, 
+    # This is the embedding class used to produce embeddings which are used to measure semantic similarity.
+    OpenAIEmbeddings(), 
+    # This is the VectorStore class that is used to store the embeddings and do a similarity search over.
+    Chroma, 
+    # This is the number of examples to produce.
+    k=1
+)
+similar_prompt = FewShotPromptTemplate(
+    # We provide an ExampleSelector instead of examples.
+    example_selector=example_selector,
+    example_prompt=example_prompt,
+    prefix="Give the antonym of every input",
+    suffix="Input: {adjective}\nOutput:", 
+    input_variables=["adjective"],
+)
+
+```
+
+```
+Running Chroma using direct local API.
+Using DuckDB in-memory for database. Data will be transient.
+
+```
+
+```
+# Input is a feeling, so should select the happy/sad example
+print(similar_prompt.format(adjective="worried"))
+
+```
+
+```
+Give the antonym of every input
+
+Input: happy
+Output: sad
+
+Input: worried
+Output:
+
+```
+
+```
+# Input is a measurement, so should select the tall/short example
+print(similar_prompt.format(adjective="fat"))
+
+```
+
+```
+Give the antonym of every input
+
+Input: happy
+Output: sad
+
+Input: fat
+Output:
+
+```
+
+```
+# You can add new examples to the SemanticSimilarityExampleSelector as well
+similar_prompt.example_selector.add_example({"input": "enthusiastic", "output": "apathetic"})
+print(similar_prompt.format(adjective="joyful"))
+
+```
+
+```
+Give the antonym of every input
+
+Input: happy
+Output: sad
+
+Input: joyful
+Output:
+
+```
+

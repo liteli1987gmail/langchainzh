@@ -1,0 +1,76 @@
+
+import Head from 'next/head'
+
+<Head>
+  <script>
+    {
+      `(function() {
+         var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+       })();`
+    }
+  </script>
+</Head>
+
+![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
+
+
+
+# BashChain
+
+这个notebook展示了如何使用LLMs和bash进程执行简单的文件系统命令。
+```   python
+from langchain.chains import LLMBashChain
+from langchain.llms import OpenAI
+
+llm = OpenAI(temperature=0)
+
+text = "Please write a bash script that prints 'Hello World' to the console."
+
+bash_chain = LLMBashChain.from_llm(llm, verbose=True)
+
+bash_chain.run(text)
+```
+你也可以自定义使用的提示。下面是一个自定义提示的示例，避免使用“echo”实用程序。
+```   python
+from langchain.prompts.prompt import PromptTemplate
+from langchain.chains.llm_bash.prompt import BashOutputParser
+
+_PROMPT_TEMPLATE = """If someone asks you to perform a task, your job is to come up with a series of bash commands that will perform the task. There is no need to put "#!/bin/bash" in your answer. Make sure to reason step by step, using this format:
+Question: "copy the files in the directory named 'target' into a new directory at the same level as target called 'myNewDirectory'"
+I need to take the following actions:
+- List all files in the directory
+- Create a new directory
+- Copy the files from the first directory into the second directory
+'```bash
+ls
+mkdir myNewDirectory
+cp -r target/* myNewDirectory
+
+
+Do not use 'echo' when writing the script.
+
+That is the format. Begin!
+Question: {question}
+
+"""
+
+PROMPT = PromptTemplate(input_variables=["question"], template=_PROMPT_TEMPLATE, output_parser=BashOutputParser())
+```
+默认情况下，该链将在每次调用时在单独的子进程中运行。这可以通过使用持久的bash进程实例化来更改。
+```   python
+from langchain.utilities.bash import BashProcess
+
+persistent_process = BashProcess(persistent=True)
+bash_chain = LLMBashChain.from_llm(llm, bash_process=persistent_process, verbose=True)
+
+text = "List the current directory then move up a level."
+
+bash_chain.run(text)
+bash_chain.run(text) # 运行相同的命令，查看状态是否在调用之间保持不变
+```

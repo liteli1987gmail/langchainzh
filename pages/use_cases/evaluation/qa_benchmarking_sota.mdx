@@ -1,0 +1,413 @@
+
+import Head from 'next/head'
+
+<Head>
+  <script>
+    {
+      `(function() {
+         var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+       })();`
+    }
+  </script>
+</Head>
+
+![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
+
+
+
+
+
+
+问答基准测试：国家地址
+ [#](#question-answering-benchmarking-state-of-the-union-address "Permalink to this headline")
+============================================================================================================================================================
+
+> 问答基准测试：国家地址  Question Answering Benchmarking: State of the Union Address
+
+在这里，我们将讨论如何在国情咨文演讲中对问答任务的性能进行基准测试。
+
+
+ It is highly reccomended that you do any evaluation/benchmarking with tracing enabled. See
+ 
+ for an explanation of what tracing is and how to set it up.
+ 
+强烈建议您在启用跟踪的情况下进行任何评估/基准测试。请参阅此处[here](https://langchain.readthedocs.io/en/latest/tracing)了解什么是跟踪以及如何设置它。
+
+
+
+
+
+
+```  python
+# Comment this out if you are NOT using tracing
+import os
+os.environ["LANGCHAIN_HANDLER"] = "langchain"
+
+```
+
+
+
+
+
+
+
+加载数据  Loading the data
+ [#](#loading-the-data "Permalink to this headline")
+-----------------------------------------------------------------------
+
+
+
+首先，让我们加载数据。
+ 
+
+
+
+
+
+
+
+```  python
+from langchain.evaluation.loading import load_dataset
+dataset = load_dataset("question-answering-state-of-the-union")
+
+```
+
+
+
+
+
+
+
+
+```  python
+Found cached dataset json (/Users/harrisonchase/.cache/huggingface/datasets/LangChainDatasets___json/LangChainDatasets--question-answering-state-of-the-union-a7e5a3b2db4f440d/0.0.0/0f7e3662623656454fcd2b650f34e886a7db4b9104504885bd462096cc7a9f51)
+
+```
+
+
+
+设置链 Setting up a chain
+ [#](#setting-up-a-chain "Permalink to this headline")
+---------------------------------------------------------------------------
+
+
+现在我们需要创建一些管道来进行问题回答。第一步是在有问题的数据上创建索引。
+
+
+
+
+
+
+
+```  python
+from langchain.document_loaders import TextLoader
+loader = TextLoader("../../modules/state_of_the_union.txt")
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+from langchain.indexes import VectorstoreIndexCreator
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+vectorstore = VectorstoreIndexCreator().from_loaders([loader]).vectorstore
+
+```
+
+
+
+
+
+
+
+
+```  python
+Running Chroma using direct local API.
+Using DuckDB in-memory for database. Data will be transient.
+
+```
+
+
+
+
+
+
+现在我们可以创建一个问题回答链。
+ 
+
+
+
+
+
+
+
+```  python
+from langchain.chains import RetrievalQA
+from langchain.llms import OpenAI
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+chain = RetrievalQA.from_chain_type(llm=OpenAI(), chain_type="stuff", retriever=vectorstore.as_retriever(), input_key="question")
+
+```
+
+
+
+
+
+
+
+
+预测  Make a prediction
+ [#](#make-a-prediction "Permalink to this headline")
+-------------------------------------------------------------------------
+
+
+首先，我们可以一次预测一个数据点。在这种粒度级别上执行此操作允许use详细地探索输出，而且比在多个数据点上运行要便宜得多
+
+
+
+
+
+
+```  python
+chain(dataset[0])
+
+```
+
+
+
+
+
+
+
+
+```  python
+{'question': 'What is the purpose of the NATO Alliance?',
+ 'answer': 'The purpose of the NATO Alliance is to secure peace and stability in Europe after World War 2.',
+ 'result': ' The NATO Alliance was created to secure peace and stability in Europe after World War 2.'}
+
+```
+
+
+
+
+
+
+
+
+做很多预测 Make many predictions
+ [#](#make-many-predictions "Permalink to this headline")
+---------------------------------------------------------------------------------
+
+
+
+现在我们可以做出预测
+ 
+
+
+
+
+
+
+
+```  python
+predictions = chain.apply(dataset)
+
+```
+
+
+
+
+
+
+
+
+评估性能 Evaluate performance
+ [#](#evaluate-performance "Permalink to this headline")
+-------------------------------------------------------------------------------
+
+
+现在我们可以评估预测。我们能做的第一件事就是用眼睛看它们。
+
+
+
+
+
+
+```  python
+predictions[0]
+
+```
+
+
+
+
+
+
+
+
+```  python
+{'question': 'What is the purpose of the NATO Alliance?',
+ 'answer': 'The purpose of the NATO Alliance is to secure peace and stability in Europe after World War 2.',
+ 'result': ' The purpose of the NATO Alliance is to secure peace and stability in Europe after World War 2.'}
+
+```
+
+
+
+接下来，我们可以使用一个语言模型，以编程的方式给它们打分
+
+
+
+
+
+
+
+```  python
+from langchain.evaluation.qa import QAEvalChain
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+llm = OpenAI(temperature=0)
+eval_chain = QAEvalChain.from_llm(llm)
+graded_outputs = eval_chain.evaluate(dataset, predictions, question_key="question", prediction_key="result")
+
+```
+
+
+
+
+
+我们可以将分级输出添加到`predictions`dict中，然后获得等级计数。
+
+
+
+
+```  python
+for i, prediction in enumerate(predictions):
+    prediction['grade'] = graded_outputs[i]['text']
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+from collections import Counter
+Counter([pred['grade'] for pred in predictions])
+
+```
+
+
+
+
+
+
+
+
+```  python
+Counter({' CORRECT': 7, ' INCORRECT': 4})
+
+```
+
+
+
+
+我们还可以过滤数据点，找出不正确的例子并查看它们。
+
+
+
+
+```  python
+incorrect = [pred for pred in predictions if pred['grade'] == " INCORRECT"]
+
+```
+
+
+
+
+
+
+
+
+
+
+```  python
+incorrect[0]
+
+```
+
+
+
+
+
+
+
+
+```  python
+{'question': 'What is the U.S. Department of Justice doing to combat the crimes of Russian oligarchs?',
+ 'answer': 'The U.S. Department of Justice is assembling a dedicated task force to go after the crimes of Russian oligarchs.',
+ 'result': ' The U.S. Department of Justice is assembling a dedicated task force to go after the crimes of Russian oligarchs and is naming a chief prosecutor for pandemic fraud.',
+ 'grade': ' INCORRECT'}
+
+```
+
+
+
+
+
+
+
+
