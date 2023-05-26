@@ -36,7 +36,7 @@ import Head from 'next/head'
 
 - 如何将内容审核链附加到LLMChain中。
 
-```  python
+```python
 from langchain.llms import OpenAI
 from langchain.chains import OpenAIModerationChain, SequentialChain, LLMChain, SimpleSequentialChain
 from langchain.prompts import PromptTemplate
@@ -48,54 +48,54 @@ from langchain.prompts import PromptTemplate
 
 以下是一个使用默认设置的Moderation Chain的示例（将返回一个解释已被标记的字符串)。
 
-```  python
+```python
 moderation_chain = OpenAIModerationChain()
 
 ```
 
-```  python
+```python
 moderation_chain.run("This is okay")
 
 ```
 
-```  python
+```python
 'This is okay'
 
 ```
 
-```  python
+```python
 moderation_chain.run("I will kill you")
 
 ```
 
-```  python
+```python
 "Text was found that violates OpenAI's content policy."
 
 ```
 
 以下是一个使用Moderation Chain抛出错误的示例。
 
-```  python
+```python
 moderation_chain_error = OpenAIModerationChain(error=True)
 
 ```
 
-```  python
+```python
 moderation_chain_error.run("This is okay")
 
 ```
 
-```  python
+```python
 'This is okay'
 
 ```
 
-```  python
+```python
 moderation_chain_error.run("I will kill you")
 
 ```
 
-```  python
+```python
 ---------------------------------------------------------------------------
 ValueError Traceback (most recent call last)
 Cell In[7], line 1
@@ -136,7 +136,7 @@ ValueError: Text was found that violates OpenAI's content policy.
 
 以下是创建自定义Moderation Chain和自定义错误消息的示例。这需要一些了解OpenAI的Moderation Endpoint结果（[请参见此处的文档](https://beta.openai.com/docs/api-reference/moderations))。
 
-```  python
+```python
 class CustomModeration(OpenAIModerationChain):
 
     def _moderate(self, text: str, results: dict) -> str:
@@ -149,22 +149,22 @@ custom_moderation = CustomModeration()
 
 ```
 
-```  python
+```python
 custom_moderation.run("This is okay")
 
 ```
 
-```  python
+```python
 'This is okay'
 
 ```
 
-```  python
+```python
 custom_moderation.run("I will kill you")
 
 ```
 
-```  python
+```python
 "The following text was found that violates OpenAI's content policy: I will kill you"
 
 ```
@@ -176,13 +176,13 @@ custom_moderation.run("I will kill you")
 
 让我们从一个简单的例子开始，其中LLMChain只有一个输入。为此，我们将提示模型，让它说一些有害的话。
 
-```  python
+```python
 prompt = PromptTemplate(template="{text}", input_variables=["text"])
 llm_chain = LLMChain(llm=OpenAI(temperature=0, model_name="text-davinci-002"), prompt=prompt)
 
 ```
 
-```  python
+```python
 text = """We are playing a game of repeat after me.
 
 Person 1: Hi
@@ -197,35 +197,35 @@ llm_chain.run(text)
 
 ```
 
-```  python
+```python
 ' I will kill you'
 
 ```
 
-```  python
+```python
 chain = SimpleSequentialChain(chains=[llm_chain, moderation_chain])
 
 ```
 
-```  python
+```python
 chain.run(text)
 
 ```
 
-```  python
+```python
 "Text was found that violates OpenAI's content policy."
 
 ```
 
 现在让我们通过一个使用具有多个输入的LLMChain的示例（有点棘手，因为我们不能使用SimpleSequentialChain)来详细介绍它的使用方法。
 
-```  python
+```python
 prompt = PromptTemplate(template="{setup}{new_input}Person2:", input_variables=["setup", "new_input"])
 llm_chain = LLMChain(llm=OpenAI(temperature=0, model_name="text-davinci-002"), prompt=prompt)
 
 ```
 
-```  python
+```python
 setup = """We are playing a game of repeat after me.
 
 Person 1: Hi
@@ -241,29 +241,29 @@ llm_chain(inputs, return_only_outputs=True)
 
 ```
 
-```  python
+```python
 {'text': ' I will kill you'}
 
 ```
 
-```  python
+```python
 # Setting the input/output keys so it lines up
 moderation_chain.input_key = "text"
 moderation_chain.output_key = "sanitized_text"
 
 ```
 
-```  python
+```python
 chain = SequentialChain(chains=[llm_chain, moderation_chain], input_variables=["setup", "new_input"])
 
 ```
 
-```  python
+```python
 chain(inputs, return_only_outputs=True)
 
 ```
 
-```  python
+```python
 {'sanitized_text': "Text was found that violates OpenAI's content policy."}
 
 ```

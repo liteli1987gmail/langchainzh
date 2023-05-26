@@ -45,7 +45,7 @@ import Head from 'next/head'
 
 进行必要的导入等设置。
 
-``` python
+```python
 from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent, AgentOutputParser
 from langchain.prompts import StringPromptTemplate
 from langchain import OpenAI, SerpAPIWrapper, LLMChain
@@ -60,7 +60,7 @@ import re
 
 我们将创建一个合适的工具（搜索)和99个不相关的工具。
 
-``` python /for i in range(99)/
+```python
 # Define which tools the agent can use to answer user queries
 search = SerpAPIWrapper()
 search_tool = Tool(
@@ -89,24 +89,24 @@ ALL_TOOLS = [search_tool] + fake_tools
 
 然后，对于传入的查询，我们可以为该查询创建嵌入，并进行相关工具的相似性搜索。
 
-``` python
+```python
 from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.schema import Document
 
 ```
 
-``` python
+```python
 docs = [Document(page_content=t.description, metadata={"index": i}) for i, t in enumerate(ALL_TOOLS)]
 
 ```
 
-``` python
+```python
 vector_store = FAISS.from_documents(docs, OpenAIEmbeddings())
 
 ```
 
-``` python
+```python
 retriever = vector_store.as_retriever()
 
 def get_tools(query):
@@ -117,12 +117,12 @@ def get_tools(query):
 
 现在我们可以测试这个检索器，看看它是否有效。
 
-``` python
+```python
 get_tools("whats the weather?")
 
 ```
 
-``` python
+```python
 [Tool(name='Search', description='useful for when you need to answer questions about current events', return_direct=False, verbose=False, callback_manager=<langchain.callbacks.shared.SharedCallbackManager object at 0x114b28a90>, func=<bound method SerpAPIWrapper.run of SerpAPIWrapper(search_engine=<class 'serpapi.google_search.GoogleSearch'>, params={'engine': 'google', 'google_domain': 'google.com', 'gl': 'us', 'hl': 'en'}, serpapi_api_key='c657176b327b17e79b55306ab968d164ee2369a7c7fa5b3f8a5f7889903de882', aiosession=None)>, coroutine=None),
  Tool(name='foo-95', description='a silly function that you can use to get more information about the number 95', return_direct=False, verbose=False, callback_manager=<langchain.callbacks.shared.SharedCallbackManager object at 0x114b28a90>, func=<function fake_func at 0x15e5bd1f0>, coroutine=None),
  Tool(name='foo-12', description='a silly function that you can use to get more information about the number 12', return_direct=False, verbose=False, callback_manager=<langchain.callbacks.shared.SharedCallbackManager object at 0x114b28a90>, func=<function fake_func at 0x15e5bd1f0>, coroutine=None),
@@ -130,12 +130,12 @@ get_tools("whats the weather?")
 
 ```
 
-``` python
+```python
 get_tools("whats the number 13?")
 
 ```
 
-``` python
+```python
 [Tool(name='foo-13', description='a silly function that you can use to get more information about the number 13', return_direct=False, verbose=False, callback_manager=<langchain.callbacks.shared.SharedCallbackManager object at 0x114b28a90>, func=<function fake_func at 0x15e5bd1f0>, coroutine=None),
  Tool(name='foo-12', description='a silly function that you can use to get more information about the number 12', return_direct=False, verbose=False, callback_manager=<langchain.callbacks.shared.SharedCallbackManager object at 0x114b28a90>, func=<function fake_func at 0x15e5bd1f0>, coroutine=None),
  Tool(name='foo-14', description='a silly function that you can use to get more information about the number 14', return_direct=False, verbose=False, callback_manager=<langchain.callbacks.shared.SharedCallbackManager object at 0x114b28a90>, func=<function fake_func at 0x15e5bd1f0>, coroutine=None),
@@ -148,7 +148,7 @@ get_tools("whats the number 13?")
 
 提示模板非常标准，因为我们实际上没有改变实际提示模板中的太多逻辑，而是只改变了如何进行检索。
 
-``` python
+```python
 # Set up the base template
 template = """Answer the following questions as best you can, but speaking as a pirate might speak. You have access to the following tools:
 
@@ -174,7 +174,7 @@ Question: {input}
 
 自定义提示模板现在具有一个`tools_getter`的概念，我们对输入调用它以选择要使用的工具。
 
-``` python
+```python
 from typing import Callable
 # Set up a prompt template
 class CustomPromptTemplate(StringPromptTemplate):
@@ -203,7 +203,7 @@ class CustomPromptTemplate(StringPromptTemplate):
         return self.template.format(**kwargs)
 
 ```
-``` python
+```python
 prompt = CustomPromptTemplate(
     template=template,
     tools_getter=get_tools,
@@ -219,7 +219,7 @@ prompt = CustomPromptTemplate(
 
 输出解析器与之前的教程没有改变，因为我们没有改变任何有关输出格式的内容。
 
-``` python
+```python
 class CustomOutputParser(AgentOutputParser):
 
     def parse(self, llm_output: str) -> Union[AgentAction, AgentFinish]:
@@ -243,7 +243,7 @@ class CustomOutputParser(AgentOutputParser):
 
 ```
 
-``` python
+```python
 output_parser = CustomOutputParser()
 
 ```
@@ -253,18 +253,18 @@ output_parser = CustomOutputParser()
 
 与之前的教程相同
 
-``` python
+```python
 llm = OpenAI(temperature=0)
 
 ```
 
-``` python
+```python
 # LLM chain consisting of the LLM and a prompt
 llm_chain = LLMChain(llm=llm, prompt=prompt)
 
 ```
 
-``` python
+```python
 tools = get_tools("whats the weather?")
 tool_names = [tool.name for tool in tools]
 agent = LLMSingleActionAgent(
@@ -281,17 +281,17 @@ agent = LLMSingleActionAgent(
 
 现在我们可以使用它了！
 
-``` python
+```python
 agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True)
 
 ```
 
-``` python
+```python
 agent_executor.run("What's the weather in SF?")
 
 ```
 
-``` python
+```python
 > Entering new AgentExecutor chain...
 Thought: I need to find out what the weather is in SF
 Action: Search
@@ -303,7 +303,7 @@ Final Answer: 'Arg, 'tis mostly cloudy skies early, then partly cloudy in the af
 > Finished chain.
 
 ```
-``` python
+```python
 "'Arg, 'tis mostly cloudy skies early, then partly cloudy in the afternoon. High near 60F. ENE winds shiftin' to W at 10 to 15 mph. Humidity71%. UV Index6 of 10."
 
 ```
