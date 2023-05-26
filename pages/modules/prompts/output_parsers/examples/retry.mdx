@@ -28,7 +28,7 @@ import Head from 'next/head'
 
 在某些情况下，只查看输出就可以修复任何解析错误，但在其他情况下则不行。例如，当输出不仅格式不正确，而且部分不完整时，就是这种情况。请考虑下面的例子。
 
-```
+```python
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate
 from langchain.llms import OpenAI
 from langchain.chat_models import ChatOpenAI
@@ -38,7 +38,7 @@ from typing import List
 
 ```
 
-```
+```python
 template = """Based on the user question, provide an Action and Action Input for what step should be taken.
 {format_instructions}
 Question: {query}
@@ -51,7 +51,7 @@ parser = PydanticOutputParser(pydantic_object=Action)
 
 ```
 
-```
+```python
 prompt = PromptTemplate(
     template="Answer the user query.\n{format_instructions}\n{query}\n",
     input_variables=["query"],
@@ -60,24 +60,24 @@ prompt = PromptTemplate(
 
 ```
 
-```
+```python
 prompt_value = prompt.format_prompt(query="who is leo di caprios gf?")
 
 ```
 
-```
+```python
 bad_response = '{"action": "search"}'
 
 ```
 
 如果我们尝试直接解析此响应，将会出现错误
 
-```
+```python
 parser.parse(bad_response)
 
 ```
 
-```
+```python
 ---------------------------------------------------------------------------
 ValidationError Traceback (most recent call last)
 File ~/workplace/langchain/langchain/output_parsers/pydantic.py:24, in PydanticOutputParser.parse(self, text)
@@ -112,39 +112,39 @@ action_input
 
 如果我们尝试使用`OutputFixingParser`来修复此错误，它会感到困惑 - 也就是说，它不知道该为操作输入实际上放什么。
 
-```
+```python
 fix_parser = OutputFixingParser.from_llm(parser=parser, llm=ChatOpenAI())
 
 ```
 
-```
+```python
 fix_parser.parse(bad_response)
 
 ```
 
-```
+```python
 Action(action='search', action_input='')
 
 ```
 
 相反，我们可以使用RetryOutputParser，它将提示（以及原始输出)传递以尝试再次获取更好的响应。
 
-```
+```python
 from langchain.output_parsers import RetryWithErrorOutputParser
 
 ```
 
-```
+```python
 retry_parser = RetryWithErrorOutputParser.from_llm(parser=parser, llm=OpenAI(temperature=0))
 
 ```
 
-```
+```python
 retry_parser.parse_with_prompt(bad_response, prompt_value)
 
 ```
 
-```
+```python
 Action(action='search', action_input='who is leo di caprios gf?')
 
 ```
