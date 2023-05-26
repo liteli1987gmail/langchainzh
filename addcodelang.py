@@ -21,7 +21,7 @@ def process_markdown_lines(file_path):
         file.writelines(lines)
 
 # 您可以替换为 Markdown 文件或 Markdown 文件集所在的目录。
-file_dir = "./pages/modules"
+file_dir = "./pages"
 default_language = "python"
 
 for root, dirs, files in os.walk(file_dir):
