@@ -10,29 +10,28 @@ const config: DocsThemeConfig = {
     link: 'https://github.com/liteli1987gmail/langchainzh'
   },
   docsRepositoryBase: 'https://github.com/liteli1987gmail/langchainzh',
-  useNextSeoProps:() =>{
+  head: () => {
+      const { asPath, defaultLocale, locale } = useRouter()
+      const { frontMatter } = useConfig()
+      console.log(frontMatter)
+      const url =
+        'https://www.langchain.com.cn' +
+        (defaultLocale === locale ? asPath : `/${locale}${asPath}`)
+   
+      return <>
+        <meta name="keywords" content="langchain,LLM,chatGPT,应用开发" />
+        <meta name="description" content="LangChain中文站，助力大语言模型LLM应用开发、chatGPT应用开发。" />
+        <meta property="og:url" content={url} />
+        <meta property="og:description" content="LangChain中文站，助力大语言模型LLM应用开发、chatGPT应用开发。" />
+      </>
+    },
+    useNextSeoProps:() =>{
       const { asPath } = useRouter()
       if (asPath !== '/') {
         return {
           titleTemplate: '%s – LangChain中文网'
         }
       }
-    },
-  head: () => {
-      const { asPath, defaultLocale, locale } = useRouter()
-      const { frontMatter } = useConfig()
-      const url =
-        'https://www.langchain.com.cn' +
-        (defaultLocale === locale ? asPath : `/${locale}${asPath}`)
-   
-      return <>
-        <title>LangChain中文网：500页超详细中文文档教程，助力LLM／chatGPT应用开发</title>
-        <meta name="keywords" content="langchain,LLM,chatGPT,应用开发" />
-        <meta name="description" content="LangChain中文站，助力大语言模型LLM应用开发、chatGPT应用开发。" />
-        <meta property="og:url" content={url} />
-        <meta property="og:title" content={frontMatter.title || 'Nextra'} />
-        <meta property="og:description" content={frontMatter.description || 'The next site builder'} />
-      </>
     },
   banner: {
     key: '2.0-release',
