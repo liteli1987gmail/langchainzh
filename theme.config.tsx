@@ -47,11 +47,12 @@ const config: DocsThemeConfig = {
   },
   footer: {
     text: <div><span>MIT {new Date().getFullYear()} © <a href="https://www.Langchain.com.cn" target="_blank">Langchain中文网</a>. 跟着langchain学AI应用开发    </span>
-    <span><a href="https://www.Langchain.com" target="_blank">Langchain英文官网    </a></span>
-    <span><a href="https://github.com/hwchase17/langchain" target="_blank">GitHub    </a></span>
-    <span><a href="http://www.r-p-a.com/llm-gpt-kaifa/" target="_blank">LLM/GPT应用外包开发    </a></span>
-    <span><a href="https://www.openaidoc.com.cn" target="_blank">Openai    </a></span>
-    <span><a href="https://www.milvus-io.com" target="_blank">Milvus-io    </a></span>
+    <span><a href="https://www.Langchain.com" target="_blank">    Langchain英文官网    |</a></span>
+    <span><a href="https://github.com/hwchase17/langchain" target="_blank">    GitHub    |</a></span>
+    <span><a href="http://www.r-p-a.com/llm-gpt-kaifa/" target="_blank">    LLM/GPT应用外包开发    |</a></span>
+    <span><a href="https://www.openaidoc.com.cn" target="_blank">    Openai中文文档    |</a></span>
+    <span><a href="https://www.milvus-io.com" target="_blank">    Milvus中文文档    |</a></span>
+    <span><a href="https://www.pinecone-io.com/ " target="_blank">    Pinecone中文文档    |</a></span>
     </div>
   }
 }
