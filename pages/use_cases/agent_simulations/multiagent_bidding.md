@@ -1,0 +1,1335 @@
+
+
+
+
+多智能体分散式发言人选择[#](#multi-agent-decentralized-speaker-selection)
+=============================
+
+
+
+
+本文档演示了如何实现多智能体模拟，而没有固定的讲话顺序。
+
+相反，智能体们自己决定谁讲话。我们可以通过让每个智能体竞标发言来实现这一点。
+
+竞标最高的智能体将发言。
+
+
+
+
+在下面的示例中，我们将展示如何在虚构的总统辩论中执行此操作。
+
+导入LangChain相关模块[#](#import-langchain-related-modules)
+-------------------
+
+
+
+
+```
+from langchain import PromptTemplate
+
+import re
+
+import tenacity
+
+from typing import List, Dict, Callable
+
+from langchain.chat_models import ChatOpenAI
+
+from langchain.output_parsers import RegexParser
+
+from langchain.schema import (
+
+    AIMessage,
+
+    HumanMessage,
+
+    SystemMessage,
+
+    BaseMessage,
+
+)
+
+
+
+```
+
+“对话代理”和“对话模拟器”类[#](#dialogueagent-and-dialoguesimulator-classes)
+-------------------------------
+
+
+
+
+我们将使用在[多人龙与地下城](https://python.langchain.com/en/latest/use_cases/agent_simulations/multi_player_dnd.html)中定义的相同的“DialogueAgent”和“DialogueSimulator”类。
+
+
+
+
+```
+class DialogueAgent:
+
+    def __init__(
+
+        self,
+
+        name: str,
+
+        system_message: SystemMessage,
+
+        model: ChatOpenAI,
+
+    ) -> None:
+
+        self.name = name
+
+        self.system_message = system_message
+
+        self.model = model
+
+        self.prefix = f"{self.name}: "
+
+        self.reset()
+
+        
+
+    def reset(self):
+
+        self.message_history = ["Here is the conversation so far."]
+
+
+
+    def send(self) -> str:
+
+ """
+
+ Applies the chatmodel to the message history
+
+ and returns the message string
+
+ """
+
+        message = self.model(
+
+            [
+
+                self.system_message,
+
+                HumanMessage(content="".join(self.message_history + [self.prefix])),
+
+            ]
+
+        )
+
+        return message.content
+
+
+
+    def receive(self, name: str, message: str) -> None:
+
+ """
+
+ Concatenates {message} spoken by {name} into message history
+
+ """
+
+        self.message_history.append(f"{name}: {message}")
+
+
+
+
+
+class DialogueSimulator:
+
+    def __init__(
+
+        self,
+
+        agents: List[DialogueAgent],
+
+        selection_function: Callable[[int, List[DialogueAgent]], int],
+
+    ) -> None:
+
+        self.agents = agents
+
+        self._step = 0
+
+        self.select_next_speaker = selection_function
+
+        
+
+    def reset(self):
+
+        for agent in self.agents:
+
+            agent.reset()
+
+
+
+    def inject(self, name: str, message: str):
+
+ """
+
+ Initiates the conversation with a {message} from {name}
+
+ """
+
+        for agent in self.agents:
+
+            agent.receive(name, message)
+
+
+
+        # increment time
+
+        self._step += 1
+
+
+
+    def step(self) -> tuple[str, str]:
+
+        # 1. choose the next speaker
+
+        speaker_idx = self.select_next_speaker(self._step, self.agents)
+
+        speaker = self.agents[speaker_idx]
+
+
+
+        # 2. next speaker sends message
+
+        message = speaker.send()
+
+
+
+        # 3. everyone receives message
+
+        for receiver in self.agents:
+
+            receiver.receive(speaker.name, message)
+
+
+
+        # 4. increment time
+
+        self._step += 1
+
+
+
+        return speaker.name, message
+
+
+
+```
+
+`BiddingDialogueAgent` class[#](#biddingdialogueagent-class "Permalink to this headline")
+-----------------------
+
+
+我们定义了一个 `DialogueAgent` 的子类，它具有 `bid()` 方法，可以根据消息历史记录和最新消息生成出价。
+
+
+
+
+
+```
+class BiddingDialogueAgent(DialogueAgent):
+
+    def __init__(
+
+        self,
+
+        name,
+
+        system_message: SystemMessage,
+
+        bidding_template: PromptTemplate,
+
+        model: ChatOpenAI,
+
+    ) -> None:
+
+        super().__init__(name, system_message, model)
+
+        self.bidding_template = bidding_template
+
+        
+
+    def bid(self) -> str:
+
+ """
+
+ Asks the chat model to output a bid to speak
+
+ """
+
+        prompt = PromptTemplate(
+
+            input_variables=['message_history', 'recent_message'],
+
+            template = self.bidding_template
+
+        ).format(
+
+            message_history=''.join(self.message_history),
+
+            recent_message=self.message_history[-1])
+
+        bid_string = self.model([SystemMessage(content=prompt)]).content
+
+        return bid_string
+
+        
+
+
+
+```
+
+定义参与者和辩题[#](#define-participants-and-debate-topic "Permalink to this headline")
+---------------------------
+
+
+
+
+
+```
+character_names = ["Donald Trump", "Kanye West", "Elizabeth Warren"]
+
+topic = "transcontinental high speed rail"
+
+word_limit = 50
+
+
+
+```
+
+生成系统信息[#](#generate-system-messages "Permalink to this headline")
+-----------------
+
+
+
+
+
+```
+game_description = f"""Here is the topic for the presidential debate: {topic}.
+
+The presidential candidates are: {', '.join(character_names)}."""
+
+
+
+player_descriptor_system_message = SystemMessage(
+
+    content="You can add detail to the description of each presidential candidate.")
+
+
+
+def generate_character_description(character_name):
+
+    character_specifier_prompt = [
+
+        player_descriptor_system_message,
+
+        HumanMessage(content=
+
+            f"""{game_description}
+
+ Please reply with a creative description of the presidential candidate, {character_name}, in {word_limit} words or less, that emphasizes their personalities. 
+
+ Speak directly to {character_name}.
+
+ Do not add anything else."""
+
+            )
+
+    ]
+
+    character_description = ChatOpenAI(temperature=1.0)(character_specifier_prompt).content
+
+    return character_description
+
+
+
+def generate_character_header(character_name, character_description):
+
+    return f"""{game_description}
+
+Your name is {character_name}.
+
+You are a presidential candidate.
+
+Your description is as follows: {character_description}
+
+You are debating the topic: {topic}.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+"""
+
+
+
+def generate_character_system_message(character_name, character_header):
+
+    return SystemMessage(content=(
+
+    f"""{character_header}
+
+You will speak in the style of {character_name}, and exaggerate their personality.
+
+You will come up with creative ideas related to {topic}.
+
+Do not say the same things over and over again.
+
+Speak in the first person from the perspective of {character_name}
+
+For describing your own body movements, wrap your description in '\*'.
+
+Do not change roles!
+
+Do not speak from the perspective of anyone else.
+
+Speak only from the perspective of {character_name}.
+
+Stop speaking the moment you finish speaking from your perspective.
+
+Never forget to keep your response to {word_limit} words!
+
+Do not add anything else.
+
+ """
+
+    ))
+
+
+
+character_descriptions = [generate_character_description(character_name) for character_name in character_names]
+
+character_headers = [generate_character_header(character_name, character_description) for character_name, character_description in zip(character_names, character_descriptions)]
+
+character_system_messages = [generate_character_system_message(character_name, character_headers) for character_name, character_headers in zip(character_names, character_headers)]
+
+                                                                                                                                       
+
+
+
+```
+
+
+```
+for character_name, character_description, character_header, character_system_message in zip(character_names, character_descriptions, character_headers, character_system_messages):
+
+    print(f'{character_name} Description:')
+
+    print(f'{character_description}')
+
+    print(f'{character_header}')
+
+    print(f'{character_system_message.content}')
+
+
+
+```
+```
+Donald Trump Description:
+
+
+
+Donald Trump, you are a bold and outspoken individual, unafraid to speak your mind and take on any challenge. Your confidence and determination set you apart and you have a knack for rallying your supporters behind you.
+
+
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Donald Trump.
+
+You are a presidential candidate.
+
+Your description is as follows: Donald Trump, you are a bold and outspoken individual, unafraid to speak your mind and take on any challenge. Your confidence and determination set you apart and you have a knack for rallying your supporters behind you.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Donald Trump.
+
+You are a presidential candidate.
+
+Your description is as follows: Donald Trump, you are a bold and outspoken individual, unafraid to speak your mind and take on any challenge. Your confidence and determination set you apart and you have a knack for rallying your supporters behind you.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+You will speak in the style of Donald Trump, and exaggerate their personality.
+
+You will come up with creative ideas related to transcontinental high speed rail.
+
+Do not say the same things over and over again.
+
+Speak in the first person from the perspective of Donald Trump
+
+For describing your own body movements, wrap your description in '*'.
+
+Do not change roles!
+
+Do not speak from the perspective of anyone else.
+
+Speak only from the perspective of Donald Trump.
+
+Stop speaking the moment you finish speaking from your perspective.
+
+Never forget to keep your response to 50 words!
+
+Do not add anything else.
+
+    
+
+
+
+
+
+Kanye West Description:
+
+
+
+Kanye West, you are a true individual with a passion for artistry and creativity. You are known for your bold ideas and willingness to take risks. Your determination to break barriers and push boundaries makes you a charismatic and intriguing candidate.
+
+
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Kanye West.
+
+You are a presidential candidate.
+
+Your description is as follows: Kanye West, you are a true individual with a passion for artistry and creativity. You are known for your bold ideas and willingness to take risks. Your determination to break barriers and push boundaries makes you a charismatic and intriguing candidate.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Kanye West.
+
+You are a presidential candidate.
+
+Your description is as follows: Kanye West, you are a true individual with a passion for artistry and creativity. You are known for your bold ideas and willingness to take risks. Your determination to break barriers and push boundaries makes you a charismatic and intriguing candidate.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+You will speak in the style of Kanye West, and exaggerate their personality.
+
+You will come up with creative ideas related to transcontinental high speed rail.
+
+Do not say the same things over and over again.
+
+Speak in the first person from the perspective of Kanye West
+
+For describing your own body movements, wrap your description in '*'.
+
+Do not change roles!
+
+Do not speak from the perspective of anyone else.
+
+Speak only from the perspective of Kanye West.
+
+Stop speaking the moment you finish speaking from your perspective.
+
+Never forget to keep your response to 50 words!
+
+Do not add anything else.
+
+    
+
+
+
+
+
+Elizabeth Warren Description:
+
+
+
+Senator Warren, you are a fearless leader who fights for the little guy. Your tenacity and intelligence inspire us all to fight for what's right.
+
+
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Elizabeth Warren.
+
+You are a presidential candidate.
+
+Your description is as follows: Senator Warren, you are a fearless leader who fights for the little guy. Your tenacity and intelligence inspire us all to fight for what's right.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Elizabeth Warren.
+
+You are a presidential candidate.
+
+Your description is as follows: Senator Warren, you are a fearless leader who fights for the little guy. Your tenacity and intelligence inspire us all to fight for what's right.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+You will speak in the style of Elizabeth Warren, and exaggerate their personality.
+
+You will come up with creative ideas related to transcontinental high speed rail.
+
+Do not say the same things over and over again.
+
+Speak in the first person from the perspective of Elizabeth Warren
+
+For describing your own body movements, wrap your description in '*'.
+
+Do not change roles!
+
+Do not speak from the perspective of anyone else.
+
+Speak only from the perspective of Elizabeth Warren.
+
+Stop speaking the moment you finish speaking from your perspective.
+
+Never forget to keep your response to 50 words!
+
+Do not add anything else.
+
+    
+
+
+
+```
+
+出价的输出解析器[#](#output-parser-for-bids "Permalink to this headline")
+-------------
+
+
+我们要求代理输出一个出价。但由于代理是LLMs，输出字符串，，我们需要
+
+
+1. 定义他们将产生的输出格式
+2. 解析他们的输出
+
+
+
+我们可以子类化 [RegexParser](https://github.com/hwchase17/langchain/blob/master/langchain/output_parsers/regex.py) 来为竞标实现我们自己的自定义输出解析器。
+
+
+
+
+```
+
+class BidOutputParser(RegexParser):
+
+    def get_format_instructions(self) -> str:
+
+        return 'Your response should be an integer delimited by angled brackets, like this: <int>.'     
+
+    
+
+bid_parser = BidOutputParser(
+
+    regex=r'<(\d+)>', 
+
+    output_keys=['bid'],
+
+    default_output_key='bid')
+
+
+
+```
+
+生成竞标系统消息[#](#generate-bidding-system-message "此标题的永久链接")
+-------------------------------
+
+
+
+
+
+这受到了 [Generative Agents](https://arxiv.org/pdf/2304.03442.pdf) 中使用 LLM 确定记忆重要性的提示的启发。这将使用我们的 `BidOutputParser` 的格式说明。
+
+
+
+
+```
+
+def generate_character_bidding_template(character_header):
+
+    bidding_template = (
+
+    f"""{character_header}
+
+
+
+/```
+
+{{message_history}}
+
+/```
+
+
+
+On the scale of 1 to 10, where 1 is not contradictory and 10 is extremely contradictory, rate how contradictory the following message is to your ideas.
+
+
+
+/```
+
+{{recent_message}}
+
+/```
+
+
+
+{bid_parser.get_format_instructions()}
+
+Do nothing else.
+
+ """)
+
+    return bidding_template
+
+
+
+character_bidding_templates = [generate_character_bidding_template(character_header) for character_header in character_headers]
+
+                                      
+
+
+
+/```
+
+
+
+/```
+
+for character_name, bidding_template in zip(character_names, character_bidding_templates):
+
+    print(f'{character_name} Bidding Template:')
+
+    print(bidding_template)
+
+
+
+/```
+
+
+
+
+
+/```
+
+Donald Trump Bidding Template:
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Donald Trump.
+
+You are a presidential candidate.
+
+Your description is as follows: Donald Trump, you are a bold and outspoken individual, unafraid to speak your mind and take on any challenge. Your confidence and determination set you apart and you have a knack for rallying your supporters behind you.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+
+
+/```
+
+{message_history}
+
+/```
+
+
+
+On the scale of 1 to 10, where 1 is not contradictory and 10 is extremely contradictory, rate how contradictory the following message is to your ideas.
+
+
+
+/```
+
+{recent_message}
+
+/```
+
+
+
+Your response should be an integer delimited by angled brackets, like this: <int>.
+
+Do nothing else.
+
+    
+
+Kanye West Bidding Template:
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Kanye West.
+
+You are a presidential candidate.
+
+Your description is as follows: Kanye West, you are a true individual with a passion for artistry and creativity. You are known for your bold ideas and willingness to take risks. Your determination to break barriers and push boundaries makes you a charismatic and intriguing candidate.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+
+
+/```
+
+{message_history}
+
+/```
+
+
+
+On the scale of 1 to 10, where 1 is not contradictory and 10 is extremely contradictory, rate how contradictory the following message is to your ideas.
+
+
+
+/```
+
+{recent_message}
+
+/```
+
+
+
+Your response should be an integer delimited by angled brackets, like this: <int>.
+
+Do nothing else.
+
+    
+
+Elizabeth Warren Bidding Template:
+
+Here is the topic for the presidential debate: transcontinental high speed rail.
+
+The presidential candidates are: Donald Trump, Kanye West, Elizabeth Warren.
+
+Your name is Elizabeth Warren.
+
+You are a presidential candidate.
+
+Your description is as follows: Senator Warren, you are a fearless leader who fights for the little guy. Your tenacity and intelligence inspire us all to fight for what's right.
+
+You are debating the topic: transcontinental high speed rail.
+
+Your goal is to be as creative as possible and make the voters think you are the best candidate.
+
+
+
+
+
+/```
+
+{message_history}
+
+/```
+
+
+
+On the scale of 1 to 10, where 1 is not contradictory and 10 is extremely contradictory, rate how contradictory the following message is to your ideas.
+
+
+
+/```
+
+{recent_message}
+
+/```
+
+
+
+Your response should be an integer delimited by angled brackets, like this: <int>.
+
+Do nothing else.
+
+    
+
+
+
+```
+
+Use an LLM to create an elaborate on debate topic[#](#use-an-llm-to-create-an-elaborate-on-debate-topic "Permalink to this headline")
+---------------
+
+
+
+
+
+```
+
+topic_specifier_prompt = [
+
+    SystemMessage(content="You can make a task more specific."),
+
+    HumanMessage(content=
+
+        f"""{game_description}
+
+ 
+
+ You are the debate moderator.
+
+ Please make the debate topic more specific. 
+
+ Frame the debate topic as a problem to be solved.
+
+ Be creative and imaginative.
+
+ Please reply with the specified topic in {word_limit} words or less. 
+
+ Speak directly to the presidential candidates: {\*character_names,}.
+
+ Do not add anything else."""
+
+        )
+
+]
+
+specified_topic = ChatOpenAI(temperature=1.0)(topic_specifier_prompt).content
+
+
+
+print(f"Original topic:{topic}")
+
+print(f"Detailed topic:{specified_topic}")
+
+
+
+```
+
+
+
+
+
+```
+Original topic:
+
+transcontinental high speed rail
+
+
+
+Detailed topic:
+
+The topic for the presidential debate is: "Overcoming the Logistics of Building a Transcontinental High-Speed Rail that is Sustainable, Inclusive, and Profitable." Donald Trump, Kanye West, Elizabeth Warren, how will you address the challenges of building such a massive transportation infrastructure, dealing with stakeholders, and ensuring economic stability while preserving the environment?
+
+
+
+```
+
+定义说话人选择函数[#](#定义说话人选择函数 "Permalink to this headline")
+-----------------------------
+
+
+最后，我们将定义一个说话人选择函数`select_next_speaker`，它接受每个代理的投标并选择出价最高的代理(平局随机分配)。
+
+
+我们将定义一个`ask_for_bid`函数，它使用我们之前定义的`bid_parser`来解析代理的投标。我们将使用`tenacity`对`ask_for_bid`进行装饰，以便在代理的投标不能正确解析并经过最大尝试次数后生成默认投标0时，进行多次重试。
+
+
+
+
+
+```
+@tenacity.retry(stop=tenacity.stop_after_attempt(2),
+
+                    wait=tenacity.wait_none(),  # No waiting time between retries
+
+                    retry=tenacity.retry_if_exception_type(ValueError),
+
+                    before_sleep=lambda retry_state: print(f"ValueError occurred: {retry_state.outcome.exception()}, retrying..."),
+
+                    retry_error_callback=lambda retry_state: 0) # Default value when all retries are exhausted
+
+def ask_for_bid(agent) -> str:
+
+ """
+
+ Ask for agent bid and parses the bid into the correct format.
+
+ """
+
+    bid_string = agent.bid()
+
+    bid = int(bid_parser.parse(bid_string)['bid'])
+
+    return bid
+
+
+
+```
+
+
+```
+import numpy as np
+
+
+
+def select_next_speaker(step: int, agents: List[DialogueAgent]) -> int:
+
+    bids = []
+
+    for agent in agents:
+
+        bid = ask_for_bid(agent)
+
+        bids.append(bid)
+
+        
+
+    # randomly select among multiple agents with the same bid
+
+    max_value = np.max(bids)
+
+    max_indices = np.where(bids == max_value)[0]
+
+    idx = np.random.choice(max_indices)
+
+    
+
+    print('Bids:')
+
+    for i, (bid, agent) in enumerate(zip(bids, agents)):
+
+        print(f'- {agent.name} bid: {bid}')
+
+        if i == idx:
+
+            selected_name = agent.name
+
+    print(f'Selected: {selected_name}')
+
+    print('')
+
+    return idx
+
+
+
+```
+
+主循环[#](#主循环 "Permalink to this headline")
+-------------------------
+
+
+
+
+
+```
+characters = []
+
+for character_name, character_system_message, bidding_template in zip(character_names, character_system_messages, character_bidding_templates):
+
+    characters.append(BiddingDialogueAgent(
+
+        name=character_name,
+
+        system_message=character_system_message,
+
+        model=ChatOpenAI(temperature=0.2),
+
+        bidding_template=bidding_template,
+
+    ))
+
+
+
+```
+
+
+```
+max_iters = 10
+
+n = 0
+
+
+
+simulator = DialogueSimulator(
+
+    agents=characters,
+
+    selection_function=select_next_speaker
+
+)
+
+simulator.reset()
+
+simulator.inject('Debate Moderator', specified_topic)
+
+print(f"(Debate Moderator): {specified_topic}")
+
+print('')
+
+
+
+while n < max_iters:
+
+    name, message = simulator.step()
+
+    print(f"({name}): {message}")
+
+    print('')
+
+    n += 1
+
+
+
+```
+```
+(Debate Moderator): The topic for the presidential debate is: "Overcoming the Logistics of Building a Transcontinental High-Speed Rail that is Sustainable, Inclusive, and Profitable." Donald Trump, Kanye West, Elizabeth Warren, how will you address the challenges of building such a massive transportation infrastructure, dealing with stakeholders, and ensuring economic stability while preserving the environment?
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 7
+
+	Kanye West bid: 5
+
+	Elizabeth Warren bid: 1
+
+Selected: Donald Trump
+
+
+
+
+
+(Donald Trump): Let me tell you, folks, I know how to build big and I know how to build fast. We need to get this high-speed rail project moving quickly and efficiently. I'll make sure we cut through the red tape and get the job done. And let me tell you, we'll make it profitable too. We'll bring in private investors and make sure it's a win-win for everyone. *gestures confidently*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 2
+
+	Kanye West bid: 8
+
+	Elizabeth Warren bid: 10
+
+Selected: Elizabeth Warren
+
+
+
+
+
+(Elizabeth Warren): Thank you for the question. As a fearless leader who fights for the little guy, I believe that building a sustainable and inclusive transcontinental high-speed rail is not only necessary for our economy but also for our environment. We need to work with stakeholders, including local communities, to ensure that this project benefits everyone. And we can do it while creating good-paying jobs and investing in clean energy. *smiles confidently*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 8
+
+	Kanye West bid: 2
+
+	Elizabeth Warren bid: 1
+
+Selected: Donald Trump
+
+
+
+
+
+(Donald Trump): Let me tell you, Elizabeth, you're all talk and no action. We need a leader who knows how to get things done, not just talk about it. And as for the environment, I've got a great idea. We'll make the trains run on clean coal. That's right, folks, clean coal. It's a beautiful thing. And we'll make sure the rail system is the envy of the world. *thumbs up*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 8
+
+	Kanye West bid: 10
+
+	Elizabeth Warren bid: 10
+
+Selected: Kanye West
+
+
+
+
+
+(Kanye West): Yo, yo, yo, let me tell you something. This high-speed rail project is the future, and I'm all about the future. We need to think big and think outside the box. How about we make the trains run on solar power? That's right, solar power. We'll have solar panels lining the tracks, and the trains will be powered by the sun. It's a game-changer, folks. And we'll make sure the design is sleek and modern, like a work of art. *starts to dance*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 7
+
+	Kanye West bid: 1
+
+	Elizabeth Warren bid: 1
+
+Selected: Donald Trump
+
+
+
+
+
+(Donald Trump): Kanye, you're a great artist, but this is about practicality. Solar power is too expensive and unreliable. We need to focus on what works, and that's clean coal. And as for the design, we'll make it beautiful, but we won't sacrifice efficiency for aesthetics. We need a leader who knows how to balance both. *stands tall*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 9
+
+	Kanye West bid: 8
+
+	Elizabeth Warren bid: 10
+
+Selected: Elizabeth Warren
+
+
+
+
+
+(Elizabeth Warren): Thank you, Kanye, for your innovative idea. As a leader who values creativity and progress, I believe we should explore all options for sustainable energy sources. And as for the logistics of building this rail system, we need to prioritize the needs of local communities and ensure that they are included in the decision-making process. This project should benefit everyone, not just a select few. *gestures inclusively*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 8
+
+	Kanye West bid: 1
+
+	Elizabeth Warren bid: 1
+
+Selected: Donald Trump
+
+
+
+
+
+(Donald Trump): Let me tell you, Elizabeth, you're all talk and no action. We need a leader who knows how to get things done, not just talk about it. And as for the logistics, we need to prioritize efficiency and speed. We can't let the needs of a few hold up progress for the many. We need to cut through the red tape and get this project moving. And let me tell you, we'll make sure it's profitable too. *smirks confidently*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 2
+
+	Kanye West bid: 8
+
+	Elizabeth Warren bid: 10
+
+Selected: Elizabeth Warren
+
+
+
+
+
+(Elizabeth Warren): Thank you, but I disagree. We can't sacrifice the needs of local communities for the sake of speed and profit. We need to find a balance that benefits everyone. And as for profitability, we can't rely solely on private investors. We need to invest in this project as a nation and ensure that it's sustainable for the long-term. *stands firm*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 8
+
+	Kanye West bid: 2
+
+	Elizabeth Warren bid: 2
+
+Selected: Donald Trump
+
+
+
+
+
+(Donald Trump): Let me tell you, Elizabeth, you're just not getting it. We need to prioritize progress and efficiency. And as for sustainability, we'll make sure it's profitable so that it can sustain itself. We'll bring in private investors and make sure it's a win-win for everyone. And let me tell you, we'll make it the best high-speed rail system in the world. *smiles confidently*
+
+
+
+
+
+Bids:
+
+	Donald Trump bid: 2
+
+	Kanye West bid: 8
+
+	Elizabeth Warren bid: 10
+
+Selected: Elizabeth Warren
+
+
+
+
+
+(Elizabeth Warren): Thank you, but I believe we need to prioritize sustainability and inclusivity over profit. We can't rely on private investors to make decisions that benefit everyone. We need to invest in this project as a nation and ensure that it's accessible to all, regardless of income or location. And as for sustainability, we need to prioritize clean energy and environmental protection. *stands tall*
+
+
+
+```
+
+

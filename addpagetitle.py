@@ -63,4 +63,4 @@ def delete_md_files(folder_path):
 
 
 
-delete_md_files('./pages/modules')
+delete_md_files('./pages/use_case/')
