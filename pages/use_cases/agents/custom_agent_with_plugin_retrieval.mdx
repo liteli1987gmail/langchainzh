@@ -1,45 +1,64 @@
 
+import Head from 'next/head'
 
-即插即用[#](#plug-and-plai "跳到此标题的永久链接")
-======================
+<Head>
+  <script>
+    {
+      `(function() {
+         var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+       })();`
+    }
+  </script>
+</Head>
+
+![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
 
 
-此文档建立在[工具检索](custom_agent_with_plugin_retrieval.html)的基础上，但从`plugnplai`中获取所有工具-一个人工智能插件目录。
 
+ 
+ 
+使用插件检索的自定义代理[#](#custom-agent-with-plugin-retrieval  "Permalink to this headline")
+===========
+ 
+ 
+这篇笔记将两个概念结合起来，构建一个可以与人工智能插件交互的自定义代理：
+ 
+ 
+1.具有检索的自定义代理这介绍了检索多个工具的概念，这在尝试使用任意多个插件时非常有用。
+2. [自然语言API Chains]（../../ modules/chains/examples/openapi.html）这会在OpenAPI端点周围创建自然语言包装器。 这很有用，因为：
+    -（1）插件在内部使用OpenAPI端点， 
+    -（2）将它们包装在NLAChain中允许路由代理更轻松地调用它们。
+ 
+ 
+本笔记中介绍的新颖思想是使用检索来选择不是显式工具， 但要使用的OpenAPI规范集。 
 
+然后我们可以从这些OpenAPI规范中生成工具。 
 
-设置环境[#](#set-up-environment "跳到此标题的永久链接")
+这种用例是在尝试让代理使用插件时。 
+
+选择插件可能更有效率， 然后选择端点而不是直接选择端点。 
+
+这是因为插件可能包含更有用的选择信息。
+ 
+ 
+ 
+设置环境[#](#set-up-environment "Permalink to this headline")
 -------------------
-
-
-导入所需的内容， 等等。
-
-
-安装plugnplai lib以从https://plugplai.com目录获取活动插件列表
-
-
-
-
-
-```
-pip install plugnplai -q
-
-
-
-```
-```
-[notice] A new release of pip available: 22.3.1 -> 23.1.1
-
-[notice] To update, run: pip install --upgrade pip
-
-Note: you may need to restart the kernel to use updated packages.
-
-
-
-```
-
-
-```
+ 
+ 
+进行必要的导入，等等。
+ 
+ 
+ 
+ 
+ 
+```python
 from langchain.agents import Tool, AgentExecutor, LLMSingleActionAgent, AgentOutputParser
 
 from langchain.prompts import StringPromptTemplate
@@ -56,27 +75,32 @@ from langchain.tools.plugin import AIPlugin
 
 import re
 
-import plugnplai
-
 
 
 ```
 
-设置LLM[#](#setup-llm "跳到此标题的永久链接")
+ 
+ 
+ 
+ 
+ 
+ 
+设置LLM[#](#setup-llm "Permalink to this headline")
 -------------------------
+ 
+ 
+ 
+ 
 
 
-
-
-
-```
+```python
 llm = OpenAI(temperature=0)
 
 
 
 ```
 
-设置插件[#](#set-up-plugins "跳到此标题的永久链接")
+设置插件[#](#set-up-plugins  "Permalink to this headline")
 -----------------------------------
 
 
@@ -86,45 +110,48 @@ llm = OpenAI(temperature=0)
 
 
 
+```python
+urls = [
+
+    "https://datasette.io/.well-known/ai-plugin.json",
+
+    "https://api.speak.com/.well-known/ai-plugin.json",
+
+    "https://www.wolframalpha.com/.well-known/ai-plugin.json",
+
+    "https://www.zapier.com/.well-known/ai-plugin.json",
+
+    "https://www.klarna.com/.well-known/ai-plugin.json",
+
+    "https://www.joinmilo.com/.well-known/ai-plugin.json",
+
+    "https://slack.com/.well-known/ai-plugin.json",
+
+    "https://schooldigger.com/.well-known/ai-plugin.json",
+
+]
+
+
+
+AI_PLUGINS = [AIPlugin.from_url(url) for url in urls]
+
+
+
 ```
-# Get all plugins from plugnplai.com
 
-urls = plugnplai.get_plugins()
-
-
-
-# Get ChatGPT plugins - only ChatGPT verified plugins
-
-urls = plugnplai.get_plugins(filter = 'ChatGPT')
-
-
-
-# Get working plugins - only tested plugins (in progress)
-
-urls = plugnplai.get_plugins(filter = 'working')
-
-
-
-
-
-AI_PLUGINS = [AIPlugin.from_url(url + "/.well-known/ai-plugin.json") for url in urls]
-
-
-
-```
-
-工具检索[#](#tool-retriever "跳到此标题的永久链接")
+工具检索[#](#tool-retriever  "Permalink to this headline")
 -----------------------------------
 
 
+我们将使用一个向量存储库为每个工具描述创建嵌入。
 
-我们将使用向量存储为每个工具描述创建嵌入。然后，对于传入的查询，我们可以为该查询创建嵌入，并进行相似性搜索以查找相关工具。
+然后，对于传入的查询，我们可以为该查询创建嵌入并进行相似性搜索以获取相关工具。
 
 
 
 
-```
 
+```python
 from langchain.vectorstores import FAISS
 
 from langchain.embeddings import OpenAIEmbeddings
@@ -136,9 +163,7 @@ from langchain.schema import Document
 ```
 
 
-
-```
-
+```python
 embeddings = OpenAIEmbeddings()
 
 docs = [
@@ -164,13 +189,7 @@ toolkits_dict = {plugin.name_for_model:
 
 
 ```
-
-
-
-
-
-```
-
+```python
 Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
 
 Attempting to load an OpenAPI 3.0.1 spec.  This may result in degraded performance. Convert your OpenAPI spec to 3.1.* spec for better support.
@@ -194,9 +213,7 @@ Attempting to load a Swagger 2.0 spec.  This may result in degraded performance.
 ```
 
 
-
-```
-
+```python
 retriever = vector_store.as_retriever()
 
 
@@ -227,13 +244,15 @@ def get_tools(query):
 
 
 
-我们现在可以测试这个检索器，看看它是否有效。
+
+
+现在，我们可以测试该检索器是否有效。
 
 
 
 
-```
 
+```python
 tools = get_tools("What could I do today with my kiddo")
 
 [t.name for t in tools]
@@ -241,13 +260,7 @@ tools = get_tools("What could I do today with my kiddo")
 
 
 ```
-
-
-
-
-
-```
-
+```python
 ['Milo.askMilo',
 
  'Zapier_Natural_Language_Actions_(NLA)_API_(Dynamic)_-_Beta.search_all_actions',
@@ -283,9 +296,7 @@ tools = get_tools("What could I do today with my kiddo")
 ```
 
 
-
-```
-
+```python
 tools = get_tools("what shirts can i buy?")
 
 [t.name for t in tools]
@@ -293,13 +304,7 @@ tools = get_tools("what shirts can i buy?")
 
 
 ```
-
-
-
-
-
-```
-
+```python
 ['Open_AI_Klarna_product_Api.productsUsingGET',
 
  'Milo.askMilo',
@@ -330,12 +335,17 @@ tools = get_tools("what shirts can i buy?")
 
 ```
 
-提示模板 Prompt Template
+提示模板[#](#prompt-template  "Permalink to this headline")
 -------------
 
-提示模板非常标准，因为实际上我们在实际提示模板中并没有改变太多逻辑，而是只是更改了检索方式。
 
-```
+
+提示模板非常标准，因为我们实际上并没有改变太多的逻辑在实际提示模板中，而是改变了检索方式。
+
+
+
+
+```python
 
 # Set up the base template
 
@@ -383,13 +393,12 @@ Question: {input}
 
 
 
-自定义提示模板现在有一个tools_getter的概念，我们在input上调用它来选择要使用的工具。
+自定义提示模板现在有了 tools_getter 的概念，我们在输入中调用它来选择要使用的工具
 
 
 
 
-
-```
+```python
 
 from typing import Callable
 
@@ -449,7 +458,7 @@ class CustomPromptTemplate(StringPromptTemplate):
 
 
 
-```
+```python
 
 prompt = CustomPromptTemplate(
 
@@ -469,19 +478,20 @@ prompt = CustomPromptTemplate(
 
 ```
 
-
-
-输出解析器[#](#output-parser "Permalink to this headline")
+输出解析器
 ---------------------------------
 
 
-由于我们不改变输出格式，所以输出解析器与上个文档没有变化。
+
+
+
+输出解析器与之前的文档没有改变，因为我们没有改变任何关于输出格式的内容。
 
 
 
 
+```python
 
-```
 class CustomOutputParser(AgentOutputParser):
 
     
@@ -527,24 +537,27 @@ class CustomOutputParser(AgentOutputParser):
 ```
 
 
-```
+
+```python
+
 output_parser = CustomOutputParser()
 
 
 
 ```
 
-设置LLM停止序列和代理[#](#set-up-llm-stop-sequence-and-the-agent "Permalink to this headline")
+设置 LLM 停止序列和代理
 ---------------------------------
 
 
-与上个文档相同
+同前。
 
 
 
 
 
-```
+```python
+
 llm = OpenAI(temperature=0)
 
 
@@ -552,7 +565,9 @@ llm = OpenAI(temperature=0)
 ```
 
 
-```
+
+```python
+
 # LLM chain consisting of the LLM and a prompt
 
 llm_chain = LLMChain(llm=llm, prompt=prompt)
@@ -562,7 +577,9 @@ llm_chain = LLMChain(llm=llm, prompt=prompt)
 ```
 
 
-```
+
+```python
+
 tool_names = [tool.name for tool in tools]
 
 agent = LLMSingleActionAgent(
@@ -581,7 +598,11 @@ agent = LLMSingleActionAgent(
 
 ```
 
-使用代理[#](#use-the-agent "Permalink to this headline")
+
+
+
+
+使用代理[#](#use-the-agent  "Permalink to this headline")
 ---------------------------------
 
 
@@ -591,7 +612,7 @@ agent = LLMSingleActionAgent(
 
 
 
-```
+```python
 agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, verbose=True)
 
 
@@ -599,13 +620,13 @@ agent_executor = AgentExecutor.from_agent_and_tools(agent=agent, tools=tools, ve
 ```
 
 
-```
+```python
 agent_executor.run("what shirts can i buy?")
 
 
 
 ```
-```
+```python
 > Entering new AgentExecutor chain...
 
 Thought: I need to find a product API
@@ -631,7 +652,7 @@ Final Answer: Arg, I found 10 shirts from the API response. They range in price 
 
 
 
-```
+```python
 'Arg, I found 10 shirts from the API response. They range in price from $9.99 to $450.00 and come in a variety of materials, colors, and patterns.'
 
 

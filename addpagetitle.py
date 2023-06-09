@@ -7,6 +7,7 @@ def replace_extension(folder_path):
         for filename in files:
             if filename.endswith('.md'):
                 file_path = os.path.join(root, filename)
+                print(file_path)
 
                 # 将文件名 .md 替换为 .mdx
                 new_filename = re.sub('\.md$', '.mdx', filename)
@@ -63,4 +64,5 @@ def delete_md_files(folder_path):
 
 
 
-delete_md_files('./pages/use_case/')
+# replace_extension('./pages/use_cases/')
+delete_md_files('./pages/use_cases/')

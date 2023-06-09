@@ -53,6 +53,7 @@ const config: DocsThemeConfig = {
     <span><a href="https://www.openaidoc.com.cn" target="_blank">    Openai中文文档    |</a></span>
     <span><a href="https://www.milvus-io.com" target="_blank">    Milvus中文文档    |</a></span>
     <span><a href="https://www.pinecone-io.com/ " target="_blank">    Pinecone中文文档    |</a></span>
+    <span><a href="https://www.Langchain.com.cn" target="_blank">    沪ICP备2023014280号-3</a></span>
     </div>
   }
 }
