@@ -1,0 +1,956 @@
+ 
+ 
+LangChain中的生成式代理[#](#generative-agents-in-langchain "Permalink to this headline")
+===
+ 
+ 
+本文实现了一种基于文献[Generative Agents: Interactive Simulacra of Human Behavior](https://arxiv.org/abs/2304.03442) by Park， et. al.的生成式代理。
+ 
+ 
+在这个过程中，我们利用了一个由LangChain检索器支持的时间加权存储对象。
+ 
+ 
+ 
+ 
+ 
+``` 
+# Use termcolor to make it easy to colorize the outputs.
+
+!pip install termcolor > /dev/null
+
+
+
+```
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+``` 
+import logging
+
+logging.basicConfig(level=logging.ERROR)
+
+
+
+```
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+``` 
+from datetime import datetime, timedelta
+
+from typing import List
+
+from termcolor import colored
+
+
+
+
+
+from langchain.chat_models import ChatOpenAI
+
+from langchain.docstore import InMemoryDocstore
+
+from langchain.embeddings import OpenAIEmbeddings
+
+from langchain.retrievers import TimeWeightedVectorStoreRetriever
+
+from langchain.vectorstores import FAISS
+
+
+
+```
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+``` 
+USER_NAME = "Person A" # The name you want to use when interviewing the agent.
+
+LLM = ChatOpenAI(max_tokens=1500) # Can be any LLM you want.
+
+
+
+```
+
+ 
+ 
+ 
+ 
+ 
+生成式代理记忆组件[#](#generative-agent-memory-components "Permalink to this headline")
+-----------------------
+ 
+ 
+本教程重点介绍了生成式代理的记忆及其对行为的影响。记忆在两个方面与标准的LangChain聊天记忆不同：
+ 
+ 
+1. **记忆形成**
+ 
+ 
+生成式代理具有扩展的记忆，将多个存储为单个流:
+ 
+ 
+- 1.观察 - 来自对话或与虚拟世界的交互有关自己或他人的事情
+- 2.反思 - 重新涌现和总结核心记忆
+
+2. **记忆召回**
+ 
+ 
+记忆是通过重要性，最近性和显著性的加权和来检索的。
+ 
+
+
+你可以在参考文档中查看以下导入的`GenerativeAgent`和`GenerativeAgentMemory`的定义，重点关注`add_memory`和`summarize_related_memories`方法。
+
+
+
+
+```
+
+from langchain.experimental.generative_agents import GenerativeAgent, GenerativeAgentMemory
+
+
+
+```
+
+记忆生命周期[#](#memory-lifecycle "此标题的永久链接")
+---------------
+
+
+
+
+总结上述:中的关键方法`add_memory`和`summarize_related_memories`。
+
+
+
+
+当代理人做出观察时，它会存储记忆:
+
+
+
+
+1. 语言模型评分记忆的重要性（琐事为1，深刻为10）
+2. 使用带有`last_accessed_time`的TimeWeightedVectorStoreRetriever在文档中存储观察和重要性。
+
+
+
+
+当代理人对观察做出响应时:
+
+
+
+
+1. 为检索器生成查询，根据显要性、时效性和重要性提取文档。
+2. 概述检索到的信息
+3. 更新所使用的文档的`last_accessed_time`。
+
+
+创建一个生成性人物[#](#create-a-generative-character "此标题的永久链接")
+---------------------------
+
+
+
+现在我们已经完成了定义，我们将创建两个名为“Tommie”和“Eve”的角色。
+
+
+
+
+
+```
+
+import math
+
+import faiss
+
+
+
+def relevance_score_fn(score: float) -> float:
+
+ """Return a similarity score on a scale [0, 1]."""
+
+    # This will differ depending on a few things:
+
+    # - the distance / similarity metric used by the VectorStore
+
+    # - the scale of your embeddings (OpenAI's are unit norm. Many others are not!)
+
+    # This function converts the euclidean norm of normalized embeddings
+
+    # (0 is most similar, sqrt(2) most dissimilar)
+
+    # to a similarity function (0 to 1)
+
+    return 1.0 - score / math.sqrt(2)
+
+
+
+def create_new_memory_retriever():
+
+ """Create a new vector store retriever unique to the agent."""
+
+    # Define your embedding model
+
+    embeddings_model = OpenAIEmbeddings()
+
+    # Initialize the vectorstore as empty
+
+    embedding_size = 1536
+
+    index = faiss.IndexFlatL2(embedding_size)
+
+    vectorstore = FAISS(embeddings_model.embed_query, index, InMemoryDocstore({}), {}, relevance_score_fn=relevance_score_fn)
+
+    return TimeWeightedVectorStoreRetriever(vectorstore=vectorstore, other_score_keys=["importance"], k=15)    
+
+
+
+```
+
+```
+tommies_memory = GenerativeAgentMemory(
+
+    llm=LLM,
+
+    memory_retriever=create_new_memory_retriever(),
+
+    verbose=False,
+
+    reflection_threshold=8 # we will give this a relatively low number to show how reflection works
+
+)
+
+
+
+tommie = GenerativeAgent(name="Tommie", 
+
+              age=25,
+
+              traits="anxious, likes design, talkative", # You can add more persistent traits here 
+
+              status="looking for a job", # When connected to a virtual world, we can have the characters update their status
+
+              memory_retriever=create_new_memory_retriever(),
+
+              llm=LLM,
+
+              memory=tommies_memory
+
+             )
+
+
+
+```
+
+
+```
+# The current "Summary" of a character can't be made because the agent hasn't made
+
+# any observations yet.
+
+print(tommie.get_summary())
+
+
+
+```
+```
+Name: Tommie (age: 25)
+
+Innate traits: anxious, likes design, talkative
+
+No information about Tommie's core characteristics is provided in the given statements.
+
+
+
+```
+
+
+```
+# We can add memories directly to the memory object
+
+tommie_observations = [
+
+    "Tommie remembers his dog, Bruno, from when he was a kid",
+
+    "Tommie feels tired from driving so far",
+
+    "Tommie sees the new home",
+
+    "The new neighbors have a cat",
+
+    "The road is noisy at night",
+
+    "Tommie is hungry",
+
+    "Tommie tries to get some rest.",
+
+]
+
+for observation in tommie_observations:
+
+    tommie.memory.add_memory(observation)
+
+
+
+```
+
+
+```
+# Now that Tommie has 'memories', their self-summary is more descriptive, though still rudimentary.
+
+# We will see how this summary updates after more observations to create a more rich description.
+
+print(tommie.get_summary(force_refresh=True))
+
+
+
+```
+```
+Name: Tommie (age: 25)
+
+Innate traits: anxious, likes design, talkative
+
+Tommie is a person who is observant of his surroundings, has a sentimental side, and experiences basic human needs such as hunger and the need for rest. He also tends to get tired easily and is affected by external factors such as noise from the road or a neighbor's pet.
+
+
+
+```
+
+与要求人物的面试前交流
+---------------------------
+
+
+在我们的角色离开我们之前，，让我们问他们几个问题。
+
+
+
+
+
+```
+def interview_agent(agent: GenerativeAgent, message: str) -> str:
+
+ """Help the notebook user interact with the agent."""
+
+    new_message = f"{USER_NAME} says {message}"
+
+    return agent.generate_dialogue_response(new_message)[1]
+
+
+
+```
+
+
+```
+interview_agent(tommie, "What do you like to do?")
+
+
+
+```
+```
+'Tommie said "I really enjoy design and being creative. I\'ve been working on some personal projects lately. What about you, Person A? What do you like to do?"'
+
+
+
+```
+
+
+```
+interview_agent(tommie, "What are you looking forward to doing today?")
+
+
+
+```
+```
+'Tommie said "Well, I\'m actually looking for a job right now, so hopefully I can find some job postings online and start applying. How about you, Person A? What\'s on your schedule for today?"'
+
+
+
+```
+
+
+```
+interview_agent(tommie, "What are you most worried about today?")
+
+
+
+```
+```
+'Tommie said "Honestly, I\'m feeling pretty anxious about finding a job. It\'s been a bit of a struggle lately, but I\'m trying to stay positive and keep searching. How about you, Person A? What worries you?"'
+
+
+
+```
+
+步骤经过一天的观察
+-------------------
+
+
+
+
+
+```
+# Let's have Tommie start going through a day in the life.
+
+observations = [
+
+    "Tommie wakes up to the sound of a noisy construction site outside his window.",
+
+    "Tommie gets out of bed and heads to the kitchen to make himself some coffee.",
+
+    "Tommie realizes he forgot to buy coffee filters and starts rummaging through his moving boxes to find some.",
+
+    "Tommie finally finds the filters and makes himself a cup of coffee.",
+
+    "The coffee tastes bitter, and Tommie regrets not buying a better brand.",
+
+    "Tommie checks his email and sees that he has no job offers yet.",
+
+    "Tommie spends some time updating his resume and cover letter.",
+
+    "Tommie heads out to explore the city and look for job openings.",
+
+    "Tommie sees a sign for a job fair and decides to attend.",
+
+    "The line to get in is long, and Tommie has to wait for an hour.",
+
+    "Tommie meets several potential employers at the job fair but doesn't receive any offers.",
+
+    "Tommie leaves the job fair feeling disappointed.",
+
+    "Tommie stops by a local diner to grab some lunch.",
+
+    "The service is slow, and Tommie has to wait for 30 minutes to get his food.",
+
+    "Tommie overhears a conversation at the next table about a job opening.",
+
+    "Tommie asks the diners about the job opening and gets some information about the company.",
+
+    "Tommie decides to apply for the job and sends his resume and cover letter.",
+
+    "Tommie continues his search for job openings and drops off his resume at several local businesses.",
+
+    "Tommie takes a break from his job search to go for a walk in a nearby park.",
+
+    "A dog approaches and licks Tommie's feet, and he pets it for a few minutes.",
+
+    "Tommie sees a group of people playing frisbee and decides to join in.",
+
+    "Tommie has fun playing frisbee but gets hit in the face with the frisbee and hurts his nose.",
+
+    "Tommie goes back to his apartment to rest for a bit.",
+
+    "A raccoon tore open the trash bag outside his apartment, and the garbage is all over the floor.",
+
+    "Tommie starts to feel frustrated with his job search.",
+
+    "Tommie calls his best friend to vent about his struggles.",
+
+    "Tommie's friend offers some words of encouragement and tells him to keep trying.",
+
+    "Tommie feels slightly better after talking to his friend.",
+
+]
+
+
+
+```
+
+
+
+```
+# Let's send Tommie on their way. We'll check in on their summary every few observations to watch it evolve
+
+for i, observation in enumerate(observations):
+
+    _, reaction = tommie.generate_reaction(observation)
+
+    print(colored(observation, "green"), reaction)
+
+    if ((i+1) % 20) == 0:
+
+        print('\*'\*40)
+
+        print(colored(f"After {i+1} observations, Tommie's summary is:{tommie.get_summary(force_refresh=True)}", "blue"))
+
+        print('\*'\*40)
+
+
+
+```
+```
+Tommie wakes up to the sound of a noisy construction site outside his window. Tommie groans and covers his head with a pillow, trying to block out the noise.
+
+Tommie gets out of bed and heads to the kitchen to make himself some coffee. Tommie stretches his arms and yawns before starting to make the coffee.
+
+Tommie realizes he forgot to buy coffee filters and starts rummaging through his moving boxes to find some. Tommie sighs in frustration and continues searching through the boxes.
+
+Tommie finally finds the filters and makes himself a cup of coffee. Tommie takes a deep breath and enjoys the aroma of the fresh coffee.
+
+The coffee tastes bitter, and Tommie regrets not buying a better brand. Tommie grimaces and sets the coffee mug aside.
+
+Tommie checks his email and sees that he has no job offers yet. Tommie sighs and closes his laptop, feeling discouraged.
+
+Tommie spends some time updating his resume and cover letter. Tommie nods, feeling satisfied with his progress.
+
+Tommie heads out to explore the city and look for job openings. Tommie feels a surge of excitement and anticipation as he steps out into the city.
+
+Tommie sees a sign for a job fair and decides to attend. Tommie feels hopeful and excited about the possibility of finding job opportunities at the job fair.
+
+The line to get in is long, and Tommie has to wait for an hour. Tommie taps his foot impatiently and checks his phone for the time.
+
+Tommie meets several potential employers at the job fair but doesn't receive any offers. Tommie feels disappointed and discouraged, but he remains determined to keep searching for job opportunities.
+
+Tommie leaves the job fair feeling disappointed. Tommie feels disappointed and discouraged, but he remains determined to keep searching for job opportunities.
+
+Tommie stops by a local diner to grab some lunch. Tommie feels relieved to take a break and satisfy his hunger.
+
+The service is slow, and Tommie has to wait for 30 minutes to get his food. Tommie feels frustrated and impatient due to the slow service.
+
+Tommie overhears a conversation at the next table about a job opening. Tommie feels a surge of hope and excitement at the possibility of a job opportunity but decides not to interfere with the conversation at the next table.
+
+Tommie asks the diners about the job opening and gets some information about the company. Tommie said "Excuse me, I couldn't help but overhear your conversation about the job opening. Could you give me some more information about the company?"
+
+Tommie decides to apply for the job and sends his resume and cover letter. Tommie feels hopeful and proud of himself for taking action towards finding a job.
+
+Tommie continues his search for job openings and drops off his resume at several local businesses. Tommie feels hopeful and determined to keep searching for job opportunities.
+
+Tommie takes a break from his job search to go for a walk in a nearby park. Tommie feels refreshed and rejuvenated after taking a break in the park.
+
+A dog approaches and licks Tommie's feet, and he pets it for a few minutes. Tommie feels happy and enjoys the brief interaction with the dog.
+
+****************************************
+
+After 20 observations, Tommie's summary is:
+
+Name: Tommie (age: 25)
+
+Innate traits: anxious, likes design, talkative
+
+Tommie is determined and hopeful in his search for job opportunities, despite encountering setbacks and disappointments. He is also able to take breaks and care for his physical needs, such as getting rest and satisfying his hunger. Tommie is nostalgic towards his past, as shown by his memory of his childhood dog. Overall, Tommie is a hardworking and resilient individual who remains focused on his goals.
+
+****************************************
+
+Tommie sees a group of people playing frisbee and decides to join in. Do nothing.
+
+Tommie has fun playing frisbee but gets hit in the face with the frisbee and hurts his nose. Tommie feels pain and puts a hand to his nose to check for any injury.
+
+Tommie goes back to his apartment to rest for a bit. Tommie feels relieved to take a break and rest for a bit.
+
+A raccoon tore open the trash bag outside his apartment, and the garbage is all over the floor. Tommie feels annoyed and frustrated at the mess caused by the raccoon.
+
+Tommie starts to feel frustrated with his job search. Tommie feels discouraged but remains determined to keep searching for job opportunities.
+
+Tommie calls his best friend to vent about his struggles. Tommie said "Hey, can I talk to you for a bit? I'm feeling really frustrated with my job search."
+
+Tommie's friend offers some words of encouragement and tells him to keep trying. Tommie said "Thank you, I really appreciate your support and encouragement."
+
+Tommie feels slightly better after talking to his friend. Tommie feels grateful for his friend's support.
+
+
+
+```
+
+面试后的日子[#](#interview-after-the-day "Permalink to this headline")
+---------------
+
+
+
+
+
+```
+interview_agent(tommie, "Tell me about how your day has been going")
+
+
+
+```
+```
+'Tommie said "It\'s been a bit of a rollercoaster, to be honest. I\'ve had some setbacks in my job search, but I also had some good moments today, like sending out a few resumes and meeting some potential employers at a job fair. How about you?"'
+
+
+
+```
+
+
+```
+interview_agent(tommie, "How do you feel about coffee?")
+
+
+
+```
+```
+'Tommie said "I really enjoy coffee, but sometimes I regret not buying a better brand. How about you?"'
+
+
+
+```
+
+
+```
+interview_agent(tommie, "Tell me about your childhood dog!")
+
+
+
+```
+添加多个字符[#](#adding-multiple-characters "Permalink to this headline")
+----
+
+```
+'Tommie said "Oh, I had a dog named Bruno when I was a kid. He was a golden retriever and my best friend. I have so many fond memories of him."'
+
+
+
+```
+
+
+
+
+让我们添加第二个角色与托米对话。请随意配置不同的特征。
+
+
+
+
+
+```
+eves_memory = GenerativeAgentMemory(
+
+    llm=LLM,
+
+    memory_retriever=create_new_memory_retriever(),
+
+    verbose=False,
+
+    reflection_threshold=5
+
+)
+
+
+
+
+
+eve = GenerativeAgent(name="Eve", 
+
+              age=34, 
+
+              traits="curious, helpful", # You can add more persistent traits here 
+
+              status="N/A", # When connected to a virtual world, we can have the characters update their status
+
+              llm=LLM,
+
+              daily_summaries = [
+
+                  ("Eve started her new job as a career counselor last week and received her first assignment, a client named Tommie.")
+
+              ],
+
+              memory=eves_memory,
+
+              verbose=False
+
+             )
+
+
+
+```
+
+
+```
+yesterday = (datetime.now() - timedelta(days=1)).strftime("%A %B %d")
+
+eve_observations = [
+
+    "Eve wakes up and hear's the alarm",
+
+    "Eve eats a boal of porridge",
+
+    "Eve helps a coworker on a task",
+
+    "Eve plays tennis with her friend Xu before going to work",
+
+    "Eve overhears her colleague say something about Tommie being hard to work with",
+
+]
+
+for observation in eve_observations:
+
+    eve.memory.add_memory(observation)
+
+
+
+```
+
+
+```
+print(eve.get_summary())
+
+
+
+```
+```
+Name: Eve (age: 34)
+
+Innate traits: curious, helpful
+
+Eve is a helpful and active person who enjoys sports and takes care of her physical health. She is attentive to her surroundings, including her colleagues, and has good time management skills.
+
+
+
+```
+
+“面试”一下 Pre-conversation interviews[#](#pre-conversation-interviews "Permalink to this headline")
+-----------------------
+
+
+在 Tommie 跟 Eve 聊天前，让我们“面试”一下 Eve。
+
+
+
+
+
+```
+interview_agent(eve, "How are you feeling about today?")
+
+
+
+```
+```
+'Eve said "I\'m feeling pretty good, thanks for asking! Just trying to stay productive and make the most of the day. How about you?"'
+
+
+
+```
+
+
+```
+interview_agent(eve, "What do you know about Tommie?")
+
+
+
+```
+```
+'Eve said "I don\'t know much about Tommie, but I heard someone mention that they find them difficult to work with. Have you had any experiences working with Tommie?"'
+
+
+
+```
+
+
+```
+interview_agent(eve, "Tommie is looking to find a job. What are are some things you'd like to ask him?")
+
+
+
+```
+```
+'Eve said "That\'s interesting. I don\'t know much about Tommie\'s work experience, but I would probably ask about his strengths and areas for improvement. What about you?"'
+
+
+
+```
+
+
+```
+interview_agent(eve, "You'll have to ask him. He may be a bit anxious, so I'd appreciate it if you keep the conversation going and ask as many questions as possible.")
+
+
+
+```
+```
+'Eve said "Sure, I can keep the conversation going and ask plenty of questions. I want to make sure Tommie feels comfortable and supported. Thanks for letting me know."'
+
+
+
+```
+
+生成智能体之间的对话[#](#dialogue-between-generative-agents "Permalink to this headline")
+-----------------------
+
+
+当生成智能体相互作用或与虚拟环境相互作用时，会变得更加复杂。以下是 Tommie 和 Eve 之间，的简单对话。
+
+
+
+
+
+```
+def run_conversation(agents: List[GenerativeAgent], initial_observation: str) -> None:
+
+ """Runs a conversation between agents."""
+
+    _, observation = agents[1].generate_reaction(initial_observation)
+
+    print(observation)
+
+    turns = 0
+
+    while True:
+
+        break_dialogue = False
+
+        for agent in agents:
+
+            stay_in_dialogue, observation = agent.generate_dialogue_response(observation)
+
+            print(observation)
+
+            # observation = f"{agent.name} said {reaction}"
+
+            if not stay_in_dialogue:
+
+                break_dialogue = True   
+
+        if break_dialogue:
+
+            break
+
+        turns += 1
+
+
+
+```
+
+
+```
+agents = [tommie, eve]
+
+run_conversation(agents, "Tommie said: Hi, Eve. Thanks for agreeing to meet with me today. I have a bunch of questions and am not sure where to start. Maybe you could first share about your experience?")
+
+
+
+```
+```
+Eve said "Sure, Tommie. I'd be happy to share about my experience. Where would you like me to start?"
+
+Tommie said "That's great, thank you! How about you start by telling me about your previous work experience?"
+
+Eve said "Sure, I'd be happy to share my previous work experience with you. I've worked in a few different industries, including marketing and event planning. What specific questions do you have for me?"
+
+Tommie said "That's great to hear. Can you tell me more about your experience in event planning? I've always been interested in that field."
+
+Eve said "Sure, I'd be happy to share about my experience in event planning. I've worked on a variety of events, from corporate conferences to weddings. One of the biggest challenges I faced was managing multiple vendors and ensuring everything ran smoothly on the day of the event. What specific questions do you have?"
+
+Tommie said "That sounds like a lot of responsibility! Can you tell me more about how you handled the challenges that came up during those events?"
+
+Eve said "Sure, Tommie. I'd be happy to share with you how I handled those challenges. One approach that worked well for me was to stay organized and create a detailed timeline for the event. This helped me keep track of all the different tasks that needed to be done and when they needed to be completed. I also made sure to communicate clearly with all the vendors and team members involved in the event to ensure everyone was on the same page. Would you like me to go into more detail?"
+
+Tommie said "Thank you for sharing that with me, Eve. That sounds like a great approach to managing events. Can you tell me more about how you handled any unexpected issues that came up during the events?"
+
+Eve said "Of course, Tommie. One example of an unexpected issue I faced was when one of the vendors didn't show up on time. To handle this, I quickly contacted a backup vendor and was able to get everything back on track. It's always important to have a backup plan in case things don't go as planned. Do you have any other questions about event planning?"
+
+Tommie said "Thank you for sharing that with me, Eve. It's really helpful to hear how you handled unexpected issues like that. Can you give me an example of how you communicated with your team to ensure everyone was on the same page during an event?"
+
+Eve said "Sure, Tommie. One thing I did to ensure everyone was on the same page was to have regular check-ins and meetings with the team leading up to the event. This helped us address any issues or concerns early on and make sure everyone was clear on their roles and responsibilities. Have you ever had to manage a team for an event before?"
+
+Tommie said "That's a great idea, Eve. I haven't had the opportunity to manage a team for an event yet, but I'll definitely keep that in mind for the future. Thank you for sharing your experience with me."
+
+Eve said "Thanks for the opportunity to share my experience, Tommie. It was great meeting with you today."
+
+
+
+```
+
+让我们在谈话后采访我们的代理[#](#let-s-interview-our-agents-after-their-conversation "Permalink to this headline")
+-------------------
+
+
+由于生成性代理会保留他们在一天中的记忆，我们可以询问他们有关他们的计划 plans、谈话 conversations和其他记忆的内容memories。
+
+
+
+
+
+```
+# We can see a current "Summary" of a character based on their own perception of self
+
+# has changed
+
+print(tommie.get_summary(force_refresh=True))
+
+
+
+```
+```
+Name: Tommie (age: 25)
+
+Innate traits: anxious, likes design, talkative
+
+Tommie is determined and hopeful in his job search, but can also feel discouraged and frustrated at times. He has a strong connection to his childhood dog, Bruno. Tommie seeks support from his friends when feeling overwhelmed and is grateful for their help. He also enjoys exploring his new city.
+
+
+
+```
+
+
+```
+print(eve.get_summary(force_refresh=True))
+
+
+
+```
+```
+Name: Eve (age: 34)
+
+Innate traits: curious, helpful
+
+Eve is a helpful and friendly person who enjoys playing sports and staying productive. She is attentive and responsive to others' needs, actively listening and asking questions to understand their perspectives. Eve has experience in event planning and communication, and is willing to share her knowledge and expertise with others. She values teamwork and collaboration, and strives to create a comfortable and supportive environment for everyone.
+
+
+
+```
+
+
+```
+interview_agent(tommie, "How was your conversation with Eve?")
+
+
+
+```
+```
+'Tommie said "It was really helpful actually. Eve shared some great tips on managing events and handling unexpected issues. I feel like I learned a lot from her experience."'
+
+
+
+```
+
+
+```
+interview_agent(eve, "How was your conversation with Tommie?")
+
+
+
+```
+```
+'Eve said "It was great, thanks for asking. Tommie was very receptive and had some great questions about event planning. How about you, have you had any interactions with Tommie?"'
+
+
+
+```
+
+
+```
+interview_agent(eve, "What do you wish you would have said to Tommie?")
+
+
+
+```
+```
+'Eve said "It was great meeting with you, Tommie. If you have any more questions or need any help in the future, don\'t hesitate to reach out to me. Have a great day!"'
+
+
+
+```
+
+

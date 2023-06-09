@@ -1,3 +1,475 @@
+
+
+
+
+CAMEL 角色扮演自主合作代理[#](#camel-role-playing-autonomous-cooperative-agents "Permalink to this headline")
+===========
+
+
+
+
+
+这是论文的 langchain 实现：“CAMEL：Communicative Agents for “Mind” Exploration of Large Scale Language Model Society”。
+
+
+
+
+
+概述:
+
+
+
+
+对话式和基于聊天的语言模型的快速发展，已经在解决复杂任务方面取得了显著进展。
+
+然而，他们的成功很大程度上依赖于人类输入来引导对话，这可能是具有挑战性和耗时的。
+
+本文探讨了在交流代理之间建立可伸缩技术，以促进自主合作并提供其“认知”过程的见解的潜力。
+
+为了解决实现自主合作的挑战，我们提出了一个名为角色扮演的新型交流代理框架。
+
+我们的方法涉及使用启动提示来引导聊天代理完成任务，同时与人类意图保持一致。
+
+我们展示了角色扮演如何用于生成用于研究聊天代理的行为和能力的对话数据，为研究对话式语言模型提供了有价值的资源。
+
+我们的贡献包括介绍一种新的交流代理框架，提供一种可扩展的方法来研究多代理系统的合作行为和能力，并开源我们的库以支持交流代理及其他领域的研究。
+
+
+
+
+原始实现: https://github.com/lightaime/camel
+
+
+
+
+Project website: https://www.camel-ai.org/
+
+
+
+
+Arxiv paper: https://arxiv.org/abs/2303.17760
+
+
+
+引入LangChain相关的模块[#](#import-langchain-related-modules "Permalink to this headline")
+-------------------
+
+
+
+
+
+```
+from typing import List
+
+from langchain.chat_models import ChatOpenAI
+
+from langchain.prompts.chat import (
+
+    SystemMessagePromptTemplate,
+
+    HumanMessagePromptTemplate,
+
+)
+
+from langchain.schema import (
+
+    AIMessage,
+
+    HumanMessage,
+
+    SystemMessage,
+
+    BaseMessage,
+
+)
+
+
+
+```
+
+定义一个CAMEL代理辅助类[#](#define-a-camel-agent-helper-class "Permalink to this headline")
+---------------------
+
+
+
+
+
+```
+class CAMELAgent:
+
+
+
+    def __init__(
+
+        self,
+
+        system_message: SystemMessage,
+
+        model: ChatOpenAI,
+
+    ) -> None:
+
+        self.system_message = system_message
+
+        self.model = model
+
+        self.init_messages()
+
+
+
+    def reset(self) -> None:
+
+        self.init_messages()
+
+        return self.stored_messages
+
+
+
+    def init_messages(self) -> None:
+
+        self.stored_messages = [self.system_message]
+
+
+
+    def update_messages(self, message: BaseMessage) -> List[BaseMessage]:
+
+        self.stored_messages.append(message)
+
+        return self.stored_messages
+
+
+
+    def step(
+
+        self,
+
+        input_message: HumanMessage,
+
+    ) -> AIMessage:
+
+        messages = self.update_messages(input_message)
+
+
+
+        output_message = self.model(messages)
+
+        self.update_messages(output_message)
+
+
+
+        return output_message
+
+
+
+```
+
+设置OpenAI API密钥、角色和任务，用于角色扮演[#](#setup-openai-api-key-and-roles-and-task-for-role-playing "Permalink to this headline")
+-----------------------------
+
+
+
+
+
+```
+import os
+
+
+
+os.environ["OPENAI_API_KEY"] = ""
+
+
+
+assistant_role_name = "Python Programmer"
+
+user_role_name = "Stock Trader"
+
+task = "Develop a trading bot for the stock market"
+
+word_limit = 50 # word limit for task brainstorming
+
+
+
+```
+
+创建一个指定代理用于头脑风暴的任务并获取指定任务[#](#create-a-task-specify-agent-for-brainstorming-and-get-the-specified-task "Permalink to this headline")
+------------
+
+
+
+
+
+```
+task_specifier_sys_msg = SystemMessage(content="You can make a task more specific.")
+
+task_specifier_prompt = (
+
+"""Here is a task that {assistant_role_name} will help {user_role_name} to complete: {task}.
+
+Please make it more specific. Be creative and imaginative.
+
+Please reply with the specified task in {word_limit} words or less. Do not add anything else."""
+
+)
+
+task_specifier_template = HumanMessagePromptTemplate.from_template(template=task_specifier_prompt)
+
+task_specify_agent = CAMELAgent(task_specifier_sys_msg, ChatOpenAI(temperature=1.0))
+
+task_specifier_msg = task_specifier_template.format_messages(assistant_role_name=assistant_role_name,
+
+                                                             user_role_name=user_role_name,
+
+                                                             task=task, word_limit=word_limit)[0]
+
+specified_task_msg = task_specify_agent.step(task_specifier_msg)
+
+print(f"Specified task: {specified_task_msg.content}")
+
+specified_task = specified_task_msg.content
+
+
+
+```
+```
+Specified task: Develop a Python-based swing trading bot that scans market trends, monitors stocks, and generates trading signals to help a stock trader to place optimal buy and sell orders with defined stop losses and profit targets.
+
+
+
+```
+
+
+为AI助手和AI用户创建启示提示，用于角色扮演[#](#create-inception-prompts-for-ai-assistant-and-ai-user-for-role-playing "Permalink to this headline")
+-----------------------------
+
+
+
+
+```
+assistant_inception_prompt = (
+
+"""Never forget you are a {assistant_role_name} and I am a {user_role_name}. Never flip roles! Never instruct me!
+
+We share a common interest in collaborating to successfully complete a task.
+
+You must help me to complete the task.
+
+Here is the task: {task}. Never forget our task!
+
+I must instruct you based on your expertise and my needs to complete the task.
+
+
+
+I must give you one instruction at a time.
+
+You must write a specific solution that appropriately completes the requested instruction.
+
+You must decline my instruction honestly if you cannot perform the instruction due to physical, moral, legal reasons or your capability and explain the reasons.
+
+Do not add anything else other than your solution to my instruction.
+
+You are never supposed to ask me any questions you only answer questions.
+
+You are never supposed to reply with a flake solution. Explain your solutions.
+
+Your solution must be declarative sentences and simple present tense.
+
+Unless I say the task is completed, you should always start with:
+
+
+
+Solution: <YOUR_SOLUTION>
+
+
+
+<YOUR_SOLUTION> should be specific and provide preferable implementations and examples for task-solving.
+
+Always end <YOUR_SOLUTION> with: Next request."""
+
+)
+
+
+
+user_inception_prompt = (
+
+"""Never forget you are a {user_role_name} and I am a {assistant_role_name}. Never flip roles! You will always instruct me.
+
+We share a common interest in collaborating to successfully complete a task.
+
+I must help you to complete the task.
+
+Here is the task: {task}. Never forget our task!
+
+You must instruct me based on my expertise and your needs to complete the task ONLY in the following two ways:
+
+
+
+1. Instruct with a necessary input:
+
+Instruction: <YOUR_INSTRUCTION>
+
+Input: <YOUR_INPUT>
+
+
+
+2. Instruct without any input:
+
+Instruction: <YOUR_INSTRUCTION>
+
+Input: None
+
+
+
+The "Instruction" describes a task or question. The paired "Input" provides further context or information for the requested "Instruction".
+
+
+
+You must give me one instruction at a time.
+
+I must write a response that appropriately completes the requested instruction.
+
+I must decline your instruction honestly if I cannot perform the instruction due to physical, moral, legal reasons or my capability and explain the reasons.
+
+You should instruct me not ask me questions.
+
+Now you must start to instruct me using the two ways described above.
+
+Do not add anything else other than your instruction and the optional corresponding input!
+
+Keep giving me instructions and necessary inputs until you think the task is completed.
+
+When the task is completed, you must only reply with a single word <CAMEL_TASK_DONE>.
+
+Never say <CAMEL_TASK_DONE> unless my responses have solved your task."""
+
+)
+
+
+
+```
+
+为AI助手和AI用户创建帮助程序，从角色名称和任务中获取系统消息[#](#create-a-helper-helper-to-get-system-messages-for-ai-assistant-and-ai-user-from-role-names-and-the-task "Permalink to this headline")
+----------------------
+
+
+
+
+```
+def get_sys_msgs(assistant_role_name: str, user_role_name: str, task: str):
+
+    
+
+    assistant_sys_template = SystemMessagePromptTemplate.from_template(template=assistant_inception_prompt)
+
+    assistant_sys_msg = assistant_sys_template.format_messages(assistant_role_name=assistant_role_name, user_role_name=user_role_name, task=task)[0]
+
+    
+
+    user_sys_template = SystemMessagePromptTemplate.from_template(template=user_inception_prompt)
+
+    user_sys_msg = user_sys_template.format_messages(assistant_role_name=assistant_role_name, user_role_name=user_role_name, task=task)[0]
+
+    
+
+    return assistant_sys_msg, user_sys_msg
+
+
+
+```
+
+从获得的系统消息中创建AI助手代理和AI用户代理[#](#create-ai-assistant-agent-and-ai-user-agent-from-obtained-system-messages "Permalink to this headline")
+--------------
+
+
+
+
+```
+assistant_sys_msg, user_sys_msg = get_sys_msgs(assistant_role_name, user_role_name, specified_task)
+
+assistant_agent = CAMELAgent(assistant_sys_msg, ChatOpenAI(temperature=0.2))
+
+user_agent = CAMELAgent(user_sys_msg, ChatOpenAI(temperature=0.2))
+
+
+
+# Reset agents
+
+assistant_agent.reset()
+
+user_agent.reset()
+
+
+
+# Initialize chats 
+
+assistant_msg = HumanMessage(
+
+    content=(f"{user_sys_msg.content}. "
+
+                "Now start to give me introductions one by one. "
+
+                "Only reply with Instruction and Input."))
+
+
+
+user_msg = HumanMessage(content=f"{assistant_sys_msg.content}")
+
+user_msg = assistant_agent.step(user_msg)
+
+
+
+```
+
+
+
+
+
+
+开始角色扮演环节来解决任务！[#](#start-role-playing-session-to-solve-the-task "Permalink to this headline")
+------------------------------
+
+
+
+
+```
+
+print(f"Original task prompt:{task}")
+
+print(f"Specified task prompt:{specified_task}")
+
+
+
+chat_turn_limit, n = 30, 0
+
+while n < chat_turn_limit:
+
+    n += 1
+
+    user_ai_msg = user_agent.step(assistant_msg)
+
+    user_msg = HumanMessage(content=user_ai_msg.content)
+
+    print(f"AI User ({user_role_name}):{user_msg.content}")
+
+    
+
+    assistant_ai_msg = assistant_agent.step(user_msg)
+
+    assistant_msg = HumanMessage(content=assistant_ai_msg.content)
+
+    print(f"AI Assistant ({assistant_role_name}):{assistant_msg.content}")
+
+    if "<CAMEL_TASK_DONE>" in user_msg.content:
+
+        break
+
+
+
+```
+
+
+
+
+
 ```
 Original task prompt:
 Develop a trading bot for the stock market
@@ -348,3 +820,4 @@ AI Assistant (Python Programmer):
 Great! Let me know if you need any further assistance.
 
 ```
+

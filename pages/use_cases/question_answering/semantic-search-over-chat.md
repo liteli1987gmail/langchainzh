@@ -1,0 +1,203 @@
+
+
+
+
+在群聊消息中进行问题回答[#](#question-answering-over-a-group-chat-messages "此标题的永久链接")
+=================================
+
+
+
+
+
+在本教程中，我们将使用Langchain + Deep Lake和GPT4来语义搜索和提问群组聊天。
+
+
+
+
+在此处查看工作演示[此处]（https://twitter.com/thisissukh_/status/1647223328363679745）
+
+
+安装所需的软件包[#](#install-required-packages "此标题的永久链接")
+----------------------
+
+
+
+
+
+```
+
+!python3 -m pip install --upgrade langchain deeplake openai tiktoken
+
+
+
+```
+
+2. 添加 API 密钥 Add API keys[#](#add-api-keys "Permalink to this headline")
+
+----------------------------------
+
+
+
+
+
+```
+
+import os
+
+import getpass
+
+from langchain.document_loaders import PyPDFLoader, TextLoader
+
+from langchain.embeddings.openai import OpenAIEmbeddings
+
+from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTextSplitter
+
+from langchain.vectorstores import DeepLake
+
+from langchain.chains import ConversationalRetrievalChain, RetrievalQA
+
+from langchain.chat_models import ChatOpenAI
+
+from langchain.llms import OpenAI
+
+
+
+os.environ['OPENAI_API_KEY'] = getpass.getpass('OpenAI API Key:')
+
+os.environ['ACTIVELOOP_TOKEN'] = getpass.getpass('Activeloop Token:')
+
+os.environ['ACTIVELOOP_ORG'] = getpass.getpass('Activeloop Org:')
+
+
+
+org = os.environ['ACTIVELOOP_ORG']
+
+embeddings = OpenAIEmbeddings()
+
+
+
+dataset_path = 'hub://' + org + '/data'
+
+
+
+```
+
+创建样本数据 Create sample data[#](#create-sample-data "此标题的永久链接")
+----------------------
+
+
+
+
+
+您可以使用ChatGPT使用此提示生成示例群聊会话:。
+```
+
+Generate a group chat conversation with three friends talking about their day, referencing real places and fictional names. Make it funny and as detailed as possible.
+
+
+
+```
+
+
+
+
+
+我已经生成了这样的聊天`messages.txt`。 我们可以保持简单，使用这个作为我们的例子。
+
+
+3. 摄取聊天嵌入 Ingest chat embeddings[#](#ingest-chat-embeddings "Permalink to this headline")
+
+----------------
+
+
+
+
+
+我们将消息加载到文本文件中，分块并上传到 ActiveLoop Vector 存储。
+
+
+
+
+
+```
+
+with open("messages.txt") as f:
+
+    state_of_the_union = f.read()
+
+text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+
+pages = text_splitter.split_text(state_of_the_union)
+
+
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+
+texts = text_splitter.create_documents(pages)
+
+
+
+print (texts)
+
+
+
+dataset_path = 'hub://'+org+'/data'
+
+embeddings = OpenAIEmbeddings()
+
+db = DeepLake.from_documents(texts, embeddings, dataset_path=dataset_path, overwrite=True)
+
+
+
+```
+
+4. 问问题 Ask questions[#](#ask-questions "Permalink to this headline")
+
+------------
+
+
+
+
+
+现在我们可以提出一个问题并通过语义搜索得到答案:
+
+
+
+
+
+```
+
+db = DeepLake(dataset_path=dataset_path, read_only=True, embedding_function=embeddings)
+
+
+
+retriever = db.as_retriever()
+
+retriever.search_kwargs['distance_metric'] = 'cos'
+
+retriever.search_kwargs['k'] = 4
+
+
+
+qa = RetrievalQA.from_chain_type(llm=OpenAI(), chain_type="stuff", retriever=retriever, return_source_documents=False)
+
+
+
+# What was the restaurant the group was talking about called?
+
+query = input("Enter query:")
+
+
+
+# The Hungry Lobster
+
+ans = qa({"query": query})
+
+
+
+print(ans)
+
+
+
+```
+
