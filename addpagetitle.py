@@ -23,6 +23,7 @@ def replace_extension(folder_path):
 import Head from 'next/head'
 
 <Head>
+  <meta name="baidu-site-verification" content="codeva-vVWLPfYJJm" />
   <script>
     {
       `(function() {
