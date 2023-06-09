@@ -19,6 +19,7 @@ const config: DocsThemeConfig = {
         (defaultLocale === locale ? asPath : `/${locale}${asPath}`)
    
       return <>
+        <link data-rh="true" rel="icon" href="https://js.langchain.com/img/favicon.ico"></link>
         <meta name="keywords" content="langchain,LLM,chatGPT,应用开发" />
         <meta name="description" content="LangChain中文站，助力大语言模型LLM应用开发、chatGPT应用开发。" />
         <meta property="og:url" content={url} />
