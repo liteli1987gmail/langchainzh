@@ -21,11 +21,11 @@ def process_markdown_lines(file_path):
         file.writelines(lines)
 
 # 您可以替换为 Markdown 文件或 Markdown 文件集所在的目录。
-file_dir = "./pages"
+file_dir = "./pages/use_cases"
 default_language = "python"
 
 for root, dirs, files in os.walk(file_dir):
     for file in files:
-        if file.endswith(".mdx"):
+        if file.endswith(".md"):
             filepath = os.path.join(root, file)
             process_markdown_lines(filepath)
