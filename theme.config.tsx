@@ -47,14 +47,13 @@ const config: DocsThemeConfig = {
     )
   },
   footer: {
-    text: <div><span>MIT {new Date().getFullYear()} © <a href="https://www.Langchain.com.cn" target="_blank">Langchain中文网</a>. 跟着langchain学AI应用开发    </span>
-    <span><a href="https://www.Langchain.com" target="_blank">    Langchain英文官网    |</a></span>
+    text: <div><span>MIT {new Date().getFullYear()} © <a href="https://www.langchain.com.cn/" target="_blank">Langchain中文网</a>. 跟着langchain学AI应用开发    </span>
     <span><a href="https://github.com/hwchase17/langchain" target="_blank">    GitHub    |</a></span>
     <span><a href="http://www.r-p-a.com/llm-gpt-kaifa/" target="_blank">    LLM/GPT应用外包开发    |</a></span>
-    <span><a href="https://www.openaidoc.com.cn" target="_blank">    Openai中文文档    |</a></span>
-    <span><a href="https://www.milvus-io.com" target="_blank">    Milvus中文文档    |</a></span>
-    <span><a href="https://www.pinecone-io.com/ " target="_blank">    Pinecone中文文档    |</a></span>
-    <span><a href="https://www.Langchain.com.cn" target="_blank">    沪ICP备2023014280号-3</a></span>
+    <span><a href="https://www.openaidoc.com.cn" target="_blank">    OpenAI 文档    |</a></span>
+    <span><a href="https://www.milvus-io.com" target="_blank">    Milvus 文档    |</a></span>
+    <span><a href="https://www.pinecone-io.com/ " target="_blank">    Pinecone 文档 </a></span>
+    <p><span><a href="https://www.Langchain.com" target="_blank">    Langchain英文站  </a></span> <a href="https://langchain.com.cn"><span><img style={{ display: "inline-block",height: "19px" }} src="https://mbdp01.bdstatic.com/static/landing-pc/img/icon_police.7296bdfd.png" alt="" />  沪ICP备2023014280号-3</span></a></p>
     </div>
   }
 }
