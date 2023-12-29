@@ -43,6 +43,7 @@ const config: DocsThemeConfig = {
     extraContent:(
       <div>
         <img src="https://pic1.zhimg.com/80/v2-31131dcb1732cb5bca7c182c9e8da046_r.jpg" alt="扫我，入群" />
+        <img src="https://pic2.zhimg.com/100/v2-23e6630a548c962582265f27e8967cd1_qhd.jpg" alt="扫我，找书" />
       </div>
     )
   },
