@@ -36,13 +36,13 @@ const config: DocsThemeConfig = {
     },
   banner: {
     key: '2.0-release',
-    text: <a href="https://www.Langchain.com.cn" target="_blank">🎉 学 LangChain 免费领 openAI GPT key  限额1000名 →</a>,
+    text: <a href="http://www.aiqbh.com/dalibao.html" target="_blank">🎉 学 LangChain 免费领 openAI GPT key  限额1000名 →</a>,
   }, 
   toc: {
     float: true,
     extraContent:(
       <div>
-        <img src="https://pic1.zhimg.com/80/v2-31131dcb1732cb5bca7c182c9e8da046_r.jpg" alt="扫我，入群" />
+        <img src="https://www.aiqbh.com/qun.png" alt="扫我，入群" />
         <img src="https://pic2.zhimg.com/100/v2-23e6630a548c962582265f27e8967cd1_qhd.jpg" alt="扫我，找书" />
       </div>
     )
