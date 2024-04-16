@@ -36,7 +36,7 @@ const config: DocsThemeConfig = {
     },
   banner: {
     key: '2.0-release',
-    text: <a href="http://www.aiqbh.com/dalibao.html" target="_blank">🎉 学 LangChain 免费领 openAI GPT key  限额1000名 →</a>,
+    text: <a href="https://www.aiqbh.com/dalibao.html" target="_blank">🎉 学 LangChain 免费领 openAI GPT key  限额1000名 →</a>,
   }, 
   toc: {
     float: true,
