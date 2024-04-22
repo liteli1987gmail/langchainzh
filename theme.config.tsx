@@ -2,6 +2,8 @@ import React from 'react'
 import { useRouter } from 'next/router'
 import { useConfig } from 'nextra-theme-docs'
 import { DocsThemeConfig } from 'nextra-theme-docs'
+import { title } from 'process'
+import Banner from './components/Banner'
 
 
 const config: DocsThemeConfig = {
@@ -26,12 +28,21 @@ const config: DocsThemeConfig = {
         <meta property="og:description" content="LangChain中文站，助力大语言模型LLM应用开发、chatGPT应用开发。" />
       </>
     },
+    navbar:{
+      extraContent: (
+        <Banner/>
+      )
+    },
     useNextSeoProps:() =>{
       const { asPath } = useRouter()
+      var titleTemplate = ''
       if (asPath !== '/') {
-        return {
-          titleTemplate: '%s – LangChain中文网'
-        }
+        titleTemplate = `%s | LangChain中文网:500页中文文档教程，助力大模型LLM应用开发从入门到精通`
+      }else{
+        titleTemplate = `LangChain中文网:500页中文文档教程，助力大模型LLM应用开发从入门到精通`
+      }
+      return {
+        'titleTemplate':titleTemplate
       }
     },
   banner: {
@@ -57,7 +68,7 @@ const config: DocsThemeConfig = {
     <p>
       <span><a href="https://www.Langchain.com" target="_blank">    Langchain英文站  </a></span>
       <span><a href="https://js.langchain.com.cn/docs/">    Langchain JS/TS 文档 </a></span>
-      <a href="https://langchain.com.cn"><span><img style={{ display: "inline-block",height: "19px" }} src="https://mbdp01.bdstatic.com/static/landing-pc/img/icon_police.7296bdfd.png" alt="" />  沪ICP备2023014280号-3</span></a></p>
+      <a href="https://www.langchain.com.cn"><span><img style={{ display: "inline-block",height: "19px" }} src="https://mbdp01.bdstatic.com/static/landing-pc/img/icon_police.7296bdfd.png" alt="" />  沪ICP备2023014280号-3</span></a></p>
     </div>
   }
 }
