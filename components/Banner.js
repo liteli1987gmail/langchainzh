@@ -2,7 +2,7 @@ import React from 'react';
 
 const Banner = () => {
   return (
-    <div style={{  display: 'flex', position: 'absolute', top: '60px',padding:'0 0 5px 0', width: '100%', background: 'white', color: 'white', textAlign: 'center',right:'0'}}>
+    <div className="my-custom-banner">
           {/* 链接和图片 1 */}
           <a href="https://www.aiqbh.com/NVIDIA-H100-server.html" style={{ flex: 1 }}>
         <img src="https://www.aiqbh.com/8xH100.png" style={{ width: '100%', height: 'auto' }} alt="英伟达8xH100" />
