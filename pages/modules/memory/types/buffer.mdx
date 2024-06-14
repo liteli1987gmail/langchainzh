@@ -1,0 +1,176 @@
+# 会话缓冲区
+
+
+这本笔记本展示了如何使用ConversationBufferMemory。这种记忆功能允许存储消息，然后以变量的形式提取消息。
+
+我们首先可以将其作为字符串提取。
+
+```python
+from langchain.memory import ConversationBufferMemory
+```
+
+
+```python
+memory = ConversationBufferMemory()
+memory.save_context({"input": "hi"}, {"output": "whats up"})
+```
+
+
+```python
+memory.load_memory_variables({})
+```
+
+---
+
+
+
+```
+    {'history': 'Human: hi\nAI: whats up'}
+```
+
+---
+
+
+
+我们还可以获得消息列表形式的历史记录（如果您使用聊天模型，这将非常有用）。
+
+
+```python
+memory = ConversationBufferMemory(return_messages=True)
+memory.save_context({"input": "hi"}, {"output": "whats up"})
+```
+
+
+```python
+memory.load_memory_variables({})
+```
+
+---
+
+
+
+```
+    {'history': [HumanMessage(content='hi', additional_kwargs={}),
+      AIMessage(content='whats up', additional_kwargs={})]}
+```
+
+---
+
+
+
+## 在链中使用
+最后，让我们看看如何在链中使用它（设置`verbose=True`以便我们可以看到提示）。
+
+
+```python
+from langchain_openai import OpenAI
+from langchain.chains import ConversationChain
+
+
+llm = OpenAI(temperature=0)
+conversation = ConversationChain(
+    llm=llm,
+    verbose=True,
+    memory=ConversationBufferMemory()
+)
+```
+
+
+```python
+conversation.predict(input="Hi there!")
+```
+
+---
+
+
+
+```
+
+
+    > 进入新的ConversationChain链...
+    格式化后的提示:
+    以下是人类和AI之间友好的对话。AI健谈，并从其上下文中提供大量具体细节。如果AI不知道问题的答案，则如实表示不知道。
+
+    当前对话：
+
+    人类: Hi there!
+    AI:
+
+    > 完成链插入。
+
+
+
+    " Hi there! It's nice to meet you. How can I help you today?"
+```
+
+---
+
+
+
+
+```python
+conversation.predict(input="I'm doing well! Just having a conversation with an AI.")
+```
+
+---
+
+
+
+```
+
+
+    > 进入新的ConversationChain链...
+    格式化后的提示:
+    以下是人类和AI之间友好的对话。AI健谈，并从其上下文中提供大量具体细节。如果AI不知道问题的答案，则如实表示不知道。
+
+    当前对话：
+    人类: Hi there!
+    AI:  Hi there! It's nice to meet you. How can I help you today?
+    人类: I'm doing well! Just having a conversation with an AI.
+    AI:
+
+    > 完成链插入。
+
+
+
+    " That's great! It's always nice to have a conversation with someone new. What would you like to talk about?"
+```
+
+---
+
+
+
+
+```python
+conversation.predict(input="Tell me about yourself.")
+```
+
+---
+
+
+
+```
+
+
+    > 进入新的ConversationChain链...
+    格式化后的提示:
+    以下是人类和AI之间友好的对话。AI健谈，并从其上下文中提供大量具体细节。如果AI不知道问题的答案，则如实表示不知道。
+
+    当前对话：
+    人类: Hi there!
+    AI:  Hi there! It's nice to meet you. How can I help you today?
+    人类: I'm doing well! Just having a conversation with an AI.
+    AI:  That's great! It's always nice to have a conversation with someone new. What would you like to talk about?
+    人类: Tell me about yourself.
+    AI:
+
+    > 完成链插入。
+
+
+
+    " Sure! I'm an AI created to help people with their everyday tasks. I'm programmed to understand natural language and provide helpful information. I'm also constantly learning and updating my knowledge base so I can provide more accurate and helpful answers."
+```
+
+---
+
+

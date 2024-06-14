@@ -1,173 +1,233 @@
+# 对话总结
 
-import Head from 'next/head'
+现在让我们来看一下如何使用稍微复杂一些的记忆类型 - `ConversationSummaryMemory`。这种类型的记忆会随着时间对对话进行总结。这对于压缩对话中的信息非常有用。
 
-<Head>
-  <script>
-    {
-      `(function() {
-         var _hmt = _hmt || [];
-(function() {
-  var hm = document.createElement("script");
-  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
-  var s = document.getElementsByTagName("script")[0]; 
-  s.parentNode.insertBefore(hm, s);
-})();
-       })();`
-    }
-  </script>
-</Head>
+对话概要记忆会在对话发生时总结并将当前总结存储在记忆中。然后可以使用这个记忆将到目前为止的对话总结注入到提示/链中。这种记忆在长时间对话中非常有用，如果在提示中直接保留过去的消息历史会占用太多的令牌。
 
-![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
-
-
-
-
-
-对话摘要记忆[#](#conversationsummarymemory "此标题的永久链接")
-================================================
-
-现在让我们来看一下使用稍微复杂的记忆类型 - `对话摘要记忆`。这种记忆类型可以创建关于对话的摘要，有助于从对话中概括信息。
-
-首先，让我们探索该类型记忆的基本功能。
+让我们首先探索这种记忆类型的基本功能。
 
 ```python
-from langchain.memory import ConversationSummaryMemory
-from langchain.llms import OpenAI
-
+from langchain.memory import ConversationSummaryMemory, ChatMessageHistory
+from langchain_openai import OpenAI
 ```
 
 ```python
 memory = ConversationSummaryMemory(llm=OpenAI(temperature=0))
-memory.save_context({"input": "hi"}, {"ouput": "whats up"})
-
+memory.save_context({"input": "hi"}, {"output": "whats up"})
 ```
 
 ```python
 memory.load_memory_variables({})
-
 ```
 
-```python
-{'history': '\nThe human greets the AI, to which the AI responds.'}
+---
+
+
 
 ```
+    {'history': '\n人类问候AI，AI回应。'}
+```
 
-我们还可以将历史记录作为消息列表获取（如果您正在与聊天模型一起使用，则此功能非常有用)。
+---
+
+
+
+我们还可以将历史作为消息列表获取（如果您将其与聊天模型一起使用，则这很有用）。
 
 ```python
 memory = ConversationSummaryMemory(llm=OpenAI(temperature=0), return_messages=True)
-memory.save_context({"input": "hi"}, {"ouput": "whats up"})
-
+memory.save_context({"input": "hi"}, {"output": "whats up"})
 ```
 
 ```python
 memory.load_memory_variables({})
-
 ```
 
-```python
-{'history': [SystemMessage(content='\nThe human greets the AI, to which the AI responds.', additional_kwargs={})]}
+---
+
+
 
 ```
+    {'history': [SystemMessage(content='\n人类问候AI，AI回应。', additional_kwargs={})]}
+```
 
-我们还可以直接使用`predict_new_summary`方法。
+---
+
+
+
+我们还可以直接利用 `predict_new_summary` 方法。
 
 ```python
 messages = memory.chat_memory.messages
 previous_summary = ""
 memory.predict_new_summary(messages, previous_summary)
+```
 
+---
+
+
+
+```
+    '\n人类问候AI，AI回应。'
+```
+
+---
+
+
+
+## 使用消息/现有总结进行初始化
+
+如果您有在这个类之外的消息，您可以很容易地使用 `ChatMessageHistory` 初始化这个类。在加载时，将计算一个总结。
+
+```python
+history = ChatMessageHistory()
+history.add_user_message("hi")
+history.add_ai_message("hi there!")
 ```
 
 ```python
-'\nThe human greets the AI, to which the AI responds.'
-
+memory = ConversationSummaryMemory.from_messages(
+    llm=OpenAI(temperature=0),
+    chat_memory=history,
+    return_messages=True
+)
 ```
 
-在链式操作中使用[#](#using-in-a-chain "此标题的永久链接")
------------------------------------------
+```python
+memory.buffer
+```
 
-让我们通过一个示例来演示如何在链式操作中使用它，再次设置`verbose=True`以便查看提示。
+---
+
+
+
+```
+    '\n人类问候AI，AI以友好的问候回应。'
+```
+
+---
+
+
+
+可选地，您可以使用以前生成的总结加快初始化，并通过直接初始化来避免重新生成总结。
 
 ```python
-from langchain.llms import OpenAI
+memory = ConversationSummaryMemory(
+    llm=OpenAI(temperature=0),
+    buffer="人类问AI如何看待人工智能。AI认为人工智能是一个好事，因为它将帮助人类发挥他们的全部潜力。",
+    chat_memory=history,
+    return_messages=True
+)
+```
+
+## 在链中使用
+让我们通过一个在链中使用这个的例子，再次设置 `verbose=True` 以便我们可以看到提示信息。
+
+```python
+from langchain_openai import OpenAI
 from langchain.chains import ConversationChain
 llm = OpenAI(temperature=0)
 conversation_with_summary = ConversationChain(
-    llm=llm, 
+    llm=llm,
     memory=ConversationSummaryMemory(llm=OpenAI()),
     verbose=True
 )
 conversation_with_summary.predict(input="Hi, what's up?")
+```
+
+---
+
+
 
 ```
 
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-Current conversation:
+    > 进入新的对话链...
+    格式化后的提示信息：
+    以下是人类和AI之间友好对话的示例。AI健谈并提供了很多具体的环境细节。如果AI不知道问题的答案，它会诚实地说不知道。
 
-Human: Hi, what's up?
-AI:
+    当前对话：
 
-> Finished chain.
+    人类：Hi, what's up?
+    AI：
 
+    > 链结束。
+
+
+
+
+
+    " Hi there! I'm doing great. I'm currently helping a customer with a technical issue. How about you?"
 ```
 
-```python
-" Hi there! I'm doing great. I'm currently helping a customer with a technical issue. How about you?"
+---
 
-```
+
 
 ```python
 conversation_with_summary.predict(input="Tell me more about it!")
+```
+
+---
+
+
 
 ```
 
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-Current conversation:
+    > 进入新的对话链...
+    格式化后的提示信息：
+    以下是人类和AI之间友好对话的示例。AI健谈并提供了很多具体的环境细节。如果AI不知道问题的答案，它会诚实地说不知道。
 
-The human greeted the AI and asked how it was doing. The AI replied that it was doing great and was currently helping a customer with a technical issue.
-Human: Tell me more about it!
-AI:
+    当前对话：
 
-> Finished chain.
+    人类问候了AI并询问它的近况。AI回应说自己状况良好，目前正在帮助一位遇到技术问题的顾客。
+    人类：Tell me more about it!
+    AI：
 
+    > 链结束。
+
+
+
+
+
+    " Sure! The customer is having trouble with their computer not connecting to the internet. I'm helping them troubleshoot the issue and figure out what the problem is. So far, we've tried resetting the router and checking the network settings, but the issue still persists. We're currently looking into other possible solutions."
 ```
 
-```python
-" Sure! The customer is having trouble with their computer not connecting to the internet. I'm helping them troubleshoot the issue and figure out what the problem is. So far, we've tried resetting the router and checking the network settings, but the issue still persists. We're currently looking into other possible solutions."
+---
 
-```
+
 
 ```python
 conversation_with_summary.predict(input="Very cool -- what is the scope of the project?")
+```
+
+---
+
+
 
 ```
 
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-Current conversation:
+    > 进入新的对话链...
+    格式化后的提示信息：
+    以下是人类和AI之间友好对话的示例。AI健谈并提供了很多具体的环境细节。如果AI不知道问题的答案，它会诚实地说不知道。
 
-The human greeted the AI and asked how it was doing. The AI replied that it was doing great and was currently helping a customer with a technical issue where their computer was not connecting to the internet. The AI was troubleshooting the issue and had already tried resetting the router and checking the network settings, but the issue still persisted and they were looking into other possible solutions.
-Human: Very cool -- what is the scope of the project?
-AI:
+    当前对话：
 
-> Finished chain.
+    人类问候了AI并询问它的近况。AI回应说自己状况良好，目前正在帮助一位遇到技术问题的顾客，顾客的电脑无法连接到互联网。AI正在为问题进行故障排除，并已尝试重置路由器和检查网络设置，但问题仍然存在，他们正在研究其他可能的解决方案。
+    人类：Very cool -- what is the scope of the project?
+    AI：
 
+    > 链结束。
+
+
+
+
+
+    " The scope of the project is to troubleshoot the customer's computer issue and find a solution that will allow them to connect to the internet. We are currently exploring different possibilities and have already tried resetting the router and checking the network settings, but the issue still persists."
 ```
 
-```python
-" The scope of the project is to troubleshoot the customer's computer issue and find a solution that will allow them to connect to the internet. We are currently exploring different possibilities and have already tried resetting the router and checking the network settings, but the issue still persists."
+---
 
-```
 

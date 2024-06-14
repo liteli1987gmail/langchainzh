@@ -1,191 +1,206 @@
+# Conversation Buffer Window
 
-import Head from 'next/head'
+`ConversationBufferWindowMemory` 维护了一个对话随时间的交互列表。它只保留最近的 K 个交互。这对于保持最近交互的滑动窗口非常有用，以防缓冲区变得太大。
 
-<Head>
-  <script>
-    {
-      `(function() {
-         var _hmt = _hmt || [];
-(function() {
-  var hm = document.createElement("script");
-  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
-  var s = document.getElementsByTagName("script")[0]; 
-  s.parentNode.insertBefore(hm, s);
-})();
-       })();`
-    }
-  </script>
-</Head>
-
-![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
-
-
-
-
-
-对话缓存窗口内存[#](#conversationbufferwindowmemory "此标题的永久链接")
-=======================================================
-
-`ConversationBufferWindowMemory`保留了对话随时间推移的交互列表。它仅使用最后K个交互。这可以用于保持最近交互的滑动窗口，以便缓冲区不会过大。
-
-让我们先探索这种类型内存的基本功能。
+首先，让我们探索这种类型的记忆的基本功能。
 
 ```python
 from langchain.memory import ConversationBufferWindowMemory
-
 ```
 
 ```python
 memory = ConversationBufferWindowMemory( k=1)
-memory.save_context({"input": "hi"}, {"ouput": "whats up"})
-memory.save_context({"input": "not much you"}, {"ouput": "not much"})
-
+memory.save_context({"input": "hi"}, {"output": "whats up"})
+memory.save_context({"input": "not much you"}, {"output": "not much"})
 ```
 
 ```python
 memory.load_memory_variables({})
-
 ```
 
-```python
-{'history': 'Human: not much you\nAI: not much'}
+---
+
+
 
 ```
+    {'history': 'Human: not much you\nAI: not much'}
+```
 
-我们也可以将历史记录作为消息列表获取（如果您正在使用聊天模型，则这非常有用)。
+---
+
+
+
+我们还可以将历史记录作为消息列表获取（如果您正在使用与聊天模型一起使用，则这将很有用）。
 
 ```python
 memory = ConversationBufferWindowMemory( k=1, return_messages=True)
-memory.save_context({"input": "hi"}, {"ouput": "whats up"})
-memory.save_context({"input": "not much you"}, {"ouput": "not much"})
-
+memory.save_context({"input": "hi"}, {"output": "whats up"})
+memory.save_context({"input": "not much you"}, {"output": "not much"})
 ```
 
 ```python
 memory.load_memory_variables({})
-
 ```
 
-```python
-{'history': [HumanMessage(content='not much you', additional_kwargs={}),
-  AIMessage(content='not much', additional_kwargs={})]}
+---
+
+
 
 ```
+    {'history': [HumanMessage(content='not much you', additional_kwargs={}),
+      AIMessage(content='not much', additional_kwargs={})]}
+```
 
-在链中使用[#](#using-in-a-chain "此标题的永久链接")
---------------------------------------
+---
 
-让我们通过一个例子来演示，再次设置`verbose=True`，以便我们可以看到提示。
+
+
+## 在链中使用
+让我们通过一个例子来了解，再次设置 `verbose=True` 以便查看提示信息。
 
 ```python
-from langchain.llms import OpenAI
+from langchain_openai import OpenAI
 from langchain.chains import ConversationChain
 conversation_with_summary = ConversationChain(
-    llm=OpenAI(temperature=0), 
-    # We set a low k=2, to only keep the last 2 interactions in memory
-    memory=ConversationBufferWindowMemory(k=2), 
+    llm=OpenAI(temperature=0),
+    # 我们设置了一个较低的 k=2，只保留最近的 2 个交互在内存中
+    memory=ConversationBufferWindowMemory(k=2),
     verbose=True
 )
 conversation_with_summary.predict(input="Hi, what's up?")
+```
+
+---
+
+
 
 ```
 
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-Current conversation:
+    > 进入新的 ConversationChain 链...
+    在格式化后的提示信息：
+    下面是一个友好的人机对话。AI 与具体上下文提供了大量详细信息。如果 AI 不知道问题的答案，它会真实地表示不知道。
 
-Human: Hi, what's up?
-AI:
+    当前对话：
 
-> Finished chain.
+    Human: Hi, what's up?
+    AI:
 
+    > 完成链。
+
+
+
+
+
+    " 嗨！我很棒。我目前正在帮助一个顾客解决技术问题。你呢？"
 ```
 
-```python
-" Hi there! I'm doing great. I'm currently helping a customer with a technical issue. How about you?"
+---
 
-```
+
 
 ```python
 conversation_with_summary.predict(input="What's their issues?")
+```
+
+---
+
+
 
 ```
 
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-Current conversation:
-Human: Hi, what's up?
-AI: Hi there! I'm doing great. I'm currently helping a customer with a technical issue. How about you?
-Human: What's their issues?
-AI:
+    > 进入新的 ConversationChain 链...
+    在格式化后的提示信息：
+    下面是一个友好的人机对话。AI 与具体上下文提供了大量详细信息。如果 AI 不知道问题的答案，它会真实地表示不知道。
 
-> Finished chain.
+    当前对话：
+    Human: Hi, what's up?
+    AI:  嗨！我很棒。我目前正在帮助一个顾客解决技术问题。你呢？
+    Human: What's their issues?
+    AI:
 
+    > 完成链。
+
+
+
+
+
+    " 该顾客无法连接到他们的 Wi-Fi 网络。我正在帮助他们解决问题并使其成功连接。"
 ```
 
-```python
-" The customer is having trouble connecting to their Wi-Fi network. I'm helping them troubleshoot the issue and get them connected."
+---
 
-```
+
 
 ```python
 conversation_with_summary.predict(input="Is it going well?")
+```
+
+---
+
+
 
 ```
 
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-Current conversation:
-Human: Hi, what's up?
-AI: Hi there! I'm doing great. I'm currently helping a customer with a technical issue. How about you?
-Human: What's their issues?
-AI: The customer is having trouble connecting to their Wi-Fi network. I'm helping them troubleshoot the issue and get them connected.
-Human: Is it going well?
-AI:
+    > 进入新的 ConversationChain 链...
+    在格式化后的提示信息：
+    下面是一个友好的人机对话。AI 与具体上下文提供了大量详细信息。如果 AI 不知道问题的答案，它会真实地表示不知道。
 
-> Finished chain.
+    当前对话：
+    Human: Hi, what's up?
+    AI:  嗨！我很棒。我目前正在帮助一个顾客解决技术问题。你呢？
+    Human: What's their issues?
+    AI:  该顾客无法连接到他们的 Wi-Fi 网络。我正在帮助他们解决问题并使其成功连接。
+    Human: Is it going well?
+    AI:
 
+    > 完成链。
+
+
+
+
+
+    " 是的，目前进展顺利。我们已经找到了问题，并正在努力寻找解决方案。"
 ```
 
-```python
-" Yes, it's going well so far. We've already identified the problem and are now working on a solution."
+---
 
-```
+
 
 ```python
-# Notice here that the first interaction does not appear.
+# 注意这里第一个交互不出现了。
 conversation_with_summary.predict(input="What's the solution?")
+```
+
+---
+
+
 
 ```
 
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-Current conversation:
-Human: What's their issues?
-AI: The customer is having trouble connecting to their Wi-Fi network. I'm helping them troubleshoot the issue and get them connected.
-Human: Is it going well?
-AI: Yes, it's going well so far. We've already identified the problem and are now working on a solution.
-Human: What's the solution?
-AI:
+    > 进入新的 ConversationChain 链...
+    在格式化后的提示信息：
+    下面是一个友好的人机对话。AI 与具体上下文提供了大量详细信息。如果 AI 不知道问题的答案，它会真实地表示不知道。
 
-> Finished chain.
+    当前对话：
+    Human: What's their issues?
+    AI:  该顾客无法连接到他们的 Wi-Fi 网络。我正在帮助他们解决问题并使其成功连接。
+    Human: Is it going well?
+    AI:  是的，目前进展顺利。我们已经找到了问题，并正在努力寻找解决方案。
+    Human: What's the solution?
+    AI:
 
+    > 完成链。
+
+
+
+
+
+    " 解决方案是重置路由器并重新配置设置。我们目前正在进行这个过程。"
 ```
 
-```python
-" The solution is to reset the router and reconfigure the settings. We're currently in the process of doing that."
-
-```
+---
 

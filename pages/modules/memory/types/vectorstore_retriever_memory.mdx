@@ -1,241 +1,247 @@
+# 支持向量存储
 
-import Head from 'next/head'
+`VectorStoreRetrieverMemory`将记忆存储在向量存储中，并在每次调用时查询最“显著”的前K个文档。
 
-<Head>
-  <script>
-    {
-      `(function() {
-         var _hmt = _hmt || [];
-(function() {
-  var hm = document.createElement("script");
-  hm.src = "https://hm.baidu.com/hm.js?e60fb290e204e04c5cb6f79b0ac1e697";
-  var s = document.getElementsByTagName("script")[0]; 
-  s.parentNode.insertBefore(hm, s);
-})();
-       })();`
-    }
-  </script>
-</Head>
+与大多数其他记忆类不同，它不明确跟踪交互的顺序。
 
-![LangChain](https://pica.zhimg.com/50/v2-56e8bbb52aa271012541c1fe1ceb11a2_r.gif)
-
-
-
-
-
-基于向量存储的记忆[#](#vectorstore-backed-memory "本标题的永久链接")
-===================================================
-
-`VectorStoreRetrieverMemory`将记忆存储在VectorDB中，并在每次调用时查询最重要的K个文档。
-
-与大多数其他记忆类不同的是，它不明确跟踪交互的顺序。
-
-在这种情况下，“文档”是先前的对话片段。这可以用来提到AI在对话中早期被告知的相关信息。
+在这种情况下，“文档”是先前的对话片段。这可以用来引用AI在对话早期告诉的相关信息。
 
 ```python
 from datetime import datetime
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.llms import OpenAI
+from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAI
 from langchain.memory import VectorStoreRetrieverMemory
 from langchain.chains import ConversationChain
-from langchain.prompts import PromptTemplate
-
+from langchain_core.prompts import PromptTemplate
 ```
 
-初始化您的VectorStore[#](#initialize-your-vectorstore "本标题的永久链接")
-------------------------------------------------------------
+### 初始化向量存储
 
-根据您选择的存储方式，此步骤可能会有所不同。有关更多详细信息，请参阅相关的VectorStore文档。
+根据您选择的存储方式，此步骤可能会有所不同。有关详细信息，请参阅相关向量存储的文档。
 
 ```python
 import faiss
 
 from langchain.docstore import InMemoryDocstore
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 
-embedding_size = 1536 # Dimensions of the OpenAIEmbeddings
+
+embedding_size = 1536  # OpenAIEmbeddings的维度
 index = faiss.IndexFlatL2(embedding_size)
 embedding_fn = OpenAIEmbeddings().embed_query
 vectorstore = FAISS(embedding_fn, index, InMemoryDocstore({}), {})
-
 ```
 
-创建您的VectorStoreRetrieverMemory[#](#create-your-the-vectorstoreretrievermemory "本标题的永久链接")
------------------------------------------------------------------------------------------
+### 创建`VectorStoreRetrieverMemory`
 
-记忆体对象是从任何VectorStoreRetriever实例化的。
+从任何向量存储检索器实例化内存对象。
 
 ```python
-# In actual usage, you would set `k` to be a higher value, but we use k=1 to show that
-# the vector lookup still returns the semantically relevant information
+# 在实际使用中，您可以将“k”设置为较高的值，这里我们使用k=1以显示向量查找仍然返回语义相关信息
 retriever = vectorstore.as_retriever(search_kwargs=dict(k=1))
 memory = VectorStoreRetrieverMemory(retriever=retriever)
 
-# When added to an agent, the memory object can save pertinent information from conversations or used tools
-memory.save_context({"input": "My favorite food is pizza"}, {"output": "thats good to know"})
-memory.save_context({"input": "My favorite sport is soccer"}, {"output": "..."})
-memory.save_context({"input": "I don't the Celtics"}, {"output": "ok"}) # 
-
+# 当添加到代理器时，内存对象可以保存对话或使用的工具的相关信息
+memory.save_context({"input": "我最喜欢的食物是比萨饼"}, {"output": "这是个好消息"})
+memory.save_context({"input": "我最喜欢的运动是足球"}, {"output": "..."})
+memory.save_context({"input": "我不喜欢凯尔特人队"}, {"output": "好的"})
 ```
 
 ```python
-# Notice the first result returned is the memory pertaining to tax help, which the language model deems more semantically relevant
-# to a 1099 than the other documents, despite them both containing numbers.
-print(memory.load_memory_variables({"prompt": "what sport should i watch?"})["history"])
-
+print(memory.load_memory_variables({"prompt": "我应该看什么运动?"})["history"])
 ```
 
-```python
-input: My favorite sport is soccer
-output: ...
+---
+
+
 
 ```
+    input: 我最喜欢的运动是足球
+    output: ...
+```
 
-在链中使用[#](#using-in-a-chain "本标题的永久链接")
---------------------------------------
+---
 
-让我们通过一个例子来演示，再次设置`verbose=True`以便我们可以看到提示。
+
+
+## 在链中使用
+让我们通过一个示例来演示，再次设置`verbose=True`以便查看提示。
 
 ```python
-llm = OpenAI(temperature=0) # Can be any valid LLM
-_DEFAULT_TEMPLATE = """The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
+llm = OpenAI(temperature=0)  # 可以是任何有效的LLM
+_DEFAULT_TEMPLATE = """以下是AI与人类之间的友好对话。AI健谈，提供了很多上下文的具体细节。如果AI不知道问题的答案，它会诚实地说它不知道。
 
-Relevant pieces of previous conversation:
+先前对话的相关片段：
 {history}
 
-(You do not need to use these pieces of information if not relevant)
+（如果不相关，您不需要使用这些信息）
 
-Current conversation:
-Human: {input}
+当前对话：
+人类：{input}
 AI:"""
 PROMPT = PromptTemplate(
     input_variables=["history", "input"], template=_DEFAULT_TEMPLATE
 )
 conversation_with_summary = ConversationChain(
-    llm=llm, 
+    llm=llm,
     prompt=PROMPT,
-    # We set a very low max_token_limit for the purposes of testing.
     memory=memory,
     verbose=True
 )
-conversation_with_summary.predict(input="Hi, my name is Perry, what's up?")
+conversation_with_summary.predict(input="你好，我叫Perry，怎么样？")
+```
+
+---
+
+
 
 ```
+
+
+    > 进入新的ConversationChain链...
+    格式化后的提示：
+    以下是AI与人类之间的友好对话。AI健谈，提供了很多上下文的具体细节。如果AI不知道问题的答案，它会诚实地说它不知道。
+
+    先前对话的相关片段：
+    输入：我最喜欢的食物是比萨饼
+    输出：这是个好消息
+
+    （如果不相关，您不需要使用这些信息）
+
+    当前对话：
+    人类：你好，我叫Perry，怎么样？
+    AI:
+
+    > 完成链
+
+
+
+
+
+    “嗨Perry，我很好。你呢？”
+```
+
+---
+
+
+
 
 ```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
+# 这里展示了与篮球相关的内容
+conversation_with_summary.predict(input="我最喜欢的运动是什么？")
+```
 
-Relevant pieces of previous conversation:
-input: My favorite food is pizza
-output: thats good to know
+---
 
-(You do not need to use these pieces of information if not relevant)
 
-Current conversation:
-Human: Hi, my name is Perry, what's up?
-AI:
-
-> Finished chain.
 
 ```
+
+
+    > 进入新的ConversationChain链...
+    格式化后的提示：
+    以下是AI与人类之间的友好对话。AI健谈，提供了很多上下文的具体细节。如果AI不知道问题的答案，它会诚实地说它不知道。
+
+    先前对话的相关片段：
+    输入：我最喜欢的运动是足球
+    输出：...
+
+    （如果不相关，您不需要使用这些信息）
+
+    当前对话：
+    人类：我最喜欢的运动是什么？
+    AI:
+
+    > 完成链
+
+
+
+
+
+    '你之前告诉我你最喜欢的运动是足球。'
+```
+
+---
+
+
+
 
 ```python
-" Hi Perry, I'm doing well. How about you?"
+# 即使语言模型是无状态的，由于获取了相关的记忆，它可以“推理”出时间的概念。
+# 对记忆和数据进行时间戳是有用的，以便让代理程序确定时态相关性
+conversation_with_summary.predict(input="我的最爱是什么食物")
+```
+
+---
+
+
 
 ```
+
+
+    > 进入新的ConversationChain链...
+    格式化后的提示：
+    以下是AI与人类之间的友好对话。AI健谈，提供了很多上下文的具体细节。如果AI不知道问题的答案，它会诚实地说它不知道。
+
+    先前对话的相关片段：
+    输入：我最喜欢的食物是比萨饼
+    输出：这是个好消息
+
+    （如果不相关，您不需要使用这些信息）
+
+    当前对话：
+    人类：我的最爱是什么食物
+    AI:
+
+    > 完成链
+
+
+
+
+
+    '你说过你最喜欢的食物是比萨饼。'
+```
+
+---
+
+
+
 
 ```python
-# Here, the basketball related content is surfaced
-conversation_with_summary.predict(input="what's my favorite sport?")
+# 对话中的记忆会被自动存储，
+# 由于此查询最符合上述引言聊天，代理程序能够“记住”用户的名字。
+conversation_with_summary.predict(input="我的名字是什么？")
+```
+
+---
+
+
 
 ```
 
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
 
-Relevant pieces of previous conversation:
-input: My favorite sport is soccer
-output: ...
+    > 进入新的ConversationChain链...
+    格式化后的提示：
+    以下是AI与人类之间的友好对话。AI健谈，提供了很多上下文的具体细节。如果AI不知道问题的答案，它会诚实地说它不知道。
 
-(You do not need to use these pieces of information if not relevant)
+    先前对话的相关片段：
+    输入：你好，我叫Perry，怎么样？
+    响应：嗨Perry，我很好。你呢？
 
-Current conversation:
-Human: what's my favorite sport?
-AI:
+    （如果不相关，您不需要使用这些信息）
 
-> Finished chain.
+    当前对话：
+    人类：我的名字是什么？
+    AI:
 
+    > 完成链
+
+
+
+
+
+    '你的名字是Perry。'
 ```
 
-```python
-' You told me earlier that your favorite sport is soccer.'
-
-```
-
-```python
-# Even though the language model is stateless, since relavent memory is fetched, it can "reason" about the time.
-# Timestamping memories and data is useful in general to let the agent determine temporal relevance
-conversation_with_summary.predict(input="Whats my favorite food")
-
-```
-
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
-
-Relevant pieces of previous conversation:
-input: My favorite food is pizza
-output: thats good to know
-
-(You do not need to use these pieces of information if not relevant)
-
-Current conversation:
-Human: Whats my favorite food
-AI:
-
-> Finished chain.
-
-```
-
-```python
-' You said your favorite food is pizza.'
-
-```
-
-```python
-# The memories from the conversation are automatically stored,
-# since this query best matches the introduction chat above,
-# the agent is able to 'remember' the user's name.
-conversation_with_summary.predict(input="What's my name?")
-
-```
-
-```python
-> Entering new ConversationChain chain...
-Prompt after formatting:
-The following is a friendly conversation between a human and an AI. The AI is talkative and provides lots of specific details from its context. If the AI does not know the answer to a question, it truthfully says it does not know.
-
-Relevant pieces of previous conversation:
-input: Hi, my name is Perry, what's up?
-response: Hi Perry, I'm doing well. How about you?
-
-(You do not need to use these pieces of information if not relevant)
-
-Current conversation:
-Human: What's my name?
-AI:
-
-> Finished chain.
-
-```
-
-```python
-' Your name is Perry.'
-
-```
+---
 

@@ -1,8 +1,8 @@
 
 
 
-  LangChain生态（LangChain Ecosystem）[#](#langchain-ecosystem "Permalink to this headline")
-=============================================================================
+#  LangChain生态（LangChain Ecosystem）[#](#langchain-ecosystem "Permalink to this headline")
+
 
 
 
@@ -21,9 +21,9 @@ LangChain提供与许多LLM和系统的集成：
  
 
 
-* [LLM Providers](./modules/models/llms/integrations)
-* [Chat Model Providers](./modules/models/chat/integrations)
-* [Text Embedding Model Providers](./modules/models/text_embedding)
+* [LLM Providers](./modules/model_io/llms/integrations)
+* [Chat Model Providers](./modules/model_io/chat/integrations)
+* [Text Embedding Model Providers](./modules/model_io/text_embedding)
 * [Document Loader Integrations](./modules/indexes/document_loaders)
 * [Text Splitter Integrations](./modules/indexes/text_splitters)
 * [Vectorstore Providers](./modules/indexes/vectorstores)
