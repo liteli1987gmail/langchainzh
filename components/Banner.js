@@ -12,8 +12,8 @@ const Banner = () => {
         <img src="http://www.aiqbh.com/ainews.png" style={{ width: '100%', height: 'auto' }} alt="每日AI新闻持续更新" />
       </a>
       {/* 链接和图片 3 */}
-      <a href="https://www.aiqbh.com/KYW.png" style={{ flex: 1 }}>
-        <img src="https://www.aiqbh.com/zhaozu1.png" style={{ width: '100%', height: 'auto' }} alt="10000个AI开发者在社群等你" />
+      <a href="https://www.dmxapi.com" style={{ flex: 1 }}>
+        <img src="https://www.aiqbh.com/zhaozu1.png" style={{ width: '100%', height: 'auto' }} alt="DMX API" />
       </a>
   </div>
   );
