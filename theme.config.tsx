@@ -66,9 +66,10 @@ const config: DocsThemeConfig = {
     <span><a href="https://www.milvus-io.com" target="_blank">    Milvus 文档    |</a></span>
     <span><a href="https://www.pinecone-io.com/ " target="_blank">    Pinecone 文档 </a></span>
     <p>
-      <span><a href="https://www.Langchain.com" target="_blank">    Langchain英文站  </a></span>
-      <span><a href="https://js.langchain.com.cn/docs/">    Langchain JS/TS 文档 </a></span>
-      <a href="https://www.langchain.com.cn"><span><img style={{ display: "inline-block",height: "19px" }} src="https://mbdp01.bdstatic.com/static/landing-pc/img/icon_police.7296bdfd.png" alt="" />  沪ICP备2023014280号-3</span></a></p>
+      <span><a href="https://www.Langchain.com" target="_blank">    Langchain英文站    |  </a></span>
+      <span><a href="https://js.langchain.com.cn/docs/" target="_blank">    Langchain JS/TS 文档     |</a></span>
+      <span><a href="https://DMXAPI.com" target="_blank">    大模型API聚合     |</a></span>
+      <a href="https://beian.miit.gov.cn/"><span>     <img style={{ display: "inline-block",height: "19px" }} src="https://mbdp01.bdstatic.com/static/landing-pc/img/icon_police.7296bdfd.png" alt="" />  沪ICP备2023014280号-3</span></a></p>
     </div>
   }
 }
