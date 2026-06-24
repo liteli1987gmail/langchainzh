@@ -66,30 +66,22 @@ python scripts/sync_langchain_docs.py --force
 
 ## Vercel 部署
 
-第一轮 Actions 成功后，仓库会出现 `site/`。
+仓库包含 `vercel.json`，会让 Vercel 跳过旧 Nextra 依赖安装，并从 `site/` 发布。
+第一轮 Actions 成功后，`site/` 会从占位页替换成完整中文文档。
+`package.json` 的 `build` 脚本也只会确保 `site/` 存在，不再运行旧 Next/Nextra 构建。
 
 在 Vercel 项目中设置：
 
 - Framework Preset: `Other`
-- Build Command: 留空或 `echo ready`
+- Build Command: `python3 scripts/ensure_site.py`
 - Output Directory: `site`
-
-也可以在确认 `site/` 已生成后添加：
-
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "echo ready",
-  "outputDirectory": "site"
-}
-```
 
 ## Cloudflare Pages 部署
 
-GitHub 已连通 Cloudflare 时，Pages 项目建议设置：
+仓库包含 `wrangler.toml`，输出目录为 `site`。GitHub 已连通 Cloudflare 时，Pages 项目建议设置：
 
 - Production branch: `main`
-- Build command: 留空或 `echo ready`
+- Build command: `python3 scripts/ensure_site.py`
 - Build output directory: `site`
 
 如果使用 Wrangler 直传，可在 `site/` 生成后执行：
