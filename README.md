@@ -1,5 +1,15 @@
 # Langchain中文网
 
+> 当前仓库正在从 2023 年旧版 Nextra 文档站升级为自动同步官方 LangChain Mintlify 文档的中文镜像。
+
+新的自动化入口见 [docs/operations.md](docs/operations.md)：
+
+- 上游源码：`https://github.com/langchain-ai/docs`
+- 官方构建：`uv run pipeline build`，输出 `build/`
+- 中文翻译：MiniMax OpenAI-compatible API
+- 免费部署目标：生成静态目录 `site/`，供 Vercel 或 Cloudflare Pages 发布
+- 更新监测：GitHub Actions 每天北京时间 02:17 检查上游并自动同步
+
 
 
 Langchain中文网是Langchain的中文社区。

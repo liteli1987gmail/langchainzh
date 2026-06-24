@@ -1,0 +1,75 @@
+name: Sync LangChain Chinese Docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Re-translate files even if the upstream sha/cache did not change
+        required: false
+        default: "false"
+      limit:
+        description: Limit translated files for a smoke run; use 0 for all files
+        required: false
+        default: "0"
+  schedule:
+    # 02:17 Asia/Shanghai every day.
+    - cron: "17 18 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: langchain-docs-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install static exporter dependencies
+        run: python -m pip install -r requirements-docs.txt
+
+      - name: Sync, translate, build, and export
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          MINIMAX_BASE_URL: ${{ vars.MINIMAX_BASE_URL || 'https://api.minimax.io/v1' }}
+          MINIMAX_MODEL: ${{ vars.MINIMAX_MODEL || 'MiniMax-M2.7-highspeed' }}
+        run: |
+          args=("--skip-if-unchanged" "--limit" "${{ github.event.inputs.limit || '0' }}")
+          if [ "${{ github.event.inputs.force || 'false' }}" = "true" ]; then
+            args+=("--force")
+          fi
+          python scripts/sync_langchain_docs.py "${args[@]}"
+
+      - name: Commit generated docs
+        run: |
+          git config user.name "langchainzh-docs-bot"
+          git config user.email "actions@users.noreply.github.com"
+          paths=()
+          [ -e site ] && paths+=("site")
+          [ -e .translation-cache ] && paths+=(".translation-cache")
+          [ -e .langchain-docs-upstream.json ] && paths+=(".langchain-docs-upstream.json")
+          if [ ${#paths[@]} -eq 0 ]; then
+            echo "No generated paths exist."
+            exit 0
+          fi
+          git add -A -- "${paths[@]}"
+          if git diff --cached --quiet; then
+            echo "No generated changes."
+          else
+            git commit -m "chore: sync LangChain Chinese docs"
+            git push
+          fi
