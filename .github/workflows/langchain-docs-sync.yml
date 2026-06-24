@@ -10,7 +10,11 @@ on:
       limit:
         description: Limit translated files for a smoke run; use 0 for all files
         required: false
-        default: "0"
+        default: "3"
+      mock:
+        description: Do not call MiniMax; copy source text unchanged for a smoke run
+        required: false
+        default: "false"
   schedule:
     # 02:17 Asia/Shanghai every day.
     - cron: "17 18 * * *"
@@ -32,32 +36,63 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Check upstream
+        id: upstream
+        run: python scripts/check_upstream.py
+
+      - name: Stop when scheduled run has no upstream changes
+        if: steps.upstream.outputs.changed != 'true' && github.event_name != 'workflow_dispatch'
+        run: echo "No upstream changes; skipping translation."
+
       - uses: actions/setup-node@v4
+        if: steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         with:
           node-version: "22"
 
       - name: Install uv
+        if: steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: astral-sh/setup-uv@v5
 
       - name: Install static exporter dependencies
+        if: steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         run: python -m pip install -r requirements-docs.txt
 
+      - name: Check MiniMax secret
+        if: (steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') && github.event.inputs.mock != 'true'
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: |
+          if [ -z "$MINIMAX_API_KEY" ]; then
+            echo "::error title=Missing MINIMAX_API_KEY::Add MINIMAX_API_KEY in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "MiniMax secret is configured."
+
       - name: Sync, translate, build, and export
+        if: steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         env:
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           MINIMAX_BASE_URL: ${{ vars.MINIMAX_BASE_URL || 'https://api.minimax.io/v1' }}
           MINIMAX_MODEL: ${{ vars.MINIMAX_MODEL || 'MiniMax-M2.7-highspeed' }}
         run: |
-          args=("--skip-if-unchanged" "--limit" "${{ github.event.inputs.limit || '0' }}")
+          args=("--limit" "${{ github.event.inputs.limit || '0' }}")
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            args+=("--skip-if-unchanged")
+          fi
           if [ "${{ github.event.inputs.force || 'false' }}" = "true" ]; then
             args+=("--force")
+          fi
+          if [ "${{ github.event.inputs.mock || 'false' }}" = "true" ]; then
+            args+=("--mock-translator")
           fi
           python scripts/sync_langchain_docs.py "${args[@]}"
 
       - name: Verify generated static site
+        if: steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
         run: python scripts/verify_site.py --site-dir site --min-pages 20
 
       - name: Commit generated docs
+        if: (steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') && github.event.inputs.mock != 'true'
         run: |
           git config user.name "langchainzh-docs-bot"
           git config user.email "actions@users.noreply.github.com"

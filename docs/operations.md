@@ -57,12 +57,15 @@ python scripts/sync_langchain_docs.py --force
 ## GitHub Actions
 
 `.github/workflows/langchain-docs-sync.yml` 每天北京时间 02:17 检查一次官方上游。
+工作流会先比较 `langchain-ai/docs` 的当前 SHA 和本仓库 `.langchain-docs-upstream.json` 记录的 SHA。
+如果是定时运行且上游没有变化，会直接跳过翻译。
 
 也可以在 GitHub Actions 页面手动运行：
 
-- `limit=3`：冒烟测试。
+- `limit=3`：冒烟测试，手动运行的默认值。
 - `limit=0`：翻译全部文档。
 - `force=true`：忽略缓存，强制重翻。
+- `mock=true`：不调用 MiniMax，只复制原文，用来测试拉取、构建和导出链路；mock 结果不会提交回 `main`。
 
 ## Vercel 部署
 
