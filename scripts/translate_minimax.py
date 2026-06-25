@@ -20,9 +20,12 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 
@@ -582,10 +585,12 @@ def translate_file(
     cache_path: Path,
     *,
     force: bool,
+    cache_lock: Any | None = None,
 ) -> tuple[str, bool]:
     source_text = source_path.read_text(encoding="utf-8")
     source_hash = sha256_text(source_text)
-    cache_entry = cache.setdefault("files", {}).get(rel_path)
+    with cache_lock or nullcontext():
+        cache_entry = cache.setdefault("files", {}).get(rel_path)
     if not force:
         cached_text = cached_translation_text(
             cache_path,
@@ -607,14 +612,15 @@ def translate_file(
         ):
             print(f"backfill-cache: {rel_path}", file=sys.stderr)
             translated = target_path.read_text(encoding="utf-8")
-            remember_translation(
-                cache_path,
-                cache,
-                rel_path,
-                source_hash=source_hash,
-                model=client.config.model,
-                translated_text=translated,
-            )
+            with cache_lock or nullcontext():
+                remember_translation(
+                    cache_path,
+                    cache,
+                    rel_path,
+                    source_hash=source_hash,
+                    model=client.config.model,
+                    translated_text=translated,
+                )
             return "cached", True
 
     if source_path.suffix.lower() in TEXT_EXTENSIONS:
@@ -631,14 +637,15 @@ def translate_file(
 
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(translated, encoding="utf-8")
-    remember_translation(
-        cache_path,
-        cache,
-        rel_path,
-        source_hash=source_hash,
-        model=client.config.model,
-        translated_text=translated,
-    )
+    with cache_lock or nullcontext():
+        remember_translation(
+            cache_path,
+            cache,
+            rel_path,
+            source_hash=source_hash,
+            model=client.config.model,
+            translated_text=translated,
+        )
     return "translated", True
 
 
@@ -685,6 +692,12 @@ def parse_args() -> argparse.Namespace:
         default=20,
         help="Persist the translation cache after this many cache updates.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=int(os.environ.get("TRANSLATION_WORKERS", "1")),
+        help="Number of files to translate concurrently.",
+    )
     return parser.parse_args()
 
 
@@ -719,51 +732,94 @@ def main() -> int:
     copied_count = 0
     seen_translatable = 0
     dirty_cache_updates = 0
+    cache_lock = Lock()
+    workers = max(1, args.workers)
 
-    for source_path in files:
-        rel_path = source_path.relative_to(args.source_dir).as_posix()
-        target_path = args.target_dir / rel_path
-        suffix = source_path.suffix.lower()
-        is_translatable = suffix in TEXT_EXTENSIONS or source_path.name == "docs.json"
+    def record_result(action: str, cache_changed: bool) -> None:
+        nonlocal translated_count, cached_count, dirty_cache_updates
+        if action == "translated":
+            translated_count += 1
+        elif action == "cached":
+            cached_count += 1
+        if cache_changed:
+            dirty_cache_updates += 1
+            if args.save_every > 0 and dirty_cache_updates >= args.save_every:
+                with cache_lock:
+                    save_cache(args.cache, cache)
+                dirty_cache_updates = 0
 
-        if args.limit and is_translatable:
-            seen_translatable += 1
-            if seen_translatable > args.limit:
-                if not args.dry_run:
-                    copy_asset(source_path, target_path)
-                    copied_count += 1
+    def process_translation(
+        source_path: Path,
+        target_path: Path,
+        rel_path: str,
+    ) -> tuple[str, bool]:
+        worker_client = client if workers == 1 else MiniMaxClient(config)
+        return translate_file(
+            source_path,
+            target_path,
+            rel_path,
+            worker_client,
+            cache,
+            args.cache,
+            force=args.force,
+            cache_lock=cache_lock,
+        )
+
+    executor: ThreadPoolExecutor | None = None
+    futures = []
+    try:
+        if workers > 1 and not args.dry_run:
+            executor = ThreadPoolExecutor(max_workers=workers)
+
+        for source_path in files:
+            rel_path = source_path.relative_to(args.source_dir).as_posix()
+            target_path = args.target_dir / rel_path
+            suffix = source_path.suffix.lower()
+            is_translatable = suffix in TEXT_EXTENSIONS or source_path.name == "docs.json"
+
+            if args.limit and is_translatable:
+                seen_translatable += 1
+                if seen_translatable > args.limit:
+                    if not args.dry_run:
+                        copy_asset(source_path, target_path)
+                        copied_count += 1
+                    continue
+
+            if args.dry_run:
+                action = "translate" if is_translatable else "copy"
+                print(f"{action}: {rel_path}")
                 continue
 
-        if args.dry_run:
-            action = "translate" if is_translatable else "copy"
-            print(f"{action}: {rel_path}")
-            continue
+            if is_translatable:
+                if executor:
+                    futures.append(
+                        executor.submit(
+                            process_translation,
+                            source_path,
+                            target_path,
+                            rel_path,
+                        )
+                    )
+                else:
+                    action, cache_changed = process_translation(
+                        source_path,
+                        target_path,
+                        rel_path,
+                    )
+                    record_result(action, cache_changed)
+            else:
+                copy_asset(source_path, target_path)
+                copied_count += 1
 
-        if is_translatable:
-            action, cache_changed = translate_file(
-                source_path,
-                target_path,
-                rel_path,
-                client,
-                cache,
-                args.cache,
-                force=args.force,
-            )
-            if action == "translated":
-                translated_count += 1
-            elif action == "cached":
-                cached_count += 1
-            if cache_changed:
-                dirty_cache_updates += 1
-                if args.save_every > 0 and dirty_cache_updates >= args.save_every:
-                    save_cache(args.cache, cache)
-                    dirty_cache_updates = 0
-        else:
-            copy_asset(source_path, target_path)
-            copied_count += 1
-
-    if not args.dry_run:
-        save_cache(args.cache, cache)
+        for future in as_completed(futures):
+            action, cache_changed = future.result()
+            record_result(action, cache_changed)
+    finally:
+        if executor:
+            executor.shutdown(cancel_futures=True)
+        if not args.dry_run:
+            with cache_lock:
+                save_cache(args.cache, cache)
 
     print(
         f"done: translated={translated_count} cached={cached_count} copied_assets={copied_count}",
