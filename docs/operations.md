@@ -57,6 +57,20 @@ python -m pip install -r requirements-docs.txt
 python scripts/sync_langchain_docs.py --force
 ```
 
+本机首次全量翻译时，MiniMax endpoint 偶尔会返回 400/401/429 或 SSL EOF。建议使用较低并发和失败日志续跑：
+
+```bash
+python scripts/translate_minimax.py \
+  --source-dir .langchain-work/upstream/src \
+  --target-dir .langchain-work/src.zh \
+  --cache .translation-cache/minimax.json \
+  --workers 4 \
+  --retries 6 \
+  --retry-delay 5 \
+  --keep-going \
+  --failure-log .translation-cache/failures.json
+```
+
 ## GitHub Actions
 
 `.github/workflows/langchain-docs-sync.yml` 每天北京时间 02:17 检查一次官方上游。

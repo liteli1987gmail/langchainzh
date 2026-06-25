@@ -698,6 +698,16 @@ def parse_args() -> argparse.Namespace:
         default=int(os.environ.get("TRANSLATION_WORKERS", "1")),
         help="Number of files to translate concurrently.",
     )
+    parser.add_argument(
+        "--keep-going",
+        action="store_true",
+        help="Record file-level translation failures and continue other files.",
+    )
+    parser.add_argument(
+        "--failure-log",
+        type=Path,
+        help="Write keep-going failures to this JSON file.",
+    )
     return parser.parse_args()
 
 
@@ -732,6 +742,7 @@ def main() -> int:
     copied_count = 0
     seen_translatable = 0
     dirty_cache_updates = 0
+    failures: list[dict[str, str]] = []
     cache_lock = Lock()
     workers = max(1, args.workers)
 
@@ -765,8 +776,13 @@ def main() -> int:
             cache_lock=cache_lock,
         )
 
+    def record_failure(rel_path: str, exc: Exception) -> None:
+        message = str(exc)
+        failures.append({"path": rel_path, "error": message})
+        print(f"failed: {rel_path}: {message}", file=sys.stderr)
+
     executor: ThreadPoolExecutor | None = None
-    futures = []
+    futures = {}
     try:
         if workers > 1 and not args.dry_run:
             executor = ThreadPoolExecutor(max_workers=workers)
@@ -792,40 +808,56 @@ def main() -> int:
 
             if is_translatable:
                 if executor:
-                    futures.append(
-                        executor.submit(
-                            process_translation,
-                            source_path,
-                            target_path,
-                            rel_path,
-                        )
-                    )
-                else:
-                    action, cache_changed = process_translation(
+                    future = executor.submit(
+                        process_translation,
                         source_path,
                         target_path,
                         rel_path,
                     )
-                    record_result(action, cache_changed)
+                    futures[future] = rel_path
+                else:
+                    try:
+                        action, cache_changed = process_translation(
+                            source_path,
+                            target_path,
+                            rel_path,
+                        )
+                        record_result(action, cache_changed)
+                    except Exception as exc:
+                        if not args.keep_going:
+                            raise
+                        record_failure(rel_path, exc)
             else:
                 copy_asset(source_path, target_path)
                 copied_count += 1
 
         for future in as_completed(futures):
-            action, cache_changed = future.result()
-            record_result(action, cache_changed)
+            rel_path = futures[future]
+            try:
+                action, cache_changed = future.result()
+                record_result(action, cache_changed)
+            except Exception as exc:
+                if not args.keep_going:
+                    raise
+                record_failure(rel_path, exc)
     finally:
         if executor:
             executor.shutdown(cancel_futures=True)
         if not args.dry_run:
             with cache_lock:
                 save_cache(args.cache, cache)
+        if args.failure_log is not None:
+            args.failure_log.parent.mkdir(parents=True, exist_ok=True)
+            args.failure_log.write_text(
+                json.dumps(failures, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
 
     print(
-        f"done: translated={translated_count} cached={cached_count} copied_assets={copied_count}",
+        f"done: translated={translated_count} cached={cached_count} copied_assets={copied_count} failed={len(failures)}",
         file=sys.stderr,
     )
-    return 0
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
