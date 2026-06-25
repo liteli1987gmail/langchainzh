@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -65,13 +66,21 @@ def main() -> int:
         if os.environ.get("MINIMAX_USE_PROXY", "").lower() in {"1", "true", "yes"}
         else urllib.request.build_opener(urllib.request.ProxyHandler({}))
     )
-    try:
-        with opener.open(request, timeout=60) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        raise SystemExit(f"MiniMax HTTP error: {exc.code} {exc.reason}") from exc
-    except urllib.error.URLError as exc:
-        raise SystemExit(f"MiniMax URL error: {exc.reason!r}") from exc
+    last_error: Exception | None = None
+    for attempt in range(4):
+        try:
+            with opener.open(request, timeout=60) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as exc:
+            raise SystemExit(f"MiniMax HTTP error: {exc.code} {exc.reason}") from exc
+        except urllib.error.URLError as exc:
+            last_error = exc
+            if attempt == 3:
+                raise SystemExit(f"MiniMax URL error: {exc.reason!r}") from exc
+            time.sleep(2 * (attempt + 1))
+    else:
+        raise SystemExit(f"MiniMax check failed: {last_error}")
 
     text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
     print(f"MiniMax OK: endpoint={base} model={model} response={text[:20]!r}")

@@ -71,6 +71,7 @@ Hard rules:
 - Preserve URLs, anchors, file paths, package names, import/export statements, code identifiers, CLI commands, env var names, and API names.
 - Keep fenced code blocks unchanged. They are normally removed before you see a fragment.
 - Keep frontmatter keys unchanged, but translate human-readable values.
+- Do not include reasoning, analysis, or <think> blocks.
 - Do not add explanations, summaries, or wrappers.
 """
 
@@ -135,7 +136,9 @@ class MiniMaxClient:
                 with self.opener.open(request, timeout=self.config.timeout) as response:
                     body = response.read().decode("utf-8")
                 parsed = json.loads(body)
-                return parsed["choices"][0]["message"]["content"].strip()
+                return strip_thinking(
+                    parsed["choices"][0]["message"]["content"].strip()
+                )
             except (KeyError, json.JSONDecodeError) as exc:
                 raise RuntimeError(f"Unexpected MiniMax response shape: {exc}") from exc
             except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
@@ -154,6 +157,19 @@ class MiniMaxClient:
 
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def strip_thinking(text: str) -> str:
+    stripped = text.lstrip()
+    if not stripped.startswith("<think>"):
+        return text.strip()
+
+    close_tag = "</think>"
+    close_index = stripped.find(close_tag)
+    if close_index == -1:
+        raise RuntimeError("MiniMax response contained an unterminated <think> block")
+
+    return stripped[close_index + len(close_tag) :].strip()
 
 
 def load_dotenv(path: Path) -> None:
