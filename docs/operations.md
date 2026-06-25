@@ -101,6 +101,10 @@ python scripts/translate_minimax.py \
 - `force=true`：忽略缓存，强制重翻。
 - `mock=true`：不调用 MiniMax，只复制原文，用来测试拉取、构建和导出链路；mock 结果不会提交回 `main`。
 
+`.github/workflows/deploy-static-site.yml` 只负责验证并部署当前 `site/`。
+当 `site/` 推送到 `main` 时会自动运行；也可以在 GitHub Actions 页面手动运行，用来在补齐
+Cloudflare 配置后立即发布现有静态站。
+
 ## Vercel 部署
 
 仓库包含 `vercel.json`，会让 Vercel 跳过旧 Nextra 依赖安装，并从 `site/` 发布。

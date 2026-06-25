@@ -1,0 +1,51 @@
+name: Deploy Static Site
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "site/**"
+      - "scripts/ensure_site.py"
+      - "scripts/verify_site.py"
+      - "vercel.json"
+      - "wrangler.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: langchainzh-static-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify generated static site
+        run: python scripts/verify_site.py --site-dir site --min-pages 20
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PROJECT_NAME: ${{ vars.CLOUDFLARE_PROJECT_NAME || 'langchainzh' }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Cloudflare Pages direct deploy skipped; set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to enable it."
+            exit 0
+          fi
+          npx --yes wrangler@latest pages deploy site \
+            --project-name "$CLOUDFLARE_PROJECT_NAME" \
+            --branch main
