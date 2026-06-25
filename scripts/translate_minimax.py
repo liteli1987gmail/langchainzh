@@ -27,6 +27,7 @@ from typing import Any
 
 
 TEXT_EXTENSIONS = {".md", ".mdx", ".txt"}
+CACHE_VERSION = 2
 JSON_DISPLAY_KEYS = {
     "anchor",
     "description",
@@ -209,16 +210,73 @@ def default_base_url() -> str:
 
 def load_cache(path: Path) -> dict[str, Any]:
     if not path.exists():
-        return {"version": 1, "files": {}}
+        return {"version": CACHE_VERSION, "files": {}}
     with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+        cache = json.load(handle)
+    cache.setdefault("files", {})
+    cache["version"] = CACHE_VERSION
+    return cache
 
 
 def save_cache(path: Path, cache: dict[str, Any]) -> None:
+    cache["version"] = CACHE_VERSION
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         json.dump(cache, handle, ensure_ascii=False, indent=2, sort_keys=True)
         handle.write("\n")
+
+
+def translation_store_path(cache_path: Path, model: str, source_hash: str) -> Path:
+    key = sha256_text(f"{model}\0{source_hash}")
+    return cache_path.parent / "translations" / key[:2] / f"{key}.txt"
+
+
+def cached_translation_text(
+    cache_path: Path,
+    cache_entry: dict[str, Any] | None,
+    *,
+    source_hash: str,
+    model: str,
+) -> str | None:
+    if not cache_entry:
+        return None
+    if cache_entry.get("sha256") != source_hash or cache_entry.get("model") != model:
+        return None
+
+    inline_text = cache_entry.get("text")
+    if isinstance(inline_text, str):
+        return inline_text
+
+    cache_file = cache_entry.get("cache_file")
+    if not isinstance(cache_file, str):
+        return None
+    root = cache_path.parent.resolve()
+    text_path = (cache_path.parent / cache_file).resolve()
+    if not text_path.is_relative_to(root):
+        raise RuntimeError(f"Refusing unsafe translation cache path: {cache_file}")
+    if not text_path.exists():
+        return None
+    return text_path.read_text(encoding="utf-8")
+
+
+def remember_translation(
+    cache_path: Path,
+    cache: dict[str, Any],
+    rel_path: str,
+    *,
+    source_hash: str,
+    model: str,
+    translated_text: str,
+) -> None:
+    text_path = translation_store_path(cache_path, model, source_hash)
+    text_path.parent.mkdir(parents=True, exist_ok=True)
+    text_path.write_text(translated_text, encoding="utf-8")
+    cache.setdefault("files", {})[rel_path] = {
+        "sha256": source_hash,
+        "model": model,
+        "cache_file": text_path.relative_to(cache_path.parent).as_posix(),
+        "translated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def iter_source_files(source_dir: Path) -> list[Path]:
@@ -392,39 +450,67 @@ def translate_file(
     rel_path: str,
     client: MiniMaxClient,
     cache: dict[str, Any],
+    cache_path: Path,
     *,
     force: bool,
-) -> bool:
+) -> tuple[str, bool]:
     source_text = source_path.read_text(encoding="utf-8")
     source_hash = sha256_text(source_text)
     cache_entry = cache.setdefault("files", {}).get(rel_path)
-    if (
-        not force
-        and target_path.exists()
-        and cache_entry
-        and cache_entry.get("sha256") == source_hash
-        and cache_entry.get("model") == client.config.model
-    ):
-        return False
+    if not force:
+        cached_text = cached_translation_text(
+            cache_path,
+            cache_entry,
+            source_hash=source_hash,
+            model=client.config.model,
+        )
+        if cached_text is not None:
+            print(f"cache: {rel_path}", file=sys.stderr)
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(cached_text, encoding="utf-8")
+            return "cached", False
+
+        if (
+            target_path.exists()
+            and cache_entry
+            and cache_entry.get("sha256") == source_hash
+            and cache_entry.get("model") == client.config.model
+        ):
+            print(f"backfill-cache: {rel_path}", file=sys.stderr)
+            translated = target_path.read_text(encoding="utf-8")
+            remember_translation(
+                cache_path,
+                cache,
+                rel_path,
+                source_hash=source_hash,
+                model=client.config.model,
+                translated_text=translated,
+            )
+            return "cached", True
 
     if source_path.suffix.lower() in TEXT_EXTENSIONS:
+        print(f"translate: {rel_path}", file=sys.stderr)
         translated = translate_markdown(source_text, client, client.config.max_chars)
     elif source_path.name == "docs.json":
+        print(f"translate: {rel_path}", file=sys.stderr)
         translated = translate_json_document(
             source_text, client, client.config.max_chars * 3
         )
     else:
         shutil.copy2(source_path, target_path)
-        return False
+        return "copied", False
 
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_text(translated, encoding="utf-8")
-    cache["files"][rel_path] = {
-        "sha256": source_hash,
-        "model": client.config.model,
-        "translated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    return True
+    remember_translation(
+        cache_path,
+        cache,
+        rel_path,
+        source_hash=source_hash,
+        model=client.config.model,
+        translated_text=translated,
+    )
+    return "translated", True
 
 
 def copy_asset(source_path: Path, target_path: Path) -> None:
@@ -464,6 +550,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-chars", type=int, default=24000)
     parser.add_argument("--retries", type=int, default=3)
     parser.add_argument("--retry-delay", type=float, default=3.0)
+    parser.add_argument(
+        "--save-every",
+        type=int,
+        default=20,
+        help="Persist the translation cache after this many cache updates.",
+    )
     return parser.parse_args()
 
 
@@ -494,8 +586,10 @@ def main() -> int:
     cache = load_cache(args.cache)
     files = iter_source_files(args.source_dir)
     translated_count = 0
+    cached_count = 0
     copied_count = 0
     seen_translatable = 0
+    dirty_cache_updates = 0
 
     for source_path in files:
         rel_path = source_path.relative_to(args.source_dir).as_posix()
@@ -517,17 +611,24 @@ def main() -> int:
             continue
 
         if is_translatable:
-            print(f"translate: {rel_path}", file=sys.stderr)
-            changed = translate_file(
+            action, cache_changed = translate_file(
                 source_path,
                 target_path,
                 rel_path,
                 client,
                 cache,
+                args.cache,
                 force=args.force,
             )
-            if changed:
+            if action == "translated":
                 translated_count += 1
+            elif action == "cached":
+                cached_count += 1
+            if cache_changed:
+                dirty_cache_updates += 1
+                if args.save_every > 0 and dirty_cache_updates >= args.save_every:
+                    save_cache(args.cache, cache)
+                    dirty_cache_updates = 0
         else:
             copy_asset(source_path, target_path)
             copied_count += 1
@@ -536,7 +637,7 @@ def main() -> int:
         save_cache(args.cache, cache)
 
     print(
-        f"done: translated={translated_count} copied_assets={copied_count}",
+        f"done: translated={translated_count} cached={cached_count} copied_assets={copied_count}",
         file=sys.stderr,
     )
     return 0

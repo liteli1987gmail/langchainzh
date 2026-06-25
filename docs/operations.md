@@ -99,5 +99,6 @@ npx wrangler pages deploy site --project-name langchainzh
 ## 注意
 
 - `site/` 是静态导出版，目标是免费部署可用；它不会完全复刻 Mintlify 的所有交互组件。
-- 翻译缓存只保存源文件 hash、模型和时间，不保存 MiniMax key。
+- 翻译缓存保存源文件 hash、模型、时间和可复用的译文文件，不保存 MiniMax key。
+  这样上游只改少量文件时，未变文件会直接从 `.translation-cache/translations/` 写回，不会重复消耗 MiniMax 额度。
 - 当前仓库的旧 Nextra 站点文件暂时保留，等 `site/` 首次生成并确认部署后再删除更稳。
