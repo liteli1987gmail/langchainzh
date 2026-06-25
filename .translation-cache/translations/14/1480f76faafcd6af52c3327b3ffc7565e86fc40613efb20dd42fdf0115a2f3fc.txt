@@ -1,0 +1,282 @@
+---
+title: 概述
+description: 使用 LangChain 代理的实时流构建生成式 UI
+---
+
+为使用 `createAgent` 创建的代理构建丰富的交互式前端。这些模式涵盖从基本消息渲染到高级工作流（如人机交互审批、队列提交、持久流重连和时间旅行调试）的一切。
+
+LangChain 前端 SDK 专为**代理应用**而构建，而非仅用于 token 流式聊天机器人。同一渲染消息的 hook 也会暴露代理的持久线程状态、工具调用生命周期、中断、检查点历史记录和自定义状态值，使您的 UI 能够成为长时间运行的代理工作的控制平面。
+
+<Note>
+这些模式使用 v1 前端 SDK 包。如果您使用的是早期版本，请参阅 [React](https://github.com/langchain-ai/langgraphjs/blob/main/libs/sdk-react/docs/v1-migration.md)、[Vue](https://github.com/langchain-ai/langgraphjs/blob/main/libs/sdk-vue/docs/v1-migration.md)、[Svelte](https://github.com/langchain-ai/langgraphjs/blob/main/libs/sdk-svelte/docs/v1-migration.md) 和 [Angular](https://github.com/langchain-ai/langgraphjs/blob/main/libs/sdk-angular/docs/v1-migration.md) 的迁移指南。
+</Note>
+
+## 架构
+
+每种模式都遵循相同的架构：`createAgent` 后端通过 SDK 流式 API 向前端流式传输状态。
+
+```mermaid
+%%{
+  init: {
+    "fontFamily": "monospace",
+    "flowchart": {
+      "curve": "curve"
+    }
+  }
+}%%
+graph LR
+  FRONTEND["useStream()"]
+  BACKEND["createAgent()"]
+
+  BACKEND --"stream"--> FRONTEND
+  FRONTEND --"submit"--> BACKEND
+
+  classDef blueHighlight fill:#E5F4FF,stroke:#006DDD,color:#030710;
+  classDef greenHighlight fill:#F6FFDB,stroke:#6E8900,color:#2E3900;
+  class FRONTEND blueHighlight;
+  class BACKEND greenHighlight;
+```
+
+在后端，`createAgent` 会生成一个编译后的 LangGraph 图，该图暴露了一个流式 API。在前端，流处理器连接到该 API 并提供响应式状态——消息、工具调用、中断、值和线程元数据——你可以使用任何框架来渲染这些内容。
+
+## 为什么要使用 LangChain 前端 SDK？
+
+大多数 AI UI 库帮助你将流式文本追加到聊天记录中。
+LangChain 的 SDK 暴露了生产级代理所需的高级运行时语义：
+
+| 功能 | 在 UI 中的作用 |
+| --- | --- |
+| **持久化线程** | 重新加载页面、切换设备或重新加入运行，而不会丢失对话状态。 |
+| **类型化代理状态** | 渲染任何状态键，而不仅仅是消息：待办事项、管道输出、引用、沙盒文件、指标或自定义业务对象。 |
+| **工具调用生命周期** | 将待处理、已完成和失败的工具调用显示为专用 UI 卡片，而不是原始 JSON。 |
+| **中断** | 暂停执行以等待人工批准、编辑或补充缺失信息，然后从代理停止的精确位置恢复。 |
+| **检查点** | 从持久化的状态快照构建编辑、重试、分支、审计和时间回溯流程。 |
+| **嵌套执行** | 可视化深度代理、子代理和图节点，而不会将所有内容扁平化为一条难以阅读的流。 |
+| **框架原生响应式** | 在 React、Vue、Svelte 或 Angular 中使用相同的协议，同时保持惯用的 hooks、composables、stores 或 signals。 |
+
+这些原语让你能够设计用户界面，在代理工作进行时检查、引导、暂停、恢复和分叉。
+
+<CodeGroup>
+
+:::python
+```python agent.py
+from langchain import create_agent
+from langgraph.checkpoint.memory import MemorySaver
+
+agent = create_agent(
+    model="openai:gpt-5.5",
+    tools=[get_weather, search_web],
+    checkpointer=MemorySaver(),
+)
+```
+
+```ts types.ts
+export interface GraphState {
+  messages: BaseMessage[];
+}
+```
+
+```tsx Chat.tsx
+import { useStream } from "@langchain/react";
+import type { GraphState } from "./types";
+
+function Chat() {
+  const stream = useStream<GraphState>({
+    apiUrl: "http://localhost:2024",
+    assistantId: "agent",
+  });
+
+  return (
+    <div>
+      {stream.messages.map((msg) => (
+        <Message key={msg.id} message={msg} />
+      ))}
+    </div>
+  );
+}
+```
+
+:::
+
+:::js
+```ts agent.ts
+import { createAgent } from "langchain";
+import { MemorySaver } from "@langchain/langgraph";
+
+const agent = createAgent({
+  model: "openai:gpt-5.5",
+  tools: [getWeather, searchWeb],
+  checkpointer: new MemorySaver(),
+});
+```
+
+```tsx Chat.tsx
+import { useStream } from "@langchain/react";
+import type { agent } from "./agent";
+
+function Chat() {
+  const stream = useStream<typeof agent>({
+    apiUrl: "http://localhost:2024",
+    assistantId: "agent",
+  });
+
+  return (
+    <div>
+      {stream.messages.map((msg) => (
+        <Message key={msg.id} message={msg} />
+      ))}
+    </div>
+  );
+}
+```
+::::
+
+</CodeGroup>
+
+React、Vue 和 Svelte 使用 `useStream`。Angular 使用 `injectStream`：
+
+```ts
+import { useStream } from "@langchain/react";      // React
+import { useStream } from "@langchain/vue";        // Vue
+import { useStream } from "@langchain/svelte";     // Svelte
+import { injectStream } from "@langchain/angular"; // Angular
+```
+
+## 类型推断
+
+向 @[`useStream`]（或在 Angular 中向 @[`injectStream`]）传递类型参数，以获得对 `stream.messages`、`stream.toolCalls`、`stream.interrupt`、`stream.values` 等响应式状态进行类型安全访问的能力。
+
+:::python
+
+定义一个 TypeScript 接口来匹配您的 agent 状态 schema，并将其作为类型参数传递：
+
+```ts
+import type { BaseMessage } from "langchain";
+
+interface AgentState {
+  messages: BaseMessage[];
+}
+
+const stream = useStream<AgentState>({
+  apiUrl: "http://localhost:2024",
+  assistantId: "agent",
+});
+```
+
+使用 `langgraph.json` 中的图形名称作为 `assistantId`。在本指南的模式示例中，将 `typeof myAgent` 替换为您的接口名称（例如 `AgentState`）。
+
+如果您的代理暴露了自定义状态键，请扩展该接口：
+
+```ts
+import type { BaseMessage, Todo } from "langchain";
+
+interface AgentState {
+  messages: BaseMessage[];
+  todos: Todo[];
+}
+```
+
+:::
+
+:::js
+
+导入你的 agent 并将 `typeof myAgent` 作为类型参数传递。TypeScript 会从编译后的图中推断状态模式：
+
+:::
+
+```ts
+import type { myAgent } from "./agent";
+
+const stream = useStream<typeof myAgent>({
+  apiUrl: "http://localhost:2024",
+  assistantId: "agent",
+});
+```
+
+自定义状态键会自动推断，无需手动编写接口。
+
+:::
+
+## 模式
+
+### 渲染消息和输出
+
+<CardGroup cols={3}>
+  <Card title="Markdown 消息" icon="markdown" href="/oss/langchain/frontend/markdown-messages">
+    解析并渲染流式 Markdown，包含正确的格式化和代码高亮。
+  </Card>
+  <Card title="结构化输出" icon="layout-grid" href="/oss/langchain/frontend/structured-output">
+    将类型化的智能体响应渲染为自定义 UI 组件，而非纯文本。
+  </Card>
+  <Card title="推理令牌" icon="brain" href="/oss/langchain/frontend/reasoning-tokens">
+    在可折叠块中显示模型的思考过程。
+  </Card>
+  <Card title="生成式 UI" icon="wand" href="/oss/langchain/frontend/generative-ui">
+    使用 json-render 将自然语言提示词生成的 AI 用户界面渲染出来。
+  </Card>
+</CardGroup>
+
+### 显示智能体操作
+
+<CardGroup cols={3}>
+  <Card title="工具调用" icon="tool" href="/oss/langchain/frontend/tool-calling">
+    以丰富、类型安全的 UI 卡片形式展示工具调用，包含加载状态和错误状态。
+  </Card>
+  <Card title="无头工具" icon="device-desktop" href="/oss/langchain/frontend/headless-tools">
+    在客户端运行浏览器和设备 API，同时在智能体端维护类型化的工具架构。
+  </Card>
+  <Card title="人机交互" icon="user-check" href="/oss/langchain/frontend/human-in-the-loop">
+    通过审批、拒绝和编辑工作流暂停智能体进行人工审核。
+  </Card>
+</CardGroup>
+
+### 管理对话
+
+<CardGroup cols={3}>
+  <Card title="分支对话" icon="git-branch" href="/oss/langchain/frontend/branching-chat">
+    编辑消息、重新生成回复，并在对话分支间切换导航。
+  </Card>
+  <Card title="消息队列" icon="list-check" href="/oss/langchain/frontend/message-queues">
+    在智能体逐个处理消息时进行排队。
+  </Card>
+</CardGroup>
+
+### 高级流式处理
+
+<CardGroup cols={3}>
+  <Card title="加入和重新加入流" icon="plug-connected" href="/oss/langchain/frontend/join-rejoin">
+    断开并重新连接运行中的智能体流，同时保留进度。
+  </Card>
+  <Card title="时间穿梭" icon="clock" href="/oss/langchain/frontend/time-travel">
+    检查、导航，并从对话历史中的任何检查点恢复。
+  </Card>
+</CardGroup>
+
+## 选择前端模式
+
+从应用程序需要解决的体验问题出发：
+
+| 如果用户需要... | 请使用 |
+| --- | --- |
+| 了解智能体正在做什么 | [工具调用](/oss/langchain/frontend/tool-calling) 和 [推理令牌](/oss/langchain/frontend/reasoning-tokens) |
+| 安全地审批敏感操作 | [人机交互](/oss/langchain/frontend/human-in-the-loop) |
+| 在运行活跃时发送工作 | [消息队列](/oss/langchain/frontend/message-queues) |
+| 离开并返回长时间运行的工作 | [加入和重新加入流](/oss/langchain/frontend/join-rejoin) |
+| 从之前的轮次编辑或重试 | [分支对话](/oss/langchain/frontend/branching-chat) 和 [时间穿梭](/oss/langchain/frontend/time-travel) |
+| 将状态呈现为应用程序，而非聊天 | [结构化输出](/oss/langchain/frontend/structured-output)、[生成式 UI](/oss/langchain/frontend/generative-ui) 和 [Deep Agents 前端模式](/oss/deepagents/frontend/overview) |
+
+## 集成
+
+LangChain 的流 API 与 UI 无关。可与任何组件库或生成式 UI 框架配合使用。组件库可以负责表示层，而 LangChain 的 SDK 在底层管理智能体的运行时状态、可恢复性、中断和检查点语义。
+
+<CardGroup cols={3}>
+  <Card title="AI Elements" icon="package" href="/oss/langchain/frontend/integrations/ai-elements">
+    用于 AI 对话的可组合 shadcn/ui 组件：`Conversation`、`Message`、`Tool`、`Reasoning`。
+  </Card>
+  <Card title="assistant-ui" icon="package" href="/oss/langchain/frontend/integrations/assistant-ui">
+    无头 React 框架，内置对话流管理、分支和附件支持。
+  </Card>
+  <Card title="OpenUI" icon="package" href="/oss/langchain/frontend/integrations/openui">
+    使用 openui-lang 组件 DSL 构建数据丰富报告和仪表板的生成式 UI 库。
+  </Card>
+</CardGroup>

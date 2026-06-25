@@ -1,0 +1,274 @@
+---
+title: 分支对话
+description: 通过从检查点分叉来编辑消息并重新生成响应
+---
+
+与 AI 智能体的对话很少是线性的。您可能希望重新措辞问题、重新生成不满意的回复，或在不丢失检查点历史的情况下探索不同的对话路径。分支对话使用 LangGraph 检查点作为分叉点：每次编辑或重新生成都会从所选消息的父检查点提交新的运行。
+
+import { PatternEmbed } from "/snippets/pattern-embed.jsx"
+
+<PatternEmbed pattern="branching-chat" />
+
+import RequiresLanggraphServer from '/snippets/oss/requires-langgraph-server.mdx';
+import UseStreamTypeInference from '/snippets/oss/use-stream-type-inference.mdx';
+
+<RequiresLanggraphServer />
+
+## 什么是分支聊天？
+
+分支聊天将对话视为带检查点的时间线，而不是扁平列表。每条消息都包含指向该消息创建前检查点的元数据。编辑消息或重新生成回复会从该检查点提交新的运行。
+
+主要功能：
+
+- **编辑任意用户消息：**重写之前的提示词并从该点重新运行智能体
+- **重新生成任意 AI 回复：**请求智能体为相同的输入生成不同的答案
+- **查看历史记录：**需要分支时间线时，使用 LangGraph 客户端加载检查点
+
+## 设置流元数据
+
+使用根流发送消息，然后在渲染每条消息的组件中读取每条消息的检查点元数据。该元数据包含要从中分叉的父检查点 ID。
+
+<UseStreamTypeInference />
+
+<CodeGroup>
+
+</CodeGroup>
+```tsx React
+import { useStream } from "@langchain/react";
+
+const AGENT_URL = "http://localhost:2024";
+
+export function Chat() {
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "simple_agent",
+  });
+
+  return (
+    <div>
+      {stream.messages.map((msg) => (
+        <MessageWithForkControls key={msg.id} stream={stream} message={msg} />
+      ))}
+    </div>
+  );
+}
+```
+
+```vue Vue
+<script setup lang="ts">
+import { useStream } from "@langchain/vue";
+
+const AGENT_URL = "http://localhost:2024";
+
+const stream = useStream<typeof myAgent>({
+  apiUrl: AGENT_URL,
+  assistantId: "simple_agent",
+});
+</script>
+
+<template>
+  <div>
+    <MessageWithForkControls
+      v-for="msg in stream.messages.value"
+      :key="msg.id"
+      :stream="stream"
+      :message="msg"
+    />
+  </div>
+</template>
+```
+
+```svelte Svelte
+<script lang="ts">
+  import { useStream } from "@langchain/svelte";
+
+  const AGENT_URL = "http://localhost:2024";
+
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "simple_agent",
+  });
+</script>
+
+<div>
+  {#each stream.messages as msg (msg.id)}
+    <Message
+      message={msg}
+      {stream}
+    />
+  {/each}
+</div>
+```
+
+```ts Angular
+import { Component } from "@angular/core";
+import { injectStream } from "@langchain/angular";
+
+const AGENT_URL = "http://localhost:2024";
+
+@Component({
+  selector: "app-chat",
+  template: `
+    @for (msg of stream.messages(); track msg.id) {
+      <app-message
+        [message]="msg"
+        [stream]="stream"
+      />
+    }
+  `,
+})
+export class ChatComponent {
+  stream = injectStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "simple_agent",
+  });
+}
+```
+</CodeGroup>
+
+## 了解消息元数据
+
+`useMessageMetadata(stream, messageId)` 助手返回 @[MessageMetadata]，用于一条消息。在渲染每条消息的组件中使用它，这样元数据就会限定在该消息 ID 的范围内：
+
+```tsx
+import type { BaseMessage } from "langchain";
+import { useState } from "react";
+import { useMessageMetadata, useStream } from "@langchain/react";
+
+function Chat() {
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "simple_agent",
+  });
+
+  return stream.messages.map((message) => (
+    <MessageWithForkControls
+      key={message.id}
+      stream={stream}
+      message={message}
+    />
+  ));
+}
+
+function MessageWithForkControls({
+  stream,
+  message,
+}: {
+  stream: ReturnType<typeof useStream>;
+  message: BaseMessage;
+}) {
+  const metadata = useMessageMetadata(stream, message.id);
+  const checkpointId = metadata?.parentCheckpointId;
+  const [editedText, setEditedText] = useState(message.text);
+
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!checkpointId) return;
+
+        stream.submit(
+          { messages: [{ type: "human", content: editedText }] },
+          { forkFrom: { checkpointId } }
+        );
+      }}
+    >
+      <textarea
+        value={editedText}
+        onChange={(event) => setEditedText(event.target.value)}
+      />
+      <button disabled={!checkpointId || editedText === message.text}>
+        Submit edited branch
+      </button>
+    </form>
+  );
+}
+```
+
+`parentCheckpointId` 是消息之前的检查点。用它作为编辑和重新生成的分支点。
+
+## 编辑消息
+
+要编辑用户消息并分支对话：
+
+1. 从消息的元数据中获取 `parentCheckpointId`
+2. 使用 `forkFrom: { checkpointId }` 提交编辑后的消息
+3. 代理从该点重新运行
+
+```ts
+function handleEdit(
+  stream: ReturnType<typeof useStream>,
+  originalMsg: HumanMessage,
+  metadata: MessageMetadata | undefined,
+  newText: string
+) {
+  if (!metadata?.parentCheckpointId) return;
+
+  stream.submit(
+    {
+      messages: [{ type: "human", content: newText }],
+    },
+    { forkFrom: { checkpointId: metadata.parentCheckpointId } }
+  );
+}
+```
+
+编辑后：
+
+- 代理从分支点重新运行，使用更新后的消息
+- 原始路径在线程历史中保持可用
+
+## 重新生成回复
+
+在不更改输入的情况下重新生成 AI 回复：
+
+1. 从 AI 消息的元数据中获取 `parent_checkpoint`
+2. 使用空输入提交，并设置 `forkFrom: { checkpointId }`
+3. 代理从该点生成新的回复
+
+```ts
+function handleRegenerate(
+  stream: ReturnType<typeof useStream>,
+  metadata: MessageMetadata | undefined
+) {
+  if (!metadata?.parentCheckpointId) return;
+
+  stream.submit(undefined, {
+    forkFrom: { checkpointId: metadata.parentCheckpointId },
+  });
+}
+```
+
+每次重新生成都会在该位置为 AI 消息创建一条新路径。
+
+<Tip>
+重新生成对于非确定性代理很有用。由于 LLM 输出会随温度变化而变化，重新生成相同的提示词通常会产生有意义的差异响应。
+</Tip>
+
+## 分支在底层是如何工作的
+
+LangGraph 将每个状态转换持久化为一个 **检查点**。当你使用 `forkFrom` 提交时，后端会从该点开始一条新的执行路径，而不是追加到当前对话。结果是一个树状结构：
+
+```
+User: "What is React?"
+  └─ AI: "React is a JavaScript library..." (branch A)
+  └─ AI: "React is a UI framework..." (branch B, regenerated)
+
+User: "Tell me about hooks" (branch A)
+  └─ AI: "Hooks are functions..."
+
+User: "Tell me about JSX" (edited from branch A)
+  └─ AI: "JSX is a syntax extension..."
+```
+
+每条路径都持久化存储在检查点存储中。当您想要构建跨检查点的独立时间线视图时，请使用
+`stream.client.threads.getHistory(threadId)`。
+
+## 最佳实践
+
+- **在消息附近读取元数据**：在渲染消息控件的组件中调用 `useMessageMetadata`。
+- **悬停时显示分叉控件**：编辑和重新生成按钮应在悬停时显示，以保持 UI 整洁。
+- **按需刷新历史记录**：仅在渲染时间线或分叉合并后调用 `client.threads.getHistory()`。
+- **流式传输时禁用控件**：在代理主动流式传输响应时不允许编辑或重新生成。启用这些操作前检查 `stream.isLoading`。
+- **取消时保留编辑文本**：如果用户开始编辑后取消，请将文本区域重置为原始消息内容。
+- **使用深层检查点树进行测试**：频繁编辑和重新生成的用户可能会创建许多路径。确保时间线渲染保持高性能。

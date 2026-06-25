@@ -1,0 +1,1145 @@
+---
+title: 子代理
+description: 了解如何使用子代理来委托工作并保持上下文清晰
+---
+
+import SubagentBasicPy from '/snippets/code-samples/subagent-basic-py.mdx';
+import SubagentBasicJs from '/snippets/code-samples/subagent-basic-js.mdx';
+import SubagentStreamProgressPy from '/snippets/code-samples/subagent-stream-progress-py.mdx';
+import SubagentStreamProgressJs from '/snippets/code-samples/subagent-stream-progress-js.mdx';
+
+深度智能体可以创建子智能体来委托工作。你可以在 `subagents` 参数中指定自定义子智能体。子智能体适用于[上下文隔离](https://www.dbreunig.com/2025/06/26/how-to-fix-your-context.html#context-quarantine)（保持主智能体的上下文干净）和提供专门指令的场景。
+
+本页介绍**同步**子智能体，即监督者阻塞直到子智能体完成。对于长时间运行的任务、并行工作流或需要中途引导和取消的情况，请参阅[异步子智能体](/oss/deepagents/async-subagents)。
+
+```mermaid
+graph TB
+    Main[Main Agent] --> |task tool| Sub[Subagent]
+
+    Sub --> Research[Research]
+    Sub --> Code[Code]
+    Sub --> General[General]
+
+    Research --> |isolated work| Result[Final Result]
+    Code --> |isolated work| Result
+    General --> |isolated work| Result
+
+    Result --> Main
+```
+
+## 为什么使用子代理？
+
+子代理解决了**上下文膨胀问题**。当代理使用产生大量输出的工具（网页搜索、文件读取、数据库查询）时，上下文窗口会迅速被中间结果填满。子代理将这种详细工作隔离——主代理只接收最终结果，而不是生成它的数十个工具调用。
+
+**何时使用子代理：**
+- ✅ 会使主代理上下文混乱的多步骤任务
+- ✅ 需要自定义指令或工具的专业领域
+- ✅ 需要不同模型能力的任务
+- ✅ 当你想让主代理专注于高层协调时
+
+**何时不使用子代理：**
+- ❌ 简单的单步骤任务
+- ❌ 当你需要保持中间上下文时
+- ❌ 当开销超过收益时
+
+## 配置
+
+`subagents` 应该是一个字典列表或 @[`CompiledSubAgent`] 对象。有两种类型：
+
+### 默认子代理
+
+除非你已提供一个同名同步子代理，否则 Deep Agents 会自动添加一个同步的 `general-purpose` 子代理。
+
+`general-purpose` 子代理默认具有文件系统工具，可以用额外的工具/中间件进行自定义。
+
+- 要替换它，请传入你自己的名为 `general-purpose` 的子代理。
+- 要重命名或重新提示自动添加的版本，请在活动的 [harness profile](/oss/deepagents/profiles#harness-profiles) 上设置 `general_purpose_subagent=GeneralPurposeSubagentProfile(...)`。
+- 要禁用它，请参阅下面的[不使用子代理运行](#running-without-subagents)。
+
+### 不使用子代理运行
+
+要在不使用 `task` 工具的情况下运行代理，请执行以下两步：
+
+1. 在活动的 [harness profile](/oss/deepagents/profiles#harness-profiles) 上设置 `general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False)`。
+2. 在 `create_deep_agent` 上通过 `subagents=` 不传入同步子代理。
+
+Deep Agents 仅在至少存在一个同步子代理时才会附加 @[`SubAgentMiddleware`]（以及 `task` 工具）。如果没有默认的也没有调用者提供的子代理，代理将在没有委托的情况下运行。
+
+异步子代理不受影响——它们通过自己的中间件和工具流动，具体说明见[异步子代理](/oss/deepagents/async-subagents)。
+
+<提示>
+    不要在这里使用 `excluded_middleware`——`SubAgentMiddleware` 是必需的框架，列入其中会引发 `ValueError`。`general_purpose_subagent.enabled = False` 参数是支持的路径。
+</提示>
+
+## 自定义子代理
+
+你可以使用 `subagents` 参数定义具有特定工具的专业子代理。例如，作为代码审查员、网络研究员或测试运行器。
+
+对于大多数用例，使用 [SubAgent 字典](#subagent-dictionary-based) 将子代理定义为字典。对于复杂的工作流，请使用 [`CompiledSubAgent`](#compiledsubagent)：
+
+### SubAgent（基于字典）
+
+使用与 @[`SubAgent`] 规范匹配的字典来定义子代理，包含以下字段：
+
+:::python
+
+| 字段 | 类型 | 描述 |
+|-------|------|-------------|
+| `name` | `str` | 必需。子代理的唯一标识符。主代理在调用 `task()` 工具时使用此名称。子代理名称成为 `AIMessage` 和流式传输的元数据，有助于区分不同的代理。 |
+| `description` | `str` | 必需。子代理功能的描述。请具体且以动作为导向。主代理使用此来决定何时委托。 |
+| `system_prompt` | `str` | 必需。子代理的指令。自定义子代理必须定义自己的指令。包括工具使用指导和输出格式要求。<br></br>不从主代理继承。 |
+| `tools` | `list[Callable]` | 可选。子代理可以使用的工具。请保持最小化，只包含所需的内容。<br></br>默认从主代理继承。指定后会完全覆盖继承的工具。 |
+| `model` | `str` \| `BaseChatModel` | 可选。覆盖主代理的模型。省略则使用主代理的模型。<br></br>默认从主代理继承。你可以传递模型标识符字符串（如 `'openai:gpt-5.5'`，使用 `'provider:model'` 格式）或 LangChain 聊天模型对象（`init_chat_model("gpt-5.5")` 或 `ChatOpenAI(model="gpt-5.5")`）。 |
+| `middleware` | `list[Middleware]` | 可选。用于自定义行为、日志记录或速率限制的其他中间件。<br></br>不从主代理继承。追加到[默认子代理堆栈](/oss/deepagents/customization#default-stack-synchronous-subagents)。 |
+| `interrupt_on` | `dict[str, bool \| InterruptOnConfig]` | 可选。为特定工具配置[人在环](/oss/deepagents/human-in-the-loop)。选项：`True`、`False` 或带有 `allowed_decisions` 的 `InterruptOnConfig`。需要检查点器。<br></br>默认从主代理继承。子代理的值覆盖默认值。 |
+| `skills` | `list[str]` | 可选。[技能](/oss/deepagents/skills)源路径。指定后，子代理将从这些目录加载技能（例如 `["/skills/research/", "/skills/web-search/"]`）。这允许子代理拥有与主代理不同的技能集。<br></br>不从主代理继承。只有 general-purpose 子代理会继承主代理的技能。当子代理拥有技能时，它会运行自己独立的 @[`SkillsMiddleware`] 实例。技能状态完全隔离——子代理加载的技能对父代理不可见，反之亦然。 |
+| `response_format` | `ResponseFormat` | 可选。子代理的[结构化输出](/oss/langchain/structured-output)模式。设置后，父代理接收到的子代理结果为 JSON 格式，而非自由文本。接受 Pydantic 模型、`ToolStrategy(...)`、`ProviderStrategy(...)` 或原始模式类型。请参阅[结构化输出](#structured-output)。 |
+| `permissions` | `list[FilesystemPermission]` | 可选。子代理的[文件系统权限规则](/oss/deepagents/permissions)。设置后，**完全替换**父代理的权限。<br></br>默认从主代理继承。 |
+
+:::
+
+:::js
+
+| 字段 | 类型 | 描述 |
+|-------|------|-------------|
+| `name` | `str` | 必需。子代理的唯一标识符。主代理在调用 `task()` 工具时使用此名称。子代理名称成为 `AIMessage` 和流式传输的元数据，有助于区分不同的代理。 |
+| `description` | `str` | 必需。子代理功能的描述。请具体且以动作为导向。主代理使用此来决定何时委托。 |
+| `system_prompt` | `str` | 必需。子代理的指令。自定义子代理必须定义自己的指令。包括工具使用指导和输出格式要求。<br></br>不从主代理继承。 |
+| `tools` | `list[Callable]` | 可选。子代理可以使用的工具。请保持最小化，只包含所需的内容。<br></br>默认从主代理继承。指定后会完全覆盖继承的工具。 |
+| `model` | `str` \| `BaseChatModel` | 可选。覆盖主代理的模型。省略则使用主代理的模型。<br></br>默认从主代理继承。你可以传递模型标识符字符串（如 `'openai:gpt-5.5'`，使用 `'provider:model'` 格式）或 LangChain 聊天模型对象（`await initChatModel("gpt-5.5")` 或 `new ChatOpenAI({ model: "gpt-5.5" })`）。 |
+| `name` | `string` | 必需。子代理的唯一标识符。主代理在调用 `task()` 工具时使用此名称。子代理名称成为 `AIMessage` 和流式传输的元数据，有助于区分不同的代理。 |
+| `description` | `string` | 必需。子代理功能的描述。请具体且以动作为导向。主代理使用此来决定何时委托。 |
+| `systemPrompt ` | `string` | 必需。子代理的指令。自定义子代理必须定义自己的指令。包括工具使用指导和输出格式要求。<br></br>不从主代理继承。 |
+| `tools` | `StructuredTool[]` | 可选。子代理可以使用的工具。请保持最小化，只包含所需的内容。<br></br>默认从主代理继承。指定后会完全覆盖继承的工具。 |
+| `model` | `LanguageModelLike \| string`| 可选。覆盖主代理的模型。省略则使用主代理的模型。<br></br>默认从主代理继承。你可以传递模型标识符字符串（如 `'openai:gpt-5.5'`，使用 `'provider:model'` 格式）或 LangChain 聊天模型对象（`await initChatModel("gpt-5.5")` 或 `new ChatOpenAI({ model: "gpt-5.5" })`）。 |
+| `middleware` | `AgentMiddleware[]` | 可选。用于自定义行为、日志记录或速率限制的其他中间件。<br></br>不从主代理继承。追加到[默认子代理堆栈](/oss/deepagents/customization#default-stack-synchronous-subagents)。 |
+| `interruptOn` | `Record<string, boolean \| InterruptOnConfig>` | 可选。为特定工具配置[人在环](/oss/deepagents/human-in-the-loop)。选项：`True`、`False` 或带有 `allowed_decisions` 的 `InterruptOnConfig`。需要检查点器。<br></br>默认从主代理继承。子代理的值覆盖默认值。 |
+| `skills` | `string[]` | 可选。[技能](/oss/deepagents/skills)源路径。指定后，子代理将从这些目录加载技能（例如 `["/skills/research/", "/skills/web-search/"]`）。这允许子代理拥有与主代理不同的技能集。<br></br>不从主代理继承。只有 general-purpose 子代理会继承主代理的技能。当子代理拥有技能时，它会运行自己独立的 @[`SkillsMiddleware`] 实例。技能状态完全隔离——子代理加载的技能对父代理不可见，反之亦然。 |
+| `responseFormat` | `ResponseFormat` | 可选。子代理的[结构化输出](/oss/langchain/structured-output)模式。设置后，父代理接收到的子代理结果为 JSON 格式，而非自由文本。接受 Zod schema、JSON schema 对象、`toolStrategy(...)` 或 `providerStrategy(...)`。请参阅[结构化输出](#structured-output)。 |
+| `permissions` | `FilesystemPermission[]` | 可选。子代理的[文件系统权限规则](/oss/deepagents/permissions)。设置后，**完全替换**父代理的权限。<br></br>默认从主代理继承。 |
+
+:::
+
+### CompiledSubAgent
+
+对于复杂的工作流，请使用预构建的 LangGraph 图作为 @[`CompiledSubAgent`]：
+
+| 字段 | 类型 | 描述 |
+|-------|------|-------------|
+| `name` | `str` | 必需。子代理的唯一标识符。子代理名称成为 `AIMessage` 和流式传输的元数据，有助于区分不同的代理。 |
+| `description` | `str` | 必需。此子代理的功能。 |
+| `runnable` | `Runnable` | 必需。已编译的 LangGraph 图（必须先调用 `.compile()`）。 |
+
+## 使用 SubAgent
+
+:::python
+<SubagentBasicPy />
+:::
+
+:::js
+<SubagentBasicJs />
+:::
+
+## 使用 CompiledSubAgent
+
+对于更复杂的用例，你可以使用 @[`CompiledSubAgent`] 为自定义子代理提供自定义功能。
+你可以使用 LangChain 的 @[`create_agent`] 创建自定义子代理，或使用[图 API](/oss/langgraph/graph-api)制作自定义 LangGraph 图。
+
+如果你正在创建自定义 LangGraph 图，请确保该图有一个名为 `"messages"` 的[状态键](/oss/langgraph/quickstart#2-define-state)：
+
+:::python
+```python
+from deepagents import create_deep_agent, CompiledSubAgent
+from langchain.agents import create_agent
+
+# Create a custom agent graph
+custom_graph = create_agent(
+    model=your_model,
+    tools=specialized_tools,
+    prompt="You are a specialized agent for data analysis..."
+)
+
+# Use it as a custom subagent
+custom_subagent = CompiledSubAgent(
+    name="data-analyzer",
+    description="Specialized agent for complex data analysis tasks",
+    runnable=custom_graph
+)
+
+subagents = [custom_subagent]
+
+agent = create_deep_agent(
+    model="google_genai:gemini-3.5-flash",
+    tools=[internet_search],
+    system_prompt=research_instructions,
+    subagents=subagents
+)
+```
+:::
+
+:::js
+```typescript
+import { createDeepAgent, CompiledSubAgent } from "deepagents";
+import { createAgent } from "langchain";
+
+// Create a custom agent graph
+const customGraph = createAgent({
+  model: yourModel,
+  tools: specializedTools,
+  prompt: "You are a specialized agent for data analysis...",
+});
+
+// Use it as a custom subagent
+const customSubagent: CompiledSubAgent = {
+  name: "data-analyzer",
+  description: "Specialized agent for complex data analysis tasks",
+  runnable: customGraph,
+};
+
+const subagents = [customSubagent];
+
+const agent = createDeepAgent({
+  model: "google_genai:gemini-3.5-flash",
+  tools: [internetSearch],
+  systemPrompt: researchInstructions,
+  subagents: subagents,
+});
+```
+## 流式传输
+
+Deep Agents 支持从协调器和每个委托的子代理获取流式更新。
+
+:::python
+使用 [`stream_events`](/oss/deepagents/event-streaming) 获取类型化投影——子代理、消息、工具调用和值的独立迭代器——以便独立消费每个部分。
+:::
+
+:::js
+使用 [`streamEvents`](/oss/deepagents/event-streaming) 获取类型化投影——子代理、消息、工具调用和值的独立迭代器——以便独立消费每个部分。
+:::
+
+### 流式传输子代理进度
+
+最简单的方式是迭代 `stream.subagents` 来追踪每个委托任务的启动、运行和完成状态。每个子代理句柄暴露了 `.name`、`.messages`、`.tool_calls` 和 `.output` 属性。
+
+:::python
+
+<SubagentStreamProgressPy />
+
+:::
+
+:::js
+
+<SubagentStreamProgressJs />
+
+:::
+
+### LangSmith 追踪
+
+当你的 deep agent 运行时，由子代理或协调器执行的所有运行都会在其元数据的 `lc_agent_name` 键下包含代理名称——例如 `{'lc_agent_name': 'research-agent'}`。这让你可以在 LangSmith 中按子代理识别和筛选运行。
+
+![LangSmith 示例追踪显示元数据](/oss/images/deepagents/deepagents-langsmith.png)
+
+<Tip>
+在 [LangSmith](https://smith.langchain.com) 中打开运行记录，比较协调器追踪与每个子代理运行。按照[可观测性快速入门](/langsmith/observability-quickstart)进行设置。我们还建议你设置 [LangSmith Engine](/langsmith/engine)，它可以监控你的追踪记录、检测问题并提出修复建议。
+</Tip>
+
+## 在 LangSmith 中按子代理筛选
+
+由于每个子代理的 `name` 都会写入其产生的每个运行的 `lc_agent_name` 元数据键，因此你可以使用 LangSmith 的元数据筛选功能来隔离特定子代理的所有运行——这对于调试、监控或随时间比较子代理行为非常有用。
+
+### 在 LangSmith UI 中筛选
+
+1. 在 [LangSmith](https://smith.langchain.com) 中打开你的追踪项目。
+2. 在追踪项目页面切换到 **Runs** 视图，查看各个跨度。
+3. 点击 **Add filter** 并选择 **Metadata**。
+4. 将 **Key** 设置为 `lc_agent_name`，将 **Value** 设置为子代理名称（例如 `research-agent`）。
+
+这将只显示该子代理产生的运行。你可以将筛选条件保存为命名视图以便重复使用。如需筛选选项的完整参考，请参阅[筛选追踪记录](/langsmith/filter-traces-in-application)。
+
+### 使用 SDK 以编程方式筛选
+
+使用 LangSmith 筛选查询语言中的 `has` 比较器按元数据键值对匹配运行：
+
+```python
+from langsmith import Client
+
+client = Client()
+
+runs = client.list_runs(
+    project_name="<your-project>",
+    filter='has(metadata, \'{"lc_agent_name": "research-agent"}\')',
+)
+
+for run in runs:
+    print(run.name, run.start_time, run.status)
+```
+
+要从 _any_ 命名的子代理获取运行记录（不包括主代理），请筛选出具有 `lc_agent_name` 键的所有运行记录：
+
+```python
+runs = client.list_runs(
+    project_name="<your-project>",
+    filter="has(metadata, 'lc_agent_name')",
+)
+```
+
+有关完整的筛选查询语言参考，请参见[追踪查询语法](/langsmith/trace-query-syntax)。
+
+## 结构化输出
+
+子代理支持[结构化输出](/oss/langchain/structured-output)，因此父代理会收到可预测、可解析的 JSON，而不是自由格式的文本。
+
+:::python
+<Note>
+    子代理的结构化输出需要 `deepagents>=0.5.3`。
+</Note>
+
+在子代理配置中传递 `response_format`。当子代理完成时，其结构化响应会被序列化为 JSON，并作为 `ToolMessage` 内容返回给父代理。该模式接受 @[`create_agent`] 支持的任何内容：Pydantic 模型、`ToolStrategy(...)`、`ProviderStrategy(...)` 或原始模式类型。
+
+```python
+from pydantic import BaseModel, Field
+
+from deepagents import create_deep_agent
+
+
+class ResearchFindings(BaseModel):
+    """Structured findings from a research task."""
+    summary: str = Field(description="Summary of findings")
+    confidence: float = Field(description="Confidence score from 0 to 1")
+    sources: list[str] = Field(description="List of source URLs")
+
+research_subagent = {
+    "name": "researcher",
+    "description": "Researches topics and returns structured findings",
+    "system_prompt": "Research the given topic thoroughly. Return your findings.",
+    "tools": [web_search],
+    "response_format": ResearchFindings,
+}
+
+agent = create_deep_agent(
+    model="claude-sonnet-4-6",
+    subagents=[research_subagent],
+)
+
+result = await agent.ainvoke(
+    {"messages": [{"role": "user", "content": "Research recent advances in quantum computing"}]}
+)
+
+# The parent's ToolMessage contains JSON-serialized structured data:
+# '{"summary": "...", "confidence": 0.87, "sources": ["https://..."]}'
+```
+:::
+
+:::js
+<Note>
+    子代理的结构化输出需要 `deepagents>=1.8.4`。
+</Note>
+
+在子代理配置上传递 `responseFormat`。当子代理完成时，其结构化响应会被序列化为 JSON 并作为 `ToolMessage` 内容返回给父代理。该 schema 接受 `createAgent` 支持的任何内容：Zod schemas、JSON schema 对象、`toolStrategy(...)` 或 `providerStrategy(...)`。
+
+:::
+
+```typescript
+import { z } from "zod";
+import { createDeepAgent } from "deepagents";
+
+const ResearchFindings = z.object({
+  summary: z.string().describe("Summary of findings"),
+  confidence: z.number().describe("Confidence score from 0 to 1"),
+  sources: z.array(z.string()).describe("List of source URLs"),
+});
+
+const researchSubagent = {
+  name: "researcher",
+  description: "Researches topics and returns structured findings",
+  systemPrompt: "Research the given topic thoroughly. Return your findings.",
+  tools: [webSearch],
+  responseFormat: ResearchFindings,
+};
+
+const agent = createDeepAgent({
+  model: "claude-sonnet-4-6",
+  subagents: [researchSubagent],
+});
+
+const result = await agent.invoke({
+  messages: [{ role: "user", content: "Research recent advances in quantum computing" }],
+});
+
+// The parent's ToolMessage contains JSON-serialized structured data:
+// '{"summary": "...", "confidence": 0.87, "sources": ["https://..."]}'
+```
+没有 `response_format` 时，父级会按原样接收子代理的最后一条消息文本。有了它，父级始终会获得符合 schema 的有效 JSON，这在父级需要以编程方式处理结果或将其传递给下游工具时非常有用。
+
+有关 schema 类型和策略（工具调用 vs. 提供商原生）的完整详细信息，请参阅[结构化输出](/oss/langchain/structured-output)。
+
+## 通用子代理
+
+除了用户定义的子代理外，每个深度代理始终可以访问一个 `general-purpose` 子代理。此子代理：
+
+- 使用自己的[应用了 profile 叠加的默认系统提示词](/oss/deepagents/customization#prompt-assembly)
+- 可以访问所有相同的工具
+- 使用相同的模型（除非被覆盖）
+- 从主代理继承技能（当技能被配置时）
+
+### 覆盖通用子代理
+
+:::python
+在 `subagents` 列表中包含一个 `name="general-purpose"` 的子代理即可替换默认子代理。使用此方式可以为通用子代理配置不同的模型、工具或系统提示词：
+
+```python
+from deepagents import create_deep_agent
+
+# Main agent uses Gemini; general-purpose subagent uses GPT
+agent = create_deep_agent(
+    model="google_genai:gemini-3.5-flash",
+    tools=[internet_search],
+    subagents=[
+        {
+            "name": "general-purpose",
+            "description": "General-purpose agent for research and multi-step tasks",
+            "system_prompt": "You are a general-purpose assistant.",
+            "tools": [internet_search],
+            "model": "openai:gpt-5.5",  # Different model for delegated tasks
+        },
+    ],
+)
+```
+:::
+
+:::js
+在您的 `subagents` 列表中添加一个 `name: "general-purpose"` 的子代理来替换默认配置。使用此配置可以为通用子代理设置不同的模型、工具或系统提示词：
+
+</fragment>
+
+```typescript
+import { createDeepAgent } from "deepagents";
+
+// Main agent uses Gemini; general-purpose subagent uses GPT
+const agent = await createDeepAgent({
+  model: "google_genai:gemini-3.5-flash",
+  tools: [internetSearch],
+  subagents: [
+    {
+      name: "general-purpose",
+      description: "General-purpose agent for research and multi-step tasks",
+      systemPrompt: "You are a general-purpose assistant.",
+      tools: [internetSearch],
+      model: "openai:gpt-5.5",  // Different model for delegated tasks
+    },
+  ],
+});
+```
+当您使用通用名称提供子代理时，不会添加默认的通用子代理。您的规格将完全替换它。
+
+要完全移除内置的通用子代理（而不是替换它），请将活动测试环境配置文件中通用子代理的 `enabled` 标志设置为 `False`。
+
+### 何时使用
+
+通用子代理非常适合需要上下文隔离且没有特殊行为的场景。主代理可以将复杂的多步骤任务委托给此子代理，并获得简洁的结果，而不会因中间工具调用而产生冗余。
+
+<Card title="示例">
+    主代理无需进行 10 次网络搜索并用结果填充上下文，而是将任务委托给通用子代理：`task(name="general-purpose", task="研究量子计算趋势")`。子代理在内部执行所有搜索，仅返回摘要。
+</Card>
+
+### 技能继承
+
+使用 `create_deep_agent` 配置[技能](/oss/deepagents/skills)时：
+
+- **通用子代理**：自动继承主代理的技能
+- **自定义子代理**：默认不继承技能——使用 `skills` 参数为其分配自己的技能
+
+<Note>
+    只有配置了技能参数的子代理才会获得 `SkillsMiddleware` 实例——没有 `skills` 参数的自定义子代理不会。当存在技能时，技能状态在两个方向上完全隔离：父级的技能对子级不可见，子级的技能也不会传播回父级。
+</Note>
+
+:::python
+```python
+from deepagents import create_deep_agent
+
+# Research subagent with its own skills
+research_subagent = {
+    "name": "researcher",
+    "description": "Research assistant with specialized skills",
+    "system_prompt": "You are a researcher.",
+    "tools": [web_search],
+    "skills": ["/skills/research/", "/skills/web-search/"],  # Subagent-specific skills
+}
+
+agent = create_deep_agent(
+    model="google_genai:gemini-3.5-flash",
+    skills=["/skills/main/"],  # Main agent and GP subagent get these
+    subagents=[research_subagent],  # Gets only /skills/research/ and /skills/web-search/
+)
+```
+:::
+
+:::js
+```typescript
+import { createDeepAgent, SubAgent } from "deepagents";
+
+// Research subagent with its own skills
+const researchSubagent: SubAgent = {
+  name: "researcher",
+  description: "Research assistant with specialized skills",
+  systemPrompt: "You are a researcher.",
+  tools: [webSearch],
+  skills: ["/skills/research/", "/skills/web-search/"],  // Subagent-specific skills
+};
+
+const agent = createDeepAgent({
+  model: "google_genai:gemini-3.5-flash",
+  skills: ["/skills/main/"],  // Main agent and GP subagent get these
+  subagents: [researchSubagent],  // Gets only /skills/research/ and /skills/web-search/
+});
+```
+## 最佳实践
+
+### 编写清晰的描述
+
+主代理使用描述来决定调用哪个子代理。请具体说明：
+
+✅ **良好：** `"Analyzes financial data and generates investment insights with confidence scores"`
+
+❌ **差：** `"Does finance stuff"`
+
+### 保持系统提示词详细
+
+包含关于如何使用工具和格式化输出的具体指导：
+
+:::python
+```python
+research_subagent = {
+    "name": "research-agent",
+    "description": "Conducts in-depth research using web search and synthesizes findings",
+    "system_prompt": """You are a thorough researcher. Your job is to:
+
+    1. Break down the research question into searchable queries
+    2. Use internet_search to find relevant information
+    3. Synthesize findings into a comprehensive but concise summary
+    4. Cite sources when making claims
+
+    Output format:
+    - Summary (2-3 paragraphs)
+    - Key findings (bullet points)
+    - Sources (with URLs)
+
+    Keep your response under 500 words to maintain clean context.""",
+    "tools": [internet_search],
+}
+```
+:::
+
+:::js
+```typescript
+const researchSubagent = {
+  name: "research-agent",
+  description: "Conducts in-depth research using web search and synthesizes findings",
+  systemPrompt: `You are a thorough researcher. Your job is to:
+
+  1. Break down the research question into searchable queries
+  2. Use internet_search to find relevant information
+  3. Synthesize findings into a comprehensive but concise summary
+  4. Cite sources when making claims
+
+  Output format:
+  - Summary (2-3 paragraphs)
+  - Key findings (bullet points)
+  - Sources (with URLs)
+
+  Keep your response under 500 words to maintain clean context.`,
+  tools: [internetSearch],
+};
+```
+:::
+
+### 最小化工具集
+
+只给子代理提供它们需要的工具。这可以提高专注度和安全性：
+
+:::python
+```python
+# ✅ Good: Focused tool set
+email_agent = {
+    "name": "email-sender",
+    "tools": [send_email, validate_email],  # Only email-related
+}
+
+# ❌ Bad: Too many tools
+email_agent = {
+    "name": "email-sender",
+    "tools": [send_email, web_search, database_query, file_upload],  # Unfocused
+}
+```
+:::
+
+:::js
+```typescript
+// ✅ Good: Focused tool set
+const emailAgent = {
+  name: "email-sender",
+  tools: [sendEmail, validateEmail],  // Only email-related
+};
+
+// ❌ Bad: Too many tools
+const emailAgentBad = {
+  name: "email-sender",
+  tools: [sendEmail, webSearch, databaseQuery, fileUpload],  // Unfocused
+};
+```
+### 按任务选择模型
+
+不同的模型擅长不同的任务：
+
+:::python
+```python
+subagents = [
+    {
+        "name": "contract-reviewer",
+        "description": "Reviews legal documents and contracts",
+        "system_prompt": "You are an expert legal reviewer...",
+        "tools": [read_document, analyze_contract],
+        "model": "google_genai:gemini-3.5-flash",  # Large context for long documents
+    },
+    {
+        "name": "financial-analyst",
+        "description": "Analyzes financial data and market trends",
+        "system_prompt": "You are an expert financial analyst...",
+        "tools": [get_stock_price, analyze_fundamentals],
+        "model": "openai:gpt-5.5",  # Better for numerical analysis
+    },
+]
+```
+:::
+
+:::js
+```typescript
+const subagents = [
+  {
+    name: "contract-reviewer",
+    description: "Reviews legal documents and contracts",
+    systemPrompt: "You are an expert legal reviewer...",
+    tools: [readDocument, analyzeContract],
+    model: "google_genai:gemini-3.5-flash",  // Large context for long documents
+  },
+  {
+    name: "financial-analyst",
+    description: "Analyzes financial data and market trends",
+    systemPrompt: "You are an expert financial analyst...",
+    tools: [getStockPrice, analyzeFundamentals],
+    model: "gpt-5.5",  // Better for numerical analysis
+  },
+];
+```
+:::
+
+### 返回简洁结果
+
+指示子代理返回摘要，而非原始数据：
+
+:::python
+```python
+data_analyst = {
+    "system_prompt": """Analyze the data and return:
+    1. Key insights (3-5 bullet points)
+    2. Overall confidence score
+    3. Recommended next actions
+
+    Do NOT include:
+    - Raw data
+    - Intermediate calculations
+    - Detailed tool outputs
+
+    Keep response under 300 words."""
+}
+```
+:::
+
+:::js
+```typescript
+const dataAnalyst = {
+  systemPrompt: `Analyze the data and return:
+  1. Key insights (3-5 bullet points)
+  2. Overall confidence score
+  3. Recommended next actions
+
+  Do NOT include:
+  - Raw data
+  - Intermediate calculations
+  - Detailed tool outputs
+
+  Keep response under 300 words.`,
+};
+```
+:::
+
+## 常见模式
+
+### 多个专用子代理
+
+为不同领域创建专用子代理：
+
+:::python
+```python
+from deepagents import create_deep_agent
+
+subagents = [
+    {
+        "name": "data-collector",
+        "description": "Gathers raw data from various sources",
+        "system_prompt": "Collect comprehensive data on the topic",
+        "tools": [web_search, api_call, database_query],
+    },
+    {
+        "name": "data-analyzer",
+        "description": "Analyzes collected data for insights",
+        "system_prompt": "Analyze data and extract key insights",
+        "tools": [statistical_analysis],
+    },
+    {
+        "name": "report-writer",
+        "description": "Writes polished reports from analysis",
+        "system_prompt": "Create professional reports from insights",
+        "tools": [format_document],
+    },
+]
+
+agent = create_deep_agent(
+    model="google_genai:gemini-3.5-flash",
+    system_prompt="You coordinate data analysis and reporting. Use subagents for specialized tasks.",
+    subagents=subagents
+)
+```
+:::
+
+:::js
+```typescript
+import { createDeepAgent } from "deepagents";
+
+const subagents = [
+  {
+    name: "data-collector",
+    description: "Gathers raw data from various sources",
+    systemPrompt: "Collect comprehensive data on the topic",
+    tools: [webSearch, apiCall, databaseQuery],
+  },
+  {
+    name: "data-analyzer",
+    description: "Analyzes collected data for insights",
+    systemPrompt: "Analyze data and extract key insights",
+    tools: [statisticalAnalysis],
+  },
+  {
+    name: "report-writer",
+    description: "Writes polished reports from analysis",
+    systemPrompt: "Create professional reports from insights",
+    tools: [formatDocument],
+  },
+];
+
+const agent = createDeepAgent({
+  model: "google_genai:gemini-3.5-flash",
+  systemPrompt: "You coordinate data analysis and reporting. Use subagents for specialized tasks.",
+  subagents: subagents,
+});
+```
+**工作流程：**
+1. 主代理制定高级计划
+2. 将数据收集委托给 data-collector
+3. 将结果传递给 data-analyzer
+4. 将洞察发送给 report-writer
+5. 编译最终输出
+
+每个子代理使用干净的上下文，仅专注于其任务。
+
+## 上下文管理
+
+当你使用[运行时上下文](/oss/langchain/runtime)调用父代理时，该上下文会自动传播到所有子代理。每次子代理运行都会收到你传递给父代理 `invoke` / `ainvoke` 调用的相同运行时上下文。
+
+这意味着在任何子代理内运行的工具都可以访问你提供给父代理的相同上下文值：
+
+:::python
+```python
+from dataclasses import dataclass
+
+from deepagents import create_deep_agent
+from langchain.messages import HumanMessage
+from langchain.tools import tool, ToolRuntime
+
+@dataclass
+class Context:
+    user_id: str
+    session_id: str
+
+@tool
+def get_user_data(query: str, runtime: ToolRuntime[Context]) -> str:
+    """Fetch data for the current user."""
+    user_id = runtime.context.user_id
+    return f"Data for user {user_id}: {query}"
+
+research_subagent = {
+    "name": "researcher",
+    "description": "Conducts research for the current user",
+    "system_prompt": "You are a research assistant.",
+    "tools": [get_user_data],
+}
+
+agent = create_deep_agent(
+    model="google_genai:gemini-3.5-flash",
+    subagents=[research_subagent],
+    context_schema=Context,
+)
+
+# Context flows to the researcher subagent and its tools automatically
+result = await agent.invoke(
+    {"messages": [HumanMessage("Look up my recent activity")]},
+    context=Context(user_id="user-123", session_id="abc"),
+)
+```
+:::
+
+:::js
+```typescript
+import { createDeepAgent } from "deepagents";
+import { tool } from "langchain";
+import type { ToolRuntime } from "@langchain/core/tools";
+import { z } from "zod";
+
+const contextSchema = z.object({
+  userId: z.string(),
+  sessionId: z.string(),
+});
+
+const getUserData = tool(
+  async (input, runtime: ToolRuntime<unknown, typeof contextSchema>) => {
+    const userId = runtime.context?.userId;
+    return `Data for user ${userId}: ${input.query}`;
+  },
+  {
+    name: "get_user_data",
+    description: "Fetch data for the current user",
+    schema: z.object({ query: z.string() }),
+  }
+);
+
+const researchSubagent = {
+  name: "researcher",
+  description: "Conducts research for the current user",
+  systemPrompt: "You are a research assistant.",
+  tools: [getUserData],
+};
+
+const agent = createDeepAgent({
+  model: "google_genai:gemini-3.5-flash",
+  subagents: [researchSubagent],
+  contextSchema,
+});
+
+// Context flows to the researcher subagent and its tools automatically
+const result = await agent.invoke(
+  { messages: [new HumanMessage("Look up my recent activity")] },
+  { context: { userId: "user-123", sessionId: "abc" } },
+);
+```
+:::
+
+### 每个子代理的上下文
+
+所有子代理接收相同的父上下文。要传递特定于某个子代理的配置，请使用 **命名空间键**（用子代理名称作为键的前缀，例如 `researcher:max_depth`）在扁平的 `context` 映射中，**或者** 将这些设置建模为上下文类型上的单独字段：
+
+:::python
+```python
+from dataclasses import dataclass
+
+from langchain.messages import HumanMessage
+from langchain.tools import tool, ToolRuntime
+
+@dataclass
+class Context:
+    user_id: str
+    researcher_max_depth: int | None = None
+    fact_checker_strict_mode: bool | None = None
+
+result = await agent.invoke(
+    {"messages": [HumanMessage("Research this and verify the claims")]},
+    context=Context(
+        user_id="user-123",
+        researcher_max_depth=3,
+        fact_checker_strict_mode=True,
+    ),
+)
+
+@tool
+def verify_claim(claim: str, runtime: ToolRuntime[Context]) -> str:
+    """Verify a factual claim."""
+    strict_mode = runtime.context.fact_checker_strict_mode or False
+    if strict_mode:
+        return strict_verification(claim)
+    return basic_verification(claim)
+```
+:::
+
+:::js
+```typescript
+import { tool } from "langchain";
+import type { ToolRuntime } from "@langchain/core/tools";
+import { z } from "zod";
+
+const contextSchema = z.object({
+  userId: z.string(),
+  researcherMaxDepth: z.number().optional(),
+  factCheckerStrictMode: z.boolean().optional(),
+});
+
+const result = await agent.invoke(
+  { messages: [new HumanMessage("Research this and verify the claims")] },
+  {
+    context: {
+      userId: "user-123",                        // shared by all agents
+      "researcher:maxDepth": 3,                  // only for researcher
+      "fact-checker:strictMode": true,           // only for fact-checker
+    },
+  },
+);
+
+const verifyClaim = tool(
+  async (input, runtime: ToolRuntime<unknown, typeof contextSchema>) => {
+    const strictMode = runtime.context?.factCheckerStrictMode ?? false;
+    if (strictMode) {
+      return strictVerification(input.claim);
+    }
+    return basicVerification(input.claim);
+  },
+  {
+    name: "verify_claim",
+    description: "Verify a factual claim",
+    schema: z.object({ claim: z.string() }),
+  }
+);
+```
+:::
+
+### 识别哪个子代理调用了工具
+
+当同一个工具在父代理和多个子代理之间共享时，您可以使用 `lc_agent_name` 元数据（与[流式传输](#streaming)中使用相同的值）来确定是哪个代理发起了调用：
+
+:::python
+```python
+from langchain.tools import tool, ToolRuntime
+
+@tool
+def shared_lookup(query: str, runtime: ToolRuntime) -> str:
+    """Look up information."""
+    agent_name = runtime.config.get("metadata", {}).get("lc_agent_name")
+    if agent_name == "fact-checker":
+        return strict_lookup(query)
+    return general_lookup(query)
+```
+:::
+
+:::js
+```typescript
+import { tool } from "langchain";
+import type { ToolRuntime } from "@langchain/core/tools";
+
+const sharedLookup = tool(
+  async (input, runtime: ToolRuntime) => {
+    const agentName = runtime.config?.metadata?.lc_agent_name;
+    if (agentName === "fact-checker") {
+      return strictLookup(input.query);
+    }
+    return generalLookup(input.query);
+  },
+  {
+    name: "shared_lookup",
+    description: "Look up information from various sources",
+    schema: z.object({ query: z.string() }),
+  }
+);
+```
+:::
+
+你可以结合使用这两种模式——从 `runtime.context` 读取代理特定设置，并在分支工具行为时从 `runtime.config` 元数据中读取 `lc_agent_name`。
+
+:::python
+```python
+from langchain.tools import tool, ToolRuntime
+
+@tool
+def flexible_search(query: str, runtime: ToolRuntime[Context]) -> str:
+    """Search with agent-specific settings."""
+    agent_name = runtime.config.get("metadata", {}).get("lc_agent_name", "unknown")
+    ctx = runtime.context
+    if agent_name == "researcher":
+        max_results = ctx.researcher_max_depth or 5
+    else:
+        max_results = 5
+    include_raw = False
+
+    return perform_search(query, max_results=max_results, include_raw=include_raw)
+```
+:::
+
+:::js
+```typescript
+const flexibleSearch = tool(
+  async (input, runtime: ToolRuntime<unknown, typeof contextSchema>) => {
+    const agentName = runtime.config?.metadata?.lc_agent_name ?? "unknown";
+    const ctx = runtime.context;
+    const maxResults =
+      agentName === "researcher" ? ctx?.researcherMaxDepth ?? 5 : 5;
+    const includeRaw = false;
+
+    return performSearch(input.query, { maxResults, includeRaw });
+  },
+  {
+    name: "flexible_search",
+    description: "Search with agent-specific settings",
+    schema: z.object({ query: z.string() }),
+  }
+);
+```
+:::
+
+## 故障排除
+
+### 子代理未被调用
+
+**问题**：主代理尝试自己完成任务，而不是委托给子代理。
+
+**解决方案**：
+
+1. **使描述更具体：**
+
+   :::python
+   ```python
+   # ✅ Good
+   {"name": "research-specialist", "description": "Conducts in-depth research on specific topics using web search. Use when you need detailed information that requires multiple searches."}
+
+   # ❌ Bad
+   {"name": "helper", "description": "helps with stuff"}
+   ```
+   :::
+
+   :::js
+   ```typescript
+   // ✅ Good
+   { name: "research-specialist", description: "Conducts in-depth research on specific topics using web search. Use when you need detailed information that requires multiple searches." }
+
+   // ❌ Bad
+   { name: "helper", description: "helps with stuff" }
+   ```
+:::
+2. **指示主代理进行委派：**
+   :::python
+   ```python
+   agent = create_deep_agent(
+       model="google_genai:gemini-3.5-flash",
+       system_prompt="""...your instructions...
+
+       IMPORTANT: For complex tasks, delegate to your subagents using the task() tool.
+       This keeps your context clean and improves results.""",
+       subagents=[...]
+   )
+   ```
+   :::
+
+   :::js
+   ```typescript
+   const agent = createDeepAgent({
+     systemPrompt: `...your instructions...
+
+     IMPORTANT: For complex tasks, delegate to your subagents using the task() tool.
+     This keeps your context clean and improves results.`,
+     subagents: [...]
+   });
+   ```
+:::
+
+### 上下文仍然不断膨胀
+
+**问题**：尽管使用了子代理，上下文仍然会填满。
+
+**解决方案**：
+
+1. **指示子代理返回简洁的结果：**
+
+   :::python
+   ```python
+   system_prompt="""...
+
+   IMPORTANT: Return only the essential summary.
+   Do NOT include raw data, intermediate search results, or detailed tool outputs.
+   Your response should be under 500 words."""
+   ```
+   :::
+
+   :::js
+   ```typescript
+   systemPrompt: `...
+
+   IMPORTANT: Return only the essential summary.
+   Do NOT include raw data, intermediate search results, or detailed tool outputs.
+   Your response should be under 500 words.`
+   ```
+:::
+
+2. **对大型数据使用文件系统：**
+
+   :::python
+   ```python
+   system_prompt="""When you gather large amounts of data:
+   1. Save raw data to /data/raw_results.txt
+   2. Process and analyze the data
+   3. Return only the analysis summary
+
+   This keeps context clean."""
+   ```
+   :::
+
+   :::js
+   ```typescript
+   systemPrompt: `When you gather large amounts of data:
+   1. Save raw data to /data/raw_results.txt
+   2. Process and analyze the data
+   3. Return only the analysis summary
+
+   This keeps context clean.`
+   ```
+:::
+
+### 选择了错误的子代理
+
+**问题**：主代理为任务调用了不合适的子代理。
+
+**解决方案**：在描述中明确区分子代理：
+
+:::python
+```python
+subagents = [
+    {
+        "name": "quick-researcher",
+        "description": "For simple, quick research questions that need 1-2 searches. Use when you need basic facts or definitions.",
+    },
+    {
+        "name": "deep-researcher",
+        "description": "For complex, in-depth research requiring multiple searches, synthesis, and analysis. Use for comprehensive reports.",
+    }
+]
+```
+:::
+
+:::js
+```typescript
+const subagents = [
+  {
+    name: "quick-researcher",
+    description: "For simple, quick research questions that need 1-2 searches. Use when you need basic facts or definitions.",
+  },
+  {
+    name: "deep-researcher",
+    description: "For complex, in-depth research requiring multiple searches, synthesis, and analysis. Use for comprehensive reports.",
+  }
+];
+```
+:::

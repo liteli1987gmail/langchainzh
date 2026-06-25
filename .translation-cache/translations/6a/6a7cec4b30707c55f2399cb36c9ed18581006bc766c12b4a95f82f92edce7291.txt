@@ -1,0 +1,149 @@
+---
+title: "Google Cloud SQL for PostgreSQL 集成"
+description: "使用 LangChain JavaScript 与 Google Cloud SQL for PostgreSQL 文档加载器集成。"
+---
+
+[Cloud SQL](https://cloud.google.com/sql) 是一个完全托管的关系型数据库服务，提供高性能、无缝集成和出色的可扩展性，并提供 PostgreSQL 等数据库引擎。
+
+本指南简要介绍如何使用 Cloud SQL for PostgreSQL 通过 `PostgresLoader` 类加载文档。
+
+## 概述
+
+### 准备工作
+
+要使用此软件包，您需要先完成以下步骤：
+
+1.  [选择或创建 Cloud Platform 项目。](https://developers.google.com/workspace/guides/create-project)
+2.  [为您的项目启用结算功能。](https://cloud.google.com/billing/docs/how-to/modify-project#enable_billing_for_a_project)
+3.  [启用 Cloud SQL Admin API。](https://console.cloud.google.com/flows/enableapi?apiid=sqladmin.googleapis.com)
+4.  [设置身份验证。](https://cloud.google.com/docs/authentication)
+5.  [创建 CloudSQL 实例](https://cloud.google.com/sql/docs/postgres/connect-instance-auth-proxy#create-instance)
+6.  [创建 CloudSQL 数据库](https://cloud.google.com/sql/docs/postgres/create-manage-databases)
+7.  [向数据库添加用户](https://cloud.google.com/sql/docs/postgres/create-manage-users)
+
+### 身份验证
+
+使用 `gcloud auth login` 命令在本地向您的 Google Cloud 账户进行身份验证。
+
+### 设置您的 Google Cloud 项目
+
+设置您的 Google Cloud 项目 ID 以在本地利用 Google Cloud 资源：
+
+```bash
+gcloud config set project YOUR-PROJECT-ID
+```
+
+如果你不知道你的项目 ID，请尝试以下方法：
+
+- 运行 `gcloud config list`。
+- 运行 `gcloud projects list`。
+- 请参阅支持页面：[查找项目 ID](https://support.google.com/googleapi/answer/7014113)。
+
+## 设置 PostgresLoader 实例
+
+要使用 PostgresLoader 类，你需要安装 `@langchain/google-cloud-sql-pg` 包，然后按照以下步骤操作。
+
+<CodeGroup>
+
+</CodeGroup>
+```bash npm
+npm install @langchain/google-cloud-sql-pg @langchain/core
+```
+```bash yarn
+yarn add @langchain/google-cloud-sql-pg @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/google-cloud-sql-pg @langchain/core
+```
+</CodeGroup>
+
+首先，您需要登录您的 Google Cloud 账户并根据您的 Google Cloud 项目设置以下环境变量；这些环境变量将根据您想要配置 PostgresEngine 实例的方式（fromInstance、fromEngine、fromEngineArgs）来定义：
+
+```bash
+PROJECT_ID="your-project-id"
+REGION="your-project-region" // example: "us-central1"
+INSTANCE_NAME="your-instance"
+DB_NAME="your-database-name"
+DB_USER="your-database-user"
+PASSWORD="your-database-password"
+```
+
+### 设置实例
+
+要实例化 PostgresLoader，首先需要通过 PostgresEngine 创建数据库连接。
+
+```typescript
+import {
+  PostgresLoader,
+  PostgresEngine,
+  PostgresEngineArgs,
+  type PostgresLoaderOptions,
+} from "@langchain/google-cloud-sql-pg";
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
+const peArgs: PostgresEngineArgs = {
+  user: process.env.DB_USER ?? "",
+  password: process.env.PASSWORD ?? "",
+};
+
+// PostgresEngine instantiation
+const engine: PostgresEngine = await PostgresEngine.fromInstance(
+  process.env.PROJECT_ID ?? "",
+  process.env.REGION ?? "",
+  process.env.INSTANCE_NAME ?? "",
+  process.env.DB_NAME ?? "",
+  peArgs
+);
+```
+
+### 使用 table_name 参数加载文档
+
+加载器返回一个 Document 列表，从表中获取数据时使用第一列作为 page_content，所有其他列作为 metadata。默认表的第一列将作为 page_content，第二列作为 metadata (JSON)。每一行转换为一个文档。
+
+```js
+const documentLoaderArgs: PostgresLoaderOptions = {
+  tableName: "test_table_custom",
+  contentColumns: ["fruit_name", "variety"],
+  metadataColumns: [
+    "fruit_id",
+    "quantity_in_stock",
+    "price_per_unit",
+    "organic",
+  ],
+  format: "text",
+};
+
+const documentLoaderInstance = await PostgresLoader.initialize(
+  engine,
+  documentLoaderArgs
+);
+```
+
+### 使用 SQL 查询加载文档
+
+query 参数允许用户指定自定义 SQL 查询，其中可以包含筛选条件，用于从数据库加载特定文档。
+
+```js
+const documentLoaderArgs: PostgresLoaderOptions = {
+  query: "SELECT * FROM my_fruit_table",
+  contentColumns: ["fruit_name", "variety"],
+  metadataColumns: [
+    "fruit_id",
+    "quantity_in_stock",
+    "price_per_unit",
+    "organic",
+  ],
+  format: "text",
+};
+
+const documentLoaderInstance = await PostgresLoader.initialize(
+  engine,
+  documentLoaderArgs
+);
+```
+
+### 设置页面内容格式
+
+加载器返回一个 Document 列表，每个文档对应一行，页面内容以指定的字符串格式返回，即 text（空格分隔拼接）、JSON、YAML、CSV 等。JSON 和 YAML 格式包含标题行，而 text 和 CSV 不包含字段标题。

@@ -1,0 +1,192 @@
+---
+title: "AgentMail 工具包"
+description: "使用 LangChain Python 与 AgentMail 工具包集成。"
+---
+
+[AgentMail](https://agentmail.to) 是一个面向 AI 代理的收件箱即 API 平台。`langchain-agentmail` 包提供了 LangChain 工具，用于发送消息、在线程中回复、管理草稿、下载附件和打标签——所有功能都连接到真实的 AgentMail 收件箱。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [JS 支持](https://js.langchain.com) | 版本 |
+|:------|:--------| :---: | :---: | :---: |
+| `AgentMailToolkit` | [`langchain-agentmail`](https://pypi.org/project/langchain-agentmail/) | ❌ | ❌ | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-agentmail?style=flat-square&label=%20) |
+
+### 可用工具
+
+| 工具 | 描述 |
+|:-----|:------------|
+| `AgentMailListInboxesTool` | 列出账户中的收件箱 |
+| `AgentMailCreateInboxTool` | 创建新收件箱 |
+| `AgentMailListThreadsTool` | 列出收件箱中的线程 |
+| `AgentMailGetThreadTool` | 获取线程及其消息 |
+| `AgentMailListMessagesTool` | 列出收件箱中的消息 |
+| `AgentMailGetMessageTool` | 获取单条消息及其正文 |
+| `AgentMailSendTool` | 从收件箱发送新邮件 |
+| `AgentMailReplyTool` | 在现有线程中回复 |
+| `AgentMailUpdateMessageLabelsTool` | 在消息上添加或删除标签 |
+| `AgentMailCreateDraftTool` | 创建草稿（可选 `send_at` 用于定时发送） |
+| `AgentMailUpdateDraftTool` | 修改现有草稿 |
+| `AgentMailSendDraftTool` | 发送已创建的草稿 |
+| `AgentMailDeleteDraftTool` | 永久删除草稿 |
+| `AgentMailGetAttachmentTool` | 获取消息附件的预签名下载链接 |
+
+## 安装
+
+安装包：
+
+```bash
+pip install -qU langchain-agentmail
+```
+
+### 凭据
+
+你需要 AgentMail API 密钥。在 [agentmail.to](https://agentmail.to) 注册以获取密钥。
+
+```python
+import getpass
+import os
+
+if not os.environ.get("AGENTMAIL_API_KEY"):
+    os.environ["AGENTMAIL_API_KEY"] = getpass.getpass("AgentMail API key:\n")
+```
+
+## 实例化
+
+使用 toolkit 一键获取所有工具：
+
+```python
+from langchain_agentmail import AgentMailToolkit
+
+toolkit = AgentMailToolkit.from_api_key()
+tools = toolkit.get_tools()
+```
+
+您也可以直接实例化单个工具：
+
+```python
+from langchain_agentmail import AgentMailSendTool, AgentMailReplyTool
+
+send = AgentMailSendTool()
+reply = AgentMailReplyTool()
+```
+
+## 调用
+
+### 直接使用参数调用
+
+```python
+from langchain_agentmail import AgentMailSendTool
+
+tool = AgentMailSendTool()
+result = tool.invoke({
+    "inbox_id": "ib_abc123",
+    "to": "alice@example.com",
+    "subject": "Hello from LangChain",
+    "text": "This message was sent through langchain-agentmail.",
+})
+print(result)
+```
+
+### 使用 ToolCall 调用
+
+```python
+model_generated_tool_call = {
+    "args": {
+        "inbox_id": "ib_abc123",
+        "to": "alice@example.com",
+        "subject": "Follow up",
+        "text": "Just checking in.",
+    },
+    "id": "1",
+    "name": "agentmail_send_message",
+    "type": "tool_call",
+}
+tool_msg = tool.invoke(model_generated_tool_call)
+print(tool_msg.content)
+```
+
+## 在代理中使用
+
+```python
+from langchain_agentmail import AgentMailToolkit
+from langchain.chat_models import init_chat_model
+from langgraph.prebuilt import create_react_agent
+
+model = init_chat_model(model="claude-sonnet-4-6", model_provider="anthropic")
+
+toolkit = AgentMailToolkit.from_api_key()
+agent = create_react_agent(model, toolkit.get_tools())
+
+response = agent.invoke({
+    "messages": [(
+        "user",
+        "Check my inbox for anything new. Summarize the most recent thread in 2 sentences.",
+    )]
+})
+```
+
+## 草稿
+
+草稿工具让智能体能够迭代编写、修改和发布——这在以下场景中非常有用：当模型想要暂存消息并在发送前确认，或通过 `send_at` 安排发送时间：
+
+```python
+from langchain_agentmail import (
+    AgentMailCreateDraftTool,
+    AgentMailUpdateDraftTool,
+    AgentMailSendDraftTool,
+)
+
+created = AgentMailCreateDraftTool().invoke({
+    "inbox_id": "ib_abc123",
+    "to": "alice@example.com",
+    "subject": "Draft v1",
+    "text": "First pass — will be revised before sending.",
+})
+
+# `created` is a JSON string; parse to get the draft_id
+import json
+draft_id = json.loads(created)["draft_id"]
+
+AgentMailUpdateDraftTool().invoke({
+    "inbox_id": "ib_abc123",
+    "draft_id": draft_id,
+    "subject": "Draft v2 — ready",
+    "text": "Revised body. Sending now.",
+})
+
+AgentMailSendDraftTool().invoke({
+    "inbox_id": "ib_abc123",
+    "draft_id": draft_id,
+})
+```
+
+## 附件
+
+出站附件可以作为 base64 文件内容或公共 URL 传递。入站附件通过预签名下载 URL 获取：
+
+```python
+import base64
+from langchain_agentmail import AgentMailSendTool, SendAttachmentSpec
+
+AgentMailSendTool().invoke({
+    "inbox_id": "ib_abc123",
+    "to": "alice@example.com",
+    "subject": "Report attached",
+    "text": "See the attached file.",
+    "attachments": [
+        SendAttachmentSpec(
+            filename="report.txt",
+            content_type="text/plain",
+            content=base64.b64encode(b"hello").decode(),
+        )
+    ],
+})
+```
+
+---
+
+## API 参考
+
+有关 AgentMail API 的详细文档，请访问 [docs.agentmail.to](https://docs.agentmail.to)。Python 包源代码位于 [github.com/agentmail-to/langchain-agentmail](https://github.com/agentmail-to/langchain-agentmail)。

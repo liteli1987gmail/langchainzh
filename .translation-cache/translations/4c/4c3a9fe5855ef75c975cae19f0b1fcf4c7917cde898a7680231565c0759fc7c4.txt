@@ -1,0 +1,152 @@
+---
+title: 设置在线代码评估器
+sidebarTitle: 代码评估器
+---
+
+[在线评估](/langsmith/evaluation-concepts#online-evaluations) 可对您的生产环境 [追踪](/langsmith/observability-concepts#traces) 提供实时反馈。这对于持续监控应用程序性能非常有用：识别问题、衡量改进并确保长期质量稳定。
+
+代码评估器允许您直接在 LangSmith 中使用 Python 或 JavaScript 编写评估器。通常用于验证数据结构或统计属性。
+
+<Note>当在线评估器对追踪中的任何运行执行时，追踪将自动升级为 [扩展数据保留](/langsmith/usage-and-billing#data-retention-auto-upgrades)。此升级将影响追踪定价，但可确保满足您评估标准的追踪（通常是对分析最有价值的追踪）被保留以供调查。</Note>
+
+## 查看在线评估器
+
+导航至 **追踪** 页面并选择一个追踪项目。要查看该项目的现有在线评估器，请点击 **评估器** 选项卡。
+
+## 配置在线评估器
+
+### 1. 导航至在线评估器
+
+导航至 **追踪** 页面并选择一个追踪项目。点击 **评估器** 选项卡，然后点击 **+ 评估器** 打开 **添加评估器** 面板。在 **从头创建** 下选择 **代码评估器** 来构建新的评估器，或在 **附加现有评估器** 下从您的工作区中选择一个现有代码评估器。
+
+### 2. 为您的评估器命名
+
+为您的评估器提供一个名称。此名称将在代码中引用评估器时使用，也将是此评估器生成的反馈名称。
+
+### 3. 创建筛选条件
+
+例如，您可能希望根据以下条件应用特定评估器：
+
+- [用户留下反馈](/langsmith/attach-user-feedback) 表明响应不满意的运行。
+- 调用特定工具调用的运行。有关更多信息，请参阅 [工具调用筛选](/langsmith/filter-traces-in-application#example-filtering-for-tool-calls)。
+- 与特定元数据匹配的运行（例如，如果您使用 `plan_type` 记录追踪，并且只想对来自企业客户的追踪运行评估）。有关更多信息，请参阅 [向追踪添加元数据](/langsmith/add-metadata-tags)。
+
+评估器上的筛选条件与在项目中筛选追踪时的工作方式相同。有关筛选条件的更多信息，请参阅 [筛选追踪](/langsmith/filter-traces-in-application)。
+
+<Tip>
+在创建评估器的筛选条件时，检查运行通常很有帮助。打开评估器配置面板后，您可以检查运行并对其应用筛选条件。您对运行表应用的任何筛选条件都会自动反映在评估器的筛选条件中。
+</Tip>
+
+### 4. (可选) 配置采样率
+
+配置采样率以控制触发自动化操作的筛选运行的百分比。例如，为了控制成本，您可能希望设置筛选条件仅将评估器应用于 10% 的追踪。为此，您可以将采样率设置为 0.1。
+
+### 5. (可选) 将规则应用于过去的运行
+
+通过切换 **应用于过去的运行** 并输入"回填开始日期"将规则应用于过去的运行。这只能在规则创建时完成。注意：回填作为后台作业处理，因此您不会立即看到结果。
+
+要跟踪回填进度，您可以导航到追踪项目中的 **评估器** 选项卡，然后点击您创建的评估器的日志按钮来查看评估器日志。在线评估器日志类似于 [自动化规则日志](/langsmith/rules#view-logs-for-your-automations)。
+
+- 添加评估器名称
+- (可选) 筛选您希望对其应用评估器的运行或配置采样率。
+- 选择 **应用评估器**
+
+## 编写您的评估函数
+
+<Note>
+**代码评估器限制。**
+
+**允许的库**：您可以导入所有标准库函数以及以下公共包：
+
+
+</fragment>
+
+```
+numpy (v2.2.2): "numpy"
+pandas (v1.5.2): "pandas"
+jsonschema (v4.21.1): "jsonschema"
+scipy (v1.14.1): "scipy"
+sklearn (v1.26.4): "scikit-learn"
+```
+
+**网络访问**：您无法从代码评估器访问互联网。
+</Note>
+
+代码评估器必须以内联方式编写。我们建议在 LangSmith 中设置代码评估器之前先在本地进行测试。
+
+在用户界面中，您将找到一个面板，让您以内联方式编写代码，并附带一些起始代码。
+
+代码评估器接受一个参数：
+
+- 一个 `Run`（[参考](/langsmith/run-data-format)）。这表示要评估的采样运行。
+
+它们返回一个单一值：
+
+- 反馈(们)字典：一个字典，其键是您想要返回的反馈类型，值是您给该反馈键的分数。例如，`{"correctness": 1, "silliness": 0}` 会在该运行上创建两种类型的反馈，一种表示它是正确的，另一种表示它不愚蠢。
+
+以下示例展示了一个函数，用于验证实验中的每个运行是否具有已知的 JSON 字段：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+import json
+
+def perform_eval(run):
+  output_to_validate = run['outputs']
+  is_valid_json = 0
+
+  # assert you can serialize/deserialize as json
+  try:
+    json.loads(json.dumps(output_to_validate))
+  except Exception as e:
+    return { "formatted": False }
+
+  # assert output facts exist
+  if "facts" not in output_to_validate:
+    return { "formatted": False }
+
+  # assert required fields exist
+  if "years_mentioned" not in output_to_validate["facts"]:
+    return { "formatted": False }
+
+  return {"formatted": True}
+```
+
+```javascript JavaScript
+function perform_eval(run) {
+    const outputToValidate = run.outputs;
+
+    // Assert you can serialize/deserialize as json
+    try {
+        JSON.stringify(outputToValidate);
+        JSON.parse(JSON.stringify(outputToValidate));
+    } catch (e) {
+        return { "formatted": false };
+    }
+
+    // Assert output facts exist
+    if (!("facts" in outputToValidate)) {
+        return { "formatted": false };
+    }
+
+    // Assert required fields exist
+    if (!outputToValidate["facts"].hasOwnProperty("years_mentioned")) {
+        return { "formatted": false };
+    }
+
+    return { "formatted": true };
+}
+```
+
+</CodeGroup>
+
+## 测试并保存您的评估函数
+
+在保存之前，您可以通过点击 **Test Code** 来测试您的评估函数在最近一次运行上的表现，以确保您的代码能正常执行。
+
+点击 **Save** 后，您的在线评估器将对新采样的运行（或如果您选择了回填选项，也包括回填的运行）进行评估。
+
+如果您更喜欢视频教程，请观看 LangSmith 入门课程中的[在线评估视频](https://academy.langchain.com/pages/intro-to-langsmith-preview)。

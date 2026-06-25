@@ -1,0 +1,91 @@
+---
+title: 追踪、引擎和访问控制
+description: 了解网关追踪的位置、策略违规如何在 LangSmith 引擎中呈现，以及谁可以查看和配置什么。
+hidden: true
+---
+
+<Note>
+**私人测试版：** LLM Gateway 处于私人[测试阶段](/langsmith/release-stages)。[注册候补名单](https://www.langchain.com/langsmith-llm-gateway-waitlist)以获取访问权限。
+</Note>
+
+通过 LLM Gateway 的每次调用都会被追踪到 LangSmith，策略违规会在 [LangSmith 引擎](/langsmith/engine) 中呈现以供分类处理。
+
+## 网关追踪显示位置
+
+默认情况下，所有网关代理的调用都会被追踪到与调用者 API 密钥关联的[工作区](/langsmith/administration-overview#workspaces)中名为 `gateway` 的项目，以及一个使用 `gateway-<short_api_key>-<api_key_id>` 方案的 API 密钥专用项目。
+
+使用 [RBAC](/langsmith/rbac) 和 [ABAC](/langsmith/abac) 控制对这些追踪项目的访问。
+
+### 追踪元数据
+
+网关代理的调用可以通过它们落入的项目及其跨度附加的元数据来区分：
+
+- **网关项目：** 所有网关流量都写入每个工作区的一个中央网关项目，以及一个固定的 LangSmith 项目，名为 `gateway`，每个 API 密钥的副本位于 `gateway-<short_api_key>-<api_key_id>` 以实现 UI 隔离。按项目过滤（或通过存在 `langsmith.metadata.gateway.*` 跨度属性）来找到网关代理的调用。
+- **策略评估结果：** 每个网关跨度都记录了评估了哪些策略及其结果，通过 `langsmith.metadata.gateway.policy.matched_ids/_names`、`passed_ids/_names` 和 `violated_ids/_names`，这样通过和阻止都会被捕获。
+- **防护规则匹配：** 当重写策略应用时，防护管道会发出一个 `rule_id → count` 映射，作为 `policy.matched_rules`、`passed_rules` 和 `violated_rules` 附加到跨度上。这些是规则 ID，不是 PII 或密钥类别标签。
+- **成本数据：** 令牌计数和成本是在线计算的，并馈送到相同的消费累加器，支出上限策略会对其进行强制执行。
+
+## LangSmith 引擎集成
+
+当治理策略触发时（例如当支出限额被达到、PII 被检测并重写，或密钥被捕获），该事件会作为元数据记录在追踪上。这些策略违规会在 LangSmith 引擎中作为问题呈现。
+
+从引擎问题中，您可以：
+
+1. **查看违规情况：** 哪个策略触发了，什么被阻止或重写了。
+2. **点击进入追踪：** 查看策略触发时代理正在执行的确切操作。
+3. **诊断根本原因：** 是重试循环消耗预算、用户将凭证粘贴到提示中，还是合法工作负载超出其上限等。
+4. **采取行动：** 更新代理的配置、调整策略，或升级问题。
+
+## 审计日志
+
+网关记录两类事件：
+
+| 类别 | 记录内容 |
+| --- | --- |
+| **管理变更** | 策略的创建、修改和删除。与网关访问相关的角色和权限变更。 |
+| **网关调用** | 每个代理的调用，包括调用者身份和匹配的策略 ID。 |
+
+[审计日志](/langsmith/audit-logs)可供[企业计划](/langsmith/pricing-plans)上的组织管理员使用。
+
+## 权限
+
+### 所需权限
+
+| 操作 | 所需权限 | 默认拥有者 |
+| --- | --- | --- |
+| 通过网关发起调用 | `gateway:invoke` + `workspaces:read` | 仅限 `WORKSPACE_ADMIN` |
+| 创建、编辑或删除策略 | `organization:manage` | 组织管理员 |
+| 查看网关追踪 | `projects:read` + `runs:read` | `WORKSPACE_ADMIN`、`WORKSPACE_USER`、`WORKSPACE_VIEWER` |
+| 查看审计日志 | `organization:manage` | 组织管理员 |
+
+内置的 `WORKSPACE_USER` 和 `WORKSPACE_VIEWER` 角色**不包含** `gateway:invoke`，且无法编辑。如需授予网关访问权限而不授予完整的工作区管理员权限，请创建包含 `gateway:invoke` 和 `workspaces:read` 的自定义工作区角色（需要启用 RBAC 的计划）。有关说明，请参阅[管理员设置](/langsmith/llm-gateway-admin-setup)。
+
+### API 密钥范围
+
+请始终使用工作区范围的 API 密钥用于网关。组织范围的密钥不支持用于调用网关。
+
+### 集中化提供商凭证
+
+网关在 LangSmith 工作区密钥中集中管理提供商 API 密钥。个人开发人员和代理使用其 [LangSmith API 密钥](/langsmith/create-account-api-key) 进行身份验证，无需直接访问提供商密钥。
+
+这意味着：
+
+- **凭证控制：** 提供商密钥集中在一处，由管理员管理。撤销访问权限意味着撤销 LangSmith API 密钥，而不是查找分散的提供商密钥副本。
+- **策略执行：** 因为所有调用都通过网关流动，策略会被一致地强制执行。只要开发人员没有单独访问提供商密钥，就无法通过直接调用提供商来绕过成本限制。
+
+为了使其按预期工作，请不要在授予网关访问权限的同时向开发人员分发提供商 API 密钥。网关默认集中化管理提供商凭证。直通模式也存在用于基于 OAuth 的流程（如 Claude Code Max）——如果您的组织想要允许或限制它，请联系我们。
+
+### 限制追踪可见性
+
+网关追踪作为运行写入工作区项目，并遵循 LangSmith 的标准工作区成员模型。任何在工作区拥有 `runs:read`（以及 `projects:read` 以查看项目本身）的人都可以查看该工作区网关项目中的追踪。内置角色 `WORKSPACE_ADMIN`、`WORKSPACE_USER` 和 `WORKSPACE_VIEWER` 默认都包含这两个权限。
+
+如果您需要限制谁可以查看网关追踪，您有两个选项：
+
+- **独立工作区**（适用于任何[计划](/langsmith/pricing-plans)）：创建一个成员受限的工作区，另一个用于拥有更广泛成员的开发人员编码代理。每个工作区都有自己的提供商密钥和追踪项目。
+- **项目级访问策略**（需要[企业计划](/langsmith/pricing-plans)）：编写一个 ABAC 策略，将网关项目上的 `projects:read` 和 `runs:read` 限制到特定用户或角色。
+
+## 下一步
+
+- [管理员设置](/langsmith/llm-gateway-admin-setup)：配置所有这些内容的分步指南。
+- [支出策略](/langsmith/llm-gateway-spend-policies)：将成本限制附加到 API 密钥和用户。
+- [PII 和密钥重写](/langsmith/llm-gateway-redaction)：配置数据保护策略。

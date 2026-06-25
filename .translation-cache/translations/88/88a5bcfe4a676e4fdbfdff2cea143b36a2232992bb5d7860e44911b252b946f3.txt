@@ -1,0 +1,91 @@
+---
+title: 自托管 LangSmith Engine
+sidebarTitle: 自托管
+description: 介绍 LangSmith Engine 如何在自托管部署中运行、如何通过私有链接访问托管推理，以及这对您的数据意味着什么。
+---
+
+<Note>
+  自托管 Engine 即将推出！
+</Note>
+
+LangSmith Engine 是 LangSmith 内的一个代理，用于监控您的生产轨迹、将它们聚类为问题、根据源代码诊断每个问题、提出修复建议作为 PR，并识别添加到数据集的真值评估。关于产品概述，请参阅 [Engine](/langsmith/engine-overview)。
+
+本页面介绍 Engine 如何在自托管部署中运行、如何访问托管推理，以及这对您的数据意味着什么。
+
+{/* TODO(author): 添加版本添加的 <Note>，说明支持自托管 Engine 托管推理的最低 LangSmith / Helm chart 版本。这是新功能文档风格指南的要求。 */}
+
+Engine 使用三种数据：
+
+- **代码**（可选）：您的代理源代码，Engine 读取这些代码来诊断问题和提出修复建议。
+- **轨迹：** 来自您的代理的运行时数据，可能包含用户消息、工具输出和 PII。
+- **模型：** Engine 进行诊断、生成修复和编写评估器时所做的 LLM 调用。
+
+在自托管部署中，Engine 的编排作为 LangSmith 的一部分在您的 VPC 内运行：读取轨迹、读取代码，并运行其检测、修复和验证循环。它调用的模型是例外。Engine 不是在本地运行模型，而是通过私有网络连接访问 LangChain 管理的零数据保留 (ZDR) 推理服务。轨迹是敏感数据类型，下面的架构确保轨迹数据保留在您云服务提供商 (CSP) 内的私有网络上。
+
+## 推理工作原理
+
+Engine 的推理通过 LangChain 管理的服务 LangSmith Intelligence 提供。该服务与 LangSmith 完全隔离，不追踪、存储或持久化任何客户数据。
+
+流程如下：
+
+- 您的自托管部署通过私有链接（AWS 和 Azure 上的 PrivateLink，GCP 上的 Private Service Connect）连接到 LangSmith Intelligence。
+- LangSmith Intelligence 在您的云提供商环境内（Bedrock、Vertex 或 Foundry）运行模型，因此没有数据离开您的 CSP。
+- 该服务仅记录计费所需的请求元数据，以及保持服务可靠所需的遥测数据。
+
+{/* TODO(author): 为了安全审查，准确列举"请求元数据"包含的内容（例如令牌计数、时间戳、模型 ID），并确认没有记录任何请求有效载荷。不要使用模糊的措辞。 */}
+
+每次推理请求都携带模型推理所需的轨迹内容、代码和中间输出。请求由在您的云提供商内运行的模型处理，永远不会被存储。您的数据没有任何副本会在您的 CSP 外部被持久化。
+
+{/* TODO(author): 说明数据驻留：模型在哪个/哪些区域运行、客户是否选择区域、是否会发生跨区域推理。 */}
+
+{/* TODO(author): 记录故障模式：如果到 LangSmith Intelligence 的私有链接不可用（降级、排队或故障关闭），检测-修复-验证循环会发生什么。 */}
+
+{/* TODO(author): 链接或列出每个平台上提供的具体模型，以便客户可以对照批准模型策略进行验证。 */}
+
+### AWS
+
+<Frame caption="AWS：通过 PrivateLink 连接到 LangSmith Intelligence，模型由 Bedrock 提供服务">
+  <img
+    src="/langsmith/images/engine-self-hosted-aws.png"
+    alt="架构图展示在 AWS 上的自托管 LangSmith 部署通过 PrivateLink 连接到 LangSmith Intelligence，推理由客户账户内的 Bedrock 提供服务"
+  />
+</Frame>
+
+### GCP
+
+<Frame caption="GCP：通过 Private Service Connect 连接到 LangSmith Intelligence，模型由 Vertex 提供服务">
+  <img
+    src="/langsmith/images/engine-self-hosted-gcp.png"
+    alt="架构图展示在 GCP 上的自托管 LangSmith 部署通过 Private Service Connect 连接到 LangSmith Intelligence，推理由客户项目内的 Vertex 提供服务"
+  />
+</Frame>
+
+### Azure
+
+<Frame caption="Azure：通过 PrivateLink 连接到 LangSmith Intelligence，模型由 Foundry 提供服务">
+  <img
+    src="/langsmith/images/engine-self-hosted-azure.png"
+    alt="架构图展示在 Azure 上的自托管 LangSmith 部署通过 PrivateLink 连接到 LangSmith Intelligence，推理由客户环境内的 Foundry 提供服务"
+  />
+</Frame>
+
+## 模型选择与质量
+
+模型选择是 Engine 高效运行的关键因素。Engine 在每个工作步骤使用不同的模型，并进行不同的调优：聚类问题、根据代码诊断根本原因、生成修复方案，以及编写验证修复的评估器。LangChain 为质量和令牌效率调优这些模型，并随着更好的模型发布而升级它们。
+
+托管推理使这成为可能。由于 Engine 始终运行 LangChain 为每个步骤调优的模型，行为保持一致，并随着这些模型的升级而改进。自带密钥的设置会将 Engine 绑定到您配置的模型，因此调优和令牌效率会因请求而异。
+
+## 这对您的数据意味着什么
+
+- **零数据保留 (ZDR)：** 推理服务不存储客户数据，LangChain 仅使用支持 ZDR 的模型。
+- **不用于训练：** LangChain 不会使用您的数据进行训练。
+- **仅限私有网络：** 所有数据传输都通过私有链接进行，绝不通过公共互联网。
+- **CSP 内：** 模型在您的 CSP 内运行，因此数据永远不会离开它。
+
+{/* TODO(author): 链接或列出 ZDR 和不训练声明的合同或合规支持（DPA、安全页面或 SOC 2 报告），以便安全团队可以验证而不是仅凭声明接受。 */}
+
+## 另请参阅
+
+- [Engine](/langsmith/engine-overview)
+- [配置 Engine](/langsmith/engine)
+- [Engine Webhook](/langsmith/engine-webhooks)

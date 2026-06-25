@@ -18,7 +18,8 @@
 3. 将翻译后的 `src/` 放回官方仓库快照。
 4. 运行官方 pipeline 生成 `build/`。
 5. 将 `build/` 转成可直接部署的静态站点 `site/`。
-6. GitHub Actions 提交 `site/`，Vercel 或 Cloudflare Pages 通过 Git 集成自动部署。
+6. 压缩超过免费静态托管单文件限制的 GIF 资源。
+7. GitHub Actions 提交 `site/`，Vercel 或 Cloudflare Pages 通过 Git 集成自动部署。
 
 ## 需要配置的密钥
 
@@ -57,6 +58,13 @@ python -m pip install -r requirements-docs.txt
 python scripts/sync_langchain_docs.py --force
 ```
 
+更稳的完整同步参数：
+
+```bash
+TRANSLATION_WORKERS=2 TRANSLATION_MAX_CHARS=6000 \
+python scripts/sync_langchain_docs.py --force
+```
+
 本机首次全量翻译时，MiniMax endpoint 偶尔会返回 400/401/429 或 SSL EOF。建议使用较低并发和失败日志续跑：
 
 ```bash
@@ -90,6 +98,8 @@ python scripts/translate_minimax.py \
 第一轮 Actions 成功后，`site/` 会从占位页替换成完整中文文档。
 `package.json` 的 `build` 脚本也只会确保 `site/` 存在，不再运行旧 Next/Nextra 构建。
 
+注意：完整静态导出版较大，Vercel Hobby 静态上传额度可能不够；Vercel Pro 或 Cloudflare Pages 更合适。
+
 在 Vercel 项目中设置：
 
 - Framework Preset: `Other`
@@ -103,6 +113,9 @@ python scripts/translate_minimax.py \
 - Production branch: `main`
 - Build command: `python3 scripts/ensure_site.py`
 - Build output directory: `site`
+
+Cloudflare Pages 免费计划有单文件大小限制。本仓库会在同步导出后运行
+`scripts/optimize_site_assets.py`，自动压缩超限 GIF，并保持原路径不变。
 
 如果使用 Wrangler 直传，可在 `site/` 生成后执行：
 

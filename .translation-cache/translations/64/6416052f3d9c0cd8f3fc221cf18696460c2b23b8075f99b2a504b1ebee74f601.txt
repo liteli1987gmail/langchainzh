@@ -1,0 +1,652 @@
+---
+title: "Split HTML - 文本分割器集成"
+description: "使用 LangChain Python 与 Split HTML 文本分割器集成。"
+---
+
+将 HTML 文档分割成易于管理的块对于各种文本处理任务（如自然语言处理、搜索索引等）至关重要。在本指南中，我们将探索 LangChain 提供的三种不同的文本分割器，您可以使用它们来有效地分割 HTML 内容：
+
+- [**HTMLHeaderTextSplitter**](#using-htmlheadertextsplitter)
+- [**HTMLSectionSplitter**](#using-htmlsectionsplitter)
+- [**HTMLSemanticPreservingSplitter**](#using-htmlsemanticpreservingsplitter)
+
+这些分割器各自具有独特的功能和使用场景。本指南将帮助您了解它们之间的差异、为什么您可能选择其中一个而不是另一个，以及如何有效地使用它们。
+
+```
+pip install -qU langchain-text-splitters
+```
+
+## 分割器概述
+
+### [HTMLHeaderTextSplitter](#using-htmlheadertextsplitter)
+
+<Info>
+**当您想根据标题保留文档的层级结构时，此功能非常有用。**
+</Info>
+
+**描述**：基于标题标签（如 `<h1>`、`<h2>`、`<h3>` 等）对 HTML 文本进行分割，并为每个与给定块相关的标题添加元数据。
+
+**功能**：
+- 在 HTML 元素级别分割文本。
+- 保留文档结构中编码的上下文丰富信息。
+- 可以按元素返回块，也可以合并具有相同元数据的元素。
+
+___
+
+### [HTMLSectionSplitter](#using-htmlsectionsplitter)
+
+<Info>
+当您想将 HTML 文档分割成更大的区块（如 `<section>`、`<div>` 或自定义区块）时，此功能非常有用。
+</Info>
+
+**描述**：类似于 HTMLHeaderTextSplitter，但专注于基于指定标签将 HTML 分割成区块。
+
+**功能**：
+- 使用 XSLT 转换来检测和分割区块。
+- 内部使用 `RecursiveCharacterTextSplitter` 处理大区块。
+- 考虑字体大小来确定区块。
+___
+
+### [HTMLSemanticPreservingSplitter](#using-htmlsemanticpreservingsplitter)
+
+<Info>
+**当您需要确保结构化元素不被分割到不同的块中、保留上下文相关性时，此功能是理想选择。**
+</Info>
+
+**描述**：将 HTML 内容分割成可管理的块，同时保留表格、列表和其他 HTML 组件等重要元素的语义结构。
+
+**功能**：
+- 保留表格、列表和其他指定的 HTML 元素。
+- 允许为特定 HTML 标签添加自定义处理器。
+- 确保文档的语义含义得以保持。
+- 内置标准化和停用词移除功能
+
+___
+
+### 选择合适的分割器
+
+- **当出现以下情况时使用 `HTMLHeaderTextSplitter`**：您需要基于标题层级分割 HTML 文档并维护有关标题的元数据。
+- **当出现以下情况时使用 `HTMLSectionSplitter`**：您需要将文档分割成更大、更通用的区块，可能基于自定义标签或字体大小。
+- **当出现以下情况时使用 `HTMLSemanticPreservingSplitter`**：您需要在分割文档时保留表格和列表等语义元素，确保它们不被分割且上下文得以保持。
+
+| 功能 | `HTMLHeaderTextSplitter` | `HTMLSectionSplitter` | `HTMLSemanticPreservingSplitter` |
+|--------------------------------------------|------------------------|---------------------|-------------------------------|
+| 基于标题分割 | 是 | 是 | 是 |
+| 保留语义元素（表格、列表） | 否 | 否 | 是 |
+| 为标题添加元数据 | 是 | 是 | 是 |
+| HTML 标签自定义处理器 | 否 | 否 | 是 |
+| 保留媒体（图片、视频） | 否 | 否 | 是 |
+| 考虑字体大小 | 否 | 是 | 否 |
+| 使用 XSLT 转换 | 否 | 是 | 否 |
+
+## 示例 HTML 文档
+
+让我们以下面的 HTML 文档作为示例：
+
+
+```python
+html_string = """
+<!DOCTYPE html>
+  <html lang='en'>
+  <head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Fancy Example HTML Page</title>
+  </head>
+  <body>
+    <h1>Main Title</h1>
+    <p>This is an introductory paragraph with some basic content.</p>
+
+    <h2>Section 1: Introduction</h2>
+    <p>This section introduces the topic. Below is a list:</p>
+    <ul>
+      <li>First item</li>
+      <li>Second item</li>
+      <li>Third item with <strong>bold text</strong> and <a href='#'>a link</a></li>
+    </ul>
+
+    <h3>Subsection 1.1: Details</h3>
+    <p>This subsection provides additional details. Here's a table:</p>
+    <table border='1'>
+      <thead>
+        <tr>
+          <th>Header 1</th>
+          <th>Header 2</th>
+          <th>Header 3</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Row 1, Cell 1</td>
+          <td>Row 1, Cell 2</td>
+          <td>Row 1, Cell 3</td>
+        </tr>
+        <tr>
+          <td>Row 2, Cell 1</td>
+          <td>Row 2, Cell 2</td>
+          <td>Row 2, Cell 3</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Section 2: Media Content</h2>
+    <p>This section contains an image and a video:</p>
+      <img src='example_image_link.mp4' alt='Example Image'>
+      <video controls width='250' src='example_video_link.mp4' type='video/mp4'>
+      Your browser does not support the video tag.
+    </video>
+
+    <h2>Section 3: Code Example</h2>
+    <p>This section contains a code block:</p>
+    <pre><code data-lang="html">
+    &lt;div&gt;
+      &lt;p&gt;This is a paragraph inside a div.&lt;/p&gt;
+    &lt;/div&gt;
+    </code></pre>
+
+    <h2>Conclusion</h2>
+    <p>This is the conclusion of the document.</p>
+  </body>
+  </html>
+"""
+```
+
+## 使用 HTMLHeaderTextSplitter
+
+[HTMLHeaderTextSplitter](https://reference.langchain.com/python/langchain-text-splitters/html/HTMLHeaderTextSplitter) 是一种"结构感知"型[文本分割器](/oss/integrations/splitters)，它在 HTML 元素级别分割文本，并为每个与给定块"相关"的标题添加元数据。它可以逐元素返回块，也可以将具有相同元数据的元素组合在一起，目标是 (a) 将相关文本（或多或少地）按语义分组，以及 (b) 保留文档结构中编码的上下文丰富信息。它可以用作分块管道的一部分，与其他文本分割器配合使用。
+
+它类似于用于 Markdown 文件的 [MarkdownHeaderTextSplitter](/oss/integrations/splitters/markdown_header_metadata_splitter)。
+
+要指定要分割的标题，请在实例化 `HTMLHeaderTextSplitter` 时指定 `headers_to_split_on`，如下所示。
+
+
+```python
+from langchain_text_splitters import HTMLHeaderTextSplitter
+
+headers_to_split_on = [
+    ("h1", "Header 1"),
+    ("h2", "Header 2"),
+    ("h3", "Header 3"),
+]
+
+html_splitter = HTMLHeaderTextSplitter(headers_to_split_on)
+html_header_splits = html_splitter.split_text(html_string)
+html_header_splits
+```
+
+
+```text
+[Document(metadata={'Header 1': 'Main Title'}, page_content='This is an introductory paragraph with some basic content.'),
+ Document(metadata={'Header 1': 'Main Title', 'Header 2': 'Section 1: Introduction'}, page_content='This section introduces the topic. Below is a list:  \nFirst item Second item Third item with bold text and a link'),
+ Document(metadata={'Header 1': 'Main Title', 'Header 2': 'Section 1: Introduction', 'Header 3': 'Subsection 1.1: Details'}, page_content="This subsection provides additional details. Here's a table:"),
+ Document(metadata={'Header 1': 'Main Title', 'Header 2': 'Section 2: Media Content'}, page_content='This section contains an image and a video:'),
+ Document(metadata={'Header 1': 'Main Title', 'Header 2': 'Section 3: Code Example'}, page_content='This section contains a code block:'),
+ Document(metadata={'Header 1': 'Main Title', 'Header 2': 'Conclusion'}, page_content='This is the conclusion of the document.')]
+```
+
+
+要返回每个元素及其相关的标题，请在实例化 `HTMLHeaderTextSplitter` 时指定 `return_each_element=True`：
+
+
+```python
+html_splitter = HTMLHeaderTextSplitter(
+    headers_to_split_on,
+    return_each_element=True,
+)
+html_header_splits_elements = html_splitter.split_text(html_string)
+```
+
+与上述相比，其中元素按其标题聚合：
+
+
+```python
+for element in html_header_splits[:2]:
+    print(element)
+```
+```python
+page_content='This is an introductory paragraph with some basic content.' metadata={'Header 1': 'Main Title'}
+page_content='This section introduces the topic. Below is a list:
+First item Second item Third item with bold text and a link' metadata={'Header 1': 'Main Title', 'Header 2': 'Section 1: Introduction'}
+```
+现在每个元素都作为独立的 `Document` 返回：
+
+
+```python
+for element in html_header_splits_elements[:3]:
+    print(element)
+```
+```python
+page_content='This is an introductory paragraph with some basic content.' metadata={'Header 1': 'Main Title'}
+page_content='This section introduces the topic. Below is a list:' metadata={'Header 1': 'Main Title', 'Header 2': 'Section 1: Introduction'}
+page_content='First item Second item Third item with bold text and a link' metadata={'Header 1': 'Main Title', 'Header 2': 'Section 1: Introduction'}
+```
+### 如何从 URL 或 HTML 文件分割：
+
+要直接从 URL 读取，请将 URL 字符串传递给 `split_text_from_url` 方法。
+
+同样，本地 HTML 文件可以传递给 `split_text_from_file` 方法。
+
+
+```python
+url = "https://plato.stanford.edu/entries/goedel/"
+
+headers_to_split_on = [
+    ("h1", "Header 1"),
+    ("h2", "Header 2"),
+    ("h3", "Header 3"),
+    ("h4", "Header 4"),
+]
+
+html_splitter = HTMLHeaderTextSplitter(headers_to_split_on)
+
+# for local file use html_splitter.split_text_from_file(<path_to_file>)
+html_header_splits = html_splitter.split_text_from_url(url)
+```
+
+### 如何限制块大小：
+
+`HTMLHeaderTextSplitter`（基于 HTML 标题进行分割）可以与另一个基于字符长度限制分割的分隔器（如 `RecursiveCharacterTextSplitter`）组合使用。
+
+可以使用第二个分隔器的 `.split_documents` 方法来实现此操作：
+
+
+```python
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+chunk_size = 500
+chunk_overlap = 30
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=chunk_size, chunk_overlap=chunk_overlap
+)
+
+# Split
+splits = text_splitter.split_documents(html_header_splits)
+splits[80:85]
+```
+
+
+```text
+[Document(metadata={'Header 1': 'Kurt Gödel', 'Header 2': '2. Gödel’s Mathematical Work', 'Header 3': '2.2 The Incompleteness Theorems', 'Header 4': '2.2.1 The First Incompleteness Theorem'}, page_content='We see that Gödel first tried to reduce the consistency problem for analysis to that of arithmetic. This seemed to require a truth definition for arithmetic, which in turn led to paradoxes, such as the Liar paradox (“This sentence is false”) and Berry’s paradox (“The least number not defined by an expression consisting of just fourteen English words”). Gödel then noticed that such paradoxes would not necessarily arise if truth were replaced by provability. But this means that arithmetic truth'),
+ Document(metadata={'Header 1': 'Kurt Gödel', 'Header 2': '2. Gödel’s Mathematical Work', 'Header 3': '2.2 The Incompleteness Theorems', 'Header 4': '2.2.1 The First Incompleteness Theorem'}, page_content='means that arithmetic truth and arithmetic provability are not co-extensive — whence the First Incompleteness Theorem.'),
+ Document(metadata={'Header 1': 'Kurt Gödel', 'Header 2': '2. Gödel’s Mathematical Work', 'Header 3': '2.2 The Incompleteness Theorems', 'Header 4': '2.2.1 The First Incompleteness Theorem'}, page_content='This account of Gödel’s discovery was told to Hao Wang very much after the fact; but in Gödel’s contemporary correspondence with Bernays and Zermelo, essentially the same description of his path to the theorems is given. (See Gödel 2003a and Gödel 2003b respectively.) From those accounts we see that the undefinability of truth in arithmetic, a result credited to Tarski, was likely obtained in some form by Gödel by 1931. But he neither publicized nor published the result; the biases logicians'),
+ Document(metadata={'Header 1': 'Kurt Gödel', 'Header 2': '2. Gödel’s Mathematical Work', 'Header 3': '2.2 The Incompleteness Theorems', 'Header 4': '2.2.1 The First Incompleteness Theorem'}, page_content='result; the biases logicians had expressed at the time concerning the notion of truth, biases which came vehemently to the fore when Tarski announced his results on the undefinability of truth in formal systems 1935, may have served as a deterrent to Gödel’s publication of that theorem.'),
+ Document(metadata={'Header 1': 'Kurt Gödel', 'Header 2': '2. Gödel’s Mathematical Work', 'Header 3': '2.2 The Incompleteness Theorems', 'Header 4': '2.2.2 The proof of the First Incompleteness Theorem'}, page_content='We now describe the proof of the two theorems, formulating Gödel’s results in Peano arithmetic. Gödel himself used a system related to that defined in Principia Mathematica, but containing Peano arithmetic. In our presentation of the First and Second Incompleteness Theorems we refer to Peano arithmetic as P, following Gödel’s notation.')]
+```
+
+
+### 局限性
+
+不同 HTML 文档之间可能存在相当大的结构差异，而虽然 `HTMLHeaderTextSplitter` 会尝试将所有"相关"标题附加到任何给定的文本块，但它有时可能会遗漏某些标题。例如，该算法假设了一个信息层次结构，其中标题始终位于相关文本"上方"的节点，即 prior siblings、ancestors 及其组合。在以下新闻文章中（截至本文撰写时），文档的结构使得顶级标题的文本，虽然标记为"h1"，却位于一个*独立的*子树中，而该文本元素本应位于我们期望它*"上方"*的位置——因此我们可以观察到"h1"元素及其相关文本没有出现在文本块元数据中（但在适用的情况下，我们确实能看到"h2"及其相关文本）：
+
+
+```python
+url = "https://www.cnn.com/2023/09/25/weather/el-nino-winter-us-climate/index.html"
+
+headers_to_split_on = [
+    ("h1", "Header 1"),
+    ("h2", "Header 2"),
+]
+
+html_splitter = HTMLHeaderTextSplitter(headers_to_split_on)
+html_header_splits = html_splitter.split_text_from_url(url)
+print(html_header_splits[1].page_content[:500])
+```
+```text
+No two El Niño winters are the same, but many have temperature and precipitation trends in common.
+Average conditions during an El Niño winter across the continental US.
+One of the major reasons is the position of the jet stream, which often shifts south during an El Niño winter. This shift typically brings wetter and cooler weather to the South while the North becomes drier and warmer, according to NOAA.
+Because the jet stream is essentially a river of air that storms flow through, they c
+```
+## 使用 HTMLSectionSplitter
+
+与 [HTMLHeaderTextSplitter](#using-htmlheadertextsplitter) 的概念类似，`HTMLSectionSplitter` 是一个“结构感知”的 [文本分割器](/oss/integrations/splitters)，它在元素级别拆分文本，并为每个与给定块“相关”的标题添加元数据。它允许你按部分拆分 HTML。
+
+它可以逐元素返回块，或将具有相同元数据的元素组合在一起，目标是 (a) 保持相关文本在语义上分组（或多或少），以及 (b) 保留文档结构中编码的上下文丰富信息。
+
+使用 `xslt_path` 提供转换 HTML 的绝对路径，以便可以根据提供的标签检测部分。默认使用 `data_connection/document_transformers` 目录中的 `converting_to_header.xslt` 文件。这是为了将 HTML 转换为更容易检测部分的格式/布局。例如，可以根据字体大小将 `span` 转换为标题标签，以便被检测为部分。
+
+### 如何拆分 HTML 字符串：
+
+
+```python
+from langchain_text_splitters import HTMLSectionSplitter
+
+headers_to_split_on = [
+    ("h1", "Header 1"),
+    ("h2", "Header 2"),
+]
+
+html_splitter = HTMLSectionSplitter(headers_to_split_on)
+html_header_splits = html_splitter.split_text(html_string)
+html_header_splits
+```
+
+
+```text
+[Document(metadata={'Header 1': 'Main Title'}, page_content='Main Title \n This is an introductory paragraph with some basic content.'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content="Section 1: Introduction \n This section introduces the topic. Below is a list: \n \n First item \n Second item \n Third item with  bold text  and  a link \n \n \n Subsection 1.1: Details \n This subsection provides additional details. Here's a table: \n \n \n \n Header 1 \n Header 2 \n Header 3 \n \n \n \n \n Row 1, Cell 1 \n Row 1, Cell 2 \n Row 1, Cell 3 \n \n \n Row 2, Cell 1 \n Row 2, Cell 2 \n Row 2, Cell 3"),
+ Document(metadata={'Header 2': 'Section 2: Media Content'}, page_content='Section 2: Media Content \n This section contains an image and a video: \n \n \n      Your browser does not support the video tag.'),
+ Document(metadata={'Header 2': 'Section 3: Code Example'}, page_content='Section 3: Code Example \n This section contains a code block: \n \n    <div>\n      <p>This is a paragraph inside a div.</p>\n    </div>'),
+ Document(metadata={'Header 2': 'Conclusion'}, page_content='Conclusion \n This is the conclusion of the document.')]
+```
+
+
+### 如何限制块大小：
+
+`HTMLSectionSplitter` 可以作为分块管道的一部分与其他文本分割器一起使用。在内部，当节大小大于块大小时，它使用 `RecursiveCharacterTextSplitter`。它还会根据文本的字体大小来确定它是否是节，基于确定的字体大小阈值。
+
+
+```python
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+headers_to_split_on = [
+    ("h1", "Header 1"),
+    ("h2", "Header 2"),
+    ("h3", "Header 3"),
+]
+
+html_splitter = HTMLSectionSplitter(headers_to_split_on)
+
+html_header_splits = html_splitter.split_text(html_string)
+
+chunk_size = 50
+chunk_overlap = 5
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=chunk_size, chunk_overlap=chunk_overlap
+)
+
+# Split
+splits = text_splitter.split_documents(html_header_splits)
+splits
+```
+
+
+```text
+[Document(metadata={'Header 1': 'Main Title'}, page_content='Main Title'),
+ Document(metadata={'Header 1': 'Main Title'}, page_content='This is an introductory paragraph with some'),
+ Document(metadata={'Header 1': 'Main Title'}, page_content='some basic content.'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content='Section 1: Introduction'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content='This section introduces the topic. Below is a'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content='is a list:'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content='First item \n Second item'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content='Third item with  bold text  and  a link'),
+ Document(metadata={'Header 3': 'Subsection 1.1: Details'}, page_content='Subsection 1.1: Details'),
+ Document(metadata={'Header 3': 'Subsection 1.1: Details'}, page_content='This subsection provides additional details.'),
+ Document(metadata={'Header 3': 'Subsection 1.1: Details'}, page_content="Here's a table:"),
+ Document(metadata={'Header 3': 'Subsection 1.1: Details'}, page_content='Header 1 \n Header 2 \n Header 3'),
+ Document(metadata={'Header 3': 'Subsection 1.1: Details'}, page_content='Row 1, Cell 1 \n Row 1, Cell 2'),
+ Document(metadata={'Header 3': 'Subsection 1.1: Details'}, page_content='Row 1, Cell 3 \n \n \n Row 2, Cell 1'),
+ Document(metadata={'Header 3': 'Subsection 1.1: Details'}, page_content='Row 2, Cell 2 \n Row 2, Cell 3'),
+ Document(metadata={'Header 2': 'Section 2: Media Content'}, page_content='Section 2: Media Content'),
+ Document(metadata={'Header 2': 'Section 2: Media Content'}, page_content='This section contains an image and a video:'),
+ Document(metadata={'Header 2': 'Section 2: Media Content'}, page_content='Your browser does not support the video'),
+ Document(metadata={'Header 2': 'Section 2: Media Content'}, page_content='tag.'),
+ Document(metadata={'Header 2': 'Section 3: Code Example'}, page_content='Section 3: Code Example'),
+ Document(metadata={'Header 2': 'Section 3: Code Example'}, page_content='This section contains a code block: \n \n    <div>'),
+ Document(metadata={'Header 2': 'Section 3: Code Example'}, page_content='<p>This is a paragraph inside a div.</p>'),
+ Document(metadata={'Header 2': 'Section 3: Code Example'}, page_content='</div>'),
+ Document(metadata={'Header 2': 'Conclusion'}, page_content='Conclusion'),
+ Document(metadata={'Header 2': 'Conclusion'}, page_content='This is the conclusion of the document.')]
+```
+
+
+## 使用 HTMLSemanticPreservingSplitter
+
+`HTMLSemanticPreservingSplitter` 旨在将 HTML 内容分割成易于管理的块，同时保留表格、列表和其他 HTML 组件等重要元素的语义结构。这确保了这些元素不会被拆分到不同的块中，从而避免表头、列表标题等上下文相关内容丢失。
+
+这个分割器的核心设计理念是创建上下文相关的块。使用 `HTMLHeaderTextSplitter` 进行常规递归分割可能导致表格、列表和其他结构化元素被从中截断，造成重要上下文丢失并产生质量不佳的块。
+
+`HTMLSemanticPreservingSplitter` 对于分割包含表格和列表等结构化元素的 HTML 内容至关重要，尤其是在需要完整保留这些元素的情况下。此外，它能够为特定的 HTML 标签定义自定义处理器，这使其成为处理复杂 HTML 文档的多功能工具。
+
+**重要提示**：`max_chunk_size` 不是块大小的绝对最大值，最大尺寸的计算是在保留的内容不属于该块时进行的，以确保内容不会被拆分。当我们将保留的数据重新添加到块中时，块大小有可能超过 `max_chunk_size`。这对于保持原始文档的结构至关重要。
+
+<Info>
+
+注意事项：
+
+1. 我们定义了一个自定义处理器来重新格式化代码块的内容
+2. 我们为特定的 html 元素定义了一个拒绝列表，在预处理时将其及其内容分解
+3. 我们有意设置了一个较小的块大小，以演示元素的不拆分行为
+
+</Info>
+
+
+```python
+# BeautifulSoup is required to use the custom handlers
+from bs4 import Tag
+from langchain_text_splitters import HTMLSemanticPreservingSplitter
+
+headers_to_split_on = [
+    ("h1", "Header 1"),
+    ("h2", "Header 2"),
+]
+
+
+def code_handler(element: Tag) -> str:
+    data_lang = element.get("data-lang")
+    code_format = f"<code:{data_lang}>{element.get_text()}</code>"
+
+    return code_format
+
+
+splitter = HTMLSemanticPreservingSplitter(
+    headers_to_split_on=headers_to_split_on,
+    separators=["\n\n", "\n", ". ", "! ", "? "],
+    max_chunk_size=50,
+    preserve_images=True,
+    preserve_videos=True,
+    elements_to_preserve=["table", "ul", "ol", "code"],
+    denylist_tags=["script", "style", "head"],
+    custom_handlers={"code": code_handler},
+)
+
+documents = splitter.split_text(html_string)
+documents
+```
+
+
+```text
+[Document(metadata={'Header 1': 'Main Title'}, page_content='This is an introductory paragraph with some basic content.'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content='This section introduces the topic'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content='. Below is a list: First item Second item Third item with bold text and a link Subsection 1.1: Details This subsection provides additional details'),
+ Document(metadata={'Header 2': 'Section 1: Introduction'}, page_content=". Here's a table: Header 1 Header 2 Header 3 Row 1, Cell 1 Row 1, Cell 2 Row 1, Cell 3 Row 2, Cell 1 Row 2, Cell 2 Row 2, Cell 3"),
+ Document(metadata={'Header 2': 'Section 2: Media Content'}, page_content='This section contains an image and a video: ![image:example_image_link.mp4](example_image_link.mp4) ![video:example_video_link.mp4](example_video_link.mp4)'),
+ Document(metadata={'Header 2': 'Section 3: Code Example'}, page_content='This section contains a code block: <code:html> <div> <p>This is a paragraph inside a div.</p> </div> </code>'),
+ Document(metadata={'Header 2': 'Conclusion'}, page_content='This is the conclusion of the document.')]
+```
+
+
+### 保留表格和列表
+
+在本示例中，我们将演示 `HTMLSemanticPreservingSplitter` 如何在 HTML 文档中保留表格和大列表。分块大小将设置为 50 个字符，以说明分块器如何确保这些元素不被拆分，即使它们超过了定义的最大分块大小。
+
+
+```python
+from langchain_text_splitters import HTMLSemanticPreservingSplitter
+
+html_string = """
+<!DOCTYPE html>
+<html>
+    <body>
+        <div>
+            <h1>Section 1</h1>
+            <p>This section contains an important table and list that should not be split across chunks.</p>
+            <table>
+                <tr>
+                    <th>Item</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                </tr>
+                <tr>
+                    <td>Apples</td>
+                    <td>10</td>
+                    <td>$1.00</td>
+                </tr>
+                <tr>
+                    <td>Oranges</td>
+                    <td>5</td>
+                    <td>$0.50</td>
+                </tr>
+                <tr>
+                    <td>Bananas</td>
+                    <td>50</td>
+                    <td>$1.50</td>
+                </tr>
+            </table>
+            <h2>Subsection 1.1</h2>
+            <p>Additional text in subsection 1.1 that is separated from the table and list.</p>
+            <p>Here is a detailed list:</p>
+            <ul>
+                <li>Item 1: Description of item 1, which is quite detailed and important.</li>
+                <li>Item 2: Description of item 2, which also contains significant information.</li>
+                <li>Item 3: Description of item 3, another item that we don't want to split across chunks.</li>
+            </ul>
+        </div>
+    </body>
+</html>
+"""
+
+headers_to_split_on = [("h1", "Header 1"), ("h2", "Header 2")]
+
+splitter = HTMLSemanticPreservingSplitter(
+    headers_to_split_on=headers_to_split_on,
+    max_chunk_size=50,
+    elements_to_preserve=["table", "ul"],
+)
+
+documents = splitter.split_text(html_string)
+print(documents)
+```
+```text
+[Document(metadata={'Header 1': 'Section 1'}, page_content='This section contains an important table and list'), Document(metadata={'Header 1': 'Section 1'}, page_content='that should not be split across chunks.'), Document(metadata={'Header 1': 'Section 1'}, page_content='Item Quantity Price Apples 10 $1.00 Oranges 5 $0.50 Bananas 50 $1.50'), Document(metadata={'Header 2': 'Subsection 1.1'}, page_content='Additional text in subsection 1.1 that is'), Document(metadata={'Header 2': 'Subsection 1.1'}, page_content='separated from the table and list. Here is a'), Document(metadata={'Header 2': 'Subsection 1.1'}, page_content="detailed list: Item 1: Description of item 1, which is quite detailed and important. Item 2: Description of item 2, which also contains significant information. Item 3: Description of item 3, another item that we don't want to split across chunks.")]
+```
+#### 说明
+在这个示例中，`HTMLSemanticPreservingSplitter` 确保整个表格和无序列表（`<ul>`）都保留在其相应的块中。尽管块大小设置为 50 个字符，但分割器识别出这些元素不应被拆分，并保持它们的完整性。
+
+当处理数据表或列表时，拆分内容可能导致上下文丢失或混淆，这一点尤为重要。生成的 @[`Document`] 对象保留了这些元素的完整结构，确保了信息的上下文相关性得到维护。
+
+### 使用自定义处理器
+`HTMLSemanticPreservingSplitter` 允许您为特定 HTML 元素定义自定义处理器。某些平台具有 `BeautifulSoup` 无法原生解析的自定义 HTML 标签，发生这种情况时，您可以利用自定义处理器轻松添加格式化逻辑。
+
+这对于需要特殊处理的元素特别有用，例如 `<iframe>` 标签或特定的 'data-' 元素。在这个示例中，我们将为 `iframe` 标签创建一个自定义处理器，将其转换为类似 Markdown 的链接。
+
+
+```python
+def custom_iframe_extractor(iframe_tag):
+    iframe_src = iframe_tag.get("src", "")
+    return f"[iframe:{iframe_src}]({iframe_src})"
+
+
+splitter = HTMLSemanticPreservingSplitter(
+    headers_to_split_on=headers_to_split_on,
+    max_chunk_size=50,
+    separators=["\n\n", "\n", ". "],
+    elements_to_preserve=["table", "ul", "ol"],
+    custom_handlers={"iframe": custom_iframe_extractor},
+)
+
+html_string = """
+<!DOCTYPE html>
+<html>
+    <body>
+        <div>
+            <h1>Section with Iframe</h1>
+            <iframe src="https://example.com/embed"></iframe>
+            <p>Some text after the iframe.</p>
+            <ul>
+                <li>Item 1: Description of item 1, which is quite detailed and important.</li>
+                <li>Item 2: Description of item 2, which also contains significant information.</li>
+                <li>Item 3: Description of item 3, another item that we don't want to split across chunks.</li>
+            </ul>
+        </div>
+    </body>
+</html>
+"""
+
+documents = splitter.split_text(html_string)
+print(documents)
+```
+```text
+[Document(metadata={'Header 1': 'Section with Iframe'}, page_content='[iframe:https://example.com/embed](https://example.com/embed) Some text after the iframe'), Document(metadata={'Header 1': 'Section with Iframe'}, page_content=". Item 1: Description of item 1, which is quite detailed and important. Item 2: Description of item 2, which also contains significant information. Item 3: Description of item 3, another item that we don't want to split across chunks.")]
+```
+#### 说明
+
+在此示例中，我们为 `iframe` 标签定义了一个自定义处理器，将其转换为类似 Markdown 的链接。当分割器处理 HTML 内容时，它使用此自定义处理器来转换 `iframe` 标签，同时保留其他元素（如表格和列表）。生成的 @[`Document`] 对象展示了 iframe 如何根据您提供的自定义逻辑进行处理。
+
+**重要提示**：保留链接等项目时，应注意不要在分隔符中包含 `.`，或将分隔符留空。`RecursiveCharacterTextSplitter` 按句点分割，这会将链接切成两半。请确保提供包含 `. ` 的分隔符列表。
+
+### 使用自定义处理器通过 LLM 分析图像
+
+通过自定义处理器，我们还可以覆盖任何元素的默认处理方式。一个很好的例子是，在文档的分块流程中直接插入图像的语义分析。
+
+由于我们的函数在发现标签时被调用，因此我们可以覆盖 `<img>` 标签并关闭 `preserve_images`，以插入我们希望嵌入到块中的任何内容。
+
+```python
+"""This example assumes you have helper methods `load_image_from_url` and an LLM agent `llm` that can process image data."""
+
+from langchain.agents import AgentExecutor
+
+# This example needs to be replaced with your own agent
+llm = AgentExecutor(...)
+
+
+# This method is a placeholder for loading image data from a URL and is not implemented here
+def load_image_from_url(image_url: str) -> bytes:
+    # Assuming this method fetches the image data from the URL
+    return b"image_data"
+
+
+html_string = """
+<!DOCTYPE html>
+<html>
+    <body>
+        <div>
+            <h1>Section with Image and Link</h1>
+            <p>
+                <img src="https://example.com/image.jpg" alt="An example image" />
+                Some text after the image.
+            </p>
+            <ul>
+                <li>Item 1: Description of item 1, which is quite detailed and important.</li>
+                <li>Item 2: Description of item 2, which also contains significant information.</li>
+                <li>Item 3: Description of item 3, another item that we don't want to split across chunks.</li>
+            </ul>
+        </div>
+    </body>
+</html>
+"""
+
+
+def custom_image_handler(img_tag) -> str:
+    img_src = img_tag.get("src", "")
+    img_alt = img_tag.get("alt", "No alt text provided")
+
+    image_data = load_image_from_url(img_src)
+    semantic_meaning = llm.invoke(image_data)
+
+    markdown_text = f"[Image Alt Text: {img_alt} | Image Source: {img_src} | Image Semantic Meaning: {semantic_meaning}]"
+
+    return markdown_text
+
+
+splitter = HTMLSemanticPreservingSplitter(
+    headers_to_split_on=headers_to_split_on,
+    max_chunk_size=50,
+    separators=["\n\n", "\n", ". "],
+    elements_to_preserve=["ul"],
+    preserve_images=False,
+    custom_handlers={"img": custom_image_handler},
+)
+
+documents = splitter.split_text(html_string)
+
+print(documents)
+```
+
+```
+[Document(metadata={'Header 1': 'Section with Image and Link'}, page_content='[Image Alt Text: An example image | Image Source: https://example.com/image.jpg | Image Semantic Meaning: semantic-meaning] Some text after the image'),
+Document(metadata={'Header 1': 'Section with Image and Link'}, page_content=". Item 1: Description of item 1, which is quite detailed and important. Item 2: Description of item 2, which also contains significant information. Item 3: Description of item 3, another item that we don't want to split across chunks.")]
+```
+
+#### 说明：
+
+使用我们编写的自定义处理器从 HTML 中的 `<img>` 元素中提取特定字段，我们可以使用我们的代理进一步处理数据，并将结果直接插入到我们的块中。请务必确保 `preserve_images` 设置为 `False`，否则将执行 `<img>` 字段的默认处理。

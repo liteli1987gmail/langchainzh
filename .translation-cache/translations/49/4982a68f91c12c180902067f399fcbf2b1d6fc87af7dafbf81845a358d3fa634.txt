@@ -1,0 +1,2926 @@
+---
+title: 预构建中间件
+description: 用于常见代理用例的预构建中间件
+---
+
+LangChain 和 [Deep Agents](/oss/deepagents/overview) 提供用于常见用例的预构建中间件。每个中间件都已投入生产就绪，可根据您的特定需求进行配置。
+
+## 供应商无关中间件
+
+以下中间件可与任何 LLM 提供商配合使用：
+
+:::python
+
+| 中间件 | 描述 |
+|------------|-------------|
+| [摘要](#summarization) | 当接近令牌限制时自动摘要对话历史。 |
+| [人工介入](#human-in-the-loop) | 暂停执行以等待人工批准工具调用。 |
+| [模型调用限制](#model-call-limit) | 限制模型调用次数以防止过度成本。 |
+| [工具调用限制](#tool-call-limit) | 通过限制调用次数来控制工具执行。 |
+| [模型回退](#model-fallback) | 主模型失败时自动回退到备用模型。 |
+| [PII 检测](#pii-detection) | 检测和处理个人身份信息 (PII)。 |
+| [待办事项列表](#to-do-list) | 为代理配备任务规划和追踪能力。 |
+| [LLM 工具选择器](#llm-tool-selector) | 使用 LLM 在调用主模型前选择相关工具。 |
+| [工具重试](#tool-retry) | 使用指数退避自动重试失败的工具调用。 |
+| [模型重试](#model-retry) | 使用指数退避自动重试失败的模型调用。 |
+| [LLM 工具模拟器](#llm-tool-emulator) | 使用 LLM 模拟工具执行以进行测试。 |
+| [上下文编辑](#context-editing) | 通过修整或清除工具使用来管理会话上下文。 |
+| [提供商工具搜索](#provider-tool-search) | 将工具放在提供商服务器端工具搜索后面，按需呈现。 |
+| [Shell 工具](#shell-tool) | 向代理公开持久化 shell 会话以执行命令。 |
+| [文件搜索](#file-search) | 提供文件系统文件的 Glob 和 Grep 搜索工具。 |
+| [文件系统](#filesystem-middleware) | 为代理提供文件系统以存储上下文和长期记忆。 |
+| [子代理](#subagent) | 添加生成子代理的能力。 |
+
+:::
+
+:::js
+
+| 中间件 | 描述 |
+|------------|-------------|
+| [摘要](#summarization) | 当接近令牌限制时自动摘要对话历史。 |
+| [人工介入](#human-in-the-loop) | 暂停执行以等待人工批准工具调用。 |
+| [模型调用限制](#model-call-limit) | 限制模型调用次数以防止过度成本。 |
+| [工具调用限制](#tool-call-limit) | 通过限制调用次数来控制工具执行。 |
+| [模型回退](#model-fallback) | 主模型失败时自动回退到备用模型。 |
+| [PII 检测](#pii-detection) | 检测和处理个人身份信息 (PII)。 |
+| [待办事项列表](#to-do-list) | 为代理配备任务规划和追踪能力。 |
+| [LLM 工具选择器](#llm-tool-selector) | 使用 LLM 在调用主模型前选择相关工具。 |
+| [工具重试](#tool-retry) | 使用指数退避自动重试失败的工具调用。 |
+| [模型重试](#model-retry) | 使用指数退避自动重试失败的模型调用。 |
+| [LLM 工具模拟器](#llm-tool-emulator) | 使用 LLM 模拟工具执行以进行测试。 |
+| [上下文编辑](#context-editing) | 通过修整或清除工具使用来管理会话上下文。 |
+| [提供商工具搜索](#provider-tool-search) | 将工具放在提供商服务器端工具搜索后面，按需呈现。 |
+| [文件系统](#filesystem-middleware) | 为代理提供文件系统以存储上下文和长期记忆。 |
+| [子代理中间件](#subagent) | 添加生成子代理的能力。 |
+
+:::
+
+### 摘要
+
+当接近令牌限制时自动摘要对话历史，保留最近消息同时压缩较旧上下文。摘要适用于以下场景：
+- 超出上下文窗口的长对话。
+- 具有大量历史记录的多轮对话。
+- 需要保留完整对话上下文的应用程序。
+
+<Note>
+    摘要是面向文本的上下文压缩。它不会调整大小、下采样或以其他方式压缩图像/音频/视频内容。通过 `keep` 保留的最近消息仍包含其原始多模态块，而被摘要的较早的多模态消息仅由生成的文本摘要表示。对于图像密集型应用程序，请将媒体存储在文件系统或对象存储中，并通过消息历史传递 URL 或文件引用。
+</Note>
+
+:::python
+**API 参考：** @[`SummarizationMiddleware`]
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import SummarizationMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[your_weather_tool, your_calculator_tool],
+    middleware=[
+        SummarizationMiddleware(
+            model="gpt-5.4-mini",
+            trigger=("tokens", 4000),
+            keep=("messages", 20),
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, summarizationMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [weatherTool, calculatorTool],
+  middleware: [
+    summarizationMiddleware({
+      model: "gpt-5.4-mini",
+      trigger: { tokens: 4000 },
+      keep: { messages: 20 },
+    }),
+  ],
+});
+```
+:::
+
+<Accordion title="Configuration options">
+
+:::python
+
+<Tip>
+    `fraction` 条件（如下所示）依赖于聊天模型的[配置数据](/oss/langchain/models#model-profiles)（如果您使用 `langchain>=1.1`）。如果没有可用数据，请使用其他条件或手动指定：
+
+
+</fragment>
+
+    ```python
+    from langchain.chat_models import init_chat_model
+
+    custom_profile = {
+        "max_input_tokens": 100_000,
+        # ...
+    }
+    model = init_chat_model("gpt-5.5", profile=custom_profile)
+    ```
+</Tip>
+
+<ParamField body="model" type="string | BaseChatModel" required>
+    用于生成摘要的模型。可以是模型标识符字符串（例如 `'openai:gpt-5.4-mini'`）或 `BaseChatModel` 实例。详见 @[`init_chat_model`][init_chat_model(model)]。
+</ParamField>
+
+<ParamField body="trigger" type="ContextSize | TriggerClause | list[ContextSize | TriggerClause] | None">
+    触发摘要生成的条件。可以是：
+
+    - 单个 @[`ContextSize`] 元组（必须达到指定的阈值）
+    - 单个 @[`TriggerClause`] 字典（必须满足所有指定的阈值 - AND 逻辑）
+    - 混合两种形式的列表（任意一项满足即可 - OR 逻辑）
+
+    支持的阈值包括：
+
+    - `fraction`（float）：模型上下文大小的比例（0-1）
+    - `tokens`（int）：绝对 token 数量
+    - `messages`（int）：消息数量
+
+    @[`ContextSize`] 元组表示恰好一个阈值。@[`TriggerClause`] 字典可以包含一个或多个阈值，例如 `{"tokens": 4000, "messages": 10}`，且字典中的所有阈值都必须满足（AND）。
+
+    每个 @[`TriggerClause`] 字典必须至少指定一个阈值。如果未提供 `trigger`，摘要生成将不会自动触发。
+
+    更多信息请参阅 @[`ContextSize`] 和 @[`TriggerClause`] 的 API 参考。
+</ParamField>
+
+<ParamField body="keep" type="ContextSize" default="('messages', 20)">
+    摘要生成后保留多少上下文。必须精确指定以下之一：
+
+    - `fraction`（float）：保留的模型上下文大小比例（0-1）
+    - `tokens`（int）：保留的绝对 token 数量
+    - `messages`（int）：保留的最近消息数量
+
+    更多信息请参阅 @[`ContextSize`] 的 API 参考。
+</ParamField>
+
+<ParamField body="token_counter" type="function">
+    自定义 token 计数函数。默认为基于字符的计数方式。
+</ParamField>
+
+<ParamField body="summary_prompt" type="string">
+    摘要生成的自定义提示模板。如未指定，将使用内置模板。模板应包含 `{messages}` 占位符，对话历史将被插入到此位置。
+</ParamField>
+
+<ParamField body="trim_tokens_to_summarize" type="number" default="4000">
+    生成摘要时包含的最大 token 数量。在摘要生成之前，消息将被修剪以符合此限制。
+</ParamField>
+
+<ParamField body="summary_prefix" type="string" deprecated>
+    **已弃用：** 请使用 `summary_prompt` 提供完整提示。
+</ParamField>
+
+<ParamField body="max_tokens_before_summary" type="number" deprecated>
+    **已弃用：** 请使用 `trigger: ("tokens", value)` 替代。触发摘要生成的 token 阈值。
+</ParamField>
+
+<ParamField body="messages_to_keep" type="number" deprecated>
+    **已弃用：** 请使用 `keep: ("messages", value)` 替代。保留的最近消息数量。
+</ParamField>
+:::
+
+:::js
+<Tip>
+    `trigger` 和 `keep` 的 `fraction` 条件（如下所示）依赖于聊天模型的[配置数据](/oss/langchain/models#model-profiles)（如果使用 `langchain@1.1.0`）。如果数据不可用，请使用其他条件或手动指定：
+
+</Tip>
+    ```typescript
+    const customProfile: ModelProfile = {
+        maxInputTokens: 100_000,
+        // ...
+    }
+    model = await initChatModel("...", {
+        profile: customProfile,
+    });
+    ```
+</Tip>
+
+<ParamField body="model" type="string | BaseChatModel" required>
+    用于生成摘要的模型。可以是模型标识符字符串（例如 `'openai:gpt-5.4-mini'`）或 `BaseChatModel` 实例。
+</ParamField>
+
+<ParamField body="trigger" type="object | object[]">
+    触发摘要生成的条件。可以是：
+
+    - 单个条件对象（所有属性必须满足 - AND 逻辑）
+    - 条件对象数组（任意条件满足即可 - OR 逻辑）
+
+    每个条件可以包含：
+    - `fraction`（number）：模型上下文大小的比例（0-1）
+    - `tokens`（number）：绝对 Token 数量
+    - `messages`（number）：消息数量
+
+    每个条件必须至少指定一个属性。如果未提供，摘要生成不会自动触发。
+</ParamField>
+
+<ParamField body="keep" type="object" default="{messages: 20}">
+    摘要生成后保留多少上下文。必须指定以下之一：
+
+    - `fraction`（number）：保留的模型上下文大小比例（0-1）
+    - `tokens`（number）：保留的绝对 Token 数量
+    - `messages`（number）：保留的最近消息数量
+</ParamField>
+
+<ParamField body="tokenCounter" type="function">
+    自定义 Token 计数函数。默认为基于字符的计数方式。
+</ParamField>
+
+<ParamField body="summaryPrompt" type="string">
+    摘要生成的自定义提示词模板。如果未指定，将使用内置模板。模板应包含 `{messages}` 占位符，对话历史将被插入到该位置。
+</ParamField>
+
+<ParamField body="trimTokensToSummarize" type="number" default="4000">
+    生成摘要时包含的最大 Token 数量。消息将在摘要生成前被修剪至符合此限制。
+</ParamField>
+
+<ParamField body="summaryPrefix" type="string">
+    添加到摘要消息的前缀。如果未提供，将使用默认前缀。
+</ParamField>
+
+<ParamField body="maxTokensBeforeSummary" type="number" deprecated>
+    **已弃用：** 请使用 `trigger: { tokens: value }` 代替。触发摘要生成的 Token 阈值。
+</ParamField>
+
+<ParamField body="messagesToKeep" type="number" deprecated>
+    **已弃用：** 请使用 `keep: { messages: value }` 代替。需要保留的最近消息数量。
+</ParamField>
+:::
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+摘要中间件会监控消息的 Token 数量，并在达到阈值时自动对旧消息进行摘要生成。
+
+**触发条件** 控制摘要生成的执行时机：
+- 单一阈值在该阈值达到时触发
+- 包含多个阈值的触发子句仅在所有阈值都达到时触发（AND 逻辑）
+- 触发条件列表在任意一项满足时触发（OR 逻辑）
+- 每个阈值可以使用 `fraction`（模型上下文大小的比例）、`tokens`（绝对数量）或 `messages`（消息数量）
+
+**保留条件** 控制保留多少上下文（必须指定其中之一）：
+- `fraction` - 保留的模型上下文大小比例
+- `tokens` - 保留的绝对 Token 数量
+- `messages` - 保留的最近消息数量
+
+:::python
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import SummarizationMiddleware
+
+
+# Single condition: trigger if tokens >= 4000
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[your_weather_tool, your_calculator_tool],
+    middleware=[
+        SummarizationMiddleware(
+            model="gpt-5.4-mini",
+            trigger=("tokens", 4000),
+            keep=("messages", 20),
+        ),
+    ],
+)
+
+# Multiple conditions: trigger if number of tokens >= 3000 OR messages >= 6
+agent2 = create_agent(
+    model="gpt-5.5",
+    tools=[your_weather_tool, your_calculator_tool],
+    middleware=[
+        SummarizationMiddleware(
+            model="gpt-5.4-mini",
+            trigger=[
+                ("tokens", 3000),
+                ("messages", 6),
+            ],
+            keep=("messages", 20),
+        ),
+    ],
+)
+
+# AND logic: trigger only when tokens >= 4000 AND messages >= 10
+agent3 = create_agent(
+    model="gpt-5.5",
+    tools=[your_weather_tool, your_calculator_tool],
+    middleware=[
+        SummarizationMiddleware(
+            model="gpt-5.4-mini",
+            trigger={"tokens": 4000, "messages": 10},
+            keep=("messages", 20),
+        ),
+    ],
+)
+
+# Combine AND and OR: trigger if (tokens >= 5000 AND messages >= 3)
+# OR (tokens >= 3000 AND messages >= 6)
+agent4 = create_agent(
+    model="gpt-5.5",
+    tools=[your_weather_tool, your_calculator_tool],
+    middleware=[
+        SummarizationMiddleware(
+            model="gpt-5.4-mini",
+            trigger=[
+                {"tokens": 5000, "messages": 3},
+                {"tokens": 3000, "messages": 6},
+            ],
+            keep=("messages", 20),
+        ),
+    ],
+)
+
+# Using fractional limits
+agent5 = create_agent(
+    model="gpt-5.5",
+    tools=[your_weather_tool, your_calculator_tool],
+    middleware=[
+        SummarizationMiddleware(
+            model="gpt-5.4-mini",
+            trigger=("fraction", 0.8),
+            keep=("fraction", 0.3),
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, summarizationMiddleware } from "langchain";
+
+// Single condition
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [weatherTool, calculatorTool],
+  middleware: [
+    summarizationMiddleware({
+      model: "gpt-5.4-mini",
+      trigger: { tokens: 4000, messages: 10 },
+      keep: { messages: 20 },
+    }),
+  ],
+});
+
+// Multiple conditions
+const agent2 = createAgent({
+  model: "gpt-5.5",
+  tools: [weatherTool, calculatorTool],
+  middleware: [
+    summarizationMiddleware({
+      model: "gpt-5.4-mini",
+      trigger: [
+        { tokens: 3000, messages: 6 },
+      ],
+      keep: { messages: 20 },
+    }),
+  ],
+});
+
+// Using fractional limits
+const agent3 = createAgent({
+  model: "gpt-5.5",
+  tools: [weatherTool, calculatorTool],
+  middleware: [
+    summarizationMiddleware({
+      model: "gpt-5.4-mini",
+      trigger: { fraction: 0.8 },
+      keep: { fraction: 0.3 },
+    }),
+  ],
+});
+```
+:::
+
+</Accordion>
+
+### 人在环中
+
+在工具调用执行前暂停代理执行，以等待人工批准、编辑或拒绝。[人在环中](/oss/langchain/human-in-the-loop) 适用于以下场景：
+
+- 需要人工批准的高风险操作（例如数据库写入、金融交易）。
+- 必须进行人工监督的合规工作流。
+- 需要人工反馈引导代理的长时间对话。
+
+:::python
+**API 参考：** @[`HumanInTheLoopMiddleware`]
+:::
+
+<Warning>
+    人在环中中间件需要一个[检查点器](/oss/langgraph/checkpointers#checkpoints)来在中断之间保持状态。
+</Warning>
+
+:::python
+
+</fragment>
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import HumanInTheLoopMiddleware
+from langgraph.checkpoint.memory import InMemorySaver
+
+
+def your_read_email_tool(email_id: str) -> str:
+    """Mock function to read an email by its ID."""
+    return f"Email content for ID: {email_id}"
+
+def your_send_email_tool(recipient: str, subject: str, body: str) -> str:
+    """Mock function to send an email."""
+    return f"Email sent to {recipient} with subject '{subject}'"
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[your_read_email_tool, your_send_email_tool],
+    checkpointer=InMemorySaver(),
+    middleware=[
+        HumanInTheLoopMiddleware(
+            interrupt_on={
+                "your_send_email_tool": {
+                    "allowed_decisions": ["approve", "edit", "reject"],
+                },
+                "your_read_email_tool": False,
+            }
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, humanInTheLoopMiddleware } from "langchain";
+
+function readEmailTool(emailId: string): string {
+  /** Mock function to read an email by its ID. */
+  return `Email content for ID: ${emailId}`;
+}
+
+function sendEmailTool(recipient: string, subject: string, body: string): string {
+  /** Mock function to send an email. */
+  return `Email sent to ${recipient} with subject '${subject}'`;
+}
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [readEmailTool, sendEmailTool],
+  middleware: [
+    humanInTheLoopMiddleware({
+      interruptOn: {
+        sendEmailTool: {
+          allowedDecisions: ["approve", "edit", "reject"],
+        },
+        readEmailTool: false,
+      }
+    })
+  ]
+});
+```
+<Tip>
+    有关完整示例、配置选项和集成模式，请参阅[人机协同文档](/oss/langchain/human-in-the-loop)。
+</Tip>
+
+:::python
+<Callout icon="player-play" iconType="solid">
+    观看此[视频指南](https://www.youtube.com/watch?v=SpfT6-YAVPk)，了解人机协同中间件行为。
+</Callout>
+:::
+
+:::js
+<Callout icon="player-play" iconType="solid">
+    观看此[视频指南](https://www.youtube.com/watch?v=tdOeUVERukA)，了解人机协同中间件行为。
+</Callout>
+:::
+
+### 模型调用限制
+
+限制模型调用次数以防止无限循环或过度成本。模型调用限制适用于以下场景：
+
+- 防止失控的代理发出过多 API 调用。
+- 在生产部署中强制执行成本控制。
+- 在特定调用预算内测试代理行为。
+
+:::python
+**API reference:** @[`ModelCallLimitMiddleware`]
+</think>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelCallLimitMiddleware
+from langgraph.checkpoint.memory import InMemorySaver
+
+agent = create_agent(
+    model="gpt-5.5",
+    checkpointer=InMemorySaver(),  # Required for thread limiting
+    tools=[],
+    middleware=[
+        ModelCallLimitMiddleware(
+            thread_limit=10,
+            run_limit=5,
+            exit_behavior="end",
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, modelCallLimitMiddleware } from "langchain";
+import { MemorySaver } from "@langchain/langgraph";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  checkpointer: new MemorySaver(), // Required for thread limiting
+  tools: [],
+  middleware: [
+    modelCallLimitMiddleware({
+      threadLimit: 10,
+      runLimit: 5,
+      exitBehavior: "end",
+    }),
+  ],
+});
+```
+:::
+
+:::python
+<Callout icon="player-play" iconType="solid">
+    观看此[视频指南](https://www.youtube.com/watch?v=nJEER0uaNkE)，了解模型调用限制中间件的行为。
+</Callout>
+:::
+
+:::js
+<Callout icon="player-play" iconType="solid">
+    观看此[视频指南](https://www.youtube.com/watch?v=x5jLQTFXR0Y)，了解模型调用限制中间件的行为。
+</Callout>
+:::
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="thread_limit" type="number">
+    线程中所有运行的最大模型调用次数。默认为无限制。
+</ParamField>
+
+<ParamField body="run_limit" type="number">
+    单次调用的最大模型调用次数。默认为无限制。
+</ParamField>
+
+<ParamField body="exit_behavior" type="string" default="end">
+    达到限制时的行为。选项：`'end'`（优雅终止）或 `'error'`（抛出异常）
+</ParamField>
+:::
+
+:::js
+<ParamField body="threadLimit" type="number">
+    线程中所有运行的最大模型调用次数。默认为无限制。
+</ParamField>
+
+<ParamField body="runLimit" type="number">
+    单次调用的最大模型调用次数。默认为无限制。
+</ParamField>
+
+<ParamField body="exitBehavior" type="string" default="end">
+    达到限制时的行为。选项：`'end'`（优雅终止）或 `'error'`（抛出异常）
+</ParamField>
+:::
+
+</Accordion>
+
+
+### 工具调用限制
+
+通过限制工具调用次数来控制代理执行，可以针对所有工具全局限制或针对特定工具限制。工具调用限制适用于以下场景：
+
+- 防止过度调用昂贵的外部API。
+- 限制网络搜索或数据库查询。
+- 对特定工具使用强制速率限制。
+- 防止代理循环失控。
+
+:::python
+**API参考：** @[`ToolCallLimitMiddleware`]
+
+:::
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ToolCallLimitMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool, database_tool],
+    middleware=[
+        # Global limit
+        ToolCallLimitMiddleware(thread_limit=20, run_limit=10),
+        # Tool-specific limit
+        ToolCallLimitMiddleware(
+            tool_name="search",
+            thread_limit=5,
+            run_limit=3,
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, toolCallLimitMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [searchTool, databaseTool],
+  middleware: [
+    toolCallLimitMiddleware({ threadLimit: 20, runLimit: 10 }),
+    toolCallLimitMiddleware({
+      toolName: "search",
+      threadLimit: 5,
+      runLimit: 3,
+    }),
+  ],
+});
+```
+:::
+
+:::python
+<Callout icon="player-play" iconType="solid">
+    观看此视频指南，了解工具调用限制中间件的行为。
+</Callout>
+:::
+
+:::js
+<Callout icon="player-play" iconType="solid">
+    观看此视频指南，了解工具调用限制中间件的行为。
+</Callout>
+:::
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="tool_name" type="string">
+    要限制的特定工具名称。如果未提供，限制将**全局应用于所有工具**。
+</ParamField>
+
+<ParamField body="thread_limit" type="number">
+    线程（对话）中所有运行的最大工具调用次数。在使用相同线程 ID 的多次调用中保持状态。需要检查点来维持状态。`None` 表示无线程限制。
+</ParamField>
+
+<ParamField body="run_limit" type="number">
+    单次调用的最大工具调用次数（一次用户消息 → 响应周期）。每次新的用户消息时重置。`None` 表示无运行限制。
+
+    **注意：**必须至少指定 `thread_limit` 或 `run_limit` 之一。
+</ParamField>
+
+<ParamField body="exit_behavior" type="string" default="continue">
+    达到限制时的行为：
+
+    - `'continue'`（默认）- 用错误消息阻止超限的工具调用，允许其他工具和模型继续运行。模型根据错误消息决定何时结束。
+    - `'error'` - 抛出 `ToolCallLimitExceededError` 异常，立即停止执行
+    - `'end'` - 立即停止执行，并为超限的工具调用返回 ToolMessage 和 AI 消息。仅在限制单个工具时有效；如果其他工具有待处理的调用则抛出 `NotImplementedError`。
+</ParamField>
+:::
+
+:::js
+<ParamField body="toolName" type="string">
+    要限制的特定工具名称。如果未提供，限制将**全局应用于所有工具**。
+</ParamField>
+
+<ParamField body="threadLimit" type="number">
+    线程（对话）中所有运行的最大工具调用次数。在使用相同线程 ID 的多次调用中保持状态。需要检查点来维持状态。`undefined` 表示无线程限制。
+</ParamField>
+
+<ParamField body="runLimit" type="number">
+    单次调用的最大工具调用次数（一次用户消息 → 响应周期）。每次新的用户消息时重置。`undefined` 表示无运行限制。
+
+    **注意：**必须至少指定 `threadLimit` 或 `runLimit` 之一。
+</ParamField>
+
+<ParamField body="exitBehavior" type="string" default="continue">
+    达到限制时的行为：
+
+    - `'continue'`（默认）- 用错误消息阻止超限的工具调用，允许其他工具和模型继续运行。模型根据错误消息决定何时结束。
+    - `'error'` - 抛出 `ToolCallLimitExceededError` 异常，立即停止执行
+    - `'end'` - 立即停止执行，并为超限的工具调用返回 ToolMessage 和 AI 消息。仅在限制单个工具时有效；如果其他工具有待处理的调用则抛出错误。
+</ParamField>
+:::
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+通过以下方式指定限制：
+- **线程限制** - 对话中所有运行的最大调用次数（需要检查点）
+- **运行限制** - 单次调用的最大调用次数（每轮重置）
+
+退出行为：
+- `'continue'`（默认）- 用错误消息阻止超限调用，代理继续执行
+- `'error'` - 立即抛出异常
+- `'end'` - 停止并返回 ToolMessage + AI 消息（仅限单工具场景）
+
+:::python
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ToolCallLimitMiddleware
+
+
+global_limiter = ToolCallLimitMiddleware(thread_limit=20, run_limit=10)
+search_limiter = ToolCallLimitMiddleware(tool_name="search", thread_limit=5, run_limit=3)
+database_limiter = ToolCallLimitMiddleware(tool_name="query_database", thread_limit=10)
+strict_limiter = ToolCallLimitMiddleware(tool_name="scrape_webpage", run_limit=2, exit_behavior="error")
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool, database_tool, scraper_tool],
+    middleware=[global_limiter, search_limiter, database_limiter, strict_limiter],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, toolCallLimitMiddleware } from "langchain";
+
+const globalLimiter = toolCallLimitMiddleware({ threadLimit: 20, runLimit: 10 });
+const searchLimiter = toolCallLimitMiddleware({ toolName: "search", threadLimit: 5, runLimit: 3 });
+const databaseLimiter = toolCallLimitMiddleware({ toolName: "query_database", threadLimit: 10 });
+const strictLimiter = toolCallLimitMiddleware({ toolName: "scrape_webpage", runLimit: 2, exitBehavior: "error" });
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [searchTool, databaseTool, scraperTool],
+  middleware: [globalLimiter, searchLimiter, databaseLimiter, strictLimiter],
+});
+```
+:::
+
+</Accordion>
+
+
+### 模型回退
+
+当主模型失败时，自动回退到替代模型。模型回退适用于以下场景：
+
+- 构建能够处理模型服务中断的弹性代理。
+- 通过回退到更便宜的模型来优化成本。
+- 跨提供商（如 OpenAI、Anthropic 等）的冗余备份。
+
+:::python
+**API 参考：** @[`ModelFallbackMiddleware`]
+
+:::
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelFallbackMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        ModelFallbackMiddleware(
+            "gpt-5.4-mini",
+            "claude-3-5-sonnet-20241022",
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, modelFallbackMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [],
+  middleware: [
+    modelFallbackMiddleware(
+      "gpt-5.4-mini",
+      "claude-3-5-sonnet-20241022"
+    ),
+  ],
+});
+```
+:::
+
+:::python
+<Callout icon="player-play" iconType="solid">
+    观看此[视频指南](https://www.youtube.com/watch?v=8rCRO0DUeIM)，了解 Model Fallback 中间件的行为演示。
+</Callout>
+:::
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="first_model" type="string | BaseChatModel" required>
+    主模型失败时尝试的第一个后备模型。可以是模型标识符字符串（例如 `'openai:gpt-5.4-mini'`）或 `BaseChatModel` 实例。
+</ParamField>
+
+<ParamField body="*additional_models" type="string | BaseChatModel">
+    如果前面的模型失败，按顺序尝试的额外后备模型
+</ParamField>
+:::
+
+:::js
+中间件接受可变数量的字符串参数，按顺序表示后备模型：
+
+<ParamField body="...models" type="string[]" required>
+  当主模型失败时，按顺序尝试的一个或多个后备模型字符串
+
+
+</ParamField>
+:::
+
+  ```typescript
+  modelFallbackMiddleware(
+    "first-fallback-model",
+    "second-fallback-model",
+    // ... more models
+  )
+  ```
+</ParamField>
+:::
+
+</Accordion>
+
+### PII 检测
+
+使用可配置的策略检测并处理对话中的个人身份信息（PII）。PII 检测适用于以下场景：
+
+- 需要合规要求的医疗和金融应用。
+- 需要清理日志的客服代理。
+- 任何处理敏感用户数据的应用。
+
+:::python
+<Note>
+当 `apply_to_output=True` 时，`PIIMiddleware` 还会通过注册的流转换器来编辑流式传输输出（文本增量、工具调用参数、工具输出和状态快照）。需要 `langchain>=1.3.2`。请参阅[在中间件上注册转换器](/oss/langchain/event-streaming#register-transformers-on-middleware)。
+</Note>
+
+**API 参考：** @[`PIIMiddleware`]
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import PIIMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        PIIMiddleware("email", strategy="redact", apply_to_input=True),
+        PIIMiddleware("credit_card", strategy="mask", apply_to_input=True),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, piiMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [],
+  middleware: [
+    piiMiddleware("email", { strategy: "redact", applyToInput: true }),
+    piiMiddleware("credit_card", { strategy: "mask", applyToInput: true }),
+  ],
+});
+```
+:::
+
+#### 自定义 PII 类型
+
+您可以通过提供 `detector` 参数来创建自定义 PII 类型。这允许您检测超出内置类型的特定用例模式。
+
+**创建自定义检测器的三种方式：**
+
+1. **正则表达式模式字符串** - 简单模式匹配
+:::js
+1. **RegExp 对象** - 更灵活地控制正则表达式标志
+:::
+1. **自定义函数** - 带有验证功能的复杂检测逻辑
+
+:::python
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import PIIMiddleware
+import re
+
+
+# Method 1: Regex pattern string
+agent1 = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        PIIMiddleware(
+            "api_key",
+            detector=r"sk-[a-zA-Z0-9]{32}",
+            strategy="block",
+        ),
+    ],
+)
+
+# Method 2: Compiled regex pattern
+agent2 = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        PIIMiddleware(
+            "phone_number",
+            detector=re.compile(r"\+?\d{1,3}[\s.-]?\d{3,4}[\s.-]?\d{4}"),
+            strategy="mask",
+        ),
+    ],
+)
+
+# Method 3: Custom detector function
+def detect_ssn(content: str) -> list[dict[str, str | int]]:
+    """Detect SSN with validation.
+
+    Returns a list of dictionaries with 'text', 'start', and 'end' keys.
+    """
+    import re
+    matches = []
+    pattern = r"\d{3}-\d{2}-\d{4}"
+    for match in re.finditer(pattern, content):
+        ssn = match.group(0)
+        # Validate: first 3 digits shouldn't be 000, 666, or 900-999
+        first_three = int(ssn[:3])
+        if first_three not in [0, 666] and not (900 <= first_three <= 999):
+            matches.append({
+                "text": ssn,
+                "start": match.start(),
+                "end": match.end(),
+            })
+    return matches
+
+agent3 = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        PIIMiddleware(
+            "ssn",
+            detector=detect_ssn,
+            strategy="hash",
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, piiMiddleware, type PIIMatch } from "langchain";
+
+// Method 1: Regex pattern string
+const agent1 = createAgent({
+  model: "gpt-5.5",
+  tools: [],
+  middleware: [
+    piiMiddleware("api_key", {
+      detector: "sk-[a-zA-Z0-9]{32}",
+      strategy: "block",
+    }),
+  ],
+});
+
+// Method 2: RegExp object
+const agent2 = createAgent({
+  model: "gpt-5.5",
+  tools: [],
+  middleware: [
+    piiMiddleware("phone_number", {
+      detector: /\+?\d{1,3}[\s.-]?\d{3,4}[\s.-]?\d{4}/,
+      strategy: "mask",
+    }),
+  ],
+});
+
+// Method 3: Custom detector function
+function detectSSN(content: string): PIIMatch[] {
+  const matches: PIIMatch[] = [];
+  const pattern = /\d{3}-\d{2}-\d{4}/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(content)) !== null) {
+    const ssn = match[0];
+    // Validate: first 3 digits shouldn't be 000, 666, or 900-999
+    const firstThree = parseInt(ssn.substring(0, 3), 10);
+    if (firstThree !== 0 && firstThree !== 666 && !(firstThree >= 900 && firstThree <= 999)) {
+      matches.push({
+        text: ssn,
+        start: match.index ?? 0,
+        end: (match.index ?? 0) + ssn.length,
+      });
+    }
+  }
+  return matches;
+}
+
+const agent3 = createAgent({
+  model: "gpt-5.5",
+  tools: [],
+  middleware: [
+    piiMiddleware("ssn", {
+      detector: detectSSN,
+      strategy: "hash",
+    }),
+  ],
+});
+```
+:::
+
+**自定义检测器函数签名：**
+
+检测器函数必须接受一个字符串 (content) 并返回匹配结果：
+
+:::python
+返回一个包含 `text`、`start` 和 `end` 键的字典列表：
+
+:::
+```python
+def detector(content: str) -> list[dict[str, str | int]]:
+    return [
+        {"text": "matched_text", "start": 0, "end": 12},
+        # ... more matches
+    ]
+```
+:::
+:::js
+返回包含 `PIIMatch` 对象的数组：
+
+</fragment>
+```typescript
+interface PIIMatch {
+  text: string;    // The matched text
+  start: number;   // Start index in content
+  end: number;      // End index in content
+}
+
+function detector(content: string): PIIMatch[] {
+  return [
+    { text: "matched_text", start: 0, end: 12 },
+    // ... more matches
+  ];
+}
+```
+:::
+
+<Tip>
+    对于自定义检测器：
+
+    - 使用正则字符串处理简单模式
+    - 需要标志时使用 RegExp 对象（例如，不区分大小写的匹配）
+    - 需要超出模式匹配范围的验证逻辑时使用自定义函数
+    - 自定义函数使您可以完全控制检测逻辑，并可实现复杂的验证规则
+</Tip>
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="pii_type" type="string" required>
+    要检测的 PII 类型。可以是内置类型（`email`、`credit_card`、`ip`、`mac_address`、`url`）或自定义类型名称。
+</ParamField>
+
+<ParamField body="strategy" type="string" default="redact">
+    如何处理检测到的 PII。选项：
+
+    - `'block'` - 检测到时抛出异常
+    - `'redact'` - 替换为 `[REDACTED_{PII_TYPE}]`
+    - `'mask'` - 部分掩码（例如 `****-****-****-1234`）
+    - `'hash'` - 替换为确定性哈希值
+</ParamField>
+
+<ParamField body="detector" type="function | regex">
+    自定义检测器函数或正则表达式模式。如果未提供，则使用 PII 类型的内置检测器。
+</ParamField>
+
+<ParamField body="apply_to_input" type="boolean" default="True">
+    在模型调用前检查用户消息
+</ParamField>
+
+<ParamField body="apply_to_output" type="boolean" default="False">
+    在模型调用后检查 AI 消息。使用 `langchain>=1.3.2` 时，还会通过注册的流转换器对流式传输输出（文本增量、工具调用参数、工具输出、状态快照）进行脱敏处理。请参阅[事件流式传输](/oss/langchain/event-streaming#register-transformers-on-middleware)。
+</ParamField>
+
+<ParamField body="apply_to_tool_results" type="boolean" default="False">
+    在执行后检查工具结果消息
+</ParamField>
+:::
+
+:::js
+<ParamField body="piiType" type="string" required>
+    要检测的 PII 类型。可以是内置类型（`email`、`credit_card`、`ip`、`mac_address`、`url`）或自定义类型名称。
+</ParamField>
+
+<ParamField body="strategy" type="string" default="redact">
+    如何处理检测到的 PII。选项：
+
+    - `'block'` - 检测到时抛出错误
+    - `'redact'` - 替换为 `[REDACTED_TYPE]`
+    - `'mask'` - 部分掩码（例如 `****-****-****-1234`）
+    - `'hash'` - 替换为确定性哈希值（例如 `<email_hash:a1b2c3d4>`）
+</ParamField>
+
+<ParamField body="detector" type="RegExp | string | function">
+    自定义检测器。可以是：
+
+    - `RegExp` - 用于匹配的正则表达式模式
+    - `string` - 正则表达式模式字符串（例如 `"sk-[a-zA-Z0-9]{32}"`）
+    - `function` - 自定义检测器函数 `(content: string) => PIIMatch[]`
+
+    如果未提供，则使用 PII 类型的内置检测器。
+</ParamField>
+
+<ParamField body="applyToInput" type="boolean" default="true">
+    在模型调用前检查用户消息
+</ParamField>
+
+<ParamField body="applyToOutput" type="boolean" default="false">
+    在模型调用后检查 AI 消息
+</ParamField>
+
+<ParamField body="applyToToolResults" type="boolean" default="false">
+    在执行后检查工具结果消息
+</ParamField>
+:::
+
+</Accordion>
+
+### 待办列表
+
+为代理配备任务规划和跟踪功能，以处理复杂的多步骤任务。待办列表适用于以下场景：
+
+- 需要跨多个工具协调的复杂多步骤任务。
+- 进度可见性重要的长时间运行操作。
+
+<Note>
+    此中间件自动为代理提供 `write_todos` 工具和系统提示，以指导有效的任务规划。
+</Note>
+
+:::python
+**API 参考：** @[`TodoListMiddleware`]
+
+
+</fragment>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import TodoListMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[read_file, write_file, run_tests],
+    middleware=[TodoListMiddleware()],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, todoListMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [readFile, writeFile, runTests],
+  middleware: [todoListMiddleware()],
+});
+```
+:::
+
+:::python
+<Callout icon="player-play" iconType="solid">
+    观看此 [视频指南](https://www.youtube.com/watch?v=yTWocbVKQxw)，了解待办事项中间件行为演示。
+</Callout>
+:::
+
+:::js
+<Callout icon="player-play" iconType="solid">
+    观看此 [视频指南](https://www.youtube.com/watch?v=dwvhZ1z_Pas)，了解待办事项中间件行为演示。
+</Callout>
+:::
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="system_prompt" type="string">
+    用于指导待办事项使用的自定义系统提示。如未指定，则使用内置提示。
+</ParamField>
+
+<ParamField body="tool_description" type="string">
+    `write_todos` 工具的自定义描述。如未指定，则使用内置描述。
+</ParamField>
+:::
+
+:::js
+无配置选项可用（使用默认值）。
+:::
+
+</Accordion>
+
+### LLM 工具选择器
+
+使用 LLM 在调用主模型之前智能选择相关工具。LLM 工具选择器适用于以下场景：
+
+- 工具数量众多（10+）且大多数每次查询都不相关的智能体。
+- 通过筛选无关工具来减少 token 使用量。
+- 提高模型专注度和准确性。
+
+此中间件使用结构化输出来让 LLM 判断哪些工具与当前查询最相关。结构化输出 schema 定义了可用的工具名称和描述。模型提供商通常会在幕后将此结构化输出信息添加到系统提示中。
+
+:::python
+**API 参考：** @[`LLMToolSelectorMiddleware`]
+
+:::
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import LLMToolSelectorMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[tool1, tool2, tool3, tool4, tool5, ...],
+    middleware=[
+        LLMToolSelectorMiddleware(
+            model="gpt-5.4-mini",
+            max_tools=3,
+            always_include=["search"],
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, llmToolSelectorMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [tool1, tool2, tool3, tool4, tool5, ...],
+  middleware: [
+    llmToolSelectorMiddleware({
+      model: "gpt-5.4-mini",
+      maxTools: 3,
+      alwaysInclude: ["search"],
+    }),
+  ],
+});
+```
+:::
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="model" type="string | BaseChatModel">
+    用于工具选择的模型。可以是模型标识符字符串（例如 `'openai:gpt-5.4-mini'`）或 `BaseChatModel` 实例。详见 @[`init_chat_model`][init_chat_model(model)]。
+
+    默认为代理的主模型。
+</ParamField>
+
+<ParamField body="system_prompt" type="string">
+    选择模型的指令。如未指定，则使用内置提示词。
+</ParamField>
+
+<ParamField body="max_tools" type="number">
+    最大选择工具数量。如果模型选择了更多工具，则只使用前 max_tools 个。如未指定，则无限制。
+</ParamField>
+
+<ParamField body="always_include" type="list[string]">
+    无论选择结果如何都始终包含的工具名称。这些不计入 max_tools 限制。
+</ParamField>
+:::
+
+:::js
+<ParamField body="model" type="string | BaseChatModel">
+    用于工具选择的模型。可以是模型标识符字符串（例如 `'openai:gpt-5.4-mini'`）或 `BaseChatModel` 实例。默认为代理的主模型。
+</ParamField>
+
+<ParamField body="systemPrompt" type="string">
+    选择模型的指令。如未指定，则使用内置提示词。
+</ParamField>
+
+<ParamField body="maxTools" type="number">
+    最大选择工具数量。如果模型选择了更多工具，则只使用前 maxTools 个。如未指定，则无限制。
+</ParamField>
+
+<ParamField body="alwaysInclude" type="string[]">
+    无论选择结果如何都始终包含的工具名称。这些不计入 maxTools 限制。
+</ParamField>
+:::
+
+</Accordion>
+
+
+### 工具重试
+
+使用可配置的指数退避策略自动重试失败的工具调用。工具重试适用于以下场景：
+
+- 处理外部 API 调用中的临时故障。
+- 提高网络依赖型工具的可靠性。
+- 构建能够优雅处理临时错误的弹性代理。
+
+:::python
+**API 参考：** @[`ToolRetryMiddleware`]
+
+
+</fragment>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ToolRetryMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool, database_tool],
+    middleware=[
+        ToolRetryMiddleware(
+            max_retries=3,
+            backoff_factor=2.0,
+            initial_delay=1.0,
+        ),
+    ],
+)
+```
+:::js
+**API 参考：** @[`toolRetryMiddleware`]
+
+:::
+
+```typescript
+import { createAgent, toolRetryMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [searchTool, databaseTool],
+  middleware: [
+    toolRetryMiddleware({
+      maxRetries: 3,
+      backoffFactor: 2.0,
+      initialDelayMs: 1000,
+    }),
+  ],
+});
+```
+:::
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="max_retries" type="number" default="2">
+    初始调用后最大重试次数（默认情况下共3次尝试）
+</ParamField>
+
+<ParamField body="tools" type="list[BaseTool | str]">
+    可选的工具或工具名称列表，用于应用重试逻辑。如果为 `None`，则应用于所有工具。
+</ParamField>
+
+<ParamField body="retry_on" type="tuple[type[Exception], ...] | callable" default="(Exception,)">
+    可以是异常类型元组用于重试，或是一个接收异常并返回 `True` 来决定是否重试的可调用对象。
+</ParamField>
+
+<ParamField body="on_failure" type="string | callable" default="return_message">
+    所有重试耗尽时的行为。选项：
+    - `'return_message'` - 返回包含错误详情的 `ToolMessage`（允许 LLM 处理失败）
+    - `'raise'` - 重新抛出异常（停止代理执行）
+    - 自定义可调用对象 - 接收异常并返回字符串作为 `ToolMessage` 内容的函数
+</ParamField>
+
+<ParamField body="backoff_factor" type="number" default="2.0">
+    指数退避的乘数。每次重试等待 `initial_delay * (backoff_factor ** retry_number)` 秒。设为 `0.0` 可获得固定延迟。
+</ParamField>
+
+<ParamField body="initial_delay" type="number" default="1.0">
+    首次重试前的初始延迟秒数
+</ParamField>
+
+<ParamField body="max_delay" type="number" default="60.0">
+    重试之间的最大延迟秒数（限制指数退避增长）
+</ParamField>
+
+<ParamField body="jitter" type="boolean" default="true">
+    是否向延迟添加随机抖动（`±25%`）以避免雷鸣般的请求
+</ParamField>
+:::
+
+:::js
+<ParamField body="maxRetries" type="number" default="2">
+    初始调用后最大重试次数（默认情况下共3次尝试）。必须 >= 0。
+</ParamField>
+
+<ParamField body="tools" type="(ClientTool | ServerTool | string)[]">
+    可选的工具或工具名称数组，用于应用重试逻辑。可以是 `BaseTool` 实例列表或工具名称字符串。如果为 `undefined`，则应用于所有工具。
+</ParamField>
+
+<ParamField body="retryOn" type="((error: Error) => boolean) | (new (...args: any[]) => Error)[]" default="() => true">
+    可以是错误构造函数数组用于重试，或是一个接收错误并返回 `true` 来决定是否重试的函数。默认对所有错误进行重试。
+</ParamField>
+
+<ParamField body="onFailure" type="'error' | 'continue' | ((error: Error) => string)" default="continue">
+    所有重试耗尽时的行为。选项：
+    - `'continue'`（默认） - 返回包含错误详情的 `ToolMessage`，允许 LLM 处理失败并可能恢复
+    - `'error'` - 重新抛出异常，停止代理执行
+    - 自定义函数 - 接收异常并返回字符串作为 `ToolMessage` 内容的函数，允许自定义错误格式
+
+    **已弃用的值：** `'raise'`（改用 `'error'`）和 `'return_message'`（改用 `'continue'`）。这些已弃用的值仍然有效，但会显示警告。
+</ParamField>
+
+<ParamField body="backoffFactor" type="number" default="2.0">
+    指数退避的乘数。每次重试等待 `initialDelayMs * (backoffFactor ** retryNumber)` 毫秒。设为 `0.0` 可获得固定延迟。必须 >= 0。
+</ParamField>
+
+<ParamField body="initialDelayMs" type="number" default="1000">
+    首次重试前的初始延迟毫秒数。必须 >= 0。
+</ParamField>
+
+<ParamField body="maxDelayMs" type="number" default="60000">
+    重试之间的最大延迟毫秒数（限制指数退避增长）。必须 >= 0。
+</ParamField>
+
+<ParamField body="jitter" type="boolean" default="true">
+    是否向延迟添加随机抖动（`±25%`）以避免雷鸣般的请求
+</ParamField>
+:::
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+中间件会自动使用指数退避重试失败的工具调用。
+
+:::python
+**关键配置：**
+- `max_retries` - 重试次数（默认：2）
+- `backoff_factor` - 指数退避的乘数（默认：2.0）
+- `initial_delay` - 起始延迟秒数（默认：1.0）
+- `max_delay` - 延迟增长上限（默认：60.0）
+- `jitter` - 添加随机变化（默认：True）
+
+**失败处理：**
+- `on_failure='return_message'` - 返回错误消息
+- `on_failure='raise'` - 重新抛出异常
+- 自定义函数 - 返回错误消息的函数
+:::
+:::js
+**关键配置：**
+- `maxRetries` - 重试次数（默认：2）
+- `backoffFactor` - 指数退避的乘数（默认：2.0）
+- `initialDelayMs` - 起始延迟毫秒数（默认：1000ms）
+- `maxDelayMs` - 延迟增长上限（默认：60000ms）
+- `jitter` - 添加随机变化（默认：true）
+
+**失败处理：**
+- `onFailure: "continue"`（默认） - 返回错误消息
+- `onFailure: "error"` - 重新抛出异常
+- 自定义函数 - 返回错误消息的函数
+:::
+
+:::python
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ToolRetryMiddleware
+
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool, database_tool, api_tool],
+    middleware=[
+        ToolRetryMiddleware(
+            max_retries=3,
+            backoff_factor=2.0,
+            initial_delay=1.0,
+            max_delay=60.0,
+            jitter=True,
+            tools=["api_tool"],
+            retry_on=(ConnectionError, TimeoutError),
+            on_failure="continue",
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, toolRetryMiddleware } from "langchain";
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+
+// Basic usage with default settings (2 retries, exponential backoff)
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [searchTool, databaseTool],
+  middleware: [toolRetryMiddleware()],
+});
+
+// Retry specific exceptions only
+const retry = toolRetryMiddleware({
+  maxRetries: 4,
+  retryOn: [TimeoutError, NetworkError],
+  backoffFactor: 1.5,
+});
+
+// Custom exception filtering
+function shouldRetry(error: Error): boolean {
+  // Only retry on 5xx errors
+  if (error.name === "HTTPError" && "statusCode" in error) {
+    const statusCode = (error as any).statusCode;
+    return 500 <= statusCode && statusCode < 600;
+  }
+  return false;
+}
+
+const retryWithFilter = toolRetryMiddleware({
+  maxRetries: 3,
+  retryOn: shouldRetry,
+});
+
+// Apply to specific tools with custom error handling
+const formatError = (error: Error) =>
+  "Database temporarily unavailable. Please try again later.";
+
+const retrySpecificTools = toolRetryMiddleware({
+  maxRetries: 4,
+  tools: ["search_database"],
+  onFailure: formatError,
+});
+
+// Apply to specific tools using BaseTool instances
+const searchDatabase = tool(
+  async ({ query }) => {
+    // Search implementation
+    return results;
+  },
+  {
+    name: "search_database",
+    description: "Search the database",
+    schema: z.object({ query: z.string() }),
+  }
+);
+
+const retryWithToolInstance = toolRetryMiddleware({
+  maxRetries: 4,
+  tools: [searchDatabase], // Pass BaseTool instance
+});
+
+// Constant backoff (no exponential growth)
+const constantBackoff = toolRetryMiddleware({
+  maxRetries: 5,
+  backoffFactor: 0.0, // No exponential growth
+  initialDelayMs: 2000, // Always wait 2 seconds
+});
+
+// Raise exception on failure
+const strictRetry = toolRetryMiddleware({
+  maxRetries: 2,
+  onFailure: "error", // Re-raise exception instead of returning message
+});
+```
+:::
+
+</Accordion>
+
+### 模型重试
+
+自动使用可配置的指数退避策略重试失败的模型调用。模型重试适用于以下场景：
+
+- 处理模型 API 调用中的临时性故障。
+- 提高网络依赖型模型请求的可靠性。
+- 构建能够优雅处理临时模型错误的弹性代理。
+
+:::python
+**API 参考：** @[`ModelRetryMiddleware`]
+
+</fragment>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRetryMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool, database_tool],
+    middleware=[
+        ModelRetryMiddleware(
+            max_retries=3,
+            backoff_factor=2.0,
+            initial_delay=1.0,
+        ),
+    ],
+)
+```
+:::
+
+:::js
+**API 参考：** @[`modelRetryMiddleware`]
+
+
+</fragment>
+
+```typescript
+import { createAgent, modelRetryMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [searchTool, databaseTool],
+  middleware: [
+    modelRetryMiddleware({
+      maxRetries: 3,
+      backoffFactor: 2.0,
+      initialDelayMs: 1000,
+    }),
+  ],
+});
+```
+:::
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="max_retries" type="number" default="2">
+    初始调用后的最大重试次数（默认情况下共 3 次尝试）
+</ParamField>
+
+<ParamField body="retry_on" type="tuple[type[Exception], ...] | callable" default="(Exception,)">
+    要重试的异常类型元组，或者一个接收异常并在应该重试时返回 `True` 的可调用对象。
+</ParamField>
+
+<ParamField body="on_failure" type="string | callable" default="continue">
+    所有重试耗尽时的行为。选项：
+    - `'continue'`（默认）- 返回包含错误详情的 `AIMessage`，允许智能体可能优雅地处理失败
+    - `'error'` - 重新抛出异常（停止智能体执行）
+    - 自定义可调用对象 - 接收异常并返回 `AIMessage` 内容的字符串的函数
+</ParamField>
+
+<ParamField body="backoff_factor" type="number" default="2.0">
+    指数退避的乘数。每次重试等待 `initial_delay * (backoff_factor ** retry_number)` 秒。设为 `0.0` 以使用固定延迟。
+</ParamField>
+
+<ParamField body="initial_delay" type="number" default="1.0">
+    首次重试前的初始延迟（秒）
+</ParamField>
+
+<ParamField body="max_delay" type="number" default="60.0">
+    重试之间的最大延迟（秒）（限制指数退避增长）
+</ParamField>
+
+<ParamField body="jitter" type="boolean" default="true">
+    是否添加随机抖动（`±25%`）以避免惊群问题
+</ParamField>
+:::
+
+:::js
+<ParamField body="maxRetries" type="number" default="2">
+    初始调用后的最大重试次数（默认情况下共 3 次尝试）。必须 >= 0。
+</ParamField>
+
+<ParamField body="retryOn" type="((error: Error) => boolean) | (new (...args: any[]) => Error)[]" default="() => true">
+    要重试的错误构造函数数组，或者一个接收错误并在应该重试时返回 `true` 的函数。默认重试所有错误。
+</ParamField>
+
+<ParamField body="onFailure" type="'error' | 'continue' | ((error: Error) => string)" default="continue">
+    所有重试耗尽时的行为。选项：
+    - `'continue'`（默认）- 返回包含错误详情的 `AIMessage`，允许智能体可能优雅地处理失败
+    - `'error'` - 重新抛出异常，停止智能体执行
+    - 自定义函数 - 接收异常并返回 `AIMessage` 内容的字符串的函数，允许自定义错误格式化
+</ParamField>
+
+<ParamField body="backoffFactor" type="number" default="2.0">
+    指数退避的乘数。每次重试等待 `initialDelayMs * (backoffFactor ** retryNumber)` 毫秒。设为 `0.0` 以使用固定延迟。必须 >= 0。
+</ParamField>
+
+<ParamField body="initialDelayMs" type="number" default="1000">
+    首次重试前的初始延迟（毫秒）。必须 >= 0。
+</ParamField>
+
+<ParamField body="maxDelayMs" type="number" default="60000">
+    重试之间的最大延迟（毫秒）（限制指数退避增长）。必须 >= 0。
+</ParamField>
+
+<ParamField body="jitter" type="boolean" default="true">
+    是否添加随机抖动（`±25%`）以避免惊群问题
+</ParamField>
+:::
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+中间件自动使用指数退避重试失败的模型调用。
+
+:::python
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRetryMiddleware
+
+
+# Basic usage with default settings (2 retries, exponential backoff)
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool],
+    middleware=[ModelRetryMiddleware()],
+)
+
+# Custom exception filtering
+class TimeoutError(Exception):
+    """Custom exception for timeout errors."""
+    pass
+
+class ConnectionError(Exception):
+    """Custom exception for connection errors."""
+    pass
+
+# Retry specific exceptions only
+retry = ModelRetryMiddleware(
+    max_retries=4,
+    retry_on=(TimeoutError, ConnectionError),
+    backoff_factor=1.5,
+)
+
+
+def should_retry(error: Exception) -> bool:
+    # Only retry on rate limit errors
+    if isinstance(error, TimeoutError):
+        return True
+    # Or check for specific HTTP status codes
+    if hasattr(error, "status_code"):
+        return error.status_code in (429, 503)
+    return False
+
+retry_with_filter = ModelRetryMiddleware(
+    max_retries=3,
+    retry_on=should_retry,
+)
+
+# Return error message instead of raising
+retry_continue = ModelRetryMiddleware(
+    max_retries=4,
+    on_failure="continue",  # Return AIMessage with error instead of raising
+)
+
+# Custom error message formatting
+def format_error(error: Exception) -> str:
+    return f"Model call failed: {error}. Please try again later."
+
+retry_with_formatter = ModelRetryMiddleware(
+    max_retries=4,
+    on_failure=format_error,
+)
+
+# Constant backoff (no exponential growth)
+constant_backoff = ModelRetryMiddleware(
+    max_retries=5,
+    backoff_factor=0.0,  # No exponential growth
+    initial_delay=2.0,  # Always wait 2 seconds
+)
+
+# Raise exception on failure
+strict_retry = ModelRetryMiddleware(
+    max_retries=2,
+    on_failure="error",  # Re-raise exception instead of returning message
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, modelRetryMiddleware } from "langchain";
+
+// Basic usage with default settings (2 retries, exponential backoff)
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [searchTool],
+  middleware: [modelRetryMiddleware()],
+});
+
+class TimeoutError extends Error {
+    // ...
+}
+class NetworkError extends Error {
+    // ...
+}
+
+// Retry specific exceptions only
+const retry = modelRetryMiddleware({
+  maxRetries: 4,
+  retryOn: [TimeoutError, NetworkError],
+  backoffFactor: 1.5,
+});
+
+// Custom exception filtering
+function shouldRetry(error: Error): boolean {
+  // Only retry on rate limit errors
+  if (error.name === "RateLimitError") {
+    return true;
+  }
+  // Or check for specific HTTP status codes
+  if (error.name === "HTTPError" && "statusCode" in error) {
+    const statusCode = (error as any).statusCode;
+    return statusCode === 429 || statusCode === 503;
+  }
+  return false;
+}
+
+const retryWithFilter = modelRetryMiddleware({
+  maxRetries: 3,
+  retryOn: shouldRetry,
+});
+
+// Return error message instead of raising
+const retryContinue = modelRetryMiddleware({
+  maxRetries: 4,
+  onFailure: "continue", // Return AIMessage with error instead of throwing
+});
+
+// Custom error message formatting
+const formatError = (error: Error) =>
+  `Model call failed: ${error.message}. Please try again later.`;
+
+const retryWithFormatter = modelRetryMiddleware({
+  maxRetries: 4,
+  onFailure: formatError,
+});
+
+// Constant backoff (no exponential growth)
+const constantBackoff = modelRetryMiddleware({
+  maxRetries: 5,
+  backoffFactor: 0.0, // No exponential growth
+  initialDelayMs: 2000, // Always wait 2 seconds
+});
+
+// Raise exception on failure
+const strictRetry = modelRetryMiddleware({
+  maxRetries: 2,
+  onFailure: "error", // Re-raise exception instead of returning message
+});
+```
+:::
+
+</Accordion>
+
+### LLM 工具模拟器
+
+使用 LLM 模拟工具执行以进行测试，用 AI 生成的响应替换实际的工具调用。LLM 工具模拟器适用于以下场景：
+
+- 在无需执行真实工具的情况下测试智能体行为。
+- 当外部工具不可用或成本高昂时开发智能体。
+- 在实际实现工具之前原型化智能体工作流程。
+
+:::python
+**API 参考：** @[`LLMToolEmulator`]
+
+:::
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import LLMToolEmulator
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[get_weather, search_database, send_email],
+    middleware=[
+        LLMToolEmulator(),  # Emulate all tools
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, toolEmulatorMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [getWeather, searchDatabase, sendEmail],
+  middleware: [
+    toolEmulatorMiddleware(), // Emulate all tools
+  ],
+});
+```
+:::
+
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="tools" type="list[str | BaseTool]">
+    要模拟的工具名称 (str) 或 BaseTool 实例列表。如果为 `None`（默认），将模拟所有工具。如果为空列表 `[]`，则不会模拟任何工具。如果为包含工具名称/实例的数组，则仅模拟这些工具。
+</ParamField>
+
+<ParamField body="model" type="string | BaseChatModel">
+    用于生成模拟工具响应的模型。可以是模型标识符字符串（例如 `'google_genai:gemini-3.5-flash'`）或 `BaseChatModel` 实例。如果未指定，默认为 agent 的模型。详见 @[`init_chat_model`][init_chat_model(model)]。
+</ParamField>
+:::
+
+:::js
+<ParamField body="tools" type="(string | ClientTool | ServerTool)[]">
+    要模拟的工具名称 (str) 或工具实例列表。如果为 `undefined`（默认），将模拟所有工具。如果为空数组 `[]`，则不会模拟任何工具。如果为包含工具名称/实例的数组，则仅模拟这些工具。
+</ParamField>
+
+<ParamField body="model" type="string | BaseChatModel">
+    用于生成模拟工具响应的模型。可以是模型标识符字符串（例如 `'google_genai:gemini-3.5-flash'`）或 `BaseChatModel` 实例。如果未指定，默认为 agent 的模型。
+</ParamField>
+:::
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+中间件使用 LLM 生成看似合理的工具调用响应，而不是执行实际工具。
+
+:::python
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import LLMToolEmulator
+from langchain.tools import tool
+
+
+@tool
+def get_weather(location: str) -> str:
+    """Get the current weather for a location."""
+    return f"Weather in {location}"
+
+@tool
+def send_email(to: str, subject: str, body: str) -> str:
+    """Send an email."""
+    return "Email sent"
+
+
+# Emulate all tools (default behavior)
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[get_weather, send_email],
+    middleware=[LLMToolEmulator()],
+)
+
+# Emulate specific tools only
+agent2 = create_agent(
+    model="gpt-5.5",
+    tools=[get_weather, send_email],
+    middleware=[LLMToolEmulator(tools=["get_weather"])],
+)
+
+# Use custom model for emulation
+agent4 = create_agent(
+    model="gpt-5.5",
+    tools=[get_weather, send_email],
+    middleware=[LLMToolEmulator(model="claude-sonnet-4-6")],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, toolEmulatorMiddleware, tool } from "langchain";
+import * as z from "zod";
+
+const getWeather = tool(
+  async ({ location }) => `Weather in ${location}`,
+  {
+    name: "get_weather",
+    description: "Get the current weather for a location",
+    schema: z.object({ location: z.string() }),
+  }
+);
+
+const sendEmail = tool(
+  async ({ to, subject, body }) => "Email sent",
+  {
+    name: "send_email",
+    description: "Send an email",
+    schema: z.object({
+      to: z.string(),
+      subject: z.string(),
+      body: z.string(),
+    }),
+  }
+);
+
+// Emulate all tools (default behavior)
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [getWeather, sendEmail],
+  middleware: [toolEmulatorMiddleware()],
+});
+
+// Emulate specific tools by name
+const agent2 = createAgent({
+  model: "gpt-5.5",
+  tools: [getWeather, sendEmail],
+  middleware: [
+    toolEmulatorMiddleware({
+      tools: ["get_weather"],
+    }),
+  ],
+});
+
+// Emulate specific tools by passing tool instances
+const agent3 = createAgent({
+  model: "gpt-5.5",
+  tools: [getWeather, sendEmail],
+  middleware: [
+    toolEmulatorMiddleware({
+      tools: [getWeather],
+    }),
+  ],
+});
+
+// Use custom model for emulation
+const agent5 = createAgent({
+  model: "gpt-5.5",
+  tools: [getWeather, sendEmail],
+  middleware: [
+    toolEmulatorMiddleware({
+      model: "claude-sonnet-4-6",
+    }),
+  ],
+});
+```
+:::
+
+</Accordion>
+
+### 上下文编辑
+
+通过在达到 token 限制时清除较早的工具调用输出，同时保留最近的结果来管理对话上下文。这有助于在包含大量工具调用的长对话中保持上下文窗口的可管理性。上下文编辑适用于以下场景：
+
+- 包含大量工具调用且超出 token 限制的长对话
+- 通过删除不再相关的较早工具输出来降低 token 成本
+- 仅在上下文中保留最近 N 个工具结果
+
+:::python
+**API 参考：** @[`ContextEditingMiddleware`], @[`ClearToolUsesEdit`]
+
+</fragment>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ContextEditingMiddleware, ClearToolUsesEdit
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        ContextEditingMiddleware(
+            edits=[
+                ClearToolUsesEdit(
+                    trigger=100000,
+                    keep=3,
+                ),
+            ],
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, contextEditingMiddleware, ClearToolUsesEdit } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [],
+  middleware: [
+    contextEditingMiddleware({
+      edits: [
+        new ClearToolUsesEdit({
+          triggerTokens: 100000,
+          keep: 3,
+        }),
+      ],
+    }),
+  ],
+});
+```
+<Accordion title="配置选项">
+
+:::python
+<ParamField body="edits" type="list[ContextEdit]" default="[ClearToolUsesEdit()]">
+    要应用的 @[`ContextEdit`] 策略列表
+</ParamField>
+
+<ParamField body="token_count_method" type="string" default="approximate">
+    Token 计数方法。选项：`'approximate'` 或 `'model'`
+</ParamField>
+
+**@[`ClearToolUsesEdit`] 选项：**
+
+<ParamField body="trigger" type="number" default="100000">
+    触发编辑的 Token 数量。当对话超过此 Token 数量时，较旧的工具输出将被清除。
+</ParamField>
+
+<ParamField body="clear_at_least" type="number" default="0">
+    编辑运行时要回收的最少 Token 数量。如果设置为 0，则清除尽可能多的内容。
+</ParamField>
+
+<ParamField body="keep" type="number" default="3">
+    必须保留的最近工具结果数量。这些结果永远不会被清除。
+</ParamField>
+
+<ParamField body="clear_tool_inputs" type="boolean" default="False">
+    是否清除 AI 消息上的原始工具调用参数。当为 `True` 时，工具调用参数将被替换为空对象。
+</ParamField>
+
+<ParamField body="exclude_tools" type="list[string]" default="()">
+    要从清除中排除的工具名称列表。这些工具的输出永远不会被清除。
+</ParamField>
+
+<ParamField body="placeholder" type="string" default="[cleared]">
+    插入到已清除工具输出的占位符文本。这将替换原始工具消息内容。
+</ParamField>
+:::
+
+:::js
+<ParamField body="edits" type="ContextEdit[]" default="[new ClearToolUsesEdit()]">
+    要应用的 @[`ContextEdit`] 策略数组
+</ParamField>
+
+**@[`ClearToolUsesEdit`] 选项：**
+
+<ParamField body="triggerTokens" type="number" default="100000">
+    触发编辑的 Token 数量。当对话超过此 Token 数量时，较旧的工具输出将被清除。
+</ParamField>
+
+<ParamField body="clearAtLeast" type="number" default="0">
+    编辑运行时要回收的最少 Token 数量。如果设置为 0，则清除尽可能多的内容。
+</ParamField>
+
+<ParamField body="keep" type="number" default="3">
+    必须保留的最近工具结果数量。这些结果永远不会被清除。
+</ParamField>
+
+<ParamField body="clearToolInputs" type="boolean" default="false">
+    是否清除 AI 消息上的原始工具调用参数。当为 `true` 时，工具调用参数将被替换为空对象。
+</ParamField>
+
+<ParamField body="excludeTools" type="string[]" default="[]">
+    要从清除中排除的工具名称列表。这些工具的输出永远不会被清除。
+</ParamField>
+
+<ParamField body="placeholder" type="string" default="[cleared]">
+    插入到已清除工具输出的占位符文本。这将替换原始工具消息内容。
+</ParamField>
+:::
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+当达到 Token 限制时，中间件会应用上下文编辑策略。最常见的策略是 `ClearToolUsesEdit`，它在保留最近结果的同时清除较旧的工具结果。
+
+**工作原理：**
+1. 监控对话中的 Token 数量
+2. 当达到阈值时，清除较旧的工具输出
+3. 保留最近 N 个工具结果
+4. 可选择保留工具调用参数以提供上下文
+
+:::python
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ContextEditingMiddleware, ClearToolUsesEdit
+
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool, your_calculator_tool, database_tool],
+    middleware=[
+        ContextEditingMiddleware(
+            edits=[
+                ClearToolUsesEdit(
+                    trigger=2000,
+                    keep=3,
+                    clear_tool_inputs=False,
+                    exclude_tools=[],
+                    placeholder="[cleared]",
+                ),
+            ],
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, contextEditingMiddleware, ClearToolUsesEdit } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [searchTool, calculatorTool, databaseTool],
+  middleware: [
+    contextEditingMiddleware({
+      edits: [
+        new ClearToolUsesEdit({
+          triggerTokens: 2000,
+          keep: 3,
+          clearToolInputs: false,
+          excludeTools: [],
+          placeholder: "[cleared]",
+        }),
+      ],
+    }),
+  ],
+});
+```
+:::
+</Accordion>
+
+:::python
+### 提供商工具搜索
+
+将选定的工具延迟到模型提供商的服务器端工具搜索之后，让模型按需发现工具，而不是预先接收所有工具架构。提供商工具搜索适用于：
+
+- 减少使用大量工具时的上下文膨胀。
+- 仅显示相关工具，提高工具选择准确性。
+
+<Note>
+    需要支持服务器端工具搜索的模型：Anthropic (Claude Sonnet 4+/Opus 4+/Haiku 4.5+) 或 OpenAI (gpt-5.5+)。其他提供商会引发 `ValueError`。
+</Note>
+
+**API 参考：** @[`ProviderToolSearchMiddleware`]
+
+:::
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ProviderToolSearchMiddleware
+
+agent = create_agent(
+    model="anthropic:claude-opus-4-8",
+    tools=[get_weather, lookup_order],
+    middleware=[
+        ProviderToolSearchMiddleware(searchable_tools=["lookup_order"]),
+    ],
+)
+```
+
+<Accordion title="配置选项">
+
+<ParamField body="searchable_tools" type="list[str | BaseTool]">
+    通过名称或实例指定的工具，将被置于提供商工具搜索之后进行延迟加载。延迟加载的工具在搜索结果出现前不会提供给模型。使用 `extras={"defer_loading": True}` 构造的工具无论此选项如何都会延迟加载；如果省略 `searchable_tools`，则仅延迟加载预先标记的工具。
+</ParamField>
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+中间件会将 `searchable_tools` 中包含的所有工具纳入延迟加载和搜索范围。工具也可以在构造时通过设置 `extras={"defer_loading": True}` 来选择延迟加载。
+
+</Accordion>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import ProviderToolSearchMiddleware
+from langchain.tools import tool
+
+
+# Marked `defer_loading` at construction, so it's deferred on its own —
+# no need to list it in `searchable_tools`.
+@tool(extras={"defer_loading": True})
+def send_email(to: str) -> str:
+    """Send an email."""
+    return "sent"
+
+
+agent = create_agent(
+    model="anthropic:claude-opus-4-8",
+    tools=[send_email],
+    middleware=[ProviderToolSearchMiddleware()],
+)
+```
+
+</Accordion>
+:::
+
+:::js
+### Provider 工具搜索
+
+将选定的工具延迟到模型 Provider 的服务端工具搜索之后，使模型按需发现工具，而不是预先接收所有工具架构。Provider 工具搜索适用于：
+
+- 减少使用多个工具时的上下文膨胀。
+- 通过仅显示相关工具来提高工具选择准确性。
+
+<Note>
+    需要支持服务端工具搜索的模型：Anthropic (Claude Sonnet 4+/Opus 4+/Haiku 4.5+) 或 OpenAI (gpt-5.5+)。其他 Provider 会抛出错误。
+</Note>
+
+**API 参考：** @[`providerToolSearchMiddleware`]
+
+</fragment>
+
+```typescript
+import { createAgent, providerToolSearchMiddleware } from "langchain";
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+
+const getWeather = tool(async () => "Sunny, 22C", {
+  name: "get_weather",
+  description: "Get the current weather for a city",
+  schema: z.object({ city: z.string() }),
+});
+
+const lookupOrderStatus = tool(async () => "OUT_FOR_DELIVERY", {
+  name: "lookup_order_status",
+  description: "Look up the current delivery status of a customer order by ID",
+  schema: z.object({ orderId: z.string() }),
+});
+
+const nicheTools = [lookupOrderStatus];
+
+const agent = createAgent({
+  model: "anthropic:claude-opus-4-8",
+  tools: [getWeather, ...nicheTools],
+  middleware: [
+    providerToolSearchMiddleware({ searchableTools: nicheTools }),
+  ],
+});
+```
+
+<Accordion title="配置选项">
+
+<ParamField body="searchableTools" type="(string | StructuredToolInterface)[]">
+    通过名称或实例指定的需要在提供者的工具搜索之后延迟调用的工具。延迟的工具将被保留，直到搜索将其暴露给模型。使用 `extras.defer_loading: true` 构造的工具无论此选项如何都会延迟；如果省略 `searchableTools`，则只有预先标记的工具会被延迟。
+</ParamField>
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+中间件会将 `searchableTools` 中包含的所有工具选择加入延迟和搜索。工具也可以通过在构造时设置 `extras.defer_loading: true` 来选择加入延迟。
+
+</Accordion>
+
+```typescript
+import { createAgent, providerToolSearchMiddleware } from "langchain";
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+
+// Marked `defer_loading` at construction, so it's deferred on its own —
+// no need to list it in `searchableTools`.
+const sendEmail = tool(async () => "sent", {
+  name: "send_email",
+  description: "Send an email",
+  schema: z.object({ to: z.string() }),
+  extras: { defer_loading: true },
+});
+
+const agent = createAgent({
+  model: "anthropic:claude-opus-4-8",
+  tools: [sendEmail],
+  middleware: [providerToolSearchMiddleware()],
+});
+```
+
+</Accordion>
+:::
+
+:::python
+### Shell 工具
+
+向代理暴露一个持久的 shell 会话以执行命令。Shell 工具中间件适用于以下场景：
+
+- 需要执行系统命令的代理
+- 开发和部署自动化任务
+- 测试和验证工作流
+- 文件系统操作和脚本执行
+
+<Warning>
+    **安全注意事项**：使用适当的执行策略（`HostExecutionPolicy`、`DockerExecutionPolicy` 或 `CodexSandboxExecutionPolicy`）来匹配您部署的安全要求。
+</Warning>
+
+<Note>
+    **限制**：持久 shell 会话目前不支持中断（人机交互）。我们计划在未来添加对此的支持。
+</Note>
+
+**API 参考：** @[`ShellToolMiddleware`]
+
+</fragment>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    ShellToolMiddleware,
+    HostExecutionPolicy,
+)
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool],
+    middleware=[
+        ShellToolMiddleware(
+            workspace_root="/workspace",
+            execution_policy=HostExecutionPolicy(),
+        ),
+    ],
+)
+```
+
+<Accordion title="配置选项">
+
+<ParamField body="workspace_root" type="str | Path | None">
+    Shell会话的基础目录。如果省略，代理启动时会创建临时目录，结束时会自动删除。
+</ParamField>
+
+<ParamField body="startup_commands" type="tuple[str, ...] | list[str] | str | None">
+    会话启动后按顺序执行的可选命令
+</ParamField>
+
+<ParamField body="shutdown_commands" type="tuple[str, ...] | list[str] | str | None">
+    会话关闭前执行的可选命令
+</ParamField>
+
+<ParamField body="execution_policy" type="BaseExecutionPolicy | None">
+    控制超时、输出限制和资源配置的执行策略。选项：
+
+    - `HostExecutionPolicy` - 完全主机访问（默认）；最适合代理已在容器或VM中运行的可信环境
+    - `DockerExecutionPolicy` - 为每次代理运行启动独立的Docker容器，提供更强的隔离
+    - `CodexSandboxExecutionPolicy` - 重用Codex CLI沙箱以提供额外的系统调用/文件系统限制
+</ParamField>
+
+<ParamField body="redaction_rules" type="tuple[RedactionRule, ...] | list[RedactionRule] | None">
+    可选的编辑规则，用于在将命令输出返回给模型前进行清理。
+    <Warning>
+    编辑规则在执行后应用，在使用 `HostExecutionPolicy` 时无法防止敏感数据或密钥被窃取。
+    </Warning>
+</ParamField>
+
+<ParamField body="tool_description" type="str | None">
+    已注册shell工具描述的可选覆盖
+</ParamField>
+
+<ParamField body="shell_command" type="Sequence[str] | str | None">
+    用于启动持久会话的可选shell可执行文件（字符串）或参数序列。默认为 `/bin/bash`。
+</ParamField>
+
+<ParamField body="env" type="Mapping[str, Any] | None">
+    要提供给shell会话的可选环境变量。值在命令执行前会被强制转换为字符串。
+</ParamField>
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+此中间件提供一个持久的shell会话，代理可按顺序执行命令。
+
+**执行策略：**
+- `HostExecutionPolicy`（默认）- 本机执行，完全主机访问
+- `DockerExecutionPolicy` - 隔离的Docker容器执行
+- `CodexSandboxExecutionPolicy` - 通过Codex CLI的沙箱执行
+
+</Accordion>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    ShellToolMiddleware,
+    HostExecutionPolicy,
+    DockerExecutionPolicy,
+    RedactionRule,
+)
+
+
+# Basic shell tool with host execution
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[search_tool],
+    middleware=[
+        ShellToolMiddleware(
+            workspace_root="/workspace",
+            execution_policy=HostExecutionPolicy(),
+        ),
+    ],
+)
+
+# Docker isolation with startup commands
+agent_docker = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        ShellToolMiddleware(
+            workspace_root="/workspace",
+            startup_commands=["pip install requests", "export PYTHONPATH=/workspace"],
+            execution_policy=DockerExecutionPolicy(
+                image="python:3.11-slim",
+                command_timeout=60.0,
+            ),
+        ),
+    ],
+)
+
+# With output redaction (applied post execution)
+agent_redacted = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        ShellToolMiddleware(
+            workspace_root="/workspace",
+            redaction_rules=[
+                RedactionRule(pii_type="api_key", detector=r"sk-[a-zA-Z0-9]{32}"),
+            ],
+        ),
+    ],
+)
+```
+
+</Accordion>
+
+### 文件搜索
+
+提供文件系统上的 Glob 和 Grep 搜索工具。文件搜索中间件适用于以下场景：
+
+- 代码探索和分析
+- 按名称模式查找文件
+- 使用正则表达式搜索代码内容
+- 需要文件发现的大型代码库
+
+**API 参考：** @[`FilesystemFileSearchMiddleware`]
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import FilesystemFileSearchMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        FilesystemFileSearchMiddleware(
+            root_path="/workspace",
+            use_ripgrep=True,
+        ),
+    ],
+)
+```
+
+<Accordion title="配置选项">
+
+<ParamField body="root_path" type="str" required>
+    搜索的根目录。所有文件操作都基于此路径。
+</ParamField>
+
+<ParamField body="use_ripgrep" type="bool" default="True">
+    是否使用 ripgrep 进行搜索。如果 ripgrep 不可用，则回退到 Python 正则表达式。
+</ParamField>
+
+<ParamField body="max_file_size_mb" type="int" default="10">
+    最大搜索文件大小（MB）。超过此大小的文件将被跳过。
+</ParamField>
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+该中间件为代理添加了两个搜索工具：
+
+**Glob 工具** - 快速文件模式匹配：
+- 支持 `**/*.py`、`src/**/*.ts` 等模式
+- 返回按修改时间排序的匹配文件路径
+
+**Grep 工具** - 使用正则表达式的内容搜索：
+- 完整正则表达式语法支持
+- 使用 `include` 参数按文件模式过滤
+- 三种输出模式：`files_with_matches`、`content`、`count`
+
+</Accordion>
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import FilesystemFileSearchMiddleware
+from langchain.messages import HumanMessage
+
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[],
+    middleware=[
+        FilesystemFileSearchMiddleware(
+            root_path="/workspace",
+            use_ripgrep=True,
+            max_file_size_mb=10,
+        ),
+    ],
+)
+
+# Agent can now use glob_search and grep_search tools
+result = agent.invoke({
+    "messages": [HumanMessage("Find all Python files containing 'async def'")]
+})
+
+# The agent will use:
+# 1. glob_search(pattern="**/*.py") to find Python files
+# 2. grep_search(pattern="async def", include="*.py") to find async functions
+```
+</Accordion>
+
+:::
+
+### 文件系统中间件
+
+上下文工程是构建有效代理的主要挑战。当使用返回可变长度结果的工具时（例如 `web_search` 和 RAG），这尤其困难，因为冗长的工具结果会迅速填满你的上下文窗口。
+
+`FilesystemMiddleware`（来自 [Deep Agents](/oss/deepagents/overview)）提供了四个用于与短期和长期记忆交互的工具：
+
+- `ls`：列出文件系统中的文件
+- `read_file`：读取整个文件或文件的特定行数
+- `write_file`：将新文件写入文件系统
+- `edit_file`：编辑文件系统中的现有文件
+
+:::python
+```python
+from langchain.agents import create_agent
+from deepagents.middleware.filesystem import FilesystemMiddleware
+
+# FilesystemMiddleware is included by default in create_deep_agent
+# You can customize it if building a custom agent
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    middleware=[
+        FilesystemMiddleware(
+            backend=None,  # Optional: custom backend (defaults to StateBackend)
+            system_prompt="Write to the filesystem when...",  # Optional custom addition to the system prompt
+            custom_tool_descriptions={
+                "ls": "Use the ls tool when...",
+                "read_file": "Use the read_file tool to..."
+            }  # Optional: Custom descriptions for filesystem tools
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent } from "langchain";
+import { createFilesystemMiddleware } from "deepagents";
+
+// FilesystemMiddleware is included by default in createDeepAgent
+// You can customize it if building a custom agent
+const agent = createAgent({
+  model: "claude-sonnet-4-6",
+  middleware: [
+    createFilesystemMiddleware({
+      backend: undefined,  // Optional: custom backend (defaults to StateBackend)
+      systemPrompt: "Write to the filesystem when...",  // Optional custom system prompt override
+      customToolDescriptions: {
+        ls: "Use the ls tool when...",
+        read_file: "Use the read_file tool to...",
+      },  // Optional: Custom descriptions for filesystem tools
+    }),
+  ],
+});
+```
+:::
+
+#### 短期文件系统与长期文件系统
+
+默认情况下，这些工具会写入图状态中的本地“文件系统”。要启用跨线程的持久化存储，请配置一个 `CompositeBackend`，用于将特定路径（如 `/memories/`）路由到 `StoreBackend`。
+
+:::python
+```python
+from langchain.agents import create_agent
+from deepagents.middleware import FilesystemMiddleware
+from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
+from langgraph.store.memory import InMemoryStore
+
+store = InMemoryStore()
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    store=store,
+    middleware=[
+        FilesystemMiddleware(
+            backend=CompositeBackend(
+                default=StateBackend(),
+                routes={"/memories/": StoreBackend()}
+            ),
+            custom_tool_descriptions={
+                "ls": "Use the ls tool when...",
+                "read_file": "Use the read_file tool to..."
+            }  # Optional: Custom descriptions for filesystem tools
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent } from "langchain";
+import { createFilesystemMiddleware, CompositeBackend, StateBackend, StoreBackend } from "deepagents";
+import { InMemoryStore } from "@langchain/langgraph-checkpoint";
+
+const store = new InMemoryStore();
+
+const agent = createAgent({
+  model: "claude-sonnet-4-6",
+  store,
+  middleware: [
+    createFilesystemMiddleware({
+      backend: new CompositeBackend(
+        new StateBackend(),
+        { "/memories/": new StoreBackend() }
+      ),
+      systemPrompt: "Write to the filesystem when...", // Optional custom system prompt override
+      customToolDescriptions: {
+        ls: "Use the ls tool when...",
+        read_file: "Use the read_file tool to...",
+      }, // Optional: Custom descriptions for filesystem tools
+    }),
+  ],
+});
+```
+:::
+当你使用 `StoreBackend` 配置 `CompositeBackend` 用于 `/memories/` 时，任何以 **/memories/** 为前缀的文件都会被保存到持久化存储中，并在不同线程之间保持存活。没有此前缀的文件则保留在临时状态存储中。
+
+### 子代理
+
+将任务委托给子代理可以隔离上下文，使主（主管）代理的上下文窗口保持简洁，同时仍能深入处理任务。
+
+来自 [Deep Agents](/oss/deepagents/overview) 的子代理中间件允许你通过 `task` 工具提供子代理。
+
+:::python
+:::
+```python
+from langchain.tools import tool
+from langchain.agents import create_agent
+from deepagents.middleware.subagents import SubAgentMiddleware
+
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the weather in a city."""
+    return f"The weather in {city} is sunny."
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    middleware=[
+        SubAgentMiddleware(
+            default_model="claude-sonnet-4-6",
+            default_tools=[],
+            subagents=[
+                {
+                    "name": "weather",
+                    "description": "This subagent can get weather in cities.",
+                    "system_prompt": "Use the get_weather tool to get the weather in a city.",
+                    "tools": [get_weather],
+                    "model": "gpt-5.5",
+                    "middleware": [],
+                }
+            ],
+        )
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { tool } from "langchain";
+import { createAgent } from "langchain";
+import { createSubAgentMiddleware } from "deepagents";
+import { z } from "zod";
+
+const getWeather = tool(
+  async ({ city }: { city: string }) => {
+    return `The weather in ${city} is sunny.`;
+  },
+  {
+    name: "get_weather",
+    description: "Get the weather in a city.",
+    schema: z.object({
+      city: z.string(),
+    }),
+  },
+);
+
+const agent = createAgent({
+  model: "claude-sonnet-4-6",
+  middleware: [
+    createSubAgentMiddleware({
+      defaultModel: "claude-sonnet-4-6",
+      defaultTools: [],
+      subagents: [
+        {
+          name: "weather",
+          description: "This subagent can get weather in cities.",
+          systemPrompt: "Use the get_weather tool to get the weather in a city.",
+          tools: [getWeather],
+          model: "gpt-5.5",
+          middleware: [],
+        },
+      ],
+    }),
+  ],
+});
+```
+:::
+
+子代理通过 **名称**、**描述**、**系统提示词** 和 **工具** 来定义。您还可以为子代理提供自定义 **模型**，或额外的 **中间件**。当您希望为子代理提供一个额外的状态键以与主代理共享时，这尤其有用。
+
+对于更复杂的使用场景，您还可以将您自己的预构建 LangGraph 图作为子代理提供。
+
+:::python
+```python
+from langchain.agents import create_agent
+from deepagents.middleware.subagents import SubAgentMiddleware
+from deepagents import CompiledSubAgent
+from langgraph.graph import StateGraph
+
+# Create a custom LangGraph graph
+def create_weather_graph():
+    workflow = StateGraph(...)
+    # Build your custom graph
+    return workflow.compile()
+
+weather_graph = create_weather_graph()
+
+# Wrap it in a CompiledSubAgent
+weather_subagent = CompiledSubAgent(
+    name="weather",
+    description="This subagent can get weather in cities.",
+    runnable=weather_graph
+)
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    middleware=[
+        SubAgentMiddleware(
+            default_model="claude-sonnet-4-6",
+            default_tools=[],
+            subagents=[weather_subagent],
+        )
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { tool, createAgent } from "langchain";
+import { createSubAgentMiddleware, type SubAgent } from "deepagents";
+import { z } from "zod";
+
+const getWeather = tool(
+  async ({ city }: { city: string }) => {
+    return `The weather in ${city} is sunny.`;
+  },
+  {
+    name: "get_weather",
+    description: "Get the weather in a city.",
+    schema: z.object({
+      city: z.string(),
+    }),
+  },
+);
+
+const weatherSubagent: SubAgent = {
+  name: "weather",
+  description: "This subagent can get weather in cities.",
+  systemPrompt: "Use the get_weather tool to get the weather in a city.",
+  tools: [getWeather],
+  model: "gpt-5.5",
+  middleware: [],
+};
+
+const agent = createAgent({
+  model: "claude-sonnet-4-6",
+  middleware: [
+    createSubAgentMiddleware({
+      defaultModel: "claude-sonnet-4-6",
+      defaultTools: [],
+      subagents: [weatherSubagent],
+    }),
+  ],
+});
+```
+除了任何用户定义的子代理之外，主代理始终可以访问一个 `general-purpose` 子代理。该子代理拥有与主代理相同的指令和所有可用的工具。`general-purpose` 子代理的主要目的是上下文隔离——主代理可以将复杂任务委托给此子代理，并获得简洁的回复，而不会因中间工具调用而膨胀。
+
+## 提供商特定的中间件
+
+这些中间件针对特定的 LLM 提供商进行了优化。请参阅每个提供商的文档以获取完整的详细信息和示例。
+
+<Columns cols={2}>
+
+:::python
+    <Card title="Anthropic" href="/oss/integrations/middleware/anthropic" icon="/images/providers/anthropic-icon.svg" arrow>
+        Claude 模型的提示缓存、bash 工具、文本编辑器、内存和文件搜索中间件。
+    </Card>
+    <Card title="AWS" href="/oss/integrations/middleware/aws" icon="brand-aws" arrow>
+        Amazon Bedrock 模型的提示缓存中间件。
+    </Card>
+    <Card title="OpenAI" href="/oss/integrations/middleware/openai" icon="brand-openai" arrow>
+        OpenAI 模型的内容审核中间件。
+    </Card>
+:::
+
+:::js
+    <Card title="Anthropic" href="/oss/integrations/middleware/anthropic" icon="/images/providers/anthropic-icon.svg" arrow>
+        Claude 模型的提示缓存、bash 工具、文本编辑器、内存和文件搜索中间件。
+    </Card>
+    <Card title="AWS" href="/oss/integrations/middleware/aws" icon="brand-aws" arrow>
+        Amazon Bedrock 模型的提示缓存中间件。
+    </Card>
+:::
+</Columns>

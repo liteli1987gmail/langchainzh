@@ -1,0 +1,373 @@
+---
+title: "OCI Generative AI 与 LangChain 的集成"
+description: "使用 LangChain Python 与 OCI Generative AI 聊天模型集成。"
+---
+
+本文档将帮助您开始使用 Oracle Cloud Infrastructure (OCI) Generative AI [聊天模型](/oss/langchain/models)。OCI Generative AI 是一项完全托管的服务，通过单一 API 提供涵盖广泛用例的最先进、可定制的大型语言模型。您可以访问即用型预训练模型，或在专用 AI 集群上创建和托管微调的自定义模型。
+
+有关详细文档，请参阅 [OCI Generative AI 文档](https://docs.oracle.com/en-us/iaas/Content/generative-ai/home.htm) 和 [API 参考](https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai/20231130/)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 下载量 | 版本 |
+| :--- | :--- | :---: |  :--- | :--- | :--- |
+| [`ChatOCIGenAI`](https://github.com/oracle/langchain-oracle/tree/main/libs/oci) | [`langchain-oci`](https://pypi.org/project/langchain-oci/) | beta | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-oci?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-oci?style=flat-square&label=%20) |
+
+### 模型特性
+
+| [工具调用](/oss/langchain/tools/) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | 视频输入 | [Token 级流式传输](/oss/langchain/streaming/) | 原生异步 | [Token 使用量](/oss/langchain/models#token-usage) | [Logprobs](/oss/langchain/models#log-probabilities) |
+| :--- | :--- | :--- |  :--- | :--- | :--- | :--- | :--- | :--- |
+| ✅ | ✅ | ✅ | ✅ (Gemini) | ✅ (Gemini) | ✅ | ✅ | ✅ | ❌ |
+
+## 设置
+
+### 安装
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-oci oci
+```
+
+```bash uv
+uv add langchain-oci oci
+```
+</CodeGroup>
+
+### 凭证
+
+使用 OCI CLI 设置身份验证（创建 `~/.oci/config`）：
+
+```bash
+oci setup config
+```
+
+对于其他身份验证方法（会话令牌、instance principals），请参阅 [OCI SDK authentication](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_authentication_methods.htm)。
+
+## 实例化
+
+```python
+from langchain_oci import ChatOCIGenAI
+
+llm = ChatOCIGenAI(
+    model_id="meta.llama-3.3-70b-instruct",
+    service_endpoint="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+    compartment_id="ocid1.compartment.oc1..your-compartment-id",
+    model_kwargs={"temperature": 0.7, "max_tokens": 500},  # Optional
+)
+```
+
+**关键参数：**
+- `model_id` - 要使用的模型（请参阅[可用模型](#available-models)）
+- `service_endpoint` - 区域终端节点（`us-chicago-1`、`eu-frankfurt-1` 等）
+- `compartment_id` - 您的 OCI 资源容器 OCID
+- `model_kwargs` - 模型设置，如 temperature、max_tokens
+
+## 调用
+
+```python
+messages = [
+    ("system", "You are a code review assistant."),
+    ("human", """Review this Python function for security issues:
+
+def login(username, password):
+    query = f"SELECT * FROM users WHERE name='{username}' AND pass='{password}'"
+    return db.execute(query)
+"""),
+]
+response = llm.invoke(messages)
+print(response.content)
+```
+
+```text
+This function has a critical SQL injection vulnerability. The username and password
+are directly interpolated into the SQL query string, allowing attackers to bypass
+authentication or extract data. Use parameterized queries instead:
+
+    cursor.execute("SELECT * FROM users WHERE name=? AND pass=?", (username, password))
+```
+
+**多轮对话** 在多条消息之间保持上下文：
+
+```python
+messages = [
+    ("user", "Analyze error rate spike at 14:30 UTC"),
+    ("assistant", "The spike correlates with deploy-v2.1.3. Checking logs..."),
+    ("user", "What was the root cause?"),
+]
+response = llm.invoke(messages)
+# Model references previous context about deploy-v2.1.3
+```
+
+## 流式传输
+
+在生成时获取响应：
+
+```python
+stream = llm.stream_events("Explain Python generators in 3 sentences", version="v3")
+for token in stream.text:
+    print(token, end="", flush=True)
+```
+
+## 异步
+
+并发处理多个请求以获得更高的吞吐量：
+
+```python
+import asyncio
+
+# Analyze multiple code files concurrently
+async def analyze_codebase(files: list[str]) -> list:
+    tasks = [llm.ainvoke(f"Find vulnerabilities in:\n{code}") for code in files]
+    return await asyncio.gather(*tasks)
+
+# Stream responses for real-time UI updates
+async def stream_response():
+    stream = await llm.astream_events("Explain async/await in Python", version="v3")
+    async for token in stream.text:
+        print(token, end="", flush=True)
+
+asyncio.run(stream_response())
+```
+
+## 工具调用
+
+让模型能够访问 API、数据库和自定义函数：
+
+```python
+from langchain.tools import tool
+
+@tool
+def get_order_status(order_id: str) -> dict:
+    """Check the status of a customer order.
+
+    Args:
+        order_id: The order ID to look up
+    """
+    # In production, query your database
+    return {"order_id": order_id, "status": "shipped", "eta": "2024-03-15"}
+
+@tool
+def get_account_balance(account_id: str) -> dict:
+    """Get current account balance.
+
+    Args:
+        account_id: The account ID
+    """
+    return {"account_id": account_id, "balance": 1250.00, "currency": "USD"}
+
+# Bind tools to the model
+tools = [get_order_status, get_account_balance]
+llm_with_tools = llm.bind_tools(tools)
+
+# Model decides which tool to call
+response = llm_with_tools.invoke("What's the status of order ORD-12345?")
+
+# Check if model wants to call a tool
+if response.tool_calls:
+    tool_call = response.tool_calls[0]
+    print(f"Tool: {tool_call['name']}, Args: {tool_call['args']}")
+    # Output: Tool: get_order_status, Args: {'order_id': 'ORD-12345'}
+```
+
+**完整工具执行循环** - 执行该工具并返回结果：
+
+```python
+from langchain.messages import HumanMessage, AIMessage, ToolMessage
+
+messages = [HumanMessage(content="What's the status of order ORD-12345?")]
+response = llm_with_tools.invoke(messages)
+
+# Execute each tool call and collect results
+if response.tool_calls:
+    messages.append(response)  # Add AI response with tool calls
+
+    for tool_call in response.tool_calls:
+        # Find and execute the tool
+        tool_fn = {"get_order_status": get_order_status,
+                   "get_account_balance": get_account_balance}[tool_call["name"]]
+        result = tool_fn.invoke(tool_call["args"])
+
+        # Add tool result to messages
+        messages.append(ToolMessage(content=str(result), tool_call_id=tool_call["id"]))
+
+    # Get final response with tool results
+    final_response = llm_with_tools.invoke(messages)
+    print(final_response.content)
+    # Output: Order ORD-12345 has been shipped and is expected to arrive on March 15, 2024.
+```
+
+**并行工具执行** (Llama 4+) 用于并发 API 调用：
+
+```python
+llm = ChatOCIGenAI(
+    model_id="meta.llama-4-scout-17b-16e-instruct",
+    service_endpoint="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+    compartment_id="ocid1.compartment.oc1..your-compartment-id",
+)
+llm_with_tools = llm.bind_tools(tools, parallel_tool_calls=True)
+# Model can call multiple tools at once, reducing latency
+```
+
+## 结构化输出
+
+将非结构化文本解析为类型化数据结构以便处理：
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Literal
+
+class SupportTicket(BaseModel):
+    """Structured representation of a customer support ticket."""
+    ticket_id: str
+    severity: Literal["low", "medium", "high", "critical"]
+    category: str = Field(description="e.g., billing, technical, account")
+    description: str
+    affected_services: List[str]
+
+structured_llm = llm.with_structured_output(SupportTicket)
+
+# Parse unstructured support email
+email_text = """From: customer@example.com
+Subject: URGENT - Cannot access production database
+
+Our production API has been returning 500 errors for the past hour.
+The database connection pool appears exhausted. This is affecting
+our payment processing and user authentication services."""
+
+ticket = structured_llm.invoke(email_text)
+```
+
+```python
+print(ticket.severity)           # "critical"
+print(ticket.category)           # "technical"
+print(ticket.affected_services)  # ["payment processing", "user authentication"]
+```
+
+用于日志解析、发票提取或数据分类管道。
+
+## 视觉与多模态
+
+处理图像以进行数据提取、分析和自动化：
+
+```python
+from langchain.messages import HumanMessage
+from langchain_oci import ChatOCIGenAI, load_image
+
+llm = ChatOCIGenAI(
+    model_id="meta.llama-3.2-90b-vision-instruct",
+    service_endpoint="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+    compartment_id="ocid1.compartment.oc1..your-compartment-id",
+)
+
+# Analyze an architecture diagram
+message = HumanMessage(content=[
+    {"type": "text", "text": "List all services and their connections in this diagram."},
+    load_image("./architecture_diagram.png"),  # Local file or URL
+])
+response = llm.invoke([message])
+print(response.content)
+```
+
+```text
+The diagram shows 4 services:
+1. API Gateway - receives external traffic, routes to internal services
+2. Auth Service - handles authentication, connects to User DB
+3. Order Service - processes orders, connects to Orders DB and Payment API
+4. Notification Service - sends emails/SMS, triggered by Order Service
+```
+
+**使用场景：** 图表分析、收据/发票解析、图表数据提取、文档处理
+
+**视觉模型：** Llama 3.2 Vision (11B, 90B), Gemini 2.0/2.5, Grok 4, Cohere Command A
+
+## Gemini 多模态（PDF、视频、音频）
+
+使用 Gemini 模型处理文档、视频和音频：
+
+```python
+import base64
+from langchain.messages import HumanMessage
+from langchain_oci import ChatOCIGenAI
+
+llm = ChatOCIGenAI(
+    model_id="google.gemini-2.5-flash",
+    service_endpoint="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+    compartment_id="ocid1.compartment.oc1..your-compartment-id",
+)
+
+# Extract data from a PDF
+with open("contract.pdf", "rb") as f:
+    pdf_data = base64.b64encode(f.read()).decode()
+
+message = HumanMessage(content=[
+    {"type": "text", "text": "Extract the contract parties, effective date, and payment terms as JSON."},
+    {"type": "document_url", "document_url": {"url": f"data:application/pdf;base64,{pdf_data}"}}
+])
+response = llm.invoke([message])
+print(response.content)
+```
+
+```text
+{
+  "parties": ["Acme Corp", "TechStart Inc"],
+  "effective_date": "2024-01-15",
+  "payment_terms": "Net 30, monthly invoicing"
+}
+```
+
+**视频/音频分析：**
+
+```python
+with open("meeting.mp4", "rb") as f:
+    video_data = base64.b64encode(f.read()).decode()
+
+message = HumanMessage(content=[
+    {"type": "text", "text": "List the action items and who is responsible for each."},
+    {"type": "video_url", "video_url": {"url": f"data:video/mp4;base64,{video_data}"}}
+])
+response = llm.invoke([message])
+```
+
+**支持的格式：** PDF、MP4/MOV 视频、MP3/WAV 音频（仅限 Gemini 2.0/2.5）
+
+## 配置
+
+使用 `model_kwargs` 控制模型行为：
+
+```python
+llm = ChatOCIGenAI(
+    model_id="meta.llama-3.3-70b-instruct",
+    service_endpoint="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+    compartment_id="ocid1.compartment.oc1..your-compartment-id",
+    model_kwargs={
+        "temperature": 0.7,    # Creativity: 0 = deterministic, 1 = creative
+        "max_tokens": 500,     # Maximum response length
+        "top_p": 0.9,          # Nucleus sampling threshold
+    },
+)
+```
+
+## 可用模型
+
+| 提供商 | 示例模型 | 主要特性 |
+|--------|----------|----------|
+| **Meta** | Llama 3.2/3.3/4 (Scout, Maverick) | 视觉、并行工具 |
+| **Google** | Gemini 2.0/2.5 Flash, Pro | PDF、视频、音频 |
+| **xAI** | Grok 3, Grok 4 | 视觉、推理 |
+| **Cohere** | Command R+, Command A | RAG、视觉 |
+
+完整列表和区域可用性，请参阅 [OCI 模型目录](https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm)。
+
+## API 参考
+
+有关所有 `ChatOCIGenAI` 功能配置的详细文档，请前往 [API 参考](https://github.com/oracle/langchain-oracle/tree/main/libs/oci)。
+
+## 相关内容
+
+- [OCI 提供商概述](/oss/integrations/providers/oci)
+- [OCI 嵌入](/oss/integrations/embeddings/oci_generative_ai)
+- [工具调用指南](/oss/langchain/tools/)
+- [结构化输出指南](/oss/langchain/structured-output)
+- [多模态消息](/oss/langchain/messages#multimodal)

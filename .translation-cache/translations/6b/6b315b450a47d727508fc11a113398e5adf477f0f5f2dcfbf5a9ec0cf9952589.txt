@@ -1,0 +1,191 @@
+---
+title: 管理模型配置
+description: 管理模型配置并控制其在 LangSmith 功能中的可用性。
+---
+
+模型配置定义了 LangSmith 功能在调用 AI 提供商时使用的模型和参数。一个共享的配置库跨越您的整个[工作空间](/langsmith/administration-overview#workspaces)，因此您创建的任何配置都可以在以下功能中使用，不会重复：
+
+- [**Playground**](/langsmith/prompt-engineering-concepts)
+- [**Evaluator**](/langsmith/evaluation)
+- [**Fleet**](/langsmith/fleet/index)
+- [**Chat**](/langsmith/chat)
+- [**Insights**](/langsmith/insights)
+
+[工作空间管理员](/langsmith/rbac#workspace-admin)可以创建、编辑和删除配置，并控制每个功能可用的提供商和模型。非管理员成员可以查看配置但不能修改。
+
+配置还可以携带 [OAuth 客户端凭证](#oauth-client-credentials)，因此 LangSmith 在请求时向您的 IdP 发放短期 bearer token，而不是使用静态 API 密钥。
+
+## 功能访问
+
+**功能访问**表独立控制每个 LangSmith 功能的提供商和模型可用性。
+
+| **功能** | **模型选择体验** |
+|---------|---------------------------|
+| Playground | 完整模型控制——查看和调整所有参数。无内置模型；依赖工作空间配置。 |
+| Evaluator | 完整模型控制——查看和调整所有参数。无内置模型；依赖工作空间配置。 |
+| Fleet | 默认从精选列表中选择。您也可以添加自定义工作空间配置。 |
+| Chat | 默认从精选列表中选择。您也可以添加自定义工作空间配置。 |
+| Insights (Thinking) | 用于深度分析的模型。默认从提供商推荐的精选列表中选择。您也可以添加自定义工作空间配置。 |
+| Insights (Summarization) | 用于轻量级摘要的模型。默认从提供商推荐的精选列表中选择。您也可以添加自定义工作空间配置。 |
+
+所有功能都支持自定义工作空间配置，因此您可以使用任何提供商或模型——即使对于默认显示精选列表的功能也是如此。
+
+<Note>
+**Insights** 使用两个单独的行——一个用于分析，一个用于摘要。如果您为任一行选择了不兼容的提供商或非推荐的模型，UI 会显示警告。
+</Note>
+
+### 配置功能访问
+
+在 [UI](https://smith.langchain.com) 中配置功能访问：
+
+1. 导航至 **Settings** > **Model configurations**。
+2. 在 **Feature Access** 表中，找到要配置的功能。
+3. 点击 **Enabled Providers** 并为该功能开启或关闭提供商。
+4. 点击 **Available Models** 并选择用户可选择的模型。
+5. 使用 **Default Model** 下拉菜单设置用户打开功能时预选的模型。
+
+## 配置
+
+**Configurations** 表是您工作空间的命名模型配置共享库。您可以在 LangSmith 中创建配置（包括从 [Playground](/langsmith/managing-model-configurations) 中创建），并可以在所有功能中重复使用。
+
+### 创建配置
+
+1. 导航至 **Settings** > **Model configurations**。
+2. 在 **Configurations** 下，点击 **+ Create**。
+3. 选择 **Provider** 和 **Model**。
+4. 输入 **API Key Name**——存储提供商 API 密钥的工作空间中的密钥名称。
+5. 根据需要调整参数。参数分组为以下部分：
+    - **Standard sampling settings**：temperature、top P、top K、presence penalty、frequency penalty、max output tokens
+    - **Reasoning**：reasoning effort、service tier
+    - **Provider config**：provider API、base URL
+    - **Options**：stop sequences、seed、JSON mode、extra headers、requests per second、extra parameters
+
+    可用参数因提供商而异——请参阅您的提供商的文档了解详情。
+6. 点击 **Save**。
+
+### 编辑配置
+
+1. 在 **Configurations** 表中，点击配置旁边的溢出菜单 <Icon icon="dots-vertical" iconType="regular" />。
+2. 选择 **Edit**。
+3. 更新配置并点击 **Save**。
+
+### 删除配置
+
+1. 在 **Configurations** 表中，点击配置旁边的溢出菜单 <Icon icon="dots-vertical" iconType="regular" />。
+2. 选择 <Icon icon="trash" iconType="regular" /> **Delete** 并确认。
+
+## OAuth 客户端凭证
+
+<Note>
+OAuth 客户端凭证在 LangSmith [Cloud](/langsmith/cloud) 上可用。[自托管](/langsmith/self-hosted) 支持计划在即将发布的版本中推出。
+</Note>
+
+当模型配置位于 OAuth2 网关后面时，您可以直接在配置上存储 OAuth `client_credentials`，而不是分发静态 API 密钥。LangSmith 在请求时将这些凭证交换为短期 bearer token，将其作为 `Authorization: Bearer <token>` 附加到出站 LLM 调用，并在 token 过期前刷新它。这是每个配置的自助服务替代方案，替代通过 [LLM auth proxy](/langsmith/llm-auth-proxy-self-hosted) 路由工作空间；两者对于每个配置是互斥的。
+
+OAuth 客户端凭证在支持自定义模型配置的每个[计划](/langsmith/pricing-plans)上都可用。**Use Custom OAuth** 切换适用于 bearer-token 提供商（OpenAI、Anthropic、OpenAI-compatible endpoints 及类似提供商），不支持 Bedrock、Google Vertex AI 或 Google GenAI，后者使用原生云身份验证。**LangServe (Deprecated)** 预设也隐藏了此切换。
+
+### 在模型配置上配置 OAuth
+
+配置 OAuth 需要[工作空间管理员](/langsmith/rbac#workspace-admin)角色或具有 `workspaces:manage-model-configs` 权限的[自定义角色](/langsmith/rbac#custom-roles)。没有该权限的成员会看到 OAuth 字段被禁用，并带有掩码密钥提示。在 [LangSmith UI](https://smith.langchain.com) 中：
+
+1. 导航至 **Settings** > **Model configurations**，然后点击 **+ Create** 或通过溢出菜单 <Icon icon="dots-vertical" iconType="regular" /> > **Edit** 打开现有行。
+2. 选择兼容的提供商并照常配置模型参数。
+3. 开启 **Use Custom OAuth**。
+4. 填写 OAuth 字段：
+    - **Token URL**：IdP token 端点，例如 `https://login.example.com/oauth/token`。
+    - **Client ID**：OAuth 客户端标识符。
+    - **Client Secret**：OAuth 客户端密钥。静态加密。
+    - **Token Endpoint Auth Method**：`client_secret_basic` 或 `client_secret_post`。
+    - **Extra parameters**：在 token 请求正文中发送的键/值行。使用这些行发送 `scope`、`audience`、`resource` 或 IdP 期望的任何其他参数。发送多个 scope 时，每个值添加一行；重复的键作为多值对发送。
+    - **Extra headers**：随 token 请求一起发送的额外头。保留的头（如 `Authorization`）在保存时被拒绝。
+5. 点击 **Save**。
+
+<img
+    className="block dark:hidden"
+    src="/langsmith/images/model-config-oauth-create-light.png"
+    alt="Model configuration Create modal in LangSmith Settings with Use Custom OAuth toggled on, showing Token URL, Client ID, masked Client Secret, and Token Endpoint Auth Method set to HTTP Basic."
+/>
+<img
+    className="hidden dark:block"
+    src="/langsmith/images/model-config-oauth-create-dark.png"
+    alt="Model configuration Create modal in LangSmith Settings with Use Custom OAuth toggled on, showing Token URL, Client ID, masked Client Secret, and Token Endpoint Auth Method set to HTTP Basic."
+/>
+
+### 编辑语义
+
+OAuth 字段遵循保护存储密钥的编辑行为：
+
+- **Secret round-trip**：服务器返回密钥为 `********`。输入框显示为空，并带有*"Secret is set. Type to replace."*提示。如果不重新输入就提交，存储的密钥将保持不变。
+- **Toggle off preserves credentials**：关闭 **Use Custom OAuth** 会停用 OAuth 流程，但保留存储的字段。重新开启会继续使用相同的凭证。
+- **清除字段**：编辑配置并留空字段以明确清除。
+- **通过 Save as preset 克隆**：将一次性配置保存为新预设时，非密钥 OAuth 字段会复制到新行。密钥无法传输，因为它从不暴露读取，因此克隆时 OAuth 被强制禁用，直到您重新输入密钥。
+
+### 请求流程
+
+当请求针对 OAuth 启用的配置运行时，LangSmith 通过内部代理发放 bearer，缓存结果，并在缓存的 token 过期之前将 bearer 附加到每个出站 LLM 调用上。
+
+```mermaid actions={false}
+sequenceDiagram
+    autonumber
+    participant Caller as LangSmith service<br/>(Playground, Evals, Insights, Chat, Fleet)
+    participant Broker as Token broker
+    participant Cache as Redis cache
+    participant IdP as Customer IdP
+    participant LLM as Upstream LLM provider
+
+    Caller->>Broker: Mint token for configuration X
+    Broker->>Cache: Lookup cached token for X
+    alt Cache hit
+        Cache-->>Broker: Cached token
+    else Cache miss or expired
+        Broker->>IdP: client_credentials grant
+        IdP-->>Broker: access_token + expires_in
+        Broker->>Cache: Store until expiry
+    end
+    Broker-->>Caller: access_token
+    Caller->>LLM: Request with Authorization: Bearer <token>
+    LLM-->>Caller: Response
+```
+
+OAuth 与 [LLM 身份验证代理](/langsmith/llm-auth-proxy-self-hosted) 之间的路由是按配置进行的，而非按组织。每个请求根据配置的 OAuth 状态解析到 OAuth 或 LLM 身份验证代理。单个多模型任务（例如，配置了独立思考模型和摘要模型的 [Insights](/langsmith/insights)）可以混合使用两种流程，因为每个模型是独立解析的。
+
+### 回退行为
+
+如果代理无法生成令牌（IdP 不可达、凭证无效、请求准备和执行之间配置被删除），则请求会回退到提供商的静态工作区 API 密钥。如果没有设置工作区密钥，则预期出站调用会出现提供商 401 错误。
+
+令牌轮换仅在缓存的 bearer 过期后才会传播。请根据 IdP 配置的访问令牌 TTL 来计划轮换。
+
+### 覆盖范围
+
+OAuth 启用的配置在所有使用模型配置的地方都会生效：
+
+- [**Playground**](/langsmith/prompt-engineering-concepts)：聊天运行和实验运行。
+- [**Evaluators**](/langsmith/evaluation)：LLM-as-judge 配置、复用、预览测试以及评估器详情测试，当每个提示都解析到 OAuth 启用的配置时，都会跳过工作区密钥提示。
+- [**Insights**](/langsmith/insights)：思考和摘要配置是独立解析的。
+- [**Chat**](/langsmith/chat)
+- [**Fleet**](/langsmith/fleet/index)
+
+当配置启用 OAuth 时，LangSmith 不会为该配置提示输入工作区密钥，因为代理会在请求时提供凭证。
+
+### 安全与审计
+
+- **静态加密**：客户端密钥使用与[工作区密钥](/langsmith/administration-overview#workspaces)相同的派生方式通过 Fernet 加密。
+- **Bearer 缓存**：访问令牌会被缓存直到过期，且永远不会写入日志。
+
+### 常见问题
+
+<Accordion title="OAuth 凭证可以在多个工作区之间共享吗？">
+不可以。OAuth 凭证存储在模型配置上，该配置是工作区范围的。每个工作区都需要输入自己的凭证，即使凭证指向同一个 IdP 客户端。
+</Accordion>
+
+<Accordion title="为什么我的 OAuth 启用配置突然使用静态工作区密钥？">
+如果代理无法生成 bearer（IdP 不可达、凭证无效、请求准备和执行之间配置被删除），则请求会回退到提供商的静态工作区 API 密钥。请重新打开模型配置并验证令牌 URL 可达、客户端 ID 和密钥是最新的，以及令牌端点身份验证方法与 IdP 期望的一致。
+</Accordion>
+
+<Accordion title="如何轮换客户端密钥？">
+编辑模型配置并在**客户端密钥**字段中重新输入密钥。保存时旧密钥会被覆盖。Redis 缓存的 bearer 会继续工作直到其 TTL 过期，之后代理会使用轮换后的密钥生成新的 bearer。
+</Accordion>
+
+<Accordion title="OAuth 和 LLM 身份验证代理可以一起使用吗？">
+可以。路由是按配置进行的。启用 OAuth 的配置使用 OAuth；未启用 OAuth 的配置会在组织级别启用代理时通过 LLM 身份验证代理。单个多模型任务可以混合使用两种流程。
+</Accordion>

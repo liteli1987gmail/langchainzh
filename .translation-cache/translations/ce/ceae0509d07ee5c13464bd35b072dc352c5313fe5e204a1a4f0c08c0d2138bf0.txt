@@ -1,0 +1,534 @@
+---
+title: "Intel 视觉数据管理系统 (VDMS) 集成"
+description: "使用 LangChain Python 与 Intel 视觉数据管理系统 (VDMS) 向量存储进行集成。"
+---
+
+This notebook covers how to get started with VDMS as a vector store.
+
+>Intel 的[视觉数据管理系统 (VDMS)](https://github.com/IntelLabs/vdms) 是一种用于高效访问大规模"视觉"数据的存储解决方案，旨在通过搜索存储为图形的视觉元数据来查找相关视觉数据，从而实现云规模，并为视觉数据启用机器友好的增强功能以加快访问速度。VDMS 采用 MIT 许可证许可。有关 `VDMS` 的更多信息，请访问 [VDMS wiki](https://github.com/IntelLabs/vdms/wiki)。
+
+VDMS 支持：
+
+* K 最近邻搜索
+* 欧几里得距离 (L2) 和内积 (IP)
+* 用于索引和计算距离的库：FaissFlat（默认）、FaissHNSWFlat、FaissIVFFlat、Flinng、TileDBDense、TileDBSparse
+* 文本、图像和视频的嵌入
+* 向量和元数据搜索
+
+## 设置
+
+要访问 VDMS 向量存储，您需要安装 `langchain-vdms` 集成包，并通过公开可用的 Docker 镜像部署 VDMS 服务器。
+为简单起见，本笔记本将使用端口 55555 在本地主机上部署 VDMS 服务器。
+
+```python
+pip install -qU "langchain-vdms>=0.1.3"
+!docker run --no-healthcheck --rm -d -p 55555:55555 --name vdms_vs_test_nb intellabs/vdms:latest
+!sleep 5
+```
+
+### 凭证
+
+您可以无需任何凭证即可使用 `VDMS`。
+
+要启用模型调用的自动追踪功能，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+## 初始化
+
+使用 VDMS Client 连接到使用 FAISS IndexFlat 索引（默认）和欧氏距离（默认）作为相似度搜索距离度量的 VDMS 向量存储。
+
+<EmbeddingTabs/>
+
+```python
+# | output: false
+# | echo: false
+
+! pip install -qU langchain-huggingface
+from langchain_huggingface import HuggingFaceEmbeddings
+
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+```
+
+```python
+from langchain_vdms.vectorstores import VDMS, VDMS_Client
+
+collection_name = "test_collection_faiss_L2"
+
+vdms_client = VDMS_Client(host="localhost", port=55555)
+
+vector_store = VDMS(
+    client=vdms_client,
+    embedding=embeddings,
+    collection_name=collection_name,
+    engine="FaissFlat",
+    distance_strategy="L2",
+)
+```
+
+## 管理向量存储
+
+### 添加内容到向量存储
+
+```python
+import logging
+
+logging.basicConfig()
+logging.getLogger("langchain_vdms.vectorstores").setLevel(logging.INFO)
+
+from langchain_core.documents import Document
+
+document_1 = Document(
+    page_content="I had chocolate chip pancakes and scrambled eggs for breakfast this morning.",
+    metadata={"source": "tweet"},
+    id=1,
+)
+
+document_2 = Document(
+    page_content="The weather forecast for tomorrow is cloudy and overcast, with a high of 62 degrees.",
+    metadata={"source": "news"},
+    id=2,
+)
+
+document_3 = Document(
+    page_content="Building an exciting new project with LangChain - come check it out!",
+    metadata={"source": "tweet"},
+    id=3,
+)
+
+document_4 = Document(
+    page_content="Robbers broke into the city bank and stole $1 million in cash.",
+    metadata={"source": "news"},
+    id=4,
+)
+
+document_5 = Document(
+    page_content="Wow! That was an amazing movie. I can't wait to see it again.",
+    metadata={"source": "tweet"},
+    id=5,
+)
+
+document_6 = Document(
+    page_content="Is the new iPhone worth the price? Read this review to find out.",
+    metadata={"source": "website"},
+    id=6,
+)
+
+document_7 = Document(
+    page_content="The top 10 soccer players in the world right now.",
+    metadata={"source": "website"},
+    id=7,
+)
+
+document_8 = Document(
+    page_content="LangGraph is the best framework for building stateful, agentic applications!",
+    metadata={"source": "tweet"},
+    id=8,
+)
+
+document_9 = Document(
+    page_content="The stock market is down 500 points today due to fears of a recession.",
+    metadata={"source": "news"},
+    id=9,
+)
+
+document_10 = Document(
+    page_content="I have a bad feeling I am going to get deleted :(",
+    metadata={"source": "tweet"},
+    id=10,
+)
+
+documents = [
+    document_1,
+    document_2,
+    document_3,
+    document_4,
+    document_5,
+    document_6,
+    document_7,
+    document_8,
+    document_9,
+    document_10,
+]
+
+doc_ids = [str(i) for i in range(1, 11)]
+vector_store.add_documents(documents=documents, ids=doc_ids)
+```
+
+```python
+['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+```
+
+如果多次提供了相同的 id，`add_documents` 不会检查 id 是否唯一。因此，使用 `upsert` 在添加之前删除已存在的 id 条目。
+
+```python
+vector_store.upsert(documents, ids=doc_ids)
+```
+
+```text
+{'succeeded': ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+ 'failed': []}
+```
+
+### 更新向量存储中的项目
+
+```python
+updated_document_1 = Document(
+    page_content="I had chocolate chip pancakes and fried eggs for breakfast this morning.",
+    metadata={"source": "tweet"},
+    id=1,
+)
+
+updated_document_2 = Document(
+    page_content="The weather forecast for tomorrow is sunny and warm, with a high of 82 degrees.",
+    metadata={"source": "news"},
+    id=2,
+)
+
+vector_store.update_documents(
+    ids=doc_ids[:2],
+    documents=[updated_document_1, updated_document_2],
+    batch_size=2,
+)
+```
+
+### 从向量存储中删除项目
+
+```python
+vector_store.delete(ids=doc_ids[-1])
+```
+
+```text
+True
+```
+
+## 查询向量存储
+
+一旦您的向量存储已创建并且相关文档已添加，您很可能希望在链或代理运行期间对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以按如下方式进行：
+
+```python
+results = vector_store.similarity_search(
+    "LangChain provides abstractions to make working with LLMs easy",
+    k=2,
+    filter={"source": ["==", "tweet"]},
+)
+for doc in results:
+    print(f"* ID={doc.id}: {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:VDMS similarity search took 0.0063 seconds
+```
+```text
+* ID=3: Building an exciting new project with LangChain - come check it out! [{'source': 'tweet'}]
+* ID=8: LangGraph is the best framework for building stateful, agentic applications! [{'source': 'tweet'}]
+```
+
+如果您想执行相似性搜索并获取相应的分数，可以运行：
+
+```python
+results = vector_store.similarity_search_with_score(
+        "Will it be hot tomorrow?", k=1, filter={"source": ["==", "news"]}
+)
+for doc, score in results:
+        print(f"* [SIM={score:3f}] {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:VDMS similarity search took 0.0460 seconds
+```
+```text
+* [SIM=0.753577] The weather forecast for tomorrow is sunny and warm, with a high of 82 degrees. [{'source': 'news'}]
+```
+
+如果您想使用嵌入向量执行相似性搜索，可以运行：
+
+```python
+results = vector_store.similarity_search_by_vector(
+    embedding=embeddings.embed_query("I love green eggs and ham!"), k=1
+)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:VDMS similarity search took 0.0044 seconds
+```
+```text
+* The weather forecast for tomorrow is sunny and warm, with a high of 82 degrees. [{'source': 'news'}]
+```
+
+### 通过转换为检索器进行查询
+
+您还可以将向量存储转换为检索器，以便在链中更方便地使用。
+
+```python
+retriever = vector_store.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 3},
+)
+results = retriever.invoke("Stealing from the bank is a crime")
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:VDMS similarity search took 0.0042 seconds
+```
+```text
+* Robbers broke into the city bank and stole $1 million in cash. [{'source': 'news'}]
+* The stock market is down 500 points today due to fears of a recession. [{'source': 'news'}]
+* Is the new iPhone worth the price? Read this review to find out. [{'source': 'website'}]
+```
+
+```python
+retriever = vector_store.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={
+        "k": 1,
+        "score_threshold": 0.0,  # >= score_threshold
+    },
+)
+results = retriever.invoke("Stealing from the bank is a crime")
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:VDMS similarity search took 0.0042 seconds
+```
+```text
+* Robbers broke into the city bank and stole $1 million in cash. [{'source': 'news'}]
+```
+
+```python
+retriever = vector_store.as_retriever(
+        search_type="mmr",
+        search_kwargs={"k": 1, "fetch_k": 10},
+)
+results = retriever.invoke(
+        "Stealing from the bank is a crime", filter={"source": ["==", "news"]}
+)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:VDMS mmr search took 0.0042 secs
+```
+```text
+* Robbers broke into the city bank and stole $1 million in cash. [{'source': 'news'}]
+```
+
+### 删除集合
+
+之前，我们基于其 `id` 移除了文档。这里，所有文档都会被移除，因为没有提供 ID。
+
+```python
+print("Documents before deletion: ", vector_store.count())
+
+vector_store.delete(collection_name=collection_name)
+
+print("Documents after deletion: ", vector_store.count())
+```
+
+```text
+Documents before deletion:  10
+Documents after deletion:  0
+```
+
+## 用于检索增强生成的用法
+
+有关如何使用此向量存储进行检索增强生成（RAG）的指南，请参阅以下部分：
+
+- [检索文档](/oss/langchain/retrieval)
+- [使用 VDMS 的多模态 RAG](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/multi_modal_RAG_vdms.ipynb)
+- [使用 VDMS 的视觉 RAG](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/visual_RAG_vdms.ipynb)
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [Agentic RAG](/oss/langgraph/agentic-rag)
+
+## 使用其他引擎的相似性搜索
+
+VDMS 支持多种用于索引和计算距离的库：FaissFlat（默认）、FaissHNSWFlat、FaissIVFFlat、Flinng、TileDBDense 和 TileDBSparse。
+默认情况下，向量存储使用 FaissFlat。下面我们展示一些使用其他引擎的示例。
+
+### 使用 Faiss HNSWFlat 和欧几里得距离的相似性搜索
+
+在这里，我们使用 Faiss IndexHNSWFlat 索引将文档添加到 VDMS，并使用 L2 作为相似性搜索的距离度量。我们搜索与查询相关的三个文档（`k=3`），同时返回分数和文档。
+
+```python
+db_FaissHNSWFlat = VDMS.from_documents(
+    documents,
+    client=vdms_client,
+    ids=doc_ids,
+    collection_name="my_collection_FaissHNSWFlat_L2",
+    embedding=embeddings,
+    engine="FaissHNSWFlat",
+    distance_strategy="L2",
+)
+# Query
+k = 3
+query = "LangChain provides abstractions to make working with LLMs easy"
+docs_with_score = db_FaissHNSWFlat.similarity_search_with_score(query, k=k, filter=None)
+
+for res, score in docs_with_score:
+    print(f"* [SIM={score:3f}] {res.page_content} [{res.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:Descriptor set my_collection_FaissHNSWFlat_L2 created
+INFO:langchain_vdms.vectorstores:VDMS similarity search took 0.1272 seconds
+```
+```text
+* [SIM=0.716791] Building an exciting new project with LangChain - come check it out! [{'source': 'tweet'}]
+* [SIM=0.936718] LangGraph is the best framework for building stateful, agentic applications! [{'source': 'tweet'}]
+* [SIM=1.834110] Is the new iPhone worth the price? Read this review to find out. [{'source': 'website'}]
+```
+
+### 使用 faiss IVFFlat 和内积 (IP) 距离的相似性搜索
+
+我们使用 Faiss IndexIVFFlat 索引和 IP 作为距离度量将文档添加到 VDMS 中进行相似性搜索。我们搜索与查询相关的三个文档（`k=3`），并同时返回分数和文档。
+
+```python
+db_FaissIVFFlat = VDMS.from_documents(
+    documents,
+        client=vdms_client,
+        ids=doc_ids,
+        collection_name="my_collection_FaissIVFFlat_IP",
+        embedding=embeddings,
+        engine="FaissIVFFlat",
+        distance_strategy="IP",
+)
+
+k = 3
+query = "LangChain provides abstractions to make working with LLMs easy"
+docs_with_score = db_FaissIVFFlat.similarity_search_with_score(query, k=k, filter=None)
+for res, score in docs_with_score:
+        print(f"* [SIM={score:3f}] {res.page_content} [{res.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:Descriptor set my_collection_FaissIVFFlat_IP created
+INFO:langchain_vdms.vectorstores:VDMS similarity search took 0.0052 seconds
+```
+```text
+* [SIM=0.641605] Building an exciting new project with LangChain - come check it out! [{'source': 'tweet'}]
+* [SIM=0.531641] LangGraph is the best framework for building stateful, agentic applications! [{'source': 'tweet'}]
+* [SIM=0.082945] Is the new iPhone worth the price? Read this review to find out. [{'source': 'website'}]
+```
+
+### 使用 FLINNG 和 IP 距离进行相似性搜索
+
+在本节中，我们使用 FLINNG（用于识别近邻组的过滤器）索引以及 IP 作为距离度量将文档添加到 VDMS 中进行相似性搜索。我们搜索与查询相关的三个文档（`k=3`），同时返回分数以及文档。
+
+```python
+db_Flinng = VDMS.from_documents(
+    documents,
+    client=vdms_client,
+    ids=doc_ids,
+    collection_name="my_collection_Flinng_IP",
+    embedding=embeddings,
+    engine="Flinng",
+    distance_strategy="IP",
+)
+# Query
+k = 3
+query = "LangChain provides abstractions to make working with LLMs easy"
+docs_with_score = db_Flinng.similarity_search_with_score(query, k=k, filter=None)
+for res, score in docs_with_score:
+    print(f"* [SIM={score:3f}] {res.page_content} [{res.metadata}]")
+```
+
+```text
+INFO:langchain_vdms.vectorstores:Descriptor set my_collection_Flinng_IP created
+INFO:langchain_vdms.vectorstores:VDMS similarity search took 0.0042 seconds
+```
+```text
+* [SIM=0.000000] I had chocolate chip pancakes and scrambled eggs for breakfast this morning. [{'source': 'tweet'}]
+* [SIM=0.000000] I had chocolate chip pancakes and scrambled eggs for breakfast this morning. [{'source': 'tweet'}]
+* [SIM=0.000000] I had chocolate chip pancakes and scrambled eggs for breakfast this morning. [{'source': 'tweet'}]
+```
+
+## 基于元数据过滤
+
+在处理集合之前，先缩小范围可能会很有帮助。
+
+例如，可以使用 `get_by_constraints` 方法基于元数据过滤集合。过滤元数据需要使用字典。这里我们检索 `langchain_id = "2"` 的文档，并将其从向量存储中移除。
+
+***注意：*** `id` 作为额外的元数据生成，为整数类型，而 `langchain_id`（内部 ID）是每个条目的唯一字符串。
+
+```python
+response, response_array = db_FaissIVFFlat.get_by_constraints(
+    db_FaissIVFFlat.collection_name,
+        limit=1,
+        include=["metadata", "embeddings"],
+        constraints={"langchain_id": ["==", "2"]},
+)
+
+# Delete id=2
+db_FaissIVFFlat.delete(collection_name=db_FaissIVFFlat.collection_name, ids=["2"])
+
+print("Deleted entry:")
+for doc in response:
+        print(f"* ID={doc.id}: {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+Deleted entry:
+* ID=2: The weather forecast for tomorrow is cloudy and overcast, with a high of 62 degrees. [{'source': 'news'}]
+```
+
+```python
+response, response_array = db_FaissIVFFlat.get_by_constraints(
+    db_FaissIVFFlat.collection_name,
+        include=["metadata"],
+)
+for doc in response:
+        print(f"* ID={doc.id}: {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+* ID=10: I have a bad feeling I am going to get deleted :( [{'source': 'tweet'}]
+* ID=9: The stock market is down 500 points today due to fears of a recession. [{'source': 'news'}]
+* ID=8: LangGraph is the best framework for building stateful, agentic applications! [{'source': 'tweet'}]
+* ID=7: The top 10 soccer players in the world right now. [{'source': 'website'}]
+* ID=6: Is the new iPhone worth the price? Read this review to find out. [{'source': 'website'}]
+* ID=5: Wow! That was an amazing movie. I can't wait to see it again. [{'source': 'tweet'}]
+* ID=4: Robbers broke into the city bank and stole $1 million in cash. [{'source': 'news'}]
+* ID=3: Building an exciting new project with LangChain - come check it out! [{'source': 'tweet'}]
+* ID=1: I had chocolate chip pancakes and scrambled eggs for breakfast this morning. [{'source': 'tweet'}]
+```
+
+这里我们使用 `id` 来筛选一定范围的 ID，因为它是一个整数。
+
+```python
+response, response_array = db_FaissIVFFlat.get_by_constraints(
+    db_FaissIVFFlat.collection_name,
+        include=["metadata", "embeddings"],
+        constraints={"source": ["==", "news"]},
+)
+for doc in response:
+        print(f"* ID={doc.id}: {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+* ID=9: The stock market is down 500 points today due to fears of a recession. [{'source': 'news'}]
+* ID=4: Robbers broke into the city bank and stole $1 million in cash. [{'source': 'news'}]
+```
+
+## 停止 VDMS 服务器
+
+```python
+!docker kill vdms_vs_test_nb
+```
+
+```text
+vdms_vs_test_nb
+```

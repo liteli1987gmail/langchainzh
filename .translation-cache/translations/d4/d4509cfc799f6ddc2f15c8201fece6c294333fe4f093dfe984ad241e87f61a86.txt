@@ -1,0 +1,381 @@
+---
+title: 使用 SDK 管理上下文
+sidebarTitle: 管理上下文
+description: 使用 LangSmith SDK 以编程方式在 Context Hub 中推送、拉取、列出和删除代理仓库和技能仓库。
+tag: SDK
+---
+
+使用 LangSmith [Python](/langsmith/smith-python-sdk) 和 [TypeScript](/langsmith/smith-js-ts-sdk) SDK 以编程方式在 [Context Hub](/langsmith/use-the-context-hub) 中管理 **代理仓库** 和 **技能仓库**。从 CI [推送](#push-an-agent) 新版本，在运行时[拉取](#pull-an-agent) 最新版本或固定提交版本以向代理注入上下文，并使用其他方法[检查是否存在](#check-whether-a-repo-exists)、[列出和搜索](#list-agents-and-skills) 仓库，以及[删除](#delete-an-agent-or-skill) 不再需要的仓库。
+
+<Note>
+Context Hub 方法需要 `langsmith>=0.7.35`（Python）和 `langsmith>=0.5.23`（TypeScript）。
+</Note>
+
+## 设置
+
+1. 安装包：
+
+<CodeGroup>
+    ```bash pip
+    pip install -U langsmith
+    ```
+
+    ```bash uv
+    uv add langsmith
+    ```
+
+    ```bash TypeScript
+    yarn add langsmith
+    ```
+1. 配置环境变量。如果你已经设置了 [`LANGSMITH_API_KEY`](/langsmith/create-account-api-key) 环境变量，则可跳过此步骤。否则，请在 **Settings > API Keys > Create API Key** 在 LangSmith 中创建一个，然后将其设置为环境变量：
+
+    ```bash
+    export LANGSMITH_API_KEY="lsv2_..."
+    ```
+
+<Note>
+**Python async：** 此页面上的所有方法同样可以在 `AsyncClient`（从 `langsmith` 导入）上使用，签名完全相同——只需 `await` 每个调用。TypeScript SDK 默认是异步的；没有单独的异步客户端。
+</Note>
+
+## 推送一个 Agent
+
+创建一个新的 Agent 仓库或提交现有仓库的新版本。如果仓库尚不存在，则会使用您提供的元数据（`description`、`readme`、`tags`、`is_public`）创建。如果已存在，这些字段仅在显式传递时才会被修补。
+
+该方法返回一个 URL，指向 [LangSmith UI](https://smith.langchain.com) 中新的提交：
+
+<CodeGroup>
+
+</CodeGroup>
+```python Python
+from langsmith import Client
+from langsmith.schemas import FileEntry
+
+client = Client()
+
+url = client.push_agent(
+    "email-assistant",
+    files={
+        "AGENTS.md": FileEntry(
+            content="You are an email triage assistant.",
+        ),
+        "tools.json": FileEntry(content='{"tools": []}'),
+    },
+    description="Triages and drafts replies to incoming email.",
+    tags=["email", "productivity"],
+    is_public=False,
+)
+print(url)
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const client = new Client();
+
+const url = await client.pushAgent("email-assistant", {
+  files: {
+    "AGENTS.md": {
+      type: "file",
+      content: "You are an email triage assistant.",
+    },
+    "tools.json": { type: "file", content: '{"tools": []}' },
+  },
+  description: "Triages and drafts replies to incoming email.",
+  tags: ["email", "productivity"],
+  isPublic: false,
+});
+console.log(url);
+```
+</CodeGroup>
+
+## 推送技能
+
+与 `push_agent` 的接口相同，但提交到技能仓库。用于其他代理可依赖的可复用能力：
+
+<CodeGroup>
+```python Python
+from langsmith import Client
+from langsmith.schemas import FileEntry
+
+client = Client()
+
+url = client.push_skill(
+    "deep-research",
+    files={
+        "SKILL.md": FileEntry(content="Conduct deep multi-step research."),
+    },
+    description="Multi-step web research with citations.",
+    tags=["research"],
+)
+print(url)
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const client = new Client();
+
+const url = await client.pushSkill("deep-research", {
+  files: {
+    "SKILL.md": {
+      type: "file",
+      content: "Conduct deep multi-step research.",
+    },
+  },
+  description: "Multi-step web research with citations.",
+  tags: ["research"],
+});
+console.log(url);
+```
+</CodeGroup>
+
+### 链接到其他仓库
+
+除了内联文件内容外，`files` 中的条目也可以是到其他 agent 或 skill 仓库的链接，这样可以在不跨仓库重复内容的情况下组合上下文。例如，一个委托给共享 skill 的 agent。
+
+如果省略 `commit_id`，LangSmith 会在你推送此提交时链接到该仓库的最新提交。如果链接的仓库后续有更新，LangSmith 会将该更新传播到引用它的父仓库。
+
+<CodeGroup>
+```python Python
+from langsmith import Client
+from langsmith.schemas import AgentEntry, FileEntry, SkillEntry
+
+client = Client()
+
+url = client.push_agent(
+    "email-assistant",
+    files={
+        "AGENTS.md": FileEntry(content="You are an email triage assistant."),
+        # Link to the deep-research skill repo. Omit commit_id to always
+        # resolve to the latest version, or pin it for reproducibility.
+        "skills/research": SkillEntry(repo_handle="deep-research"),
+        # Link to another agent repo.
+        "agents/scheduler": AgentEntry(repo_handle="calendar-agent"),
+    },
+)
+print(url)
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const client = new Client();
+
+const url = await client.pushAgent("email-assistant", {
+  files: {
+    "AGENTS.md": { type: "file", content: "You are an email triage assistant." },
+    // Link to the deep-research skill repo. Omit commit_id to always
+    // resolve to the latest version, or pin it for reproducibility.
+    "skills/research": { type: "skill", repo_handle: "deep-research" },
+    // Link to another agent repo.
+    "agents/scheduler": { type: "agent", repo_handle: "calendar-agent" },
+  },
+});
+console.log(url);
+```
+</CodeGroup>
+
+## Push 参数
+
+`push_agent` / `pushAgent` 和 `push_skill` / `pushSkill` 都接受以下参数：
+
+| 参数                                  | 类型                                        | 描述                                                                                          |
+| ---------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `identifier`                       | `string`                                    | 仓库的标识符。                                                                               |
+| `files`                            | `dict[str, Entry \| None]`                  | 文件路径到 `Entry` 的映射。传入 `None` / `null` 以删除此提交中的某个路径。                     |
+| `parent_commit` / `parentCommit`   | `string`（可选）                            | 用于乐观并发的父提交哈希前缀。提供时必须为 8–64 个字符。如果与最新提交不匹配，API 将返回 409 冲突错误。 |
+| `description`                      | `string`（可选）                            | 仓库描述。在创建时设置或在更新时修补。                                                        |
+| `readme`                           | `string`（可选）                            | 仓库 readme 内容。                                                                           |
+| `tags`                             | `string[]`（可选）                          | 仓库标签。                                                                                   |
+| `is_public` / `isPublic`           | `boolean`（可选）                            | 仓库是否公开可发现。                                                                         |
+
+## 拉取 agent
+
+拉取 agent 仓库的快照。默认返回最新提交；通过 `version` 传递提交哈希或标签（或将其嵌入到标识符中，格式为 `owner/name:version`）来拉取特定版本：
+
+<Note>
+**标识符格式**：`identifier` 参数接受三种形式：
+- `name`：解析为当前工作区所有者。
+- `owner/name`：完全限定格式。
+- `owner/name:version`：固定到特定提交哈希或标签。
+
+可选的 `version` 参数会覆盖嵌入在标识符中的任何版本。如果两者都未提供，则返回最新提交。
+</Note>
+
+<CodeGroup>
+```python Python
+from langsmith import Client
+
+client = Client()
+
+agent = client.pull_agent("email-assistant")
+print(agent.commit_hash)
+print(list(agent.files))
+
+# Pull a specific commit.
+pinned = client.pull_agent("email-assistant", version="7ca95573")
+
+# Pull a tagged commit (for example, the production tag).
+prod = client.pull_agent("email-assistant:production")
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const client = new Client();
+
+const agent = await client.pullAgent("email-assistant");
+console.log(agent.commit_hash);
+console.log(Object.keys(agent.files));
+
+// Pull a specific commit.
+const pinned = await client.pullAgent("email-assistant", {
+  version: "7ca95573",
+});
+
+// Pull a tagged commit.
+const prod = await client.pullAgent("email-assistant:production");
+```
+</CodeGroup>
+
+## 拉取技能
+
+拉取技能仓库的快照。功能与 `pull_agent` 相同，但返回 `SkillContext`：
+
+<CodeGroup>
+```python Python
+from langsmith import Client
+
+client = Client()
+
+skill = client.pull_skill("deep-research")
+print(skill.files["SKILL.md"].content)
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const client = new Client();
+
+const skill = await client.pullSkill("deep-research");
+const skillFile = skill.files["SKILL.md"];
+if (skillFile.type === "file") {
+  console.log(skillFile.content);
+}
+```
+</CodeGroup>
+
+## 拉取参数
+
+`pull_agent` / `pullAgent` 和 `pull_skill` / `pullSkill` 均接受以下参数：
+
+| 参数         | 类型                | 描述                                                                         |
+| ------------ | ------------------- | ---------------------------------------------------------------------------- |
+| `identifier` | `string`            | 仓库的标识符。可包含内联版本：`owner/name:version`。                          |
+| `version`    | `string` (optional) | 要拉取的提交哈希或标签。将覆盖标识符中嵌入的任何版本。                        |
+
+`pull_agent` 返回一个 `AgentContext`；`pull_skill` 返回一个 `SkillContext`。
+
+## 检查仓库是否存在
+
+在推送或拉取之前，使用以下方法检查工作区中是否存在代理或技能仓库：
+
+<CodeGroup>
+```python Python
+from langsmith import Client
+
+client = Client()
+
+if client.agent_exists("email-assistant"):
+    print("agent already exists")
+
+if not client.skill_exists("deep-research"):
+    print("skill not found")
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const client = new Client();
+
+if (await client.agentExists("email-assistant")) {
+  console.log("agent already exists");
+}
+
+if (!(await client.skillExists("deep-research"))) {
+  console.log("skill not found");
+}
+```
+</CodeGroup>
+
+## 列出代理和技能
+
+列出任意类型的仓库，并可按可见性、归档状态和搜索查询进行筛选：
+
+<CodeGroup>
+```python Python
+from langsmith import Client
+
+client = Client()
+
+# Python returns a paginated response.
+result = client.list_agents(limit=20, query="email")
+for repo in result.repos:
+    print(repo.repo_handle)
+
+skills = client.list_skills(is_public=True)
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const client = new Client();
+
+// TypeScript yields one repo at a time, auto-paginating.
+for await (const repo of client.listAgents({ query: "email" })) {
+  console.log(repo.repo_handle);
+}
+
+for await (const skill of client.listSkills({ isPublic: true })) {
+  console.log(skill.repo_handle);
+}
+```
+| 参数                    | 类型                  | 描述                                                          |
+| ----------------------- | --------------------- | ------------------------------------------------------------ |
+| `limit`                 | `int`（仅 Python）    | 每页返回的最大仓库数量。默认为 100。                          |
+| `offset`                | `int`（仅 Python）    | 跳过的仓库数量。默认为 0。                                    |
+| `is_public` / `isPublic` | `boolean`（可选）     | 筛选仅公开（或仅私有）的仓库。                                |
+| `is_archived` / `isArchived` | `boolean`（可选）  | 按归档状态筛选。默认为 `False`。                             |
+| `query`                 | `string`（可选）      | 在仓库句柄、所有者句柄、描述和标签中搜索查询。                |
+
+<Note>
+Python 的 `list_agents` / `list_skills` 返回带有显式 `limit` 和 `offset` 的分页响应对象，用于手动分页。TypeScript 的 `listAgents` / `listSkills` 返回 `AsyncIterableIterator`，在您消费时会自动处理分页。
+</Note>
+
+## 删除代理或技能
+
+<Warning>
+此操作是永久性的，无法撤销。删除仓库也会删除其拥有的子文件仓库。
+</Warning>
+
+从您的工作区中删除代理或技能仓库：
+
+<CodeGroup>
+```python Python
+from langsmith import Client
+
+client = Client()
+
+client.delete_agent("email-assistant")
+client.delete_skill("deep-research")
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const client = new Client();
+
+await client.deleteAgent("email-assistant");
+await client.deleteSkill("deep-research");
+```
+</CodeGroup>

@@ -1,0 +1,151 @@
+---
+title: "Modelscope 集成"
+description: "使用 LangChain Python 与 Modelscope 嵌入模型集成。"
+---
+
+ModelScope（[首页](https://www.modelscope.cn/) | [GitHub](https://github.com/modelscope/modelscope)）构建在“模型即服务”（MaaS）理念之上。它致力于汇集 AI 社区中最先进的机器学习模型，并简化在现实应用中利用 AI 模型的过程。此仓库中开源的核心 ModelScope 库提供了接口和实现，使开发者能够执行模型推理、训练和评估。
+
+这将帮助您开始使用 LangChain 的 ModelScope 嵌入模型。
+
+## 概述
+
+### 集成详情
+
+| 提供商 | 包 |
+|:--------:|:-------:|
+| [ModelScope](/oss/integrations/providers/modelscope/) | [`langchain-modelscope-integration`](https://pypi.org/project/langchain-modelscope-integration/) |
+
+## 设置
+
+要访问 ModelScope 嵌入模型，您需要创建一个 ModelScope 账户，获取 API 密钥，并安装 `langchain-modelscope-integration` 集成包。
+
+### 凭证
+
+访问 [ModelScope](https://modelscope.cn/) 注册 ModelScope。
+
+```python
+import getpass
+import os
+
+if not os.getenv("MODELSCOPE_SDK_TOKEN"):
+    os.environ["MODELSCOPE_SDK_TOKEN"] = getpass.getpass(
+        "Enter your ModelScope SDK token: "
+    )
+```
+
+### 安装
+
+LangChain ModelScope 集成位于 `langchain-modelscope-integration` 包中：
+
+```python
+pip install -qU langchain-modelscope-integration
+```
+
+## 实例化
+
+现在我们可以实例化我们的模型对象：
+
+```python
+from langchain_modelscope import ModelScopeEmbeddings
+
+embeddings = ModelScopeEmbeddings(
+    model_id="damo/nlp_corom_sentence-embedding_english-base",
+)
+```
+
+```text
+Downloading Model to directory: /root/.cache/modelscope/hub/damo/nlp_corom_sentence-embedding_english-base
+```
+```text
+2024-12-27 16:15:11,175 - modelscope - WARNING - Model revision not specified, use revision: v1.0.0
+2024-12-27 16:15:11,443 - modelscope - INFO - initiate model from /root/.cache/modelscope/hub/damo/nlp_corom_sentence-embedding_english-base
+2024-12-27 16:15:11,444 - modelscope - INFO - initiate model from location /root/.cache/modelscope/hub/damo/nlp_corom_sentence-embedding_english-base.
+2024-12-27 16:15:11,445 - modelscope - INFO - initialize model from /root/.cache/modelscope/hub/damo/nlp_corom_sentence-embedding_english-base
+2024-12-27 16:15:12,115 - modelscope - WARNING - No preprocessor field found in cfg.
+2024-12-27 16:15:12,116 - modelscope - WARNING - No val key and type key found in preprocessor domain of configuration.json file.
+2024-12-27 16:15:12,116 - modelscope - WARNING - Cannot find available config to build preprocessor at mode inference, current config: {'model_dir': '/root/.cache/modelscope/hub/damo/nlp_corom_sentence-embedding_english-base'}. trying to build by task and model information.
+2024-12-27 16:15:12,318 - modelscope - WARNING - No preprocessor field found in cfg.
+2024-12-27 16:15:12,319 - modelscope - WARNING - No val key and type key found in preprocessor domain of configuration.json file.
+2024-12-27 16:15:12,319 - modelscope - WARNING - Cannot find available config to build preprocessor at mode inference, current config: {'model_dir': '/root/.cache/modelscope/hub/damo/nlp_corom_sentence-embedding_english-base', 'sequence_length': 128}. trying to build by task and model information.
+```
+
+## 索引和检索
+
+嵌入模型通常用于检索增强生成（RAG）流程中，既作为索引数据的一部分，也用于后续的检索。更多详细说明，请参阅我们的 [RAG 教程](/oss/langchain/rag)。
+
+下面，查看如何使用上面初始化的 `embeddings` 对象来索引和检索数据。在此示例中，我们将在 `InMemoryVectorStore` 中索引和检索一个示例文档。
+
+```python
+# Create a vector store with a sample text
+from langchain_core.vectorstores import InMemoryVectorStore
+
+text = "LangChain is the framework for building context-aware reasoning applications"
+
+vectorstore = InMemoryVectorStore.from_texts(
+    [text],
+        embedding=embeddings,
+)
+
+# Use the vectorstore as a retriever
+retriever = vectorstore.as_retriever()
+
+# Retrieve the most similar text
+retrieved_documents = retriever.invoke("What is LangChain?")
+
+# show the retrieved document's content
+retrieved_documents[0].page_content
+```
+
+```text
+/root/miniconda3/envs/langchain/lib/python3.10/site-packages/transformers/modeling_utils.py:1113: FutureWarning: The `device` argument is deprecated and will be removed in v5 of Transformers.
+  warnings.warn(
+/root/miniconda3/envs/langchain/lib/python3.10/site-packages/transformers/modeling_utils.py:1113: FutureWarning: The `device` argument is deprecated and will be removed in v5 of Transformers.
+  warnings.warn(
+```
+
+```text
+'LangChain is the framework for building context-aware reasoning applications'
+```
+
+## 直接使用
+
+在底层，向量存储和检索器的实现正在调用 `embeddings.embed_documents(...)` 和 `embeddings.embed_query(...)` 来为 `from_texts` 和检索 `invoke` 操作中使用的文本创建嵌入。
+
+您可以直接调用这些方法为您的用例获取嵌入。
+
+### 嵌入单个文本
+
+您可以使用 `embed_query` 嵌入单个文本或文档：
+
+```python
+single_vector = embeddings.embed_query(text)
+print(str(single_vector)[:100])  # Show the first 100 characters of the vector
+```
+
+```text
+[-0.6046376824378967, -0.3595953583717346, 0.11333226412534714, -0.030444221571087837, 0.23397332429
+```
+
+### 嵌入多个文本
+
+你可以使用 `embed_documents` 嵌入多个文本：
+
+```python
+text2 = (
+    "LangGraph is a library for building stateful, multi-actor applications with LLMs"
+)
+two_vectors = embeddings.embed_documents([text, text2])
+for vector in two_vectors:
+    print(str(vector)[:100])  # Show the first 100 characters of the vector
+```
+
+```text
+[-0.6046381592750549, -0.3595949709415436, 0.11333223432302475, -0.030444379895925522, 0.23397321999
+[-0.36103254556655884, -0.7602502107620239, 0.6505364775657654, 0.000658963865134865, 1.185304522514
+```
+
+---
+
+## API 参考
+
+有关 `ModelScopeEmbeddings` 功能和配置选项的详细文档，请参阅 [API 参考](https://www.modelscope.cn/docs/sdk/pipelines)。

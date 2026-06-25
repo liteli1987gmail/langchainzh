@@ -1,0 +1,173 @@
+---
+title: 使用 openevals 包运行评估
+sidebarTitle: 使用 openevals 包运行评估
+description: 使用 LangSmith 通过开源 openevals 和 agentevals 包运行评估。
+---
+
+LangSmith 与开源 `openevals` 包集成，提供了一套评估工具和提示，您可以将它们用作评估的起点。
+
+<Note>
+本操作指南将演示如何设置和运行一种评估器（LLM 即评判者）。要获取完整的评估工具和提示列表以及使用示例，请参阅 [openevals](https://github.com/langchain-ai/openevals) 和 [agentevals](https://github.com/langchain-ai/agentevals) 代码库。
+</Note>
+
+## 设置
+
+您需要安装 `openevals` 包才能使用 LLM 即评判者评估器。
+
+<CodeGroup>
+
+
+</fragment>
+
+```bash Python
+pip install -U openevals
+```
+
+```bash TypeScript
+yarn add openevals @langchain/core
+```
+
+</CodeGroup>
+
+你还需要将你的 OpenAI API 密钥设置为环境变量，不过你也可以选择其他提供商：
+
+```bash
+export OPENAI_API_KEY="your_openai_api_key"
+```
+
+我们还将使用 LangSmith 的 [pytest](/langsmith/pytest) 集成（用于 Python）和 [Vitest/Jest](/langsmith/vitest-jest)（用于 TypeScript）来运行我们的评估。`openevals` 还能与 [`evaluate`](https://docs.smith.langchain.com/reference/python/evaluation/langsmith.evaluation._runner.evaluate) 方法无缝集成。请参阅[相应指南](/langsmith/pytest)以获取设置说明。
+
+## 运行评估器
+
+流程很简单：从 `openevals` 导入评估器或工厂函数，然后在测试文件中运行它，传入输入、输出和参考输出。LangSmith 将自动记录评估器的结果作为反馈。
+
+请注意，并非所有评估器都需要每个参数（例如，精确匹配评估器只需要输出和参考输出）。此外，如果你的 LLM-as-a-judge prompt 需要额外的变量，将其作为 `kwargs` 传入即可将其格式化到 prompt 中。
+
+按以下方式设置测试文件：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+import pytest
+from langsmith import testing as t
+from openevals.llm import create_llm_as_judge
+from openevals.prompts import CORRECTNESS_PROMPT
+
+correctness_evaluator = create_llm_as_judge(
+    prompt=CORRECTNESS_PROMPT,
+    feedback_key="correctness",
+    model="openai:o3-mini",
+)
+
+# Mock standin for your application
+def my_llm_app(inputs: dict) -> str:
+    return "Doodads have increased in price by 10% in the past year."
+
+@pytest.mark.langsmith
+def test_correctness():
+    inputs = "How much has the price of doodads changed in the past year?"
+    reference_outputs = "The price of doodads has decreased by 50% in the past year."
+    outputs = my_llm_app(inputs)
+
+    t.log_inputs({"question": inputs})
+    t.log_outputs({"answer": outputs})
+    t.log_reference_outputs({"answer": reference_outputs})
+
+    correctness_evaluator(
+        inputs=inputs,
+        outputs=outputs,
+        reference_outputs=reference_outputs
+    )
+```
+
+```typescript TypeScript
+import * as ls from "langsmith/vitest";
+// import * as ls from "langsmith/jest";
+import { createLLMAsJudge, CORRECTNESS_PROMPT } from "openevals";
+
+const correctnessEvaluator = createLLMAsJudge({
+    prompt: CORRECTNESS_PROMPT,
+    feedbackKey: "correctness",
+    model: "openai:o3-mini",
+});
+
+// Mock standin for your application
+const myLLMApp = async (_inputs: Record<string, unknown>) => {
+    return "Doodads have increased in price by 10% in the past year.";
+};
+
+ls.describe("Correctness", () => {
+    ls.test("incorrect answer", {
+        inputs: {
+            question: "How much has the price of doodads changed in the past year?"
+        },
+        referenceOutputs: {
+            answer: "The price of doodads has decreased by 50% in the past year."
+        }
+    }, async ({ inputs, referenceOutputs }) => {
+        const outputs = await myLLMApp(inputs);
+        ls.logOutputs({ answer: outputs });
+        await correctnessEvaluator({
+            inputs,
+            outputs,
+            referenceOutputs,
+        });
+    });
+});
+```
+
+</CodeGroup>
+
+`feedback_key`/`feedbackKey` 参数将用作实验中的反馈名称。
+
+在终端中运行评估将得到类似以下的结果：
+
+![Prebuilt evaluator terminal result](/langsmith/images/prebuilt-eval-result.png)
+
+如果您已在 LangSmith 中创建了数据集，也可以直接将评估器传入 `evaluate` 方法。如果使用 Python，则需要 `langsmith>=0.3.11`：
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+from openevals.llm import create_llm_as_judge
+from openevals.prompts import CONCISENESS_PROMPT
+
+client = Client()
+conciseness_evaluator = create_llm_as_judge(
+    prompt=CONCISENESS_PROMPT,
+    feedback_key="conciseness",
+    model="openai:o3-mini",
+)
+
+experiment_results = client.evaluate(
+    # This is a dummy target function, replace with your actual LLM-based system
+    lambda inputs: "What color is the sky?",
+    data="Sample dataset",
+    evaluators=[
+        conciseness_evaluator
+    ]
+)
+```
+
+```typescript TypeScript
+import { evaluate } from "langsmith/evaluation";
+import { createLLMAsJudge, CONCISENESS_PROMPT } from "openevals";
+
+const concisenessEvaluator = createLLMAsJudge({
+    prompt: CONCISENESS_PROMPT,
+    feedbackKey: "conciseness",
+    model: "openai:o3-mini",
+});
+
+await evaluate((inputs) => "What color is the sky?", {
+    data: datasetName,
+    evaluators: [concisenessEvaluator],
+});
+```
+
+</CodeGroup>
+
+有关可用的评估工具和提示的完整列表，请参阅 [openevals](https://github.com/langchain-ai/openevals) 和 [agentevals](https://github.com/langchain-ai/agentevals) 仓库。

@@ -1,0 +1,377 @@
+---
+title: LambdaDB
+---
+
+>[LambdaDB](https://lambdadb.ai/) 是一个用于构建可扩展 RAG 和代理应用的无服务器 AI 数据库。
+
+本笔记本介绍了如何开始使用 LangChain 中的 LambdaDB 向量存储。
+
+## 设置
+
+要访问 LambdaDB 向量存储，您需要创建一个 LambdaDB 账户，获取您的项目凭证，并安装 `langchain-lambdadb` 集成包。
+
+### 凭证
+
+LambdaDB 使用基于项目的身份验证，需要项目 URL 和 API 密钥：
+
+```python
+import getpass
+import os
+
+if "LAMBDADB_PROJECT_URL" not in os.environ:
+    os.environ["LAMBDADB_PROJECT_URL"] = getpass.getpass("Enter your LambdaDB project URL: ")
+
+if "LAMBDADB_API_KEY" not in os.environ:
+    os.environ["LAMBDADB_API_KEY"] = getpass.getpass("Enter your LambdaDB API key: ")
+```
+
+要启用模型的自动追踪功能，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+LangChain LambdaDB 集成位于 `langchain-lambdadb` 包中：
+
+```bash
+pip install -U langchain-lambdadb
+```
+
+您还需要安装一个嵌入模型。例如，要使用 OpenAI 嵌入：
+
+```bash
+pip install -U langchain-openai
+```
+
+---
+
+## 实例化
+
+<Note>
+`LambdaDBVectorStore` 可与现有集合配合使用。您必须提前创建集合，并配置适当的向量索引和文本索引。
+</Note>
+
+```python
+from langchain_lambdadb.vectorstores import LambdaDBVectorStore
+from langchain_openai import OpenAIEmbeddings
+from lambdadb import LambdaDB
+import os
+
+# Initialize the LambdaDB client
+client = LambdaDB(
+    server_url=os.environ["LAMBDADB_SERVER_URL"],
+    project_api_key=os.environ["LAMBDADB_API_KEY"]
+)
+
+# Initialize embeddings
+embeddings = OpenAIEmbeddings()
+
+# Connect to an existing collection
+vector_store = LambdaDBVectorStore(
+    client=client,
+    collection_name="my_collection",  # Must exist beforehand
+    embedding=embeddings,
+)
+```
+
+### 关键参数
+
+- `client`: LambdaDB 客户端实例（必需）
+- `collection_name`: LambdaDB 中现有集合的名称（必需）
+- `embedding`: 要使用的嵌入函数（必需）
+- `text_field`: 文档中文本字段的名称（默认："text"）
+- `vector_field`: 文档中向量字段的名称（默认："vector"）
+- `validate_collection`: 是否验证集合存在且处于活跃状态（默认：True）
+- `default_consistent_read`: 默认使用一致性读取以实现即时一致性，或使用最终一致性以获得更好的性能（默认：False）
+
+---
+
+## 管理向量存储
+
+### 添加项目
+
+```python
+from langchain_core.documents import Document
+
+document_1 = Document(page_content="LambdaDB is a serverless vector database", metadata={"source": "docs"})
+document_2 = Document(page_content="It supports fast similarity search", metadata={"source": "docs"})
+document_3 = Document(page_content="Perfect for RAG applications", metadata={"category": "features"})
+
+documents = [document_1, document_2, document_3]
+ids = vector_store.add_documents(documents=documents, ids=["1", "2", "3"])
+print(f"Added documents with IDs: {ids}")
+```
+
+<Note>
+文档最大尺寸为50KB。集成会自动将文档分组成最多100个一组，以保持在LambdaDB的6MB请求限制范围内。
+</Note>
+
+### 删除项
+
+```python
+vector_store.delete(ids=["3"])
+```
+
+### 根据 ID 获取项目
+
+```python
+documents = vector_store.get_by_ids(["1", "2"])
+for doc in documents:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+---
+
+## 查询向量存储
+
+一旦您的向量存储已创建并添加了相关文档，您很可能希望在运行链或代理时对其进行查询。
+
+### 相似性搜索
+
+执行简单的相似性搜索：
+
+```python
+results = vector_store.similarity_search(
+    query="What is LambdaDB?",
+    k=2
+)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+### 带分数的相似性搜索
+
+如果你想执行相似性搜索并获取相应的分数：
+
+```python
+results = vector_store.similarity_search_with_score(
+    query="vector database features",
+    k=2
+)
+for doc, score in results:
+    print(f"* [SIM={score:.3f}] {doc.page_content} [{doc.metadata}]")
+```
+
+### 带过滤的相似性搜索
+
+LambdaDB 支持使用查询字符串语法进行过滤：
+
+```python
+results = vector_store.similarity_search(
+    query="database",
+    k=2,
+    filter={"queryString": {"query": "source:docs"}}
+)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+### 最大边际相关性 (MMR) 搜索
+
+MMR 优化查询相似度和所选文档的多样性：
+
+```python
+results = vector_store.max_marginal_relevance_search(
+    query="LambdaDB features",
+    k=2,
+    fetch_k=10,  # Fetch 10 candidates
+    lambda_mult=0.5,  # Balance between relevance (1.0) and diversity (0.0)
+)
+for doc in results:
+    print(f"* {doc.page_content}")
+```
+
+### 转换为检索器
+
+您还可以将向量存储转换为检索器，以便在链中更方便地使用：
+
+```python
+retriever = vector_store.as_retriever(
+    search_type="mmr",
+    search_kwargs={"k": 2, "fetch_k": 10}
+)
+retriever.invoke("What is LambdaDB?")
+```
+
+支持的搜索类型：
+- `"similarity"`：标准相似性搜索（默认）
+- `"mmr"`：最大边际相关性搜索
+- `"similarity_score_threshold"`：带分数阈值的相似性搜索
+
+---
+
+## 异步操作
+
+`LambdaDBVectorStore` 支持所有操作的异步方法：
+
+```python
+# Add documents
+ids = await vector_store.aadd_documents(documents=documents)
+
+# Delete documents
+await vector_store.adelete(ids=["3"])
+
+# Search
+results = await vector_store.asimilarity_search(query="LambdaDB", k=2)
+for doc in results:
+    print(f"* {doc.page_content}")
+
+# Search with score
+results = await vector_store.asimilarity_search_with_score(query="database", k=2)
+for doc, score in results:
+    print(f"* [SIM={score:.3f}] {doc.page_content}")
+```
+
+<Note>
+目前，异步方法会同步运行，因为 LambdaDB 客户端尚不支持异步操作。
+</Note>
+
+---
+
+## 一致性控制
+
+LambdaDB 支持两种一致性模式：
+
+- **最终一致性**（默认）：性能更快，但写入后数据最多可能延迟约 1 分钟
+- **一致性读取**：立即保持一致，性能略有影响
+
+```python
+# Use consistent reads for a specific operation
+results = vector_store.similarity_search(
+    query="LambdaDB",
+    k=2,
+    consistent_read=True
+)
+
+# Or set consistent reads as the default
+vector_store = LambdaDBVectorStore(
+    client=client,
+    collection_name="my_collection",
+    embedding=embeddings,
+    default_consistent_read=True  # All reads will be consistent by default
+)
+```
+
+---
+
+## 从文本创建
+
+您可以通过一步操作创建向量存储并用文本填充它：
+
+```python
+from langchain_lambdadb.vectorstores import LambdaDBVectorStore
+
+texts = [
+    "LambdaDB is a serverless vector database",
+    "It supports fast similarity search",
+    "Perfect for RAG applications"
+]
+
+metadatas = [
+    {"source": "docs"},
+    {"source": "docs"},
+    {"category": "features"}
+]
+
+vector_store = LambdaDBVectorStore.from_texts(
+    texts=texts,
+    embedding=embeddings,
+    metadatas=metadatas,
+    client=client,
+    collection_name="my_collection",
+    ids=["1", "2", "3"]
+)
+```
+
+---
+
+## 用于检索增强生成的用法
+
+以下是一个使用 LambdaDB 进行 RAG 的完整示例：
+
+```python
+from langchain_lambdadb.vectorstores import LambdaDBVectorStore
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+from lambdadb import LambdaDB
+import os
+
+# Initialize
+client = LambdaDB(
+    project_url=os.environ["LAMBDADB_PROJECT_URL"],
+    project_api_key=os.environ["LAMBDADB_API_KEY"]
+)
+
+embeddings = OpenAIEmbeddings()
+vector_store = LambdaDBVectorStore(
+    client=client,
+    collection_name="my_collection",
+    embedding=embeddings
+)
+
+# Create retriever
+retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+
+# Create RAG chain
+template = """Answer the question based only on the following context:
+{context}
+
+Question: {question}
+"""
+prompt = ChatPromptTemplate.from_template(template)
+model = ChatOpenAI()
+
+chain = (
+    {"context": retriever, "question": RunnablePassthrough()}
+    | prompt
+    | model
+    | StrOutputParser()
+)
+
+# Use the chain
+response = chain.invoke("What is LambdaDB?")
+print(response)
+```
+
+---
+
+## 主要特性
+
+### 文档大小限制
+
+- 最大文档大小：每个文档 50KB
+- 集成会验证文档大小，超出时抛出错误
+
+### 批量处理
+
+- 文档会自动按每组 100 个进行批量处理以执行 upsert 操作
+- 保持在 LambdaDB 的 6MB 请求限制内
+
+### 筛选
+
+- 支持 LambdaDB 的查询字符串语法进行元数据筛选
+- 示例：`filter={"queryString": {"query": "field:value"}}`
+
+### 搜索选项
+
+- **相似性搜索**：查找与查询相似的文档
+- **MMR 搜索**：平衡相似性与多样性
+- **分数阈值**：按相似性分数筛选结果
+- **一致性读取**：控制读取一致性与性能之间的权衡
+
+---
+
+## API 参考
+
+有关 `LambdaDBVectorStore` 所有功能和配置的详细文档，请前往 [API 参考](https://docs.lambdadb.ai/guides/get-started/quickstart)。
+
+---
+
+## 更多资源
+
+- [LambdaDB 文档](https://docs.lambdadb.ai)

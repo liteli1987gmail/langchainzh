@@ -1,0 +1,136 @@
+---
+title: "Naver 搜索集成"
+description: "使用 LangChain Python 与 Naver 搜索工具集成。"
+---
+
+Naver 搜索工具提供了一个简单的界面来搜索 Naver 并获取结果。
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 版本 |
+| :--- | :--- | :---: | :---: | :---: |
+| `NaverSearchResults` | [`langchain-naver-community`](https://pypi.org/project/langchain-naver-community/) | ❌ | ❌ | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-naver-community?style=flat-square&label=%20) |
+
+### 工具功能
+
+**搜索**：Naver 搜索工具提供了一个简单的界面来搜索 Naver 并获取结果。
+
+## 设置
+
+### 设置 API 凭证
+
+要使用 Naver 搜索，您需要获取 API 凭证。请按照以下步骤操作：
+
+登录 [Naver 开发者门户](https://developers.naver.com/main/)。
+创建一个新应用并启用搜索 API。
+从“应用列表”部分获取您的 **NAVER_CLIENT_ID** 和 **NAVER_CLIENT_SECRET**。
+
+### 设置环境变量
+
+获取凭证后，在脚本中将其设置为环境变量：
+
+```python
+pip install -qU  langchain-naver-community
+```
+
+```python
+import getpass
+import os
+
+if not os.environ.get("NAVER_CLIENT_ID"):
+    os.environ["NAVER_CLIENT_ID"] = getpass.getpass("Enter your Naver Client ID:\n")
+
+if not os.environ.get("NAVER_CLIENT_SECRET"):
+    os.environ["NAVER_CLIENT_SECRET"] = getpass.getpass(
+        "Enter your Naver Client Secret:\n"
+    )
+```
+
+## 实例化
+
+```python
+from langchain_naver_community.utils import NaverSearchAPIWrapper
+
+search = NaverSearchAPIWrapper()
+```
+
+## 调用
+
+```python
+search.results("Seoul")[:3]
+```
+
+```text
+[{'title': 'Seoul shares rise for 4th day on tech gains; won at 2-week low',
+  'link': 'https://n.news.naver.com/mnews/article/001/0015277717?sid=104',
+  'description': 'stocks-summary Seoul shares rise for 4th day on tech gains; won at 2-week low SEOUL, March 20 (Yonhap) -- Seoul shares extended their winning streak to a fourth day Thursday on the back of gains... ',
+  'pubDate': 'Thu, 20 Mar 2025 16:09:00 +0900'},
+ {'title': "Seoul Mayor Oh's residence, office raided over alleged ties to shadowy po...",
+  'link': 'https://n.news.naver.com/mnews/article/640/0000067073?sid=100',
+  'description': 'Prosecutors on Thursday raided Seoul Mayor Oh Se-hoon’s official residence and the City Hall... The raid came as part of the Seoul Central District Prosecutors’ Office’s probe into... ',
+  'pubDate': 'Thu, 20 Mar 2025 19:12:00 +0900'},
+ {'title': 'Education can heal divides: Seoul schools chief',
+  'link': 'https://n.news.naver.com/mnews/article/044/0000267866?sid=104',
+  'description': 'Jung Keun-sik, Superintendent of Seoul Metropolitan Office of Education speaks during an interview with The Korea Herald at his office on March 13. (Lim Se-jun/ The Korea Herald) Seoul education... ',
+  'pubDate': 'Thu, 20 Mar 2025 14:35:00 +0900'}]
+```
+
+## 工具使用
+
+```python
+from langchain_naver_community.tool import NaverSearchResults
+from langchain_naver_community.utils import NaverSearchAPIWrapper
+
+search = NaverSearchAPIWrapper()
+
+tool = NaverSearchResults(api_wrapper=search)
+
+tool.invoke("what is the weather in seoul?")[3:5]
+```
+
+```text
+[{'title': "2025 is here. Here's what to watch out for",
+  'link': 'https://n.news.naver.com/mnews/article/044/0000265707?sid=104',
+  'description': 'The trend was predicted in &quot;Trend Korea 2025,&quot; written by Kim Ran-do, a professor of consumer science at Seoul National University, and his team. The annually published book also predicts that... ',
+  'pubDate': 'Sat, 18 Jan 2025 16:01:00 +0900'},
+ {'title': '[INTERVIEW] Korea to overhaul weather prediction model against climate ch...',
+  'link': 'https://www.koreatimes.co.kr/www/nation/2023/06/371_353628.html?utm_source=na',
+  'description': 'western Seoul to protest its confusing weather predictions, false forecasting is hardly accepted compared to what Yoo saw in Oklahoma. The administrator hopes the Korean public would understand... ',
+  'pubDate': 'Sun, 25 Jun 2023 17:22:00 +0900'}]
+```
+
+## 在代理中使用
+
+Naver Search 工具可以集成到 LangChain 代理中以执行更复杂的任务。下面我们演示如何设置一个可以搜索 Naver 获取当前信息的代理。
+
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-5.4-mini")
+
+system_prompt = """
+You are a helpful assistant that can search the web for information.
+"""
+```
+
+```python
+from langchain_naver_community.tool import NaverNewsSearch
+from langchain.agents import create_agent
+
+
+tools = [NaverNewsSearch()]
+
+agent_executor = create_agent(
+    model,
+    tools,
+    prompt=system_prompt,
+)
+```
+
+现在我们可以使用查询来运行智能体。
+
+```python
+query = "What is the weather in Seoul?"
+result = agent_executor.invoke({"messages": [("human", query)]})
+result["messages"][-1].content
+```

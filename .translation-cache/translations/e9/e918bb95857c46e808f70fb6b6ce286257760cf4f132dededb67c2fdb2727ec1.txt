@@ -1,0 +1,508 @@
+---
+title: "Qdrant 集成"
+description: "使用 LangChain Python 与 Qdrant 向量存储集成。"
+---
+
+>[Qdrant](https://qdrant.tech/documentation/)（发音：quadrant）是一个向量相似性搜索引擎。它提供了一个生产级别的服务，包含便捷的 API，可用于存储、搜索和管理向量，并支持额外的负载和扩展过滤功能。它适用于各种神经网络或基于语义的匹配、分面搜索和其他应用。
+
+本文档演示了如何将 Qdrant 与 LangChain 结合使用，以进行密集型（即基于嵌入的）、稀疏型（即文本搜索）和混合检索。`QdrantVectorStore` 类通过 Qdrant 的新 [Query API](https://qdrant.tech/blog/qdrant-1.10.x/) 支持多种检索模式。它要求您运行 Qdrant v1.10.0 或更高版本。
+
+## 设置
+
+运行 `Qdrant` 有多种模式，根据所选模式会存在一些细微差异。选项包括：
+
+- 本地模式，无需服务器
+- Docker 部署
+- Qdrant Cloud
+
+请参阅 [Qdrant 安装说明](https://qdrant.tech/documentation/install/)。
+
+```python
+pip install -qU langchain-qdrant
+```
+
+### 凭证
+
+运行此笔记本中的代码无需任何凭证。
+
+如果您想获得最佳的模型调用自动追踪功能，您还可以通过取消下方代码的注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+## 初始化
+
+### 本地模式
+
+Python 客户端提供了一种选项，可以在不运行 Qdrant 服务器的情况下以本地模式运行代码。这非常适合测试和调试，或者仅存储少量向量。嵌入向量可以完全保留在内存中，也可以持久化到磁盘上。
+
+#### 内存模式
+
+在某些测试场景和快速实验中，您可能更愿意仅将所有数据保留在内存中，这样当客户端被销毁时（通常在脚本/笔记本结束时）数据会被删除。
+
+<EmbeddingTabs/>
+
+```python
+# | output: false
+# | echo: false
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+```
+
+```python
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import Distance, VectorParams
+
+client = QdrantClient(":memory:")
+
+client.create_collection(
+    collection_name="demo_collection",
+    vectors_config=VectorParams(size=3072, distance=Distance.COSINE),
+)
+
+vector_store = QdrantVectorStore(
+    client=client,
+    collection_name="demo_collection",
+    embedding=embeddings,
+)
+```
+
+#### 磁盘存储
+
+本地模式（无需使用 Qdrant 服务器）也可以将向量存储到磁盘，以便在多次运行之间保持持久化。
+
+```python
+client = QdrantClient(path="/tmp/langchain_qdrant")
+
+client.create_collection(
+    collection_name="demo_collection",
+    vectors_config=VectorParams(size=3072, distance=Distance.COSINE),
+)
+
+vector_store = QdrantVectorStore(
+    client=client,
+    collection_name="demo_collection",
+    embedding=embeddings,
+)
+```
+
+### 本地服务器部署
+
+无论您选择使用 [Docker 容器](https://qdrant.tech/documentation/install/) 在本地启动 Qdrant，还是使用 [官方 Helm chart](https://github.com/qdrant/qdrant-helm) 选择 Kubernetes 部署，连接到此实例的方式都是相同的。您需要提供指向该服务的 URL。
+
+```python
+url = "<---qdrant url here --->"
+docs = []  # put docs here
+qdrant = QdrantVectorStore.from_documents(
+    docs,
+    embeddings,
+    url=url,
+    prefer_grpc=True,
+    collection_name="my_documents",
+)
+```
+
+### Qdrant Cloud
+
+如果您不想为管理基础设施而忙碌，可以选择在 [Qdrant Cloud](https://cloud.qdrant.io/) 上设置一个完全托管的 Qdrant 集群。其中包含一个永久免费的 1GB 集群，可供试用。使用托管版本的 Qdrant 的主要区别是，您需要提供 API 密钥来保护您的部署不被公开访问。该值也可以在 `QDRANT_API_KEY` 环境变量中设置。
+
+```python
+url = "<---qdrant cloud cluster url here --->"
+api_key = "<---api key here--->"
+qdrant = QdrantVectorStore.from_documents(
+    docs,
+    embeddings,
+    url=url,
+    prefer_grpc=True,
+    api_key=api_key,
+    collection_name="my_documents",
+)
+```
+
+## 使用现有集合
+
+要获取 `langchain_qdrant.Qdrant` 实例而无需加载任何新文档或文本，可以使用 `Qdrant.from_existing_collection()` 方法。
+
+```python
+qdrant = QdrantVectorStore.from_existing_collection(
+    embedding=embeddings,
+    collection_name="my_documents",
+    url="http://localhost:6333",
+)
+```
+
+## 管理向量存储
+
+创建向量存储后，我们可以通过添加和删除不同的项目来与其进行交互。
+
+### 向向量存储添加项目
+
+我们可以使用 `add_documents` 函数向向量存储添加项目。
+
+```python
+from uuid import uuid4
+
+from langchain_core.documents import Document
+
+document_1 = Document(
+    page_content="I had chocolate chip pancakes and scrambled eggs for breakfast this morning.",
+    metadata={"source": "tweet"},
+)
+
+document_2 = Document(
+    page_content="The weather forecast for tomorrow is cloudy and overcast, with a high of 62 degrees Fahrenheit.",
+    metadata={"source": "news"},
+)
+
+document_3 = Document(
+    page_content="Building an exciting new project with LangChain - come check it out!",
+    metadata={"source": "tweet"},
+)
+
+document_4 = Document(
+    page_content="Robbers broke into the city bank and stole $1 million in cash.",
+    metadata={"source": "news"},
+)
+
+document_5 = Document(
+    page_content="Wow! That was an amazing movie. I can't wait to see it again.",
+    metadata={"source": "tweet"},
+)
+
+document_6 = Document(
+    page_content="Is the new iPhone worth the price? Read this review to find out.",
+    metadata={"source": "website"},
+)
+
+document_7 = Document(
+    page_content="The top 10 soccer players in the world right now.",
+    metadata={"source": "website"},
+)
+
+document_8 = Document(
+    page_content="LangGraph is the best framework for building stateful, agentic applications!",
+    metadata={"source": "tweet"},
+)
+
+document_9 = Document(
+    page_content="The stock market is down 500 points today due to fears of a recession.",
+    metadata={"source": "news"},
+)
+
+document_10 = Document(
+    page_content="I have a bad feeling I am going to get deleted :(",
+    metadata={"source": "tweet"},
+)
+
+documents = [
+    document_1,
+    document_2,
+    document_3,
+    document_4,
+    document_5,
+    document_6,
+    document_7,
+    document_8,
+    document_9,
+    document_10,
+]
+uuids = [str(uuid4()) for _ in range(len(documents))]
+```
+
+```python
+vector_store.add_documents(documents=documents, ids=uuids)
+```
+
+### 从向量存储中删除项目
+
+```python
+vector_store.delete(ids=[uuids[-1]])
+```
+
+```text
+True
+```
+
+## 查询向量存储
+
+一旦您的向量存储已创建并添加了相关文档，您很可能希望在链或代理运行期间对其进行查询。
+
+### 直接查询
+
+使用 Qdrant 向量存储的最简单场景是执行相似性搜索。在底层，我们的查询将被编码为向量嵌入，用于在 Qdrant 集合中查找相似文档。
+
+```python
+results = vector_store.similarity_search(
+    "LangChain provides abstractions to make working with LLMs easy", k=2
+)
+for res in results:
+    print(f"* {res.page_content} [{res.metadata}]")
+```
+
+```text
+* Building an exciting new project with LangChain - come check it out! [{'source': 'tweet', '_id': 'd3202666-6f2b-4186-ac43-e35389de8166', '_collection_name': 'demo_collection'}]
+* LangGraph is the best framework for building stateful, agentic applications! [{'source': 'tweet', '_id': '91ed6c56-fe53-49e2-8199-c3bb3c33c3eb', '_collection_name': 'demo_collection'}]
+```
+
+`QdrantVectorStore` 支持 3 种相似性搜索模式。可以使用 `retrieval_mode` 参数配置这些模式。
+
+- 密集向量搜索（默认）
+- 稀疏向量搜索
+- 混合搜索
+
+### 密集向量搜索
+
+密集向量搜索通过基于向量的嵌入来计算相似性。仅使用密集向量进行搜索：
+
+- `retrieval_mode` 参数应设置为 `RetrievalMode.DENSE`。这是默认行为。
+- 应向 `embedding` 参数提供[密集嵌入](https://python.langchain.com/docs/integrations/embeddings/)值。
+
+```python
+from langchain_qdrant import QdrantVectorStore, RetrievalMode
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import Distance, VectorParams
+
+# Create a Qdrant client for local storage
+client = QdrantClient(path="/tmp/langchain_qdrant")
+
+# Create a collection with dense vectors
+client.create_collection(
+    collection_name="my_documents",
+    vectors_config=VectorParams(size=3072, distance=Distance.COSINE),
+)
+
+qdrant = QdrantVectorStore(
+    client=client,
+    collection_name="my_documents",
+    embedding=embeddings,
+    retrieval_mode=RetrievalMode.DENSE,
+)
+
+qdrant.add_documents(documents=documents, ids=uuids)
+
+query = "How much money did the robbers steal?"
+found_docs = qdrant.similarity_search(query)
+found_docs
+```
+
+### 稀疏向量搜索
+
+要仅使用稀疏向量进行搜索：
+
+- `retrieval_mode` 参数应设置为 `RetrievalMode.SPARSE`。
+- 必须提供使用任何稀疏嵌入提供程序的 [`SparseEmbeddings`](https://github.com/langchain-ai/langchain/blob/master/libs/partners/qdrant/langchain_qdrant/sparse_embeddings.py) 接口实现作为 `sparse_embedding` 参数的值。
+
+`langchain-qdrant` 包提供了开箱即用的基于 [FastEmbed](https://github.com/qdrant/fastembed) 的实现。
+
+要使用它，请安装 FastEmbed 包。
+
+```python
+pip install -qU fastembed
+```
+
+```python
+from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
+from qdrant_client import QdrantClient, models
+from qdrant_client.http.models import Distance, SparseVectorParams, VectorParams
+
+sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
+
+# Create a Qdrant client for local storage
+client = QdrantClient(path="/tmp/langchain_qdrant")
+
+# Create a collection with sparse vectors
+client.create_collection(
+    collection_name="my_documents",
+    vectors_config={"dense": VectorParams(size=3072, distance=Distance.COSINE)},
+    sparse_vectors_config={
+        "sparse": SparseVectorParams(index=models.SparseIndexParams(on_disk=False))
+    },
+)
+
+qdrant = QdrantVectorStore(
+    client=client,
+    collection_name="my_documents",
+    sparse_embedding=sparse_embeddings,
+    retrieval_mode=RetrievalMode.SPARSE,
+    sparse_vector_name="sparse",
+)
+
+qdrant.add_documents(documents=documents, ids=uuids)
+
+query = "How much money did the robbers steal?"
+found_docs = qdrant.similarity_search(query)
+found_docs
+```
+
+### 混合向量搜索
+
+要使用密集向量和稀疏向量以及分数融合执行混合搜索，
+
+- `retrieval_mode` 参数应设置为 `RetrievalMode.HYBRID`。
+- 应向 `embedding` 参数提供[密集嵌入](https://python.langchain.com/docs/integrations/embeddings/)值。
+- 必须向 `sparse_embedding` 参数提供使用任何稀疏嵌入提供商的 [`SparseEmbeddings`](https://github.com/langchain-ai/langchain/blob/master/libs/partners/qdrant/langchain_qdrant/sparse_embeddings.py) 接口实现作为值。
+
+请注意，如果您使用 `HYBRID` 模式添加了文档，则在搜索时可以切换到任何检索模式，因为集合中同时包含密集向量和稀疏向量。
+
+```python
+from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
+from qdrant_client import QdrantClient, models
+from qdrant_client.http.models import Distance, SparseVectorParams, VectorParams
+
+sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
+
+# Create a Qdrant client for local storage
+client = QdrantClient(path="/tmp/langchain_qdrant")
+
+# Create a collection with both dense and sparse vectors
+client.create_collection(
+    collection_name="my_documents",
+    vectors_config={"dense": VectorParams(size=3072, distance=Distance.COSINE)},
+    sparse_vectors_config={
+        "sparse": SparseVectorParams(index=models.SparseIndexParams(on_disk=False))
+    },
+)
+
+qdrant = QdrantVectorStore(
+    client=client,
+    collection_name="my_documents",
+    embedding=embeddings,
+    sparse_embedding=sparse_embeddings,
+    retrieval_mode=RetrievalMode.HYBRID,
+    vector_name="dense",
+    sparse_vector_name="sparse",
+)
+
+qdrant.add_documents(documents=documents, ids=uuids)
+
+query = "How much money did the robbers steal?"
+found_docs = qdrant.similarity_search(query)
+found_docs
+```
+
+如果您想执行相似性搜索并接收对应的分数，您可以运行：
+
+```python
+results = vector_store.similarity_search_with_score(
+    query="Will it be hot tomorrow", k=1
+)
+for doc, score in results:
+    print(f"* [SIM={score:3f}] {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+* [SIM=0.531834] The weather forecast for tomorrow is cloudy and overcast, with a high of 62 degrees. [{'source': 'news', '_id': '9e6ba50c-794f-4b88-94e5-411f15052a02', '_collection_name': 'demo_collection'}]
+```
+
+有关 `QdrantVectorStore` 所有可用的搜索函数的完整列表，请参阅 [API 参考文档](https://reference.langchain.com/python/langchain-qdrant/qdrant/QdrantVectorStore)
+
+### 元数据过滤
+
+Qdrant 拥有[强大的过滤系统](https://qdrant.tech/documentation/concepts/filtering/)，支持丰富的类型。也可以在 LangChain 中使用这些过滤器，只需在 `similarity_search_with_score` 和 `similarity_search` 方法中添加一个额外的参数即可。
+
+```python
+from qdrant_client import models
+
+results = vector_store.similarity_search(
+    query="Who are the best soccer players in the world?",
+    k=1,
+    filter=models.Filter(
+        should=[
+            models.FieldCondition(
+                key="page_content",
+                match=models.MatchValue(
+                    value="The top 10 soccer players in the world right now."
+                ),
+            ),
+        ]
+    ),
+)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+* The top 10 soccer players in the world right now. [{'source': 'website', '_id': 'b0964ab5-5a14-47b4-a983-37fa5c5bd154', '_collection_name': 'demo_collection'}]
+```
+
+### 通过转换为检索器进行查询
+
+你还可以将向量存储转换为检索器，以便在链中更方便地使用。
+
+```python
+retriever = vector_store.as_retriever(search_type="mmr", search_kwargs={"k": 1})
+retriever.invoke("Stealing from the bank is a crime")
+```
+
+```text
+[Document(metadata={'source': 'news', '_id': '50d8d6ee-69bf-4173-a6a2-b254e9928965', '_collection_name': 'demo_collection'}, page_content='Robbers broke into the city bank and stole $1 million in cash.')]
+```
+
+## 用于检索增强生成的用法
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下部分：
+
+- [检索文档](/oss/langchain/retrieval)
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [Agentic RAG](/oss/langgraph/agentic-rag)
+
+## 自定义 qdrant
+
+在 LangChain 应用中使用现有 Qdrant 集合的选项。在此情况下，您可能需要定义如何将 Qdrant 点映射到 LangChain `Document`。
+
+### 命名向量
+
+Qdrant 支持通过命名向量实现[每个点多个向量](https://qdrant.tech/documentation/concepts/collections/#collection-with-multiple-vectors)。如果您使用外部创建的集合或希望使用不同名称的向量，可通过提供其名称来进行配置。
+
+```python
+from langchain_qdrant import RetrievalMode
+
+QdrantVectorStore.from_documents(
+    docs,
+    embedding=embeddings,
+    sparse_embedding=sparse_embeddings,
+    location=":memory:",
+    collection_name="my_documents_2",
+    retrieval_mode=RetrievalMode.HYBRID,
+    vector_name="custom_vector",
+    sparse_vector_name="custom_sparse_vector",
+)
+```
+
+### 元数据
+
+Qdrant 会存储您的向量嵌入以及可选的类 JSON 负载。负载是可选的，但由于 LangChain 假定嵌入是从文档生成的，我们会保留上下文数据，以便您也可以提取原始文本。
+
+默认情况下，您的文档将按以下负载结构存储：
+
+```json
+{
+    "page_content": "Lorem ipsum dolor sit amet",
+    "metadata": {
+        "foo": "bar"
+    }
+}
+```
+
+不过，你可以决定使用不同的键来存储页面内容和元数据。如果你已经有一个想要重用的集合，这就很有用。
+
+```python
+QdrantVectorStore.from_documents(
+    docs,
+    embeddings,
+    location=":memory:",
+    collection_name="my_documents_2",
+    content_payload_key="my_page_content_key",
+    metadata_payload_key="my_meta",
+)
+```
+
+---
+
+## API 参考
+
+有关所有 `QdrantVectorStore` 功能和配置的详细文档，请参阅 @[API 参考][QdrantVectorStore]

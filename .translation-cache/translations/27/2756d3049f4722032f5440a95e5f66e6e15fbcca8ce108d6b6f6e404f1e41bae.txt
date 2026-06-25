@@ -1,0 +1,253 @@
+---
+title: "Google 集成"
+sidebarTitle: "工具"
+description: "使用 LangChain JavaScript 与 Google Gemini 工具集成。"
+---
+
+`@langchain/google` 包支持 Gemini 的内置工具，这些工具提供网络搜索基础、代码执行、URL 上下文检索等功能。这些工具作为 Gemini 原生对象通过 `bindTools()` 或 `tools` 调用选项传递给 `ChatGoogle`。
+
+<Warning>
+  您不能在同一请求中混用 Gemini 原生工具（Google 搜索、代码执行等。）与标准 LangChain 工具（基于 Zod 的函数工具）。有关标准工具调用的用法，请参阅 [ChatGoogle](/oss/integrations/chat/google) 页面。
+</Warning>
+
+### Google 搜索
+
+`googleSearch` 工具使用实时 Google 搜索结果来为基础模型响应。这对于有关时事的问题或特定事实的查询非常有用。
+
+```typescript
+import { ChatGoogle } from "@langchain/google";
+
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+    {
+      googleSearch: {},
+    },
+  ]);
+
+const res = await llm.invoke("Who won the latest World Series?");
+console.log(res.text);
+```
+
+您可以按特定时间范围筛选搜索结果：
+
+```typescript
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+  {
+    googleSearch: {
+      timeRangeFilter: {
+        startTime: "2025-01-01T00:00:00Z",
+        endTime: "2025-12-31T23:59:59Z",
+      },
+    },
+  },
+]);
+```
+
+<Note>
+  `googleSearchRetrieval` 工具继续提供是为了保持向后兼容性，但推荐使用 `googleSearch`。
+</Note>
+
+如需了解更多信息，请参阅 [Google 的使用 Google Search 进行 Grounding 文档](https://ai.google.dev/gemini-api/docs/grounding)。
+
+### 代码执行
+
+`codeExecution` 工具允许 Gemini 生成并运行 Python 代码来解决复杂问题。模型会编写代码、执行代码并返回结果。
+
+```typescript
+import { ChatGoogle } from "@langchain/google";
+
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+    {
+      codeExecution: {},
+    },
+  ]);
+
+const res = await llm.invoke("Calculate the 100th Fibonacci number.");
+console.log(res.contentBlocks);
+```
+
+响应包含生成的代码及其执行结果，位于 `contentBlocks` 字段中：
+
+```typescript
+for (const block of res.contentBlocks) {
+  if (block.type === "tool_code") {
+    console.log("Code:", block.toolCode);
+  } else if (block.type === "tool_result") {
+    console.log("Result:", block.toolResult);
+  }
+}
+```
+
+更多信息，请参阅 [Google 的 Code Execution 文档](https://ai.google.dev/gemini-api/docs/code-execution)。
+
+### URL 上下文
+
+`urlContext` 工具允许 Gemini 获取并使用 URL 中的内容来增强其响应。
+
+```typescript
+import { ChatGoogle } from "@langchain/google";
+
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+    {
+      urlContext: {},
+    },
+  ]);
+
+const res = await llm.invoke("Summarize this page: https://js.langchain.com/");
+console.log(res.text);
+```
+
+有关更多信息，请参阅 [Google 的 URL Context 文档](https://ai.google.dev/gemini-api/docs/url-context)。
+
+### Google Maps
+
+`googleMaps` 工具使用 Google Maps 的地理空间上下文来增强响应。对于与地点相关的查询非常有用。
+
+```typescript
+import { ChatGoogle } from "@langchain/google";
+
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+    {
+      googleMaps: {},
+    },
+  ]);
+
+const res = await llm.invoke("What are the best coffee shops near Times Square?");
+console.log(res.text);
+```
+
+您可以启用小部件上下文令牌用于渲染 Google Maps 小部件：
+
+```typescript
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+    {
+      googleMaps: {
+        enableWidget: true,
+    },
+  },
+]);
+
+const res = await llm.invoke("Find Italian restaurants in downtown Chicago");
+
+// Access the widget context token from grounding metadata
+const groundingMetadata = res.response_metadata?.groundingMetadata;
+console.log(groundingMetadata?.googleMapsWidgetContextToken);
+```
+
+有关更多信息，请参阅 [Google 的 Google Maps 基础文档](https://ai.google.dev/gemini-api/docs/grounding/google-maps)。
+
+### 文件搜索
+
+`fileSearch` 工具从文件搜索存储中执行语义检索。文件必须首先使用 Gemini File API 导入。
+
+```typescript
+import { ChatGoogle } from "@langchain/google";
+
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+    {
+      fileSearch: {
+      fileSearchStoreNames: ["fileSearchStores/my-store-123"],
+    },
+  },
+]);
+
+const res = await llm.invoke("What does the report say about Q4 revenue?");
+console.log(res.text);
+```
+
+配置选项：
+
+- `fileSearchStoreNames`（必需）-- 要检索的文件搜索存储的名称
+- `metadataFilter`（可选）-- 要应用于检索的元数据过滤器
+- `topK`（可选）-- 要返回的语义检索块数
+
+更多信息，请参阅 [Google File Search 文档](https://ai.google.dev/gemini-api/docs/file-search)。
+
+### 计算机使用
+
+`computerUse` 工具使 Gemini 能够与浏览器环境进行交互。该模型可以查看屏幕截图并执行点击、输入和滚动等操作。
+
+```typescript
+import { ChatGoogle } from "@langchain/google";
+
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+    {
+      computerUse: {
+      environment: "ENVIRONMENT_BROWSER",
+    },
+  },
+]);
+```
+
+配置选项：
+
+- `environment`（必需）-- 正在操作的环境（例如 `"ENVIRONMENT_BROWSER"`）
+- `excludedPredefinedFunctions`（可选）-- 要从操作空间中排除的预定义函数
+
+更多信息，请参阅 [Google 的 Computer Use 文档](https://ai.google.dev/gemini-api/docs/computer-use)。
+
+### MCP 服务器
+
+`mcpServers` 字段允许 Gemini 连接到远程 MCP（Model Context Protocol）服务器。与其他原生工具不同，MCP 服务器在工具对象上指定为数组。
+
+```typescript
+import { ChatGoogle } from "@langchain/google";
+
+const llm = new ChatGoogle("gemini-2.5-flash")
+  .bindTools([
+    {
+      mcpServers: [
+      {
+        name: "my-mcp-server",
+        streamableHttpTransport: {
+          url: "https://my-mcp-server.example.com/mcp",
+        },
+      },
+    ],
+  },
+]);
+
+const res = await llm.invoke("Use the tools from the MCP server to help me.");
+console.log(res.text);
+```
+
+有关更多信息，请参阅 [Google 的 MCP 文档](https://ai.google.dev/gemini-api/docs/mcp)。
+
+### Vertex AI Search 数据存储
+
+如果您使用的是 Vertex AI（`platformType: "gcp"`），则可以使用 Vertex AI Search 数据存储来为响应提供基础。
+
+```typescript
+import { ChatGoogle } from "@langchain/google";
+
+const projectId = "YOUR_PROJECT_ID";
+const datastoreId = "YOUR_DATASTORE_ID";
+
+const llm = new ChatGoogle({
+  model: "gemini-2.5-pro",
+  platformType: "gcp",
+}).bindTools([
+  {
+    retrieval: {
+      vertexAiSearch: {
+        datastore: `projects/${projectId}/locations/global/collections/default_collection/dataStores/${datastoreId}`,
+      },
+      disableAttribution: false,
+    },
+  },
+]);
+
+const res = await llm.invoke(
+  "What is the score of Argentina vs Bolivia football game?"
+);
+console.log(res.text);
+```
+
+有关更多信息，请参阅 [Google 的 Vertex AI Search grounding 文档](https://cloud.google.com/vertex-ai/generative-ai/docs/grounding/ground-with-vertex-ai-search)。

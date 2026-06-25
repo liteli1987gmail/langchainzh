@@ -1,0 +1,101 @@
+---
+title: "E2BSandbox 集成"
+description: "使用 LangChain Python 与 E2BSandbox 沙箱进行集成。"
+---
+
+[E2B](https://e2b.dev/) 提供云沙箱，用于在隔离环境中运行 AI 生成的代码。参见 [E2B 文档](https://e2b.dev/docs) 了解注册、身份验证和平台详情。
+
+## 安装
+
+<CodeGroup>
+
+```bash pip
+pip install langchain-e2b
+```
+
+```bash uv
+uv add langchain-e2b
+```
+
+</CodeGroup>
+
+## 身份验证
+
+设置您的 E2B API 密钥：
+
+```bash
+export E2B_API_KEY="..."
+```
+
+通过 E2B SDK 配置 E2B 特定选项，例如模板或沙盒生命周期。
+
+## 创建沙盒
+
+在 Python 中，您使用 E2B SDK 创建沙盒，然后使用 [deepagents 后端](/oss/deepagents/backends) 将其包装。
+
+```python
+from e2b import Sandbox
+from langchain_e2b import E2BSandbox
+
+e2b_sandbox = Sandbox.create()
+backend = E2BSandbox(sandbox=e2b_sandbox)
+
+try:
+    result = backend.execute("echo hello")
+    print(result.output)
+finally:
+    e2b_sandbox.kill()
+```
+
+## 与 Deep Agents 配合使用
+
+```python
+from e2b import Sandbox
+from deepagents import create_deep_agent
+from langchain_anthropic import ChatAnthropic
+from langchain_e2b import E2BSandbox
+
+e2b_sandbox = Sandbox.create()
+backend = E2BSandbox(sandbox=e2b_sandbox)
+
+agent = create_deep_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    system_prompt="You are a coding assistant with sandbox access.",
+    backend=backend,
+)
+
+try:
+    result = agent.invoke(
+        {
+            "messages": [
+                {"role": "user", "content": "Create a hello world Python script and run it"}
+            ]
+        }
+    )
+finally:
+    e2b_sandbox.kill()
+```
+
+## 与 Deep Agents Code 配合使用
+
+`langchain-e2b` 还为 [Deep Agents Code](/oss/deepagents/code/remote-sandboxes) 发布了一个 E2B 沙箱提供商，因此 `dcode` 可以让代理工具调用在 E2B 沙箱中执行。将该包安装到 `dcode` 环境中，设置您的 API 密钥，然后选择该提供商：
+
+<Note>
+    在 Deep Agents Code 中使用 E2B 需要 `dcode` 0.1.19 或更高版本以及 `langchain-e2b` 0.0.4 或更高版本。
+</Note>
+
+```bash
+dcode --install langchain-e2b --package
+export E2B_API_KEY="..."
+dcode --sandbox e2b
+```
+
+E2B sandbox 使用 `/home/user` 作为默认工作目录。要从特定的 [E2B 模板](https://e2b.dev/docs/sandbox-template) 创建 sandbox，请设置 `E2B_TEMPLATE`；要更改 sandbox 生命周期，请设置 `E2B_SANDBOX_TIMEOUT`（以秒为单位）。每个变量还接受带 `DEEPAGENTS_CODE_` 前缀的形式（例如 `DEEPAGENTS_CODE_E2B_API_KEY`），该形式优先。
+
+Deep Agents Code 会自动管理 sandbox 生命周期，在启动时创建 sandbox，在退出时删除。
+
+## 清理
+
+使用完毕后请务必终止 E2B sandbox，以避免资源持续消耗。
+
+另请参阅：[Sandbox](/oss/deepagents/sandboxes)。

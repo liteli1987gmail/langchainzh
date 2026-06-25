@@ -1,0 +1,143 @@
+---
+title: 概述
+description: 在每个步骤控制和自定义代理执行
+---
+
+中间件提供了一种更紧密地控制代理内部发生的情况的方法。中间件可用于以下场景：
+
+- 使用日志、分析和调试跟踪代理行为。
+- 转换提示、[工具选择](/oss/langchain/middleware/built-in#llm-tool-selector)和输出格式。
+- 添加[重试](/oss/langchain/middleware/built-in#tool-retry)、[回退](/oss/langchain/middleware/built-in#model-fallback)和提前终止逻辑。
+- 应用[速率限制](/oss/langchain/middleware/built-in#model-call-limit)、护栏和 [PII 检测](/oss/langchain/middleware/built-in#pii-detection)。
+
+:::python
+通过将中间件传递给 @[`create_agent`] 来添加中间件：
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import SummarizationMiddleware, HumanInTheLoopMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[...],
+    middleware=[
+        SummarizationMiddleware(...),
+        HumanInTheLoopMiddleware(...)
+    ],
+)
+```
+:::
+
+:::js
+通过将中间件传递给 `createAgent` 来添加中间件：
+
+```typescript
+import {
+  createAgent,
+  summarizationMiddleware,
+  humanInTheLoopMiddleware,
+} from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [...],
+  middleware: [summarizationMiddleware, humanInTheLoopMiddleware],
+});
+```
+:::
+
+## 代理循环
+
+核心代理循环包括调用模型、让其选择要执行的工具，然后在不再调用工具时结束：
+
+<img
+    src="/oss/images/core_agent_loop.png"
+    alt="核心代理循环示意图"
+    style={{height: "200px", width: "auto", justifyContent: "center"}}
+    className="rounded-lg block mx-auto"
+/>
+
+中间件在这些步骤的前后都暴露了钩子：
+
+<img
+    src="/oss/images/middleware_final.png"
+    alt="中间件流程示意图"
+    style={{height: "300px", width: "auto", justifyContent: "center"}}
+    className="rounded-lg mx-auto"
+/>
+
+## 在 LangGraph 工作流中使用中间件
+
+中间件不是一个独立的运行时：钩子运行在 @[`create_agent`] 返回的已编译 [LangGraph](/oss/langgraph/overview) 内部。你可以将整个代理（包含中间件）作为节点或子图放入更大的 @[StateGraph] 中，每个中间件钩子都会继续运行。
+
+当周围拓扑结构比标准的"循环直到完成"更复杂时，可以采用这种模式：在路由到多个代理之一之前对输入进行分类、在并行中展开工作，或将代理调用与确定性步骤结合在一起。
+
+`HumanInTheLoopMiddleware` 会根据每个工具的 `.name` 进行匹配。在 Python 中，使用 `@tool` 装饰的函数以其函数名作为名称（因此下面的键是 `"send_email"`）；在 TypeScript 中，键与传递给 `tool({...}, { name })` 的 `name` 相匹配。
+
+:::python
+```python
+from langchain.agents import AgentState, create_agent
+from langchain.agents.middleware import HumanInTheLoopMiddleware
+from langgraph.graph import START, StateGraph
+
+# Assumes read_email, send_email, classify_node, and route are defined elsewhere.
+email_agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=[read_email, send_email],
+    middleware=[HumanInTheLoopMiddleware(interrupt_on={"send_email": True})],
+)
+
+graph = (
+    StateGraph(AgentState)
+    .add_node("classify", classify_node)
+    .add_node("email_agent", email_agent)
+    .add_edge(START, "classify")
+    .add_conditional_edges("classify", route)
+    .compile()
+)
+```
+:::
+
+:::js
+```typescript
+import { AgentState, createAgent, humanInTheLoopMiddleware } from "langchain";
+import { StateGraph, START } from "@langchain/langgraph";
+
+// Assumes readEmail, sendEmail, classifyNode, and route are defined elsewhere.
+// readEmail / sendEmail are registered with name: "read_email" / "send_email".
+const emailAgent = createAgent({
+  model: "claude-sonnet-4-6",
+  tools: [readEmail, sendEmail],
+  middleware: [humanInTheLoopMiddleware({ interruptOn: { send_email: true } })],
+});
+
+const graph = new StateGraph(AgentState)
+  .addNode("classify", classifyNode)
+  .addNode("emailAgent", emailAgent)
+  .addEdge(START, "classify")
+  .addConditionalEdges("classify", route)
+  .compile();
+```
+:::
+
+HITL 中断、摘要、PII 脱敏、重试以及任何自定义钩子都会随代理节点一起传递。请参阅[使用子图](/oss/langgraph/use-subgraphs)了解完整的组合模式，包括子图检查点作用域（按调用与按线程）。
+
+## 其他资源
+
+<CardGroup cols={2}>
+    <Card title="内置中间件" icon="box" href="/oss/langchain/middleware/built-in">
+        探索常见用例的内置中间件。
+    </Card>
+    <Card title="自定义中间件" icon="code" href="/oss/langchain/middleware/custom">
+        使用钩子和装饰器构建你自己的中间件。
+    </Card>
+    <Card title="中间件 API 参考" icon="book" href="https://reference.langchain.com/python/langchain/middleware/">
+        完整的中间件 API 参考。
+    </Card>
+    <Card title="中间件集成" icon="plug" href="/oss/integrations/middleware/">
+        面向 Anthropic、AWS、OpenAI 等的提供商特定中间件。
+    </Card>
+    <Card title="测试代理" icon="scale" href="/oss/langchain/test/">
+        使用 LangSmith 测试你的代理。
+    </Card>
+</CardGroup>

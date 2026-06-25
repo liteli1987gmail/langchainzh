@@ -1,0 +1,824 @@
+---
+title: "Anthropic 中间件集成"
+description: "使用 LangChain Python 与 Anthropic 中间件集成。"
+---
+
+专为 Anthropic 的 Claude 模型设计的中间件。了解更多关于[中间件](/oss/langchain/middleware/overview)的信息。
+
+| 中间件 | 描述 |
+|------------|-------------|
+| [Prompt 缓存](#prompt-caching) | 通过缓存重复的提示前缀来降低成本 |
+| [Bash 工具](#bash-tool) | 执行 Claude 的原生 bash 工具，支持本地命令执行 |
+| [文本编辑器](#text-editor) | 提供 Claude 的文本编辑器工具用于文件编辑 |
+| [记忆](#memory) | 提供 Claude 的记忆工具用于持久化代理记忆 |
+| [文件搜索](#file-search) | 用于基于状态的文件系统的搜索工具 |
+
+## 中间件与工具
+
+`langchain-anthropic` 提供了两种使用 Claude 原生工具的方式：
+
+- **中间件**（本页）：生产就绪的实现，包含内置执行、状态管理和安全策略
+- **工具**（通过 [`bind_tools`](/oss/integrations/chat/anthropic#built-in-tools)）：底层构建块，由您提供自己的执行逻辑
+
+### 何时使用哪种
+
+| 使用场景 | 推荐 | 原因 |
+|----------|-------------|-----|
+| 带 bash 的生产代理 | 中间件 | 持久会话、Docker 隔离、输出编辑 |
+| 基于状态的文件编辑 | 中间件 | 内置 LangGraph 状态持久化 |
+| 文件系统文件编辑 | 中间件 | 写入磁盘并进行路径验证 |
+| 自定义执行逻辑 | 工具 | 完全控制执行过程 |
+| 快速原型 | 工具 | 更简单，使用您自己的回调 |
+| 非代理使用 @[`bind_tools`][ChatAnthropic.bind_tools] | 工具 | 中间件需要 @[`create_agent`] |
+
+### 功能对比
+
+| 功能 | 中间件 | 工具 |
+|---------|:----------:|:-----:|
+| 与 @[`create_agent`] 配合使用 | ✅ | ✅ |
+| 与 @[`bind_tools`][ChatAnthropic.bind_tools] 配合使用 | ❌ | ✅ |
+| 内置状态管理 | ✅ | ❌ |
+| 自定义执行回调 | ❌ | ✅ |
+
+<Accordion title="示例：中间件与工具对比">
+
+**使用中间件**（交钥匙解决方案）：
+
+</Accordion>
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import ClaudeBashToolMiddleware
+from langchain.agents import create_agent
+from langchain.agents.middleware import DockerExecutionPolicy
+
+# Production-ready with Docker isolation, session management, etc.
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    middleware=[
+        ClaudeBashToolMiddleware(
+            workspace_root="/workspace",
+            execution_policy=DockerExecutionPolicy(image="python:3.11"),
+            startup_commands=["pip install pandas"],
+        ),
+    ],
+)
+```
+
+**使用工具**（自带执行环境）：
+
+```python
+import subprocess
+
+from anthropic.types.beta import BetaToolBash20250124Param
+from langchain_anthropic import ChatAnthropic
+from langchain.agents import create_agent
+from langchain.tools import tool
+
+tool_spec = BetaToolBash20250124Param(
+    name="bash",
+    type="bash_20250124",
+    strict=True,
+)
+
+@tool(extras={"provider_tool_definition": tool_spec})
+def bash(*, command: str, restart: bool = False, **kw):
+    """Execute a bash command."""
+    if restart:
+        return "Bash session restarted"
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.stdout + result.stderr
+    except Exception as e:
+        return f"Error: {e}"
+
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[bash],
+)
+
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "List files in this directory"}]}
+)
+print(result["messages"][-1].content)
+```
+
+## 提示词缓存
+
+通过在 Anthropic 服务器上缓存静态或重复的提示词内容（如系统提示词、工具定义和对话历史）来降低成本和延迟。此中间件实现了**对话缓存策略**，可直接标记系统提示词和工具定义等稳定的代理内容，并通过 `model_settings` 传递 `cache_control`。聊天模型和提供程序随后处理消息尾部及提供程序特定的缓存行为，使对话历史能够在后续 API 调用中被缓存和重用。
+
+提示词缓存适用于以下场景：
+
+- 应用程序具有长而静态的系统提示词，这些提示词在请求之间保持不变
+- 代理拥有许多在调用中保持不变的工具定义
+- 对话中的早期消息历史在多个轮次中被重用
+- 高吞吐量部署中，降低 API 成本和延迟至关重要
+
+<Tip>
+    对于更简单的用例，您也可以通过在调用时传递 `cache_control` 来使用[自动缓存](/oss/integrations/chat/anthropic#automatic-caching)，而无需使用中间件。当您需要对系统提示词和工具定义的缓存断点进行显式控制时，推荐使用中间件。
+</Tip>
+
+<Info>
+    详细了解 [Anthropic 提示词缓存](https://platform.claude.com/docs/en/build-with-claude/prompt-caching#cache-limitations)策略和限制。
+</Info>
+
+**API 参考：** @[`AnthropicPromptCachingMiddleware`]
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
+from langchain.agents import create_agent
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    system_prompt="<Your long system prompt here>",
+    middleware=[AnthropicPromptCachingMiddleware(ttl="5m")], # [!code highlight]
+)
+```
+
+<Accordion title="配置选项">
+
+<ParamField body="type" type="string" default="ephemeral">
+    缓存类型。当前仅支持 `'ephemeral'`。
+</ParamField>
+
+<ParamField body="ttl" type="string" default="5m">
+    缓存内容的生存时间。有效值：`'5m'` 或 `'1h'`
+</ParamField>
+
+<ParamField body="min_messages_to_cache" type="number" default="0">
+    开始缓存前的最小消息数量
+</ParamField>
+
+<ParamField body="unsupported_model_behavior" type="string" default="warn">
+    使用非 Anthropic 模型时的行为。选项：`'ignore'`、`'warn'` 或 `'raise'`
+</ParamField>
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+中间件会缓存每个请求中直到最新消息的内容。在 TTL 窗口（5 分钟或 1 小时）内的后续请求中，之前见过的内容会从缓存中检索，而无需重新处理，从而显著降低成本和延迟。
+
+**工作原理：**
+1. 首次请求：系统提示词、工具和用户消息 *"Hi, my name is Bob"* 被发送到 API 并缓存
+2. 第二次请求：从缓存中检索缓存的内容（系统提示词、工具和第一条消息）。只需处理新消息 *"What's my name?"*，加上第一条请求中模型的响应
+3. 每个回合都继续此模式，每个请求都重用缓存的对话历史
+
+<Note>
+    提示词缓存通过缓存 token 来降低 API 成本，但**不**提供对话记忆。若要在调用之间持久化对话历史，请使用 [checkpointer](https://langchain-ai.github.io/langgraph/concepts/persistence/#checkpointer-libraries)，如 `MemorySaver`。
+</Note>
+
+</Accordion>
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
+from langchain.agents import create_agent
+from langchain.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import MemorySaver
+
+
+LONG_PROMPT = """
+Please be a helpful assistant.
+
+<Lots more context ...>
+"""
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    system_prompt=LONG_PROMPT,
+    middleware=[AnthropicPromptCachingMiddleware(ttl="5m")], # [!code highlight]
+    checkpointer=MemorySaver(),  # Persists conversation history
+)
+
+# Use a thread_id to maintain conversation state
+config: RunnableConfig = {"configurable": {"thread_id": "user-123"}}
+
+# First invocation: Creates cache with system prompt, tools, and "Hi, my name is Bob"
+agent.invoke({"messages": [HumanMessage("Hi, my name is Bob")]}, config=config)
+
+# Second invocation: Reuses cached system prompt, tools, and previous messages
+# The checkpointer maintains conversation history, so the agent remembers "Bob"
+result = agent.invoke({"messages": [HumanMessage("What's my name?")]}, config=config)
+print(result["messages"][-1].content)
+```
+
+```text
+Your name is Bob! You told me that when you introduced yourself at the start of our conversation.
+```
+
+</Accordion>
+
+## Bash 工具
+
+使用本地命令执行功能调用 Claude 原生的 `bash_20250124` 工具。
+
+Bash 工具中间件适用于以下场景：
+
+- 使用本地执行功能调用 Claude 内置的 bash 工具
+- 利用 Claude 优化的 bash 工具界面
+- 需要与 Anthropic 模型建立持久 shell 会话的 Agent
+
+<Info>
+    此中间件封装了 `ShellToolMiddleware`，并将其作为 Claude 原生的 bash 工具暴露出来。
+</Info>
+
+**API 参考：** @[`ClaudeBashToolMiddleware`]
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import ClaudeBashToolMiddleware
+from langchain.agents import create_agent
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[ # [!code highlight]
+        ClaudeBashToolMiddleware( # [!code highlight]
+            workspace_root="/workspace", # [!code highlight]
+        ), # [!code highlight]
+    ], # [!code highlight]
+)
+```
+
+<Accordion title="配置选项">
+
+`ClaudeBashToolMiddleware` 接受 @[`ShellToolMiddleware`] 的所有参数，包括：
+
+<ParamField body="workspace_root" type="str | Path | None">
+    Shell 会话的基础目录
+</ParamField>
+
+<ParamField body="startup_commands" type="tuple[str, ...] | list[str] | str | None">
+    会话启动时运行的命令
+</ParamField>
+
+<ParamField body="execution_policy" type="BaseExecutionPolicy | None">
+    执行策略（`HostExecutionPolicy`、`DockerExecutionPolicy` 或 `CodexSandboxExecutionPolicy`）
+</ParamField>
+
+<ParamField body="redaction_rules" type="tuple[RedactionRule, ...] | list[RedactionRule] | None">
+    用于清理命令输出的规则
+</ParamField>
+
+有关完整配置详情，请参阅 [Shell 工具](/oss/langchain/middleware/built-in#shell-tool)。
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+</Accordion>
+
+```python
+import tempfile
+
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import ClaudeBashToolMiddleware
+from langchain.agents import create_agent
+from langchain.agents.middleware import DockerExecutionPolicy
+
+# Create a temporary workspace directory for this demo.
+# In production, use a persistent directory path.
+workspace = tempfile.mkdtemp(prefix="agent-workspace-")
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[ # [!code highlight]
+        ClaudeBashToolMiddleware( # [!code highlight]
+            workspace_root=workspace, # [!code highlight]
+            startup_commands=["echo 'Session initialized'"], # [!code highlight]
+            execution_policy=DockerExecutionPolicy( # [!code highlight]
+                image="python:3.11-slim", # [!code highlight]
+            ), # [!code highlight]
+        ), # [!code highlight]
+    ], # [!code highlight]
+)
+
+# Claude can now use its native bash tool
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "What version of Python is installed?"}]}
+)
+print(result["messages"][-1].content)
+```
+
+```text
+Python 3.11.14 is installed.
+```
+
+</Accordion>
+
+## 文本编辑器
+
+提供 Claude 的文本编辑器工具（`text_editor_20250728`），用于文件创建和编辑。
+
+文本编辑器中间件适用于以下场景：
+
+- 基于文件的代理工作流
+- 代码编辑和重构任务
+- 多文件项目工作
+- 需要持久化文件存储的代理
+
+<Note>
+    提供两种变体：**基于状态**（文件存储在 LangGraph 状态中）和**基于文件系统**（文件存储在磁盘上）。
+</Note>
+
+**API 参考：**
+- @[`StateClaudeTextEditorMiddleware`]
+- @[`FilesystemClaudeTextEditorMiddleware`]
+
+```python State-based text editor
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import StateClaudeTextEditorMiddleware
+from langchain.agents import create_agent
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[StateClaudeTextEditorMiddleware()], # [!code highlight]
+)
+```
+
+```python Filesystem-based text editor
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import FilesystemClaudeTextEditorMiddleware
+from langchain.agents import create_agent
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[ # [!code highlight]
+        FilesystemClaudeTextEditorMiddleware( # [!code highlight]
+            root_path="/workspace", # [!code highlight]
+        ), # [!code highlight]
+    ], # [!code highlight]
+)
+```
+
+Claude 的文本编辑器工具支持以下命令：
+
+- `view` - 查看文件内容或列出目录
+- `create` - 创建新文件
+- `str_replace` - 替换文件中的字符串
+- `insert` - 在指定行号插入文本
+- `delete` - 删除文件
+- `rename` - 重命名/移动文件
+
+<Accordion title="配置选项">
+
+**@[`StateClaudeTextEditorMiddleware`] (基于状态)**
+
+<ParamField body="allowed_path_prefixes" type="Sequence[str] | None">
+    允许的路径前缀的可选列表。如果指定，则只允许以这些前缀开头的路径。
+</ParamField>
+
+**@[`FilesystemClaudeTextEditorMiddleware`] (基于文件系统)**
+
+<ParamField body="root_path" type="str" required>
+    文件操作的根目录
+</ParamField>
+
+<ParamField body="allowed_prefixes" type="list[str] | None">
+    允许的虚拟路径前缀的可选列表（默认值：`["/"]`）
+</ParamField>
+
+<ParamField body="max_file_size_mb" type="int" default="10">
+    最大文件大小（MB）
+</ParamField>
+
+</Accordion>
+
+<AccordionGroup>
+
+<Accordion title="完整示例：基于状态的文本编辑器">
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import StateClaudeTextEditorMiddleware
+from langchain.agents import create_agent
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import MemorySaver
+
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[
+        StateClaudeTextEditorMiddleware( # [!code highlight]
+            allowed_path_prefixes=["/project"], # [!code highlight]
+        ), # [!code highlight]
+    ],
+    checkpointer=MemorySaver(),
+)
+
+# Use a thread_id to persist state across invocations
+config: RunnableConfig = {"configurable": {"thread_id": "my-session"}}
+
+# Claude can now create and edit files (stored in LangGraph state)
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Create a file at /project/hello.py with a simple hello world program"}]},
+    config=config,
+)
+print(result["messages"][-1].content)
+```
+
+```text
+I've created a simple "Hello, World!" program at `/project/hello.py`. The program uses Python's `print()` function to display "Hello, World!" to the console when executed.
+```
+
+</Accordion>
+
+<Accordion title="完整示例：基于文件系统的文本编辑器">
+
+
+</Accordion>
+
+```python
+import tempfile
+
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import FilesystemClaudeTextEditorMiddleware
+from langchain.agents import create_agent
+
+
+# Create a temporary workspace directory for this demo.
+# In production, use a persistent directory path.
+workspace = tempfile.mkdtemp(prefix="editor-workspace-")
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[
+        FilesystemClaudeTextEditorMiddleware( # [!code highlight]
+            root_path=workspace, # [!code highlight]
+            allowed_prefixes=["/src"], # [!code highlight]
+            max_file_size_mb=10, # [!code highlight]
+        ), # [!code highlight]
+    ],
+)
+
+# Claude can now create and edit files (stored on disk)
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Create a file at /src/hello.py with a simple hello world program"}]}
+)
+print(result["messages"][-1].content)
+```
+
+```text
+I've created a simple "Hello, World!" program at `/src/hello.py`. The program uses Python's `print()` function to display "Hello, World!" to the console when executed.
+```
+
+</Accordion>
+
+</AccordionGroup>
+
+
+## 内存
+
+为 Claude 的内存工具（`memory_20250818`）提供跨对话轮次的持久化代理内存。
+
+内存中间件适用于以下场景：
+
+- 长时间运行的代理对话
+- 在中断期间保持上下文
+- 任务进度跟踪
+- 持久化代理状态管理
+
+<Info>
+    Claude 的内存工具使用 `/memories` 目录，并自动注入系统提示词，鼓励代理检查和更新内存。
+</Info>
+
+**API 参考：** @[`StateClaudeMemoryMiddleware`], @[`FilesystemClaudeMemoryMiddleware`]
+
+```python State-based memory
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import StateClaudeMemoryMiddleware
+from langchain.agents import create_agent
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[StateClaudeMemoryMiddleware()], # [!code highlight]
+)
+```
+
+```python Filesystem-based memory
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import FilesystemClaudeMemoryMiddleware
+from langchain.agents import create_agent
+
+agent_fs = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[ # [!code highlight]
+        FilesystemClaudeMemoryMiddleware( # [!code highlight]
+            root_path="/workspace", # [!code highlight]
+        ), # [!code highlight]
+    ], # [!code highlight]
+)
+```
+
+<Accordion title="配置选项">
+
+**@[`StateClaudeMemoryMiddleware`] (基于状态)**
+
+<ParamField body="allowed_path_prefixes" type="Sequence[str] | None">
+    可选路径前缀列表。默认为 `["/memories"]`。
+</ParamField>
+
+<ParamField body="system_prompt" type="str">
+    要注入的系统提示词。默认为 Anthropic 推荐的记忆提示词，鼓励代理检查和更新记忆。
+</ParamField>
+
+**@[`FilesystemClaudeMemoryMiddleware`] (基于文件系统)**
+
+<ParamField body="root_path" type="str" required>
+    文件操作的根目录
+</ParamField>
+
+<ParamField body="allowed_prefixes" type="list[str] | None">
+    可选的虚拟路径前缀列表。默认为 `["/memories"]`。
+</ParamField>
+
+<ParamField body="max_file_size_mb" type="int" default="10">
+    最大文件大小（MB）
+</ParamField>
+
+<ParamField body="system_prompt" type="str">
+    要注入的系统提示词
+</ParamField>
+
+</Accordion>
+
+<AccordionGroup>
+
+<Accordion title="完整示例：基于状态的记忆">
+
+代理将自动执行以下操作：
+1. 启动时检查 `/memories` 目录
+2. 在执行过程中记录进度和思考
+3. 随着工作进展更新记忆文件
+
+
+</AccordionGroup>
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import StateClaudeMemoryMiddleware
+from langchain.agents import create_agent
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import MemorySaver
+
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[StateClaudeMemoryMiddleware()], # [!code highlight]
+    checkpointer=MemorySaver(),
+)
+
+# Use a thread_id to persist state across invocations
+config: RunnableConfig = {"configurable": {"thread_id": "my-session"}}
+
+# Claude can now use memory to track progress (stored in LangGraph state)
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Remember that my favorite color is blue, then confirm what you stored."}]},
+    config=config,
+)
+print(result["messages"][-1].content)
+```
+
+```text
+Perfect! I've stored your favorite color as **blue** in my memory system. The information is saved in my user preferences file where I can access it in future conversations.
+```
+
+</Accordion>
+
+<Accordion title="完整示例：基于文件系统的记忆">
+
+智能体将自动：
+1. 在启动时检查 `/memories` 目录
+2. 在执行过程中记录进度和想法
+3. 随着工作进展更新记忆文件
+
+
+</fragment>
+
+```python
+import tempfile
+
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import FilesystemClaudeMemoryMiddleware
+from langchain.agents import create_agent
+
+
+# Create a temporary workspace directory for this demo.
+# In production, use a persistent directory path.
+workspace = tempfile.mkdtemp(prefix="memory-workspace-")
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[
+        FilesystemClaudeMemoryMiddleware( # [!code highlight]
+            root_path=workspace, # [!code highlight]
+        ), # [!code highlight]
+    ],
+)
+
+# Claude can now use memory to track progress (stored on disk)
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Remember that my favorite color is blue, then confirm what you stored."}]}
+)
+print(result["messages"][-1].content)
+```
+
+```text
+Perfect! I've stored your favorite color as **blue** in my memory system. The information is saved in my user preferences file where I can access it in future conversations.
+```
+
+</Accordion>
+
+</AccordionGroup>
+
+## 文件搜索
+
+提供用于搜索 LangGraph 状态中存储的文件的 Glob 和 Grep 搜索工具。文件搜索中间件适用于以下场景：
+
+- 搜索基于状态的文件系统
+- 与文本编辑器和记忆工具配合使用
+- 按模式查找文件
+- 使用正则表达式进行内容搜索
+
+**API 参考：** @[`StateFileSearchMiddleware`]
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import (
+    StateClaudeTextEditorMiddleware,
+    StateFileSearchMiddleware,
+)
+from langchain.agents import create_agent
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[ # [!code highlight]
+        StateClaudeTextEditorMiddleware(), # [!code highlight]
+        StateFileSearchMiddleware(),  # Search text editor files [!code highlight]
+    ], # [!code highlight]
+)
+```
+
+<Accordion title="配置选项">
+
+<ParamField body="state_key" type="str" default="text_editor_files">
+    包含要搜索文件的状态键。使用 `"text_editor_files"` 表示文本编辑器文件，或使用 `"memory_files"` 表示记忆文件。
+</ParamField>
+
+</Accordion>
+
+<AccordionGroup>
+
+<Accordion title="完整示例：搜索文本编辑器文件">
+
+此中间件添加了 Glob 和 Grep 搜索工具，可处理基于状态的文件。
+
+</AccordionGroup>
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import (
+    StateClaudeTextEditorMiddleware,
+    StateFileSearchMiddleware,
+)
+from langchain.agents import create_agent
+from langchain.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import MemorySaver
+
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[
+        StateClaudeTextEditorMiddleware(),
+        StateFileSearchMiddleware(state_key="text_editor_files"), # [!code highlight]
+    ],
+    checkpointer=MemorySaver(),
+)
+
+# Use a thread_id to persist state across invocations
+config: RunnableConfig = {"configurable": {"thread_id": "my-session"}}
+
+# First invocation: Create some files using the text editor tool
+result = agent.invoke(
+    {"messages": [HumanMessage("Create a Python project with main.py, utils/helpers.py, and tests/test_main.py")]},
+    config=config,
+)
+
+# The agent creates files, which are stored in state
+print("Files created:", list(result["text_editor_files"].keys()))
+
+# Second invocation: Search the files we just created
+# State is automatically persisted via the checkpointer
+result = agent.invoke(
+    {"messages": [HumanMessage("Find all Python files in the project")]},
+    config=config,
+)
+print(result["messages"][-1].content)
+```
+
+```text
+Files created: ['/project/main.py', '/project/utils/helpers.py', '/project/utils/__init__.py', '/project/tests/test_main.py', '/project/tests/__init__.py', '/project/README.md']
+```
+
+```text
+I found 5 Python files in the project:
+
+1. `/project/main.py` - Main application file
+2. `/project/utils/__init__.py` - Utils package initialization
+3. `/project/utils/helpers.py` - Helper utilities
+4. `/project/tests/__init__.py` - Tests package initialization
+5. `/project/tests/test_main.py` - Main test file
+
+Would you like me to view the contents of any of these files?
+```
+
+<Accordion title="完整示例：搜索记忆文件">
+
+</Accordion>
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain_anthropic.middleware import (
+    StateClaudeMemoryMiddleware,
+    StateFileSearchMiddleware,
+)
+from langchain.agents import create_agent
+from langchain.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import MemorySaver
+
+
+agent = create_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-6"),
+    tools=[],
+    middleware=[
+        StateClaudeMemoryMiddleware(),
+        StateFileSearchMiddleware(state_key="memory_files"), # [!code highlight]
+    ],
+    checkpointer=MemorySaver(),
+)
+
+# Use a thread_id to persist state across invocations
+config: RunnableConfig = {"configurable": {"thread_id": "my-session"}}
+
+# First invocation: Record some memories
+result = agent.invoke(
+    {"messages": [HumanMessage("Remember that the project deadline is March 15th and code review deadline is March 10th")]},
+    config=config,
+)
+
+# The agent creates memory files, which are stored in state
+print("Memory files created:", list(result["memory_files"].keys()))
+
+# Second invocation: Search the memories we just recorded
+# State is automatically persisted via the checkpointer
+result = agent.invoke(
+    {"messages": [HumanMessage("Search my memories for project deadlines")]},
+    config=config,
+)
+print(result["messages"][-1].content)
+```
+
+```text
+Memory files created: ['/memories/project_info.md']
+```
+
+```text
+I found your project deadlines in my memory! Here's what I have recorded:
+
+## Important Deadlines
+- **Code Review Deadline:** March 10th
+- **Project Deadline:** March 15th
+
+## Notes
+- Code review must be completed 5 days before final project deadline
+- Need to ensure all code is ready for review by March 10th
+
+Is there anything specific about these deadlines you'd like to know or update?
+```
+
+</Accordion>
+
+</AccordionGroup>

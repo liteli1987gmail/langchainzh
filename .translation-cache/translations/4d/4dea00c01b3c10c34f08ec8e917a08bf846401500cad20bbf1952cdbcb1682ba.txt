@@ -1,0 +1,138 @@
+---
+title: "Perplexity 搜索集成"
+description: "使用 LangChain Python 与 Perplexity 搜索工具集成。"
+---
+
+[Perplexity Search](https://docs.perplexity.ai/docs/search/quickstart) 是一个网络搜索 API，返回排名结果并附带来源信息，专为 LLM 和 agent 设计。它为 [perplexity.ai](https://www.perplexity.ai/) 上的问答引擎提供支持，并通过专用 [Search API 端点](https://docs.perplexity.ai/api-reference/search-post) 公开。
+
+本页面介绍如何使用 Perplexity Search API 作为 LangChain 工具。
+
+## 设置
+
+### 安装
+
+安装 LangChain Perplexity 集成包：
+
+```python
+pip install -qU langchain-perplexity
+
+# and some deps for this notebook
+pip install -qU langchain langchain-openai
+```
+
+### 凭据
+
+您需要一个 Perplexity API 密钥才能使用此集成。请在 [Perplexity API 密钥仪表板](https://www.perplexity.ai/account/api/keys) 中创建一个。
+
+```python
+import getpass
+import os
+
+if not os.environ.get("PPLX_API_KEY"):
+    os.environ["PPLX_API_KEY"] = getpass.getpass("Perplexity API key:\n")
+```
+
+如果您更喜欢该名称，集成也接受 `PERPLEXITY_API_KEY`。
+
+## 使用 PerplexitySearchResults 工具
+
+`PerplexitySearchResults` 是一个可与 LangChain 代理配合使用以执行 Perplexity 搜索的工具。调用它会返回一个搜索结果的 JSON 数组，每个结果包含 `title`、`url`、`snippet`、`date` 和 `last_updated` 字段。
+
+```python
+from langchain_perplexity import PerplexitySearchResults
+
+# Initialize the PerplexitySearchResults tool
+search_tool = PerplexitySearchResults(max_results=5)
+
+# Perform a search query
+search_results = search_tool.invoke("When was the last time the New York Knicks won the NBA Championship?")
+
+print("Search Results:", search_results)
+```
+
+### PerplexitySearchResults 高级功能
+
+该工具接受以下构造函数和调用时参数：
+
+- `max_results` — 要返回的结果数量。
+- `country` — 用于结果偏好的 ISO 国家代码（例如 `"US"`）。
+- `search_domain_filter` — 要包含或排除的域名列表（最多 20 个）。在域名前面加 `-` 可以排除该域名。参见[域名过滤文档](https://docs.perplexity.ai/docs/search/filters/domain-filter)。
+- `search_recency_filter` — 可选值包括 `"day"`、`"week"`、`"month"`、`"year"`。参见[日期和时间过滤文档](https://docs.perplexity.ai/docs/search/filters/date-time-filters)。
+- `search_after_date` / `search_before_date` — `MM/DD/YYYY` 格式的日期字符串。
+
+```python
+from langchain_perplexity import PerplexitySearchResults
+
+# Restrict results to a recent timeframe and a specific set of domains
+search_tool = PerplexitySearchResults(
+    max_results=10,
+    country="US",
+    search_recency_filter="week",
+    search_domain_filter=["nytimes.com", "reuters.com", "-pinterest.com"],
+)
+
+results = search_tool.invoke("Latest AI research papers")
+print(results)
+```
+
+```python
+from langchain_perplexity import PerplexitySearchResults
+
+# Restrict results to a specific date range
+search_tool = PerplexitySearchResults(
+    max_results=5,
+    search_after_date="01/01/2025",
+    search_before_date="06/30/2025",
+)
+
+results = search_tool.invoke("US Federal Reserve interest rate decisions")
+print(results)
+```
+
+## 在智能体中使用
+
+我们可以将 `PerplexitySearchResults` 工具与 LangGraph 智能体一起使用。这使智能体能够动态搜索网络，获取有依据的、来源可追溯的信息。
+
+首先，设置语言模型。您需要提供您的 OpenAI API 密钥：
+
+```python
+import getpass
+
+if not os.environ.get("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = getpass.getpass("OpenAI API key:\n")
+```
+
+```python
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
+from langchain_perplexity import PerplexitySearchResults
+
+
+# Initialize the language model
+model = init_chat_model(model="gpt-5.5", temperature=0)
+
+# Initialize the Perplexity search tool
+perplexity_search = PerplexitySearchResults(
+    max_results=5,
+    search_recency_filter="month",
+)
+
+# Create the agent
+agent = create_agent(model, [perplexity_search])
+
+# Run the agent
+user_input = "What are the latest developments in quantum computing?"
+
+stream = agent.stream_events(
+    {"messages": [{"role": "user", "content": user_input}]},
+    version="v3",
+)
+for snapshot in stream.values:
+    snapshot["messages"][-1].pretty_print()
+```
+
+---
+
+## API 参考
+
+有关 Perplexity Search API 及其所有选项的详细文档，请参阅 [Search API 参考](https://docs.perplexity.ai/api-reference/search-post) 和 [Perplexity API 文档](https://docs.perplexity.ai)。

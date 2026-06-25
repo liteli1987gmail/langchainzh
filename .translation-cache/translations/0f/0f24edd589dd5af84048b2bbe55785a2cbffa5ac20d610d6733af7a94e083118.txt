@@ -1,0 +1,336 @@
+---
+title: "Unstructured 集成"
+description: "使用 LangChain Python 与 Unstructured 文档加载器集成。"
+---
+
+本笔记本介绍了如何使用 Unstructured [文档加载器](/oss/integrations/document_loaders) 加载多种类型的文件。`Unstructured` 目前支持加载文本文件、PowerPoint、HTML、PDF、图片等。
+
+请参阅 [Unstructured](/oss/integrations/providers/unstructured) 获取有关本地设置 Unstructured 的更多说明，包括设置所需系统依赖项。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 本地支持 | 可序列化 | [JS 支持](https://js.langchain.com/docs/integrations/document_loaders/file_loaders/unstructured/)|
+| :--- | :--- | :---: | :---: |  :---: |
+| [`UnstructuredLoader`](https://reference.langchain.com/python/langchain-unstructured/document_loaders/UnstructuredLoader) | [`langchain-unstructured`](https://reference.langchain.com/python/langchain-unstructured) | ✅ | ❌ | ✅ |
+
+### 加载器功能
+
+| 来源 | 文档延迟加载 | 原生异步支持
+| :---: | :---: | :---: |
+| `UnstructuredLoader` | ✅ | ❌ |
+
+## 设置
+
+### 凭据
+
+默认情况下，`langchain-unstructured` 安装的是占用空间较小的版本，需要将分区逻辑卸载到 Unstructured API，这需要 API 密钥。如果您使用本地安装，则不需要 API 密钥。要获取 API 密钥，请访问[此网站](https://unstructured.io)获取 API 密钥，然后在下面的单元格中设置：
+
+```python
+import getpass
+import os
+
+if "UNSTRUCTURED_API_KEY" not in os.environ:
+    os.environ["UNSTRUCTURED_API_KEY"] = getpass.getpass(
+        "Enter your Unstructured API key: "
+    )
+```
+
+### 安装
+
+#### 常规安装
+
+运行本笔记本的其余部分需要以下包。
+
+```python
+# Install package, compatible with API partitioning
+pip install -qU langchain-unstructured unstructured-client unstructured "unstructured[pdf]" python-magic
+```
+
+
+
+```bash
+# base dependencies
+brew install libmagic poppler tesseract
+
+# If parsing xml / html documents:
+brew install libxml2 libxslt
+```
+
+你可以安装本地开发所需的 `pip` 依赖项，如下：
+
+```bash
+pip install "langchain-unstructured[local]"
+```
+
+## 初始化
+
+`UnstructuredLoader` 允许从各种不同的文件类型加载数据。要了解 `unstructured` 包的详细信息，请参阅其[文档](https://docs.unstructured.io/open-source/introduction/overview)/。在此示例中，我们展示如何从文本文件和 PDF 文件加载数据。
+
+```python
+from langchain_unstructured import UnstructuredLoader
+
+file_paths = [
+    "./example_data/layout-parser-paper.pdf",
+    "./example_data/state_of_the_union.txt",
+]
+
+
+loader = UnstructuredLoader(file_paths)
+```
+
+## 加载
+
+```python
+docs = loader.load()
+
+docs[0]
+```
+
+```text
+INFO: pikepdf C++ to Python logger bridge initialized
+```
+
+```text
+Document(metadata={'source': './example_data/layout-parser-paper.pdf', 'coordinates': {'points': ((16.34, 213.36), (16.34, 253.36), (36.34, 253.36), (36.34, 213.36)), 'system': 'PixelSpace', 'layout_width': 612, 'layout_height': 792}, 'file_directory': './example_data', 'filename': 'layout-parser-paper.pdf', 'languages': ['eng'], 'last_modified': '2024-02-27T15:49:27', 'page_number': 1, 'filetype': 'application/pdf', 'category': 'UncategorizedText', 'element_id': 'd3ce55f220dfb75891b4394a18bcb973'}, page_content='1 2 0 2')
+```
+
+```python
+print(docs[0].metadata)
+```
+
+```python
+{'source': './example_data/layout-parser-paper.pdf', 'coordinates': {'points': ((16.34, 213.36), (16.34, 253.36), (36.34, 253.36), (36.34, 213.36)), 'system': 'PixelSpace', 'layout_width': 612, 'layout_height': 792}, 'file_directory': './example_data', 'filename': 'layout-parser-paper.pdf', 'languages': ['eng'], 'last_modified': '2024-02-27T15:49:27', 'page_number': 1, 'filetype': 'application/pdf', 'category': 'UncategorizedText', 'element_id': 'd3ce55f220dfb75891b4394a18bcb973'}
+```
+
+## 懒加载
+
+```python
+pages = []
+for doc in loader.lazy_load():
+    pages.append(doc)
+
+pages[0]
+```
+
+```text
+Document(metadata={'source': './example_data/layout-parser-paper.pdf', 'coordinates': {'points': ((16.34, 213.36), (16.34, 253.36), (36.34, 253.36), (36.34, 213.36)), 'system': 'PixelSpace', 'layout_width': 612, 'layout_height': 792}, 'file_directory': './example_data', 'filename': 'layout-parser-paper.pdf', 'languages': ['eng'], 'last_modified': '2024-02-27T15:49:27', 'page_number': 1, 'filetype': 'application/pdf', 'category': 'UncategorizedText', 'element_id': 'd3ce55f220dfb75891b4394a18bcb973'}, page_content='1 2 0 2')
+```
+
+## Post processing
+
+如果您需要在提取后对 `unstructured` 元素进行后处理，可以在实例化 `UnstructuredLoader` 时将 `str` -> `str` 函数列表传递给 `post_processors` 关键字参数。这同样适用于其他 Unstructured 加载器。以下是一个示例。
+
+```python
+from langchain_unstructured import UnstructuredLoader
+from unstructured.cleaners.core import clean_extra_whitespace
+
+loader = UnstructuredLoader(
+    "./example_data/layout-parser-paper.pdf",
+    post_processors=[clean_extra_whitespace],
+)
+
+docs = loader.load()
+
+docs[5:10]
+```
+
+```text
+[Document(metadata={'source': './example_data/layout-parser-paper.pdf', 'coordinates': {'points': ((16.34, 393.9), (16.34, 560.0), (36.34, 560.0), (36.34, 393.9)), 'system': 'PixelSpace', 'layout_width': 612, 'layout_height': 792}, 'file_directory': './example_data', 'filename': 'layout-parser-paper.pdf', 'languages': ['eng'], 'last_modified': '2024-02-27T15:49:27', 'page_number': 1, 'parent_id': '89565df026a24279aaea20dc08cedbec', 'filetype': 'application/pdf', 'category': 'UncategorizedText', 'element_id': 'e9fa370aef7ee5c05744eb7bb7d9981b'}, page_content='2 v 8 4 3 5 1 . 3 0 1 2 : v i X r a'),
+ Document(metadata={'source': './example_data/layout-parser-paper.pdf', 'coordinates': {'points': ((157.62199999999999, 114.23496279999995), (157.62199999999999, 146.5141628), (457.7358962799999, 146.5141628), (457.7358962799999, 114.23496279999995)), 'system': 'PixelSpace', 'layout_width': 612, 'layout_height': 792}, 'file_directory': './example_data', 'filename': 'layout-parser-paper.pdf', 'languages': ['eng'], 'last_modified': '2024-02-27T15:49:27', 'page_number': 1, 'filetype': 'application/pdf', 'category': 'Title', 'element_id': 'bde0b230a1aa488e3ce837d33015181b'}, page_content='LayoutParser: A Uniﬁed Toolkit for Deep Learning Based Document Image Analysis'),
+ Document(metadata={'source': './example_data/layout-parser-paper.pdf', 'coordinates': {'points': ((134.809, 168.64029940800003), (134.809, 192.2517444), (480.5464199080001, 192.2517444), (480.5464199080001, 168.64029940800003)), 'system': 'PixelSpace', 'layout_width': 612, 'layout_height': 792}, 'file_directory': './example_data', 'filename': 'layout-parser-paper.pdf', 'languages': ['eng'], 'last_modified': '2024-02-27T15:49:27', 'page_number': 1, 'parent_id': 'bde0b230a1aa488e3ce837d33015181b', 'filetype': 'application/pdf', 'category': 'UncategorizedText', 'element_id': '54700f902899f0c8c90488fa8d825bce'}, page_content='Zejiang Shen1 ((cid:0)), Ruochen Zhang2, Melissa Dell3, Benjamin Charles Germain Lee4, Jacob Carlson3, and Weining Li5'),
+ Document(metadata={'source': './example_data/layout-parser-paper.pdf', 'coordinates': {'points': ((207.23000000000002, 202.57205439999996), (207.23000000000002, 311.8195408), (408.12676, 311.8195408), (408.12676, 202.57205439999996)), 'system': 'PixelSpace', 'layout_width': 612, 'layout_height': 792}, 'file_directory': './example_data', 'filename': 'layout-parser-paper.pdf', 'languages': ['eng'], 'last_modified': '2024-02-27T15:49:27', 'page_number': 1, 'parent_id': 'bde0b230a1aa488e3ce837d33015181b', 'filetype': 'application/pdf', 'category': 'UncategorizedText', 'element_id': 'b650f5867bad9bb4e30384282c79bcfe'}, page_content='1 Allen Institute for AI shannons@allenai.org 2 Brown University ruochen zhang@brown.edu 3 Harvard University {melissadell,jacob carlson}@fas.harvard.edu 4 University of Washington bcgl@cs.washington.edu 5 University of Waterloo w422li@uwaterloo.ca'),
+ Document(metadata={'source': './example_data/layout-parser-paper.pdf', 'coordinates': {'points': ((162.779, 338.45008160000003), (162.779, 566.8455408), (454.0372021523199, 566.8455408), (454.0372021523199, 338.45008160000003)), 'system': 'PixelSpace', 'layout_width': 612, 'layout_height': 792}, 'file_directory': './example_data', 'filename': 'layout-parser-paper.pdf', 'languages': ['eng'], 'last_modified': '2024-02-27T15:49:27', 'links': [{'text': ':// layout - parser . github . io', 'url': 'https://layout-parser.github.io', 'start_index': 1477}], 'page_number': 1, 'parent_id': 'bde0b230a1aa488e3ce837d33015181b', 'filetype': 'application/pdf', 'category': 'NarrativeText', 'element_id': 'cfc957c94fe63c8fd7c7f4bcb56e75a7'}, page_content='Abstract. Recent advances in document image analysis (DIA) have been primarily driven by the application of neural networks. Ideally, research outcomes could be easily deployed in production and extended for further investigation. However, various factors like loosely organized codebases and sophisticated model conﬁgurations complicate the easy reuse of im- portant innovations by a wide audience. Though there have been on-going eﬀorts to improve reusability and simplify deep learning (DL) model development in disciplines like natural language processing and computer vision, none of them are optimized for challenges in the domain of DIA. This represents a major gap in the existing toolkit, as DIA is central to academic research across a wide range of disciplines in the social sciences and humanities. This paper introduces LayoutParser, an open-source library for streamlining the usage of DL in DIA research and applica- tions. The core LayoutParser library comes with a set of simple and intuitive interfaces for applying and customizing DL models for layout de- tection, character recognition, and many other document processing tasks. To promote extensibility, LayoutParser also incorporates a community platform for sharing both pre-trained models and full document digiti- zation pipelines. We demonstrate that LayoutParser is helpful for both lightweight and large-scale digitization pipelines in real-word use cases. The library is publicly available at https://layout-parser.github.io.')]
+```
+
+## Unstructured API
+
+如果您想快速上手更小的包并获取最新的分区功能，您可以运行 `pip install unstructured-client` 和 `pip install langchain-unstructured`。有关 `UnstructuredLoader` 的更多信息，请参阅 [Unstructured 提供商页面](https://python.langchain.com/v0.1/docs/integrations/document_loaders/unstructured_file/)。
+
+当您传入 `api_key` 并设置 `partition_via_api=True` 时，加载器将使用托管的 Unstructured 无服务器 API 来处理您的文档。您可以[生成免费的 Unstructured API 密钥](https://unstructured.io/api-key/)。
+
+如果您想自托管 Unstructured API 或在本地运行，请查看 [Docker 镜像说明以自托管 Unstructured API](https://github.com/Unstructured-IO/unstructured-api#dizzy-instructions-for-using-the-docker-image)。
+
+```python
+from langchain_unstructured import UnstructuredLoader
+
+loader = UnstructuredLoader(
+    file_path="example_data/fake.docx",
+    api_key=os.getenv("UNSTRUCTURED_API_KEY"),
+    partition_via_api=True,
+)
+
+docs = loader.load()
+docs[0]
+```
+
+```text
+INFO: Preparing to split document for partition.
+INFO: Given file doesn't have '.pdf' extension, so splitting is not enabled.
+INFO: Partitioning without split.
+INFO: Successfully partitioned the document.
+```
+
+```text
+Document(metadata={'source': 'example_data/fake.docx', 'category_depth': 0, 'filename': 'fake.docx', 'languages': ['por', 'cat'], 'filetype': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'category': 'Title', 'element_id': '56d531394823d81787d77a04462ed096'}, page_content='Lorem ipsum dolor sit amet.')
+```
+
+您也可以使用 `UnstructuredLoader` 在单个 API 调用中通过 Unstructured API 批量处理多个文件。
+
+```python
+loader = UnstructuredLoader(
+    file_path=["example_data/fake.docx", "example_data/fake-email.eml"],
+    api_key=os.getenv("UNSTRUCTURED_API_KEY"),
+    partition_via_api=True,
+)
+
+docs = loader.load()
+
+print(docs[0].metadata["filename"], ": ", docs[0].page_content[:100])
+print(docs[-1].metadata["filename"], ": ", docs[-1].page_content[:100])
+```
+
+```text
+INFO: Preparing to split document for partition.
+INFO: Given file doesn't have '.pdf' extension, so splitting is not enabled.
+INFO: Partitioning without split.
+INFO: Successfully partitioned the document.
+INFO: Preparing to split document for partition.
+INFO: Given file doesn't have '.pdf' extension, so splitting is not enabled.
+INFO: Partitioning without split.
+INFO: Successfully partitioned the document.
+```
+```text
+fake.docx :  Lorem ipsum dolor sit amet.
+fake-email.eml :  Violets are blue
+```
+
+### Unstructured SDK 客户端
+
+使用 Unstructured API 进行分区依赖于 [Unstructured SDK
+Client](https://docs.unstructured.io/api-reference/api-services/accessing-unstructured-api)。
+
+如果您想自定义客户端，则需要将 `UnstructuredClient` 实例传递给 `UnstructuredLoader`。以下是展示如何自定义客户端功能的示例，例如使用您自己的 `requests.Session()`、传递替代的 `server_url` 以及自定义 `RetryConfig` 对象。有关自定义客户端或 SDK 客户端接受的其他参数的更多信息，请参阅 [Unstructured Python SDK](https://docs.unstructured.io/api-reference/api-services/sdk-python) 文档和 [API Parameters](https://docs.unstructured.io/api-reference/api-services/api-parameters) 文档的客户端部分。请注意，所有 API 参数都应传递给 `UnstructuredLoader`。
+
+<div class="alert alert-block alert-warning"><b>警告：</b>下面的示例可能未使用最新版本的 UnstructuredClient，未来版本中可能会有破坏性变更。有关最新示例，请参阅 <a href="https://docs.unstructured.io/api-reference/api-services/sdk-python">Unstructured Python SDK</a> 文档。</div>
+
+```python
+import requests
+from langchain_unstructured import UnstructuredLoader
+from unstructured_client import UnstructuredClient
+from unstructured_client.utils import BackoffStrategy, RetryConfig
+
+client = UnstructuredClient(
+        api_key_auth=os.getenv(
+        "UNSTRUCTURED_API_KEY"
+    ),  # Note: the client API param is "api_key_auth" instead of "api_key"
+        client=requests.Session(),  # Define your own requests session
+        server_url="https://api.unstructuredapp.io/general/v0/general",  # Define your own api url
+        retry_config=RetryConfig(
+                strategy="backoff",
+                retry_connection_errors=True,
+                backoff=BackoffStrategy(
+                        initial_interval=500,
+                        max_interval=60000,
+                        exponent=1.5,
+                        max_elapsed_time=900000,
+        ),
+    ),  # Define your own retry config
+)
+
+loader = UnstructuredLoader(
+    "./example_data/layout-parser-paper.pdf",
+        partition_via_api=True,
+        client=client,
+        split_pdf_page=True,
+        split_pdf_page_range=[1, 10],
+)
+
+docs = loader.load()
+
+print(docs[0].metadata["filename"], ": ", docs[0].page_content[:100])
+```
+
+```text
+INFO: Preparing to split document for partition.
+INFO: Concurrency level set to 5
+INFO: Splitting pages 1 to 10 (10 total)
+INFO: Determined optimal split size of 2 pages.
+INFO: Partitioning 5 files with 2 page(s) each.
+INFO: Partitioning set #1 (pages 1-2).
+INFO: Partitioning set #2 (pages 3-4).
+INFO: Partitioning set #3 (pages 5-6).
+INFO: Partitioning set #4 (pages 7-8).
+INFO: Partitioning set #5 (pages 9-10).
+INFO: HTTP Request: POST https://api.unstructuredapp.io/general/v0/general "HTTP/1.1 200 OK"
+INFO: HTTP Request: POST https://api.unstructuredapp.io/general/v0/general "HTTP/1.1 200 OK"
+INFO: HTTP Request: POST https://api.unstructuredapp.io/general/v0/general "HTTP/1.1 200 OK"
+INFO: HTTP Request: POST https://api.unstructuredapp.io/general/v0/general "HTTP/1.1 200 OK"
+INFO: Successfully partitioned set #1, elements added to the final result.
+INFO: Successfully partitioned set #2, elements added to the final result.
+INFO: Successfully partitioned set #3, elements added to the final result.
+INFO: Successfully partitioned set #4, elements added to the final result.
+INFO: Successfully partitioned set #5, elements added to the final result.
+INFO: Successfully partitioned the document.
+```
+```text
+layout-parser-paper.pdf :  LayoutParser: A Uniﬁed Toolkit for Deep Learning Based Document Image Analysis
+```
+
+## Chunking
+
+`UnstructuredLoader` 不支持 `mode` 作为参数来对文本进行分组，这与旧版本的加载器（如 `UnstructuredFileLoader` 等）不同。它改为支持"chunking"（分块）。Unstructured 的分块机制与您可能熟悉的其他分块机制不同——后者基于纯文本特征（如 "\n\n" 或 "\n" 等字符序列）来形成块，这些字符可能表示段落边界或列表项边界。相反，所有文档都使用每种文档格式的特定知识进行分割，将文档划分为语义单元（文档元素），只有当单个元素超过所需的最大块大小时，才需要诉诸文本分割。一般来说，分块会将连续的元素组合成尽可能大的块，同时不超过最大块大小。分块会产生一个 CompositeElement、Table 或 TableChunk 元素序列。每个"块"都是这三种类型之一的实例。
+
+有关分块选项的更多详细信息，请参阅此[页面](https://docs.unstructured.io/open-source/core-functionality/chunking)，但要重现与 `mode="single"` 相同的行为，您可以设置 `chunking_strategy="basic"`、`max_characters=<某个非常大的数字>` 和 `include_orig_elements=False`。
+
+```python
+from langchain_unstructured import UnstructuredLoader
+
+loader = UnstructuredLoader(
+    "./example_data/layout-parser-paper.pdf",
+    chunking_strategy="basic",
+    max_characters=1000000,
+    include_orig_elements=False,
+)
+
+docs = loader.load()
+
+print("Number of LangChain documents:", len(docs))
+print("Length of text in the document:", len(docs[0].page_content))
+```
+
+```text
+Number of LangChain documents: 1
+Length of text in the document: 42772
+```
+
+## 加载网页
+
+`UnstructuredLoader` 在本地运行时接受 `web_url` kwarg，该参数填充底层 Unstructured [partition](https://docs.unstructured.io/open-source/core-functionality/partitioning) 的 `url` 参数。这允许解析远程托管的文档，例如 HTML 网页。
+
+使用示例：
+
+```python
+from langchain_unstructured import UnstructuredLoader
+
+loader = UnstructuredLoader(web_url="https://www.example.com")
+docs = loader.load()
+
+for doc in docs:
+    print(f"{doc}\n")
+```
+
+```python
+page_content='Example Domain' metadata={'category_depth': 0, 'languages': ['eng'], 'filetype': 'text/html', 'url': 'https://www.example.com', 'category': 'Title', 'element_id': 'fdaa78d856f9d143aeeed85bf23f58f8'}
+
+page_content='This domain is for use in illustrative examples in documents. You may use this domain in literature without prior coordination or asking for permission.' metadata={'languages': ['eng'], 'parent_id': 'fdaa78d856f9d143aeeed85bf23f58f8', 'filetype': 'text/html', 'url': 'https://www.example.com', 'category': 'NarrativeText', 'element_id': '3652b8458b0688639f973fe36253c992'}
+
+page_content='More information...' metadata={'category_depth': 0, 'link_texts': ['More information...'], 'link_urls': ['https://www.iana.org/domains/example'], 'languages': ['eng'], 'filetype': 'text/html', 'url': 'https://www.example.com', 'category': 'Title', 'element_id': '793ab98565d6f6d6f3a6d614e3ace2a9'}
+```
+
+---
+
+## API 参考
+
+有关所有 `UnstructuredLoader` 功能和配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/python/langchain-unstructured/document_loaders/UnstructuredLoader)

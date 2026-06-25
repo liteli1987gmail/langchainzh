@@ -1,0 +1,177 @@
+---
+title: "Cdp Agentkit 工具包集成"
+description: "使用 LangChain Python 与 Cdp Agentkit 工具包集成。"
+---
+
+`CDP Agentkit` 工具包包含使 LLM 代理能够与 [Coinbase Developer Platform](https://docs.cdp.coinbase.com/) 进行交互的工具。该工具包提供了 CDP SDK 的封装，允许代理执行链上操作，如转账、交易和智能合约交互。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 版本 |
+| :--- | :--- | :---: | :---: | :---: |
+| `CdpToolkit` | `cdp-langchain` | ❌ | ❌ | ![PyPI - Version](https://img.shields.io/pypi/v/cdp-langchain?style=flat-square&label=%20) |
+
+### 工具特性
+
+该工具包提供以下工具：
+
+1. **get_wallet_details** - 获取 MPC 钱包的详细信息
+2. **get_balance** - 获取特定资产余额
+3. **request_faucet_funds** - 从水龙头请求测试代币
+4. **transfer** - 在地址之间转移资产
+5. **trade** - 交易资产（仅限主网）
+6. **deploy_token** - 部署 ERC-20 代币合约
+7. **mint_nft** - 从现有合约铸造 NFT
+8. **deploy_nft** - 部署新的 NFT 合约
+9. **register_basename** - 为钱包注册 basename
+
+我们鼓励您添加自己的工具，包括使用 CDP 和 Web2 API 的工具，以创建适合您需求的代理。
+
+## 设置
+
+总体而言，我们将：
+
+1. 安装 langchain 包
+2. 设置您的 CDP API 凭证
+3. 初始化 CDP 封装器和工具包
+4. 使用 `toolkit.get_tools()` 将工具传递给您的代理
+
+要启用单个工具的自动追踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+此工具包位于 `cdp-langchain` 包中：
+
+```python
+pip install -qU cdp-langchain
+```
+
+#### 设置环境变量
+
+要使用此工具包，您必须首先设置以下环境变量，以访问 [CDP APIs](https://docs.cdp.coinbase.com/mpc-wallet/docs/quickstart) 来创建钱包并与链上交互。您可以在 [CDP Portal](https://cdp.coinbase.com/) 免费注册 API 密钥：
+
+```python
+import getpass
+import os
+
+for env_var in [
+    "CDP_API_KEY_NAME",
+    "CDP_API_KEY_PRIVATE_KEY",
+]:
+    if not os.getenv(env_var):
+        os.environ[env_var] = getpass.getpass(f"Enter your {env_var}: ")
+
+# Optional: Set network (defaults to base-sepolia)
+os.environ["NETWORK_ID"] = "base-sepolia"  # or "base-mainnet"
+```
+
+## 实例化
+
+现在我们可以实例化我们的工具包：
+
+```python
+from cdp_langchain.agent_toolkits import CdpToolkit
+from cdp_langchain.utils import CdpAgentkitWrapper
+
+# Initialize CDP wrapper
+cdp = CdpAgentkitWrapper()
+
+# Create toolkit from wrapper
+toolkit = CdpToolkit.from_cdp_agentkit_wrapper(cdp)
+```
+
+## 工具
+
+查看[可用工具](#tool-features)：
+
+```python
+tools = toolkit.get_tools()
+for tool in tools:
+    print(tool.name)
+```
+
+## 在智能体中使用
+
+我们需要一个大语言模型或聊天模型：
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-5.4-mini")
+```
+
+使用工具初始化代理：
+
+```python
+from langchain.agents import create_agent
+
+
+tools = toolkit.get_tools()
+agent_executor = create_agent(llm, tools)
+```
+
+示例用法：
+
+```python
+example_query = "Send 0.005 ETH to john2879.base.eth"
+
+stream = agent_executor.stream_events(
+    {"messages": [("user", example_query)]},
+    version="v3",
+)
+for snapshot in stream.values:
+    snapshot["messages"][-1].pretty_print()
+```
+
+<fragment>
+
+Expected output:
+
+
+</fragment>
+
+```
+Transferred 0.005 of eth to john2879.base.eth.
+Transaction hash for the transfer: 0x78c7c2878659a0de216d0764fc87eff0d38b47f3315fa02ba493a83d8e782d1e
+Transaction link for the transfer: https://sepolia.basescan.org/tx/0x78c7c2878659a0de216d0764fc87eff0d38b47f3315fa02ba493a83d8e782d1
+```
+
+## CDP 工具包特有功能
+
+### 钱包管理
+
+该工具包维护一个 MPC 钱包。钱包数据可以导出和导入，以便在会话之间持久保存：
+
+```python
+# Export wallet data
+wallet_data = cdp.export_wallet()
+
+# Import wallet data
+values = {"cdp_wallet_data": wallet_data}
+cdp = CdpAgentkitWrapper(**values)
+```
+
+### 网络支持
+
+该工具包支持[多个网络](https://docs.cdp.coinbase.com/cdp-sdk/docs/networks)
+
+### 免Gas交易
+
+部分操作支持在 Base 主网上的免Gas交易：
+
+- USDC 转账
+- EURC 转账
+- cbBTC 转账
+
+---
+
+## API参考
+
+有关所有CDP功能和配置的详细文档，请前往 [CDP文档](https://docs.cdp.coinbase.com/mpc-wallet/docs/welcome)。

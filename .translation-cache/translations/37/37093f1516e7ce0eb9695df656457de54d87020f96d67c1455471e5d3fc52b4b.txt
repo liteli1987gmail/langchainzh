@@ -1,0 +1,462 @@
+---
+title: 自定义插桩
+sidebarTitle: 自定义插桩
+description: 直接为您的代码添加插桩，以控制哪些函数被追踪以及它们在 LangSmith 中的显示方式。
+---
+
+import TraceablePipelineJava from '/snippets/code-samples/traceable-pipeline-java.mdx';
+import RunTreeExampleJava from '/snippets/code-samples/run-tree-example-java.mdx';
+import TraceablePipelineKt from '/snippets/code-samples/traceable-pipeline-kt.mdx';
+import RunTreeExampleKt from '/snippets/code-samples/run-tree-example-kt.mdx';
+
+直接向代码[添加插桩](/langsmith/observability-concepts#manual-instrumentation)可让你精确控制应用的哪些函数被追踪、记录哪些输入和输出，以及如何构建你的[追踪](/langsmith/observability-concepts#traces)层级。三种核心插桩方法如下：
+
+- [`@traceable` 装饰器](#use-%40traceable-%2F-traceable)：适用于大多数场景的推荐方案
+- [`trace` 上下文管理器](#use-the-trace-context-manager-python-only)：仅限 Python
+- [`RunTree` API](#use-the-runtree-api)：显式底层控制
+
+本页还涵盖：
+
+- [指定自定义运行 ID](#specify-a-custom-run-id)，适用于在运行后立即附加反馈或与外部系统关联。
+- [确保在进程退出前提交所有追踪](#ensure-all-traces-are-submitted-before-exiting)。
+
+对于 LangChain（Python 或 JS/TS），请参阅 [LangChain 专用说明](/langsmith/trace-with-langchain)。
+
+<Callout icon="plug" color="#4F46E5" iconType="regular">
+如果你使用的是内置 LangSmith 集成的 LLM 提供商或 Agent 框架，请改而参阅[集成概览](/langsmith/integrations)
+</Callout>
+
+## 前提条件
+
+在开始追踪前，请设置以下环境变量：
+
+- `LANGSMITH_TRACING=true`：启用追踪。设置此变量可在不更改代码的情况下开启或关闭追踪功能。
+
+    <Note>
+    `LANGSMITH_TRACING` 控制 `@traceable` 装饰器和 `trace` 上下文管理器。如需在运行时覆盖 `@traceable` 的此设置而不更改环境变量，请使用 [`tracing_context(enabled=True/False)`](#use-the-trace-context-manager-python-only)（Python）或直接向 `traceable` 传递 `tracingEnabled`（JS/TS）。[`RunTree` 对象](#use-the-runtree-api)不受这些控制的影响；它们在发布时始终向 LangSmith 发送数据。
+    </Note>
+
+- `LANGSMITH_API_KEY`：你的 [LangSmith API 密钥](/langsmith/create-account-api-key)。
+- 默认情况下，LangSmith 将追踪记录到名为 `default` 的项目中。如需记录到其他项目，请设置 `LANGSMITH_PROJECT`。更多详情，请参阅[将追踪记录到特定项目](/langsmith/log-traces-to-project)。
+
+## 使用 `@traceable` / `traceable`
+
+将 @[`@traceable`]（Python）、[`traceable`](https://reference.langchain.com/javascript/langsmith/traceable)（TypeScript）、`traceable`（Kotlin）或 `Tracing.traceFunction`（Java）应用于任何函数，使其成为一个被追踪的运行。LangSmith 自动处理跨嵌套调用的上下文传播。
+
+以下示例追踪一个简单管道：`run_pipeline` 调用 `format_prompt` 构建消息，调用 `invoke_llm` 调用模型，以及调用 `parse_output` 提取结果。
+
+每个函数都被单独追踪，并且由于它们是在 `run_pipeline`（同样被追踪）内部调用的，LangSmith 自动将它们嵌套为子运行。`invoke_llm` 使用 `run_type="llm"` 将其标记为 LLM 调用，以便 LangSmith 能够正确渲染 token 计数和延迟：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langsmith import traceable
+from openai import Client
+
+openai = Client()
+
+@traceable
+def format_prompt(subject):
+  return [
+      {
+          "role": "system",
+          "content": "You are a helpful assistant.",
+      },
+      {
+          "role": "user",
+          "content": f"What's a good name for a store that sells {subject}?"
+      }
+  ]
+
+@traceable(run_type="llm")
+def invoke_llm(messages):
+  return openai.chat.completions.create(
+      messages=messages, model="gpt-5.4-mini", temperature=0
+  )
+
+@traceable
+def parse_output(response):
+  return response.choices[0].message.content
+
+@traceable
+def run_pipeline():
+  messages = format_prompt("colorful socks")
+  response = invoke_llm(messages)
+  return parse_output(response)
+
+run_pipeline()
+```
+
+```typescript TypeScript
+import { traceable } from "langsmith/traceable";
+import OpenAI from "openai";
+
+const openai = new OpenAI();
+
+const formatPrompt = traceable((subject: string) => {
+  return [
+    {
+      role: "system" as const,
+      content: "You are a helpful assistant.",
+    },
+    {
+      role: "user" as const,
+      content: `What's a good name for a store that sells ${subject}?`,
+    },
+  ];
+},{ name: "formatPrompt" });
+
+const invokeLLM = traceable(
+  async ({ messages }: { messages: { role: string; content: string }[] }) => {
+      return openai.chat.completions.create({
+          model: "gpt-5.4-mini",
+          messages: messages,
+          temperature: 0,
+      });
+  },
+  { run_type: "llm", name: "invokeLLM" }
+);
+
+const parseOutput = traceable(
+  (response: any) => {
+      return response.choices[0].message.content;
+  },
+  { name: "parseOutput" }
+);
+
+const runPipeline = traceable(
+  async () => {
+      const messages = await formatPrompt("colorful socks");
+      const response = await invokeLLM({ messages });
+      return parseOutput(response);
+  },
+  { name: "runPipeline" }
+);
+
+await runPipeline();
+```
+
+<TraceablePipelineJava />
+<TraceablePipelineKt />
+</CodeGroup>
+
+在 [UI](https://smith.langchain.com) 中，你会发现一个带有 `format_prompt`、`invoke_llm` 和 `parse_output` 作为嵌套子运行的 `run_pipeline` 跟踪。
+
+<Note>
+当使用 `traceable` 包装同步函数时（例如上一示例中的 `formatPrompt`），调用时使用 `await` 关键字以确保跟踪被正确记录。
+</Note>
+
+## 使用 `trace` 上下文管理器（仅限 Python）
+
+在 Python 中，你可以使用 `trace` 上下文管理器将跟踪记录到 LangSmith。这在以下情况下很有用：
+
+1. 你想为特定代码块记录跟踪。
+1. 你想控制跟踪的输入、输出和其他属性。
+1. 使用装饰器或包装器不可行。
+1. 上述任意或所有情况。
+
+上下文管理器与 `traceable` 装饰器和 `wrap_openai` 包装器无缝集成，因此你可以在同一应用程序中一起使用它们。
+
+以下示例展示了所有三者的组合使用。`wrap_openai` 包装 OpenAI 客户端以便自动追踪其调用。`my_tool` 使用 `@traceable` 并设置 `run_type="tool"` 和自定义 `name` 以便在跟踪中正确显示。`chat_pipeline` 本身没有装饰器；而是由 `ls.trace` 包装调用，允许你显式传递项目名称和输入，并通过 `rt.end()` 手动设置输出：
+
+```python
+import openai
+import langsmith as ls
+from langsmith.wrappers import wrap_openai
+
+client = wrap_openai(openai.Client())
+
+@ls.traceable(run_type="tool", name="Retrieve Context")
+def my_tool(question: str) -> str:
+    return "During this morning's meeting, we solved all world conflict."
+
+def chat_pipeline(question: str):
+    context = my_tool(question)
+    messages = [
+        { "role": "system", "content": "You are a helpful assistant. Please respond to the user's request only based on the given context." },
+        { "role": "user", "content": f"Question: {question}\nContext: {context}"}
+    ]
+    chat_completion = client.chat.completions.create(
+        model="gpt-5.4-mini", messages=messages
+    )
+    return chat_completion.choices[0].message.content
+
+app_inputs = {"input": "Can you summarize this morning's meetings?"}
+
+with ls.trace("Chat Pipeline", "chain", project_name="my_test", inputs=app_inputs) as rt:
+    output = chat_pipeline("Can you summarize this morning's meetings?")
+    rt.end(outputs={"output": output})
+```
+
+## 使用 `RunTree` API
+
+另一种更显式的方式来记录追踪到 LangSmith 是通过 `RunTree` API。这个 API 允许你对追踪进行更多控制。你可以通过手动创建运行和子运行来组装你的追踪。你仍然需要设置你的 `LANGSMITH_API_KEY`，但 `LANGSMITH_TRACING` 对这种方法来说不是必需的。
+
+这种方法是推荐的，不过它有一些限制。相比之下，使用 `@traceable` 可以自动处理上下文传播，更加可靠。对于大多数用例，推荐使用 `@traceable` 而不是手动管理追踪上下文。
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+import openai
+from langsmith.run_trees import RunTree
+
+# This can be a user input to your app
+question = "Can you summarize this morning's meetings?"
+
+# Create a top-level run
+pipeline = RunTree(
+  name="Chat Pipeline",
+  run_type="chain",
+  inputs={"question": question}
+)
+pipeline.post()
+
+# This can be retrieved in a retrieval step
+context = "During this morning's meeting, we solved all world conflict."
+messages = [
+  { "role": "system", "content": "You are a helpful assistant. Please respond to the user's request only based on the given context." },
+  { "role": "user", "content": f"Question: {question}\nContext: {context}"}
+]
+
+# Create a child run
+child_llm_run = pipeline.create_child(
+  name="OpenAI Call",
+  run_type="llm",
+  inputs={"messages": messages},
+)
+child_llm_run.post()
+
+# Generate a completion
+client = openai.Client()
+chat_completion = client.chat.completions.create(
+  model="gpt-5.4-mini", messages=messages
+)
+
+# End the runs and log them
+child_llm_run.end(outputs=chat_completion)
+child_llm_run.patch()
+pipeline.end(outputs={"answer": chat_completion.choices[0].message.content})
+pipeline.patch()
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+import { RunTree } from "langsmith";
+
+// This can be a user input to your app
+const question = "Can you summarize this morning's meetings?";
+
+const pipeline = new RunTree({
+  name: "Chat Pipeline",
+  run_type: "chain",
+  inputs: { question }
+});
+await pipeline.postRun();
+
+// This can be retrieved in a retrieval step
+const context = "During this morning's meeting, we solved all world conflict.";
+const messages = [
+  { role: "system", content: "You are a helpful assistant. Please respond to the user's request only based on the given context." },
+  { role: "user", content: `Question: ${question}Context: ${context}` }
+];
+
+// Create a child run
+const childRun = await pipeline.createChild({
+  name: "OpenAI Call",
+  run_type: "llm",
+  inputs: { messages },
+});
+await childRun.postRun();
+
+// Generate a completion
+const client = new OpenAI();
+const chatCompletion = await client.chat.completions.create({
+  model: "gpt-5.4-mini",
+  messages: messages,
+});
+
+// End the runs and log them
+childRun.end(chatCompletion);
+await childRun.patchRun();
+pipeline.end({ outputs: { answer: chatCompletion.choices[0].message.content } });
+await pipeline.patchRun();
+```
+
+<RunTreeExampleJava />
+<RunTreeExampleKt />
+</CodeGroup>
+
+Java 和 Kotlin 示例使用自定义根运行 ID 和专用执行器。关闭执行器并等待终止可确保后台运行提交在进程退出前完成。
+
+## 示例用法
+
+您可以扩展上一节中介绍的实用工具来跟踪任何代码。以下代码展示了一些扩展示例。
+
+跟踪类中的任何公共方法：
+
+```python expandable
+from typing import Any, Callable, Type, TypeVar
+
+T = TypeVar("T")
+
+def traceable_cls(cls: Type[T]) -> Type[T]:
+    """Instrument all public methods in a class."""
+    def wrap_method(name: str, method: Any) -> Any:
+        if callable(method) and not name.startswith("__"):
+            return traceable(name=f"{cls.__name__}.{name}")(method)
+        return method
+
+    # Handle __dict__ case
+    for name in dir(cls):
+        if not name.startswith("_"):
+            try:
+                method = getattr(cls, name)
+                setattr(cls, name, wrap_method(name, method))
+            except AttributeError:
+                # Skip attributes that can't be set (e.g., some descriptors)
+                pass
+
+    # Handle __slots__ case
+    if hasattr(cls, "__slots__"):
+        for slot in cls.__slots__:  # type: ignore[attr-defined]
+            if not slot.startswith("__"):
+                try:
+                    method = getattr(cls, slot)
+                    setattr(cls, slot, wrap_method(slot, method))
+                except AttributeError:
+                    # Skip slots that don't have a value yet
+                    pass
+
+    return cls
+
+@traceable_cls
+class MyClass:
+    def __init__(self, some_val: int):
+        self.some_val = some_val
+
+    def combine(self, other_val: int):
+        return self.some_val + other_val
+
+# See trace: https://smith.langchain.com/public/882f9ecf-5057-426a-ae98-0edf84fdcaf9/r
+MyClass(13).combine(29)
+```
+
+## 指定自定义运行 ID
+
+默认情况下，LangSmith 为每次运行分配一个随机 ID。当您需要提前知道运行 ID（例如，在运行后立即附加[反馈](/langsmith/attach-user-feedback)）、将 LangSmith 运行与外部系统的 ID 关联，或使用确定性 ID 使运行具有幂等性时，可以覆盖此设置。
+
+<Note>
+对于自定义运行 ID，请使用 **UUID v7**。UUIDv7 包含时间戳，可以保持追踪中运行的正确时间顺序。LangSmith SDK 导出了一个 `uuid7` 辅助函数（Python v0.4.43+，JS v0.3.80+）：
+
+- **Python**: `from langsmith import uuid7`
+- **JS/TS**: `import { uuid7 } from 'langsmith'`
+
+接受任何 UUID v7 字符串——如果您的系统已经使用 UUID v7 标识符，您可以使用 SDK 辅助函数或您自己的。
+</Note>
+
+使用以下方法之一：
+
+- `@traceable`：调用 `@traceable` 函数时，在 `langsmith_extra` 中传递 `run_id`（Python），或在传递给 `traceable` 的配置对象中传递 `id`（TypeScript）：
+
+    <CodeGroup>
+
+    ```python Python
+    from langsmith import traceable, uuid7
+
+    @traceable
+    def my_pipeline(question: str) -> str:
+        return "answer"
+
+    run_id = uuid7()
+    my_pipeline("What is the capital of France?", langsmith_extra={"run_id": run_id})
+
+    # run_id can now be used to attach feedback, query the run, etc.
+    ```
+
+    ```typescript TypeScript
+    import { traceable } from "langsmith/traceable";
+    import { uuid7 } from "langsmith";
+
+    const runId = uuid7();
+
+    const myPipeline = traceable(
+    async (question: string) => {
+        return "answer";
+    },
+    { name: "my-pipeline", id: runId }
+    );
+
+    await myPipeline("What is the capital of France?");
+
+    // runId can now be used to attach feedback, query the run, etc.
+    ```
+
+- `trace` 上下文管理器（仅限 Python）：将 `run_id` 直接传递到 `@[trace]` 上下文管理器构造函数：
+
+    ```python Python
+    from langsmith import trace, uuid7
+
+    run_id = uuid7()
+
+    with trace("my-pipeline", run_id=run_id) as run:
+        result = "answer"
+        run.end(outputs={"result": result})
+
+    # run_id can now be used to attach feedback, query the run, etc.
+    ```
+
+## 确保退出前提交所有跟踪
+
+LangSmith 在后台线程中执行跟踪，以避免阻塞您的生产应用程序。这意味着您的进程可能会在所有跟踪成功发送到 LangSmith 之前结束。请参阅以下选项：
+
+- 如果您使用的是 LangChain，请参阅 [LangChain 跟踪指南](/langsmith/trace-with-langchain#ensure-all-traces-are-submitted-before-exiting)。
+- 如果您独立使用 [LangSmith SDK](/langsmith/reference)，您可以在退出前使用 `flush` 方法：
+
+<CodeGroup>
+
+    ```python Python
+    from langsmith import Client
+
+    client = Client()
+
+    @traceable(client=client)
+    async def my_traced_func():
+    # Your code here...
+    pass
+
+    try:
+    await my_traced_func()
+    finally:
+    await client.flush()
+    ```
+
+    ```typescript TypeScript
+    import { Client } from "langsmith";
+
+    const langsmithClient = new Client({});
+
+    const myTracedFunc = traceable(async () => {
+    // Your code here...
+    },{ client: langsmithClient });
+
+    try {
+    await myTracedFunc();
+    } finally {
+    await langsmithClient.flush();
+    }
+    ```
+
+## 相关
+
+- [可观测性概念](/langsmith/observability-concepts)：了解运行、追踪和 LangSmith 数据模型的相关背景
+- [运行（跨度）数据格式](/langsmith/run-data-format)：运行字段的模式参考，包括 `dotted_order`、`trace_id` 和 `parent_run_id`
+- [使用 SDK 记录用户反馈](/langsmith/attach-user-feedback)：预指定运行 ID 的常见用例
+- [在追踪函数中访问当前运行（跨度）](/langsmith/access-current-span)：从追踪内部读取或修改活动运行
+- [将追踪记录到特定项目](/langsmith/log-traces-to-project)：将追踪路由到命名项目而非 `default`
+- [使用 API 进行追踪](/langsmith/trace-with-api)：SDK 的低级 REST API 替代方案
+- [追踪基础视频](https://academy.langchain.com/pages/intro-to-langsmith-preview)，来自 LangSmith 入门课程

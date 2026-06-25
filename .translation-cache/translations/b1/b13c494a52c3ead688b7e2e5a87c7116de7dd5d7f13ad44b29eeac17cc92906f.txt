@@ -1,0 +1,304 @@
+---
+title: "Docling 集成"
+description: "使用 LangChain Python 与 Docling 文档加载器集成。"
+---
+
+[Docling](https://github.com/DS4SD/docling) 将 PDF、DOCX、PPTX、HTML 和其他格式解析为统一的丰富表示，包括文档布局、表格等，使它们能够用于 RAG 等生成式 AI 工作流。
+
+此集成通过 `DoclingLoader` 文档加载器提供 Docling 的功能。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 本地 | 可序列化 | JS 支持|
+| :--- | :---: | :---: | :---: |  :---: |
+| langchain_docling.loader | langchain-docling | ✅ | ❌ | ❌ |
+
+### 加载器功能
+
+| 来源 | 文档懒加载 | 原生异步支持
+| :---: | :---: | :---: |
+| `DoclingLoader` | ✅ | ❌ |
+
+提供的 `DoclingLoader` 组件使您能够：
+
+- 轻松快速地在 LLM 应用中使用各种文档类型，以及
+- 利用 Docling 的丰富格式进行高级的文档原生基础。
+
+`DoclingLoader` 支持两种不同的导出模式：
+
+- `ExportType.DOC_CHUNKS`（默认）：如果您希望将每个输入文档分块，然后在下游将每个单独的块捕获为单独的 LangChain Document，或
+- `ExportType.MARKDOWN`：如果您希望将每个输入文档捕获为单独的 LangChain Document
+
+该示例通过 `EXPORT_TYPE` 参数探索两种模式；根据设定的值，示例管道会相应地设置。
+
+## 设置
+
+```python
+pip install -qU langchain-docling
+```
+
+> 为获得最佳转换速度，请尽可能使用 GPU 加速；例如，如果在 Colab 上运行，请使用启用 GPU 的运行时。
+
+## Initialization
+
+基本初始化如下所示：
+
+```python
+from langchain_docling.loader import DoclingLoader
+
+FILE_PATH = "https://arxiv.org/pdf/2408.09869"
+
+loader = DoclingLoader(file_path=FILE_PATH)
+```
+
+如需高级用法，`DoclingLoader` 具有以下参数：
+
+- `file_path`：单个字符串（URL 或本地文件）或可迭代对象作为源
+- `converter`（可选）：要使用的特定 Docling 转换器实例
+- `convert_kwargs`（可选）：用于转换执行的特定 kwargs
+- `export_type`（可选）：要使用的导出模式：`ExportType.DOC_CHUNKS`（默认）或
+    `ExportType.MARKDOWN`
+- `md_export_kwargs`（可选）：特定的 Markdown 导出 kwargs（用于 Markdown 模式）
+- `chunker`（可选）：要使用的特定 Docling 分块器实例（用于文档块模式）
+- `meta_extractor`（可选）：要使用的特定元数据提取器
+
+## 加载
+
+```python
+docs = loader.load()
+```
+
+```text
+Token indices sequence length is longer than the specified maximum sequence length for this model (1041 > 512). Running this sequence through the model will result in indexing errors
+```
+
+> 注意：在此情况下可以忽略一条显示 `"Token indices sequence length is longer than the specified
+maximum sequence length..."` 的消息 —— 更多详情请参阅此 [docling-core GitHub issue](https://github.com/DS4SD/docling-core/issues/119#issuecomment-2577418826)。
+
+检查一些示例文档：
+
+```python
+for d in docs[:3]:
+    print(f"- {d.page_content=}")
+```
+
+```text
+- d.page_content='arXiv:2408.09869v5  [cs.CL]  9 Dec 2024'
+- d.page_content='Docling Technical Report\nVersion 1.0\nChristoph Auer Maksym Lysak Ahmed Nassar Michele Dolfi Nikolaos Livathinos Panos Vagenas Cesar Berrospi Ramis Matteo Omenetti Fabian Lindlbauer Kasper Dinkla Lokesh Mishra Yusik Kim Shubham Gupta Rafael Teixeira de Lima Valery Weber Lucas Morin Ingmar Meijer Viktor Kuropiatnyk Peter W. J. Staar\nAI4K Group, IBM Research R¨uschlikon, Switzerland'
+- d.page_content='Abstract\nThis technical report introduces Docling , an easy to use, self-contained, MITlicensed open-source package for PDF document conversion. It is powered by state-of-the-art specialized AI models for layout analysis (DocLayNet) and table structure recognition (TableFormer), and runs efficiently on commodity hardware in a small resource budget. The code interface allows for easy extensibility and addition of new features and models.'
+```
+
+## Lazy load
+
+文档也可以采用延迟加载的方式加载：
+
+```python
+doc_iter = loader.lazy_load()
+for doc in doc_iter:
+    pass  # you can operate on `doc` here
+```
+
+## 端到端示例
+
+```python
+import os
+
+# https://github.com/huggingface/transformers/issues/5486:
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+```
+
+> - 以下示例管道使用 HuggingFace 的 Inference API；如需增加 LLM 配额，可通过环境变量 `HF_TOKEN` 提供 token。
+> - 此管道的依赖项可按如下方式安装（`--no-warn-conflicts` 适用于 Colab 预装的 Python 环境；如需更严格的用法可移除该参数）：
+
+```python
+pip install -q --progress-bar off --no-warn-conflicts langchain-core langchain-huggingface langchain-milvus langchain python-dotenv
+```
+
+定义管道参数：
+
+```python
+from pathlib import Path
+from tempfile import mkdtemp
+
+from dotenv import load_dotenv
+from langchain_core.prompts import PromptTemplate
+from langchain_docling.loader import ExportType
+
+
+def _get_env_from_colab_or_os(key):
+    try:
+        from google.colab import userdata
+
+        try:
+            return userdata.get(key)
+        except userdata.SecretNotFoundError:
+            pass
+    except ImportError:
+        pass
+    return os.getenv(key)
+
+
+load_dotenv()
+
+HF_TOKEN = _get_env_from_colab_or_os("HF_TOKEN")
+FILE_PATH = ["https://arxiv.org/pdf/2408.09869"]  # Docling Technical Report
+EMBED_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+GEN_MODEL_ID = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+EXPORT_TYPE = ExportType.DOC_CHUNKS
+QUESTION = "Which are the main AI models in Docling?"
+PROMPT = PromptTemplate.from_template(
+    "Context information is below.\n---------------------\n{context}\n---------------------\nGiven the context information and not prior knowledge, answer the query.\nQuery: {input}\nAnswer:\n",
+)
+TOP_K = 3
+MILVUS_URI = str(Path(mkdtemp()) / "docling.db")
+```
+
+现在我们可以实例化我们的加载器并加载文档：
+
+```python
+from docling.chunking import HybridChunker
+from langchain_docling import DoclingLoader
+
+loader = DoclingLoader(
+    file_path=FILE_PATH,
+    export_type=EXPORT_TYPE,
+    chunker=HybridChunker(tokenizer=EMBED_MODEL_ID),
+)
+
+docs = loader.load()
+```
+
+```text
+Token indices sequence length is longer than the specified maximum sequence length for this model (1041 > 512). Running this sequence through the model will result in indexing errors
+```
+
+确定分割点：
+
+```python
+if EXPORT_TYPE == ExportType.DOC_CHUNKS:
+    splits = docs
+elif EXPORT_TYPE == ExportType.MARKDOWN:
+    from langchain_text_splitters import MarkdownHeaderTextSplitter
+
+    splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=[
+            ("#", "Header_1"),
+            ("##", "Header_2"),
+            ("###", "Header_3"),
+        ],
+    )
+    splits = [split for doc in docs for split in splitter.split_text(doc.page_content)]
+else:
+    raise ValueError(f"Unexpected export type: {EXPORT_TYPE}")
+```
+
+查看一些样本分割：
+
+```python
+for d in splits[:3]:
+    print(f"- {d.page_content=}")
+print("...")
+```
+
+```text
+- d.page_content='arXiv:2408.09869v5  [cs.CL]  9 Dec 2024'
+- d.page_content='Docling Technical Report\nVersion 1.0\nChristoph Auer Maksym Lysak Ahmed Nassar Michele Dolfi Nikolaos Livathinos Panos Vagenas Cesar Berrospi Ramis Matteo Omenetti Fabian Lindlbauer Kasper Dinkla Lokesh Mishra Yusik Kim Shubham Gupta Rafael Teixeira de Lima Valery Weber Lucas Morin Ingmar Meijer Viktor Kuropiatnyk Peter W. J. Staar\nAI4K Group, IBM Research R¨uschlikon, Switzerland'
+- d.page_content='Abstract\nThis technical report introduces Docling , an easy to use, self-contained, MITlicensed open-source package for PDF document conversion. It is powered by state-of-the-art specialized AI models for layout analysis (DocLayNet) and table structure recognition (TableFormer), and runs efficiently on commodity hardware in a small resource budget. The code interface allows for easy extensibility and addition of new features and models.'
+...
+```
+
+### 数据摄取
+
+```python
+import json
+from pathlib import Path
+from tempfile import mkdtemp
+
+from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+from langchain_milvus import Milvus
+
+embedding = HuggingFaceEmbeddings(model_name=EMBED_MODEL_ID)
+
+milvus_uri = str(Path(mkdtemp()) / "docling.db")  # or set as needed
+vectorstore = Milvus.from_documents(
+    documents=splits,
+    embedding=embedding,
+    collection_name="docling_demo",
+    connection_args={"uri": milvus_uri},
+    index_params={"index_type": "FLAT"},
+    drop_old=True,
+)
+```
+
+### RAG
+
+```python
+from langchain_classic.chains import create_retrieval_chain
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain_huggingface import HuggingFaceEndpoint
+
+retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K})
+llm = HuggingFaceEndpoint(
+    repo_id=GEN_MODEL_ID,
+    huggingfacehub_api_token=HF_TOKEN,
+    task="text-generation",
+)
+```
+
+```python
+def clip_text(text, threshold=100):
+    return f"{text[:threshold]}..." if len(text) > threshold else text
+```
+
+```python
+question_answer_chain = create_stuff_documents_chain(llm, PROMPT)
+rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+resp_dict = rag_chain.invoke({"input": QUESTION})
+
+clipped_answer = clip_text(resp_dict["answer"], threshold=350)
+print(f"Question:\n{resp_dict['input']}\n\nAnswer:\n{clipped_answer}")
+for i, doc in enumerate(resp_dict["context"]):
+    print()
+    print(f"Source {i + 1}:")
+    print(f"  text: {json.dumps(clip_text(doc.page_content, threshold=350))}")
+    for key in doc.metadata:
+        if key != "pk":
+            val = doc.metadata.get(key)
+            clipped_val = clip_text(val) if isinstance(val, str) else val
+            print(f"  {key}: {clipped_val}")
+```
+
+```text
+Question:
+Which are the main AI models in Docling?
+
+Answer:
+The main AI models in Docling are a layout analysis model, which is an accurate object-detector for page elements, and TableFormer, a state-of-the-art table structure recognition model.
+
+Source 1:
+  text: "3.2 AI models\nAs part of Docling, we initially release two highly capable AI models to the open-source community, which have been developed and published recently by our team. The first model is a layout analysis model, an accurate object-detector for page elements [13]. The second model is TableFormer [12, 9], a state-of-the-art table structure re..."
+  dl_meta: {'schema_name': 'docling_core.transforms.chunker.DocMeta', 'version': '1.0.0', 'doc_items': [{'self_ref': '#/texts/50', 'parent': {'$ref': '#/body'}, 'children': [], 'label': 'text', 'prov': [{'page_no': 3, 'bbox': {'l': 108.0, 't': 405.1419982910156, 'r': 504.00299072265625, 'b': 330.7799987792969, 'coord_origin': 'BOTTOMLEFT'}, 'charspan': [0, 608]}]}], 'headings': ['3.2 AI models'], 'origin': {'mimetype': 'application/pdf', 'binary_hash': 11465328351749295394, 'filename': '2408.09869v5.pdf'}}
+  source: https://arxiv.org/pdf/2408.09869
+
+Source 2:
+  text: "3 Processing pipeline\nDocling implements a linear pipeline of operations, which execute sequentially on each given document (see Fig. 1). Each document is first parsed by a PDF backend, which retrieves the programmatic text tokens, consisting of string content and its coordinates on the page, and also renders a bitmap image of each page to support ..."
+  dl_meta: {'schema_name': 'docling_core.transforms.chunker.DocMeta', 'version': '1.0.0', 'doc_items': [{'self_ref': '#/texts/26', 'parent': {'$ref': '#/body'}, 'children': [], 'label': 'text', 'prov': [{'page_no': 2, 'bbox': {'l': 108.0, 't': 273.01800537109375, 'r': 504.00299072265625, 'b': 176.83799743652344, 'coord_origin': 'BOTTOMLEFT'}, 'charspan': [0, 796]}]}], 'headings': ['3 Processing pipeline'], 'origin': {'mimetype': 'application/pdf', 'binary_hash': 11465328351749295394, 'filename': '2408.09869v5.pdf'}}
+  source: https://arxiv.org/pdf/2408.09869
+
+Source 3:
+  text: "6 Future work and contributions\nDocling is designed to allow easy extension of the model library and pipelines. In the future, we plan to extend Docling with several more models, such as a figure-classifier model, an equationrecognition model, a code-recognition model and more. This will help improve the quality of conversion for specific types of ..."
+  dl_meta: {'schema_name': 'docling_core.transforms.chunker.DocMeta', 'version': '1.0.0', 'doc_items': [{'self_ref': '#/texts/76', 'parent': {'$ref': '#/body'}, 'children': [], 'label': 'text', 'prov': [{'page_no': 5, 'bbox': {'l': 108.0, 't': 322.468994140625, 'r': 504.00299072265625, 'b': 259.0169982910156, 'coord_origin': 'BOTTOMLEFT'}, 'charspan': [0, 543]}]}, {'self_ref': '#/texts/77', 'parent': {'$ref': '#/body'}, 'children': [], 'label': 'text', 'prov': [{'page_no': 5, 'bbox': {'l': 108.0, 't': 251.6540069580078, 'r': 504.00299072265625, 'b': 198.99200439453125, 'coord_origin': 'BOTTOMLEFT'}, 'charspan': [0, 402]}]}], 'headings': ['6 Future work and contributions'], 'origin': {'mimetype': 'application/pdf', 'binary_hash': 11465328351749295394, 'filename': '2408.09869v5.pdf'}}
+  source: https://arxiv.org/pdf/2408.09869
+```
+
+请注意，源数据包含丰富的锚定信息，包括段落标题（即章节）、页码和精确的边界框。
+
+---
+
+## API 参考
+
+- [LangChain Docling 集成 GitHub](https://github.com/docling-project/docling-langchain)
+- [Docling GitHub](https://github.com/docling-project/docling)
+- [Docling 文档](https://docling-project.github.io/docling//)

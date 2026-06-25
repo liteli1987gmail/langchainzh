@@ -1,0 +1,199 @@
+---
+title: 设置资源标签
+sidebarTitle: 设置资源标签
+description: 创建和管理资源标签，以组织 LangSmith 工作区中的项目、数据集、提示词和其他资源。
+---
+
+<Info>
+资源标签适用于 [Plus 和 Enterprise 计划](/langsmith/pricing-plans)。
+</Info>
+
+[工作区](/langsmith/administration-overview#workspaces) 帮助划分信任边界和控制访问，而标签则帮助您在工作区内组织资源。标签是您可以附加到资源的键值对。
+
+<Note>
+**请勿与提交标签混淆**：资源标签是用于组织和筛选工作区资源（项目、数据集、提示词等。）的键值对。[提交标签](/langsmith/manage-prompts#commit-tags) 是引用提示词提交历史中特定版本的标签。虽然这两种标签可以使用相似的术语（如 `prod` 或 `staging`），但资源标签帮助您*组织*工作区中的资源，而提交标签则控制代码中使用的提示词*版本*。
+</Note>
+
+您可以通过 [LangSmith UI](https://smith.langchain.com) 或通过 [REST API](/langsmith/smith-api-ref) 以编程方式管理资源标签：
+
+<Tabs>
+  <Tab title="UI" icon="browser">
+
+## 创建标签
+
+<Note>
+要创建资源标签，您必须拥有 [`workspaces:manage` 权限](/langsmith/organization-workspace-operations)（默认情况下授予[工作区管理员](/langsmith/rbac#workspace-admin)角色）。编辑者可以为其有更新权限的资源应用 **Application** 标签，但创建标签键或应用其他标签类型需要此权限。有关将标签应用到资源的更多信息，请参阅工作区操作中的[标签部分](/langsmith/organization-workspace-operations#tags)。
+</Note>
+
+创建标签：
+
+1. 导航到工作区 **Settings** 页面，然后点击左侧边栏中的 **Resource tags**。
+1. 在这里，您可以找到按键分组的现有标签值。LangSmith 默认创建 **Application** 和 **Environment** 键。您可以使用 **Application** 键来筛选 UI 中显示的资源。
+1. 选择页面顶部的 <Icon icon="tag" /> **New Tag**。系统将提示您输入标签的键和值。请注意，您可以使用现有键或创建新键。
+
+    <img
+        className="block dark:hidden"
+        src="/langsmith/images/create-tag-light.png"
+        alt="Create resource tag modal accessed from the Settings menu in the LangSmith UI."
+    />
+
+    <img
+        className="hidden dark:block"
+        src="/langsmith/images/create-tag-dark.png"
+        alt="Create resource tag modal accessed from the Settings menu in the LangSmith UI."
+    />
+
+## 为资源分配标签
+
+在同一侧面板中创建新标签时，您也可以将资源分配给标签。在 **Assign resources** 部分搜索相应的资源，然后选择您要标记的资源。
+
+<Note>
+您只能使用资源标签标记工作区范围内的资源。这包括 Tracing Projects、Annotation Queues、Deployments、Experiments、Datasets 和 Prompts。
+</Note>
+
+要从资源取消分配标签，请点击标签面板和资源标签面板中标签旁边的 <Icon icon="trash" /> 垃圾桶图标。
+
+## 删除标签
+
+您可以从 [**Settings** 页面 > **Resource tags** 页面](https://smith.langchain.com/settings/workspaces/resource_tags) 删除标签的键或值。要删除键，请点击键旁边的 <Icon icon="trash" /> 垃圾桶图标。要删除值，请点击值旁边的 <Icon icon="trash" /> 垃圾桶图标。
+
+如果您删除一个键，LangSmith 将删除与该键关联的所有值。删除值时，您将失去该值与所有资源之间的关联。
+
+  </Tab>
+  <Tab title="API" icon="terminal">
+
+## 通过 API 管理标签
+
+您可以使用 LangSmith REST API 以编程方式创建、分配和查询资源标签。所有标签端点位于 `/api/v1/workspaces/current/` 下，需要 [API 密钥](/langsmith/create-account-api-key)。
+
+### 设置
+
+导入 `requests` 库并配置您的 API 密钥和请求头。以下所有示例都假定这些变量在作用域内：
+
+```python
+import os
+import requests
+
+LANGSMITH_API_URL = "https://api.smith.langchain.com"
+LANGSMITH_API_KEY = os.environ["LANGSMITH_API_KEY"]
+headers = {"x-api-key": LANGSMITH_API_KEY, "Content-Type": "application/json"}
+```
+
+### 创建标签键
+
+<Note>
+创建标签键需要 [`workspaces:manage`](/langsmith/organization-workspace-operations) 权限。
+如果你想应用默认的 **Application** 键，请跳过此步骤，改为列出现有键。
+</Note>
+
+```python
+response = requests.post(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/tag-keys",
+    headers=headers,
+    json={"key": "Environment", "description": "Deployment environment"},
+)
+response.raise_for_status()
+tag_key = response.json()
+tag_key_id = tag_key["id"]
+```
+
+### 创建标签值
+
+```python
+response = requests.post(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/tag-keys/{tag_key_id}/tag-values",
+    headers=headers,
+    json={"value": "production"},
+)
+response.raise_for_status()
+tag_value = response.json()
+tag_value_id = tag_value["id"]
+```
+
+### 为资源分配标签
+
+```python
+response = requests.post(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/taggings",
+    headers=headers,
+    json={
+        "tag_value_id": tag_value_id,
+        "resource_type": "project",
+        "resource_id": "<project-uuid>",
+    },
+)
+response.raise_for_status()
+tagging_id = response.json()["id"]
+```
+
+有效的 `resource_type` 值：`project`、`dataset`、`prompt`、`experiment`、`queue`、
+`deployment`、`dashboard`、`evaluator`、`mcp_server`、`fleet_integration`。
+
+<Note>
+**权限**：分配 **Application** 标签只需要对目标资源的更新访问权限，
+因此编辑器可以在没有 `workspaces:manage` 的情况下完成此操作。分配任何其他标签键都需要 `workspaces:manage` 权限。
+</Note>
+
+**应用现有标签**：如果键和值已存在（例如默认的 **Application** 键），请先获取其 ID，然后直接进入分配步骤：
+
+```python
+tags = requests.get(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/tags",
+    headers=headers,
+).json()
+# tags is a list of {id, key, values: [{id, value}, ...]}
+```
+
+### 查询标签
+
+```python
+# All tag keys and values in the workspace
+tags = requests.get(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/tags",
+    headers=headers,
+).json()
+
+# Tags on a specific resource
+resource_tags = requests.get(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/tags/resource",
+    headers=headers,
+    params={"resource_type": "project", "resource_id": "<project-uuid>"},
+).json()
+
+# All resources tagged with a specific value
+taggings = requests.get(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/taggings",
+    headers=headers,
+    params={"tag_value_id": tag_value_id},
+).json()
+```
+
+### 从资源中移除标签
+
+```python
+requests.delete(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/taggings/{tagging_id}",
+    headers=headers,
+)
+```
+
+### 删除标签键或值
+
+```python
+# Delete a value (removes all resource assignments for that value)
+requests.delete(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/tag-keys/{tag_key_id}/tag-values/{tag_value_id}",
+    headers=headers,
+)
+
+# Delete a key (also deletes all its values)
+requests.delete(
+    f"{LANGSMITH_API_URL}/api/v1/workspaces/current/tag-keys/{tag_key_id}",
+    headers=headers,
+)
+```
+
+有关请求/响应字段的完整列表，请参阅 [API 参考文档](/langsmith/smith-api-ref)。
+
+  </Tab>
+</Tabs>

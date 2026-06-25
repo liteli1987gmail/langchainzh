@@ -1,0 +1,109 @@
+---
+title: "Truefoundry 集成"
+description: "使用 LangChain Python 与 Truefoundry 集成。"
+---
+
+TrueFoundry 提供企业级 [AI Gateway](https://www.truefoundry.com/ai-gateway)，为 LangChain 等代理框架提供治理和可观测性。TrueFoundry AI Gateway 作为 LLM 访问的统一接口，提供：
+
+- **统一 API 访问**：通过一个 API 连接 250+ LLM（OpenAI、Claude、Gemini、Groq、Mistral）
+- **低延迟**：智能路由和负载均衡下内部延迟低于 3ms
+- **企业级安全**：SOC 2、HIPAA、GDPR 合规，支持 RBAC 和审计日志
+- **配额和成本管理**：基于 Token 的配额、速率限制和全面的使用量跟踪
+- **可观测性**：完整的请求/响应日志、指标和追踪，支持自定义保留策略
+
+
+## 前提条件
+
+在将 LangChain 与 TrueFoundry 集成之前，请确保您已具备：
+
+1. **TrueFoundry 账户**：一个已配置至少一个模型提供商的 [TrueFoundry 账户](https://www.truefoundry.com/register)。请按照 [TrueFoundry 快速入门指南](https://docs.truefoundry.com/gateway/quick-start) 操作
+2. **个人访问令牌**：按照 [TrueFoundry 令牌生成指南](https://docs.truefoundry.com/gateway/authentication) 生成令牌
+
+## 快速入门
+
+您可以通过 @[`ChatOpenAI`] 接口连接到 TrueFoundry 的统一 LLM 网关。
+
+- 将 `base_url` 设置为您的 TrueFoundry 端点（见下文说明）
+- 将 `api_key` 设置为您的 TrueFoundry [PAT（个人访问令牌）](https://docs.truefoundry.com/gateway/authentication#personal-access-token-pat)
+- 使用与统一代码示例中相同的 `model-name`
+
+
+### 安装
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install langchain-openai
+```
+
+```bash uv
+uv add langchain-openai
+```
+</CodeGroup>
+
+### 基本设置
+
+通过更新 LangChain 中的 @[`ChatOpenAI`] 模型来连接到 TrueFoundry：
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    api_key=TRUEFOUNDRY_API_KEY,
+    base_url=TRUEFOUNDRY_GATEWAY_BASE_URL,
+    model="openai-main/gpt-5.5"  # Similarly you can call any model from any model provider
+)
+
+llm.invoke("What is the meaning of life, universe and everything?")
+```
+
+请求通过您的 TrueFoundry 网关路由到指定的模型提供商。TrueFoundry 自动处理速率限制、负载均衡和可观测性。
+
+### LangGraph 集成
+
+
+```python
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, MessagesState
+from langchain.messages import HumanMessage
+
+# Define your LangGraph workflow
+def call_model(state: MessagesState):
+    model = ChatOpenAI(
+        api_key=TRUEFOUNDRY_API_KEY,
+        base_url=TRUEFOUNDRY_GATEWAY_BASE_URL,
+        # Copy the exact model name from gateway
+        model="openai-main/gpt-5.5"
+    )
+    response = model.invoke(state["messages"])
+    return {"messages": [response]}
+
+# Build workflow
+workflow = StateGraph(MessagesState)
+workflow.add_node("agent", call_model)
+workflow.set_entry_point("agent")
+workflow.set_finish_point("agent")
+
+app = workflow.compile()
+
+# Run agent through TrueFoundry
+result = app.invoke({"messages": [HumanMessage(content="Hello!")]})
+```
+
+
+## 可观测性与治理
+
+使用 Metrics Dashboard，您可以监控和分析：
+
+- **性能指标**：追踪关键延迟指标，如请求延迟、首批令牌时间（TTFS）和令牌间隔延迟（ITL），并提供 P99、P90 和 P50 百分位数
+- **成本与令牌使用量**：深入了解应用的支出情况，详细拆分各模型的输入/输出令牌及相应费用
+- **使用模式**：通过用户活动、模型分布和团队使用情况的详细分析，了解应用的使用情况
+- **速率限制与负载均衡**：配置限流策略、在不同模型间分配流量，并设置备用方案
+
+## 支持
+
+如有问题、遇到问题或需要支持：
+
+- **电子邮件**：[support@truefoundry.com](mailto:support@truefoundry.com)
+- **文档**：[https://docs.truefoundry.com/](https://docs.truefoundry.com/)

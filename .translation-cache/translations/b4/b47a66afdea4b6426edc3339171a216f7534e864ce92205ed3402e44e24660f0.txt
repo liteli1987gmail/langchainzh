@@ -1,0 +1,147 @@
+---
+title: "OpenVINO 集成"
+description: "使用 LangChain Python 与 OpenVINO LLM 集成。"
+---
+
+[OpenVINO™](https://github.com/openvinotoolkit/openvino) 是一个用于优化和部署 AI 推理的开源工具包。OpenVINO™ Runtime 可以使相同的优化模型在各种硬件[设备](https://github.com/openvinotoolkit/openvino?tab=readme-ov-file#supported-hardware-matrix)上运行。加速您的深度学习性能，适用于语言 + LLM、计算机视觉、自动语音识别等用例。
+
+OpenVINO 模型可以通过 `HuggingFacePipeline` [类](https://python.langchain.com/docs/integrations/llms/huggingface_pipeline)在本地运行。要使用 OpenVINO 部署模型，您可以指定 `backend="openvino"` 参数来触发 OpenVINO 作为后端推理框架。
+
+要使用此功能，您应该安装带有 OpenVINO Accelerator 的 `optimum-intel` python [包](https://github.com/huggingface/optimum-intel?tab=readme-ov-file#installation)。
+
+```python
+pip install -U-strategy eager "optimum[openvino,nncf]" langchain-huggingface --quiet
+```
+
+### 模型加载
+
+可以通过使用 `from_model_id` 方法指定模型参数来加载模型。
+
+如果您有 Intel GPU，可以指定 `model_kwargs={"device": "GPU"}` 来在其上运行推理。
+
+```python
+from langchain_huggingface import HuggingFacePipeline
+
+ov_config = {"PERFORMANCE_HINT": "LATENCY", "NUM_STREAMS": "1", "CACHE_DIR": ""}
+
+ov_llm = HuggingFacePipeline.from_model_id(
+    model_id="gpt2",
+    task="text-generation",
+    backend="openvino",
+    model_kwargs={"device": "CPU", "ov_config": ov_config},
+    pipeline_kwargs={"max_new_tokens": 10},
+)
+```
+
+它们也可以通过直接传递现有的 [`optimum-intel`](https://huggingface.co/docs/optimum/main/en/intel/inference) pipeline 来加载
+
+```python
+from optimum.intel.openvino import OVModelForCausalLM
+from transformers import AutoTokenizer, pipeline
+
+model_id = "gpt2"
+device = "CPU"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+ov_model = OVModelForCausalLM.from_pretrained(
+    model_id, export=True, device=device, ov_config=ov_config
+)
+ov_pipe = pipeline(
+    "text-generation", model=ov_model, tokenizer=tokenizer, max_new_tokens=10
+)
+ov_llm = HuggingFacePipeline(pipeline=ov_pipe)
+```
+
+### 创建链
+
+模型加载到内存后，您可以将其与提示词组合，形成一个链。
+
+```python
+from langchain_core.prompts import PromptTemplate
+
+template = """Question: {question}
+
+Answer: Let's think step by step."""
+prompt = PromptTemplate.from_template(template)
+
+chain = prompt | ov_llm
+
+question = "What is electroencephalography?"
+
+print(chain.invoke({"question": question}))
+```
+
+要获取无需提示的响应，你可以将 `skip_prompt=True` 与 LLM 绑定。
+
+```python
+chain = prompt | ov_llm.bind(skip_prompt=True)
+
+question = "What is electroencephalography?"
+
+print(chain.invoke({"question": question}))
+```
+
+### 使用本地 OpenVINO 模型进行推理
+
+您可以通过 CLI 将[模型导出](https://github.com/huggingface/optimum-intel?tab=readme-ov-file#export)为 OpenVINO IR 格式，并从本地文件夹加载模型。
+
+```python
+!optimum-cli export openvino --model gpt2 ov_model_dir
+```
+
+建议使用 `--weight-format` 应用 8 位或 4 位权重量化来减少推理延迟和模型体积：
+
+```python
+!optimum-cli export openvino --model gpt2  --weight-format int8 ov_model_dir # for 8-bit quantization
+
+!optimum-cli export openvino --model gpt2  --weight-format int4 ov_model_dir # for 4-bit quantization
+```
+
+```python
+ov_llm = HuggingFacePipeline.from_model_id(
+    model_id="ov_model_dir",
+    task="text-generation",
+    backend="openvino",
+    model_kwargs={"device": "CPU", "ov_config": ov_config},
+    pipeline_kwargs={"max_new_tokens": 10},
+)
+
+chain = prompt | ov_llm
+
+question = "What is electroencephalography?"
+
+print(chain.invoke({"question": question}))
+```
+
+您可以通过对激活和 KV-cache 进行动态量化来获得额外的推理速度提升。这些选项可以通过 `ov_config` 启用，如下所示：
+
+```python
+ov_config = {
+    "KV_CACHE_PRECISION": "u8",
+    "DYNAMIC_QUANTIZATION_GROUP_SIZE": "32",
+    "PERFORMANCE_HINT": "LATENCY",
+    "NUM_STREAMS": "1",
+    "CACHE_DIR": "",
+}
+```
+
+### 流式传输
+
+您可以使用 `stream` 方法获取 LLM 输出的流式传输，
+
+```python
+generation_config = {"skip_prompt": True, "pipeline_kwargs": {"max_new_tokens": 100}}
+chain = prompt | ov_llm.bind(**generation_config)
+
+for chunk in chain.stream(question):
+    print(chunk, end="", flush=True)
+```
+
+更多信息请参阅：
+
+* [OpenVINO LLM 指南](https://docs.openvino.ai/2024/learn-openvino/llm_inference_guide.html)。
+
+* [OpenVINO 文档](https://docs.openvino.ai/2024/home.html)。
+
+* [OpenVINO 入门指南](https://www.intel.com/content/www/us/en/content-details/819067/openvino-get-started-guide.html)。
+
+* [使用 LangChain 的 RAG Notebook](https://github.com/openvinotoolkit/openvino_notebooks/tree/latest/notebooks/llm-rag-langchain)。

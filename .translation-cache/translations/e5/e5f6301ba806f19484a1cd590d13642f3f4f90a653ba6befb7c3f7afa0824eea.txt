@@ -1,0 +1,67 @@
+---
+title: "ModalSandbox 集成"
+description: "使用 LangChain Python 与 ModalSandbox 沙箱后端集成。"
+---
+
+[Modal](https://modal.com) 提供支持 GPU 的无服务器容器基础设施。详见 [Modal 文档](https://modal.com/docs) 了解注册、认证和平台详情。
+
+## 安装
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install langchain-modal
+```
+
+```bash uv
+uv add langchain-modal
+```
+</CodeGroup>
+
+## 创建沙盒后端
+
+在 Python 中，您使用 provider SDK 创建沙盒，然后使用 [deepagents 后端](/oss/deepagents/backends) 将其包装。
+
+```python
+import modal
+
+from langchain_modal import ModalSandbox
+
+app = modal.App.lookup("your-app")
+modal_sandbox = modal.Sandbox.create(app=app)
+backend = ModalSandbox(sandbox=modal_sandbox)
+
+result = backend.execute("echo hello")
+print(result.output)
+```
+
+## 配合 Deep Agents 使用
+
+```python
+import modal
+from langchain_anthropic import ChatAnthropic
+
+from deepagents import create_deep_agent
+from langchain_modal import ModalSandbox
+
+app = modal.App.lookup("your-app")
+modal_sandbox = modal.Sandbox.create(app=app)
+backend = ModalSandbox(sandbox=modal_sandbox)
+
+agent = create_deep_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-20250514"),
+    system_prompt="You are a coding assistant with sandbox access.",
+    backend=backend,
+)
+
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Install numpy and calculate pi"}]}
+)
+```
+
+## 清理
+
+您有责任通过 Modal 管理沙盒生命周期。使用完毕后，请终止沙盒。
+
+另请参阅：[沙盒](/oss/deepagents/sandboxes)

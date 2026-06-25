@@ -1,0 +1,107 @@
+---
+title: "NVIDIARAGRetriever 集成"
+description: "使用 LangChain Python 与 NVIDIARAGRetriever 进行集成。"
+---
+
+`NVIDIARAGRetriever` 将 LangChain 连接到正在运行的 [NVIDIA RAG Blueprint](https://docs.nvidia.com/rag/latest/index.html) 服务器，并通过 `/v1/search` 端点检索相关文档。它支持同步和异步检索、重排序、查询重写和元数据过滤。
+
+## 概述
+
+### 集成详情
+
+| Class | Package | Local | Serializable | JS support | Downloads | Version |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| [`NVIDIARAGRetriever`](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints/retrievers/NVIDIARAGRetriever) | [`langchain-nvidia-ai-endpoints`](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints) | ✅ | beta | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain_nvidia_ai_endpoints?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain_nvidia_ai_endpoints?style=flat-square&label=%20) |
+
+## 设置
+
+`NVIDIARAGRetriever` 需要一台正在运行的 NVIDIA RAG Blueprint 服务器。请参阅 [NVIDIA RAG Blueprint 文档](https://docs.nvidia.com/rag/latest/index.html) 获取部署说明。默认情况下，服务器监听 `http://localhost:8081`，并且需要向量数据库中至少有一个已导入的集合。
+
+检索器不需要 API 密钥；身份验证由 RAG 服务器处理。
+
+### 安装
+
+```bash
+pip install -qU langchain-nvidia-ai-endpoints
+```
+
+## 实例化
+
+```python
+from langchain_nvidia_ai_endpoints import NVIDIARAGRetriever
+
+retriever = NVIDIARAGRetriever(
+    base_url="http://localhost:8081",
+    k=4,
+    collection_names=["my_collection"],
+)
+```
+
+关键参数：
+
+| 参数 | 类型 | 默认值 | 描述 |
+|-----------|------|---------|-------------|
+| `base_url` | `str` | — | RAG Blueprint 服务器的基础 URL |
+| `k` | `int` | `10` | 返回的文档数量 (0–25) |
+| `collection_names` | `list[str]` | `["multimodal_data"]` | 要搜索的向量数据库集合 |
+| `vdb_top_k` | `int` | `100` | 重排前检索的结果数量 (0–400) |
+| `enable_reranker` | `bool` | `True` | 启用检索结果的重排 |
+| `enable_query_rewriting` | `bool` | `False` | 在搜索前启用查询改写 |
+| `confidence_threshold` | `float` | `0.0` | 包含文档的最小相关性分数 (0.0–1.0) |
+| `timeout` | `float` | `60` | HTTP 请求超时时间（秒） |
+
+## 用法
+
+```python
+docs = retriever.invoke("What is NVIDIA NIM?")
+for doc in docs:
+    print(doc.page_content)
+```
+
+也支持异步检索：
+
+```python
+docs = await retriever.ainvoke("What is NVIDIA NIM?")
+```
+
+## 在链中使用
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIARAGRetriever
+
+retriever = NVIDIARAGRetriever(base_url="http://localhost:8081", k=4)
+llm = ChatNVIDIA(model="meta/llama3-8b-instruct")
+
+prompt = ChatPromptTemplate.from_template(
+    "Answer the question based only on the following context:\n{context}\n\nQuestion: {question}"
+)
+
+
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+
+chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+
+chain.invoke("What is NVIDIA NIM?")
+```
+
+
+## API 参考
+
+有关所有 `NVIDIARAGRetriever` 功能配置的详细文档，请前往 [API 参考](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints/retrievers/NVIDIARAGRetriever)。
+
+## 相关主题
+
+- [NVIDIA 提供商页面](/oss/integrations/providers/nvidia)
+- [`ChatNVIDIA` 集成](/oss/integrations/chat/nvidia_ai_endpoints)
+- [`NVIDIAEmbeddings` 集成](/oss/integrations/embeddings/nvidia_ai_endpoints)
+- [NVIDIA RAG Blueprint 文档](https://docs.nvidia.com/rag/latest/index.html)

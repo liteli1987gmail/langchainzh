@@ -1,0 +1,59 @@
+---
+title: 核心能力概述
+sidebarTitle: 概述
+description: Agent Server 能力，包括流式输出、人工介入、MCP、A2A、分布式追踪、Webhook 和双重消息处理。
+---
+
+基于 [Agent Server](/langsmith/agent-server) 运行时构建，这些能力涵盖了运行如何进行流式输出、暂停、暴露端点以及响应事件：
+
+<CardGroup cols={2}>
+
+<Card title="流式 API" icon="player-play" href="/langsmith/streaming">
+  使用 LangGraph SDK 实时流式传输已部署 agent 的输出。
+</Card>
+
+<Card title="人工介入" icon="user-check" href="/langsmith/add-human-in-the-loop">
+  暂停 agent 执行以在继续之前审查、编辑或批准工具调用。
+</Card>
+
+<Card title="时间旅行" icon="clock" href="/langsmith/human-in-the-loop-time-travel">
+  从任意先前状态重放 agent 运行以进行调试或探索替代路径。
+</Card>
+
+<Card title="MCP 端点" icon="plug" href="/langsmith/server-mcp">
+  将您的 agent 暴露为 MCP 工具，可被任何 MCP 兼容客户端访问。
+</Card>
+
+<Card title="A2A 端点" icon="arrows-exchange" href="/langsmith/server-a2a">
+  使用 A2A 协议启用 agent 间通信。
+</Card>
+
+<Card title="分布式追踪" icon="git-merge" href="/langsmith/agent-server-distributed-tracing">
+  从外部应用调用 Agent Server 时统一跨服务的追踪。
+</Card>
+
+<Card title="Webhook" icon="webhook" href="/langsmith/use-webhooks">
+  响应已部署 agent 的运行事件来触发外部系统。
+</Card>
+
+<Card title="双重消息处理" icon="messages" href="/langsmith/double-texting">
+  控制 Agent Server 在运行进行中时如何处理新消息。
+</Card>
+
+</CardGroup>
+
+
+
+## 持久执行
+
+LangSmith Deployment 本质上是一个持久执行引擎。您的 agent 在托管任务队列上运行并自动创建检查点，因此任何运行都可以从中断的确切位置重试、重放或恢复，而无需从头开始。
+
+因为执行是持久化的，agent 可以完成在无状态运行时中脆弱或不可能完成的事情：
+
+- **等待外部输入。** Agent 调用 [`interrupt()`](/langsmith/add-human-in-the-loop)，运行时检查其状态，释放资源，并等待人工批准交易、审阅者编辑草稿，或其他系统返回结果。当数小时或数天后 [`Command(resume=...)`](/langsmith/add-human-in-the-loop) 到达时，执行从停止的确切位置恢复。这是[人工介入](/langsmith/add-human-in-the-loop)工作流和[时间旅行调试](/langsmith/human-in-the-loop-time-travel)背后的原语。
+- **在后台运行。** [后台运行](/langsmith/background-run) 不会阻塞调用方而执行。运行时管理完整生命周期（排队、执行、检查点、完成），而客户端继续执行。
+- **按计划运行。** [定时任务](/langsmith/cron-jobs) 按重复节奏触发 agent 执行。每日摘要 agent、每周报告、定期数据同步。运行时按照相同的持久性保证按计划启动新执行。
+- **处理并发输入。** 当用户在 agent 运行中间发送新输入时（[双重消息处理](/langsmith/double-texting)），运行时可以将其排队、取消进行中的运行，或并行处理两者而不会出现数据竞争或状态损坏。
+- **失败时重试。** 可配置的[重试策略](/oss/langgraph/use-graph-api#add-retry-policies)控制在每个节点基础上控制退避、最大尝试次数以及哪些异常触发重试。运行在进程重启、基础设施故障和执行中的代码修订后仍能存活。
+
+有关容器、进程和任务队列如何协同工作的详细信息，请参阅 [Agent Server：运行时架构](/langsmith/agent-server#runtime-architecture)。有关扩展和吞吐量调优，请参阅[为规模配置 Agent Server](/langsmith/agent-server-scale)。

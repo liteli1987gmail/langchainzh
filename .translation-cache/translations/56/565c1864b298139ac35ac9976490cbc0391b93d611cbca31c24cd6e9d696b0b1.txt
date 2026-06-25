@@ -1,0 +1,638 @@
+---
+title: 如何使用 Vitest/Jest 运行评估
+sidebarTitle: 使用 Vitest/Jest 运行评估
+---
+
+LangSmith 提供了与 [Vitest](https://vitest.dev/) 和 [Jest](https://jestjs.io/) 的集成，允许 JavaScript 和 TypeScript 开发人员定义他们的[数据集](/langsmith/evaluation-concepts#datasets)，并使用熟悉的语法进行评估。
+
+![Jest/Vitest 报告输出](/langsmith/images/jest-vitest-reporter-output.png)
+
+与 @[`evaluate()`][Client.evaluate] 评估流程相比，Vitest 或 Jest 测试框架在以下场景中非常有用：
+
+* **每个示例需要不同的评估逻辑**：标准评估流程假设在所有数据集示例中一致地执行应用程序和评估器。对于更复杂的系统或全面的评估，特定的系统子集可能需要使用特定的输入类型和指标进行评估。这些异构评估更容易编写为独立的测试用例套件，然后一起跟踪。
+* **您想要断言二元期望**：在 LangSmith 中跟踪断言，并在本地抛出断言错误（例如在 CI 流水线中）。当同时评估系统输出并断言其基本属性时，测试工具会很有帮助。
+* **您想要利用 Vitest/Jest 生态系统的模拟、监视模式、本地结果或其他功能**。
+
+<Info>
+需要 JS/TS SDK 版本 `langsmith>=0.3.1`。
+</Info>
+
+<Info>
+Python SDK 有类似的 [pytest 集成](/langsmith/pytest)。
+</Info>
+
+## 设置
+
+如下设置集成。请注意，虽然您可以将 LangSmith 评估与其他单元测试一起添加（作为标准的 `*.test.ts` 文件），使用您现有的测试配置文件，但以下示例还将设置一个单独的测试配置文件和命令来运行您的评估。它假设您的测试文件以 `.eval.ts` 结尾。
+
+这确保了自定义测试报告器和 LangSmith 的其他触点不会修改您现有的测试输出。
+
+### Vitest
+
+如果尚未安装，请安装所需的开发依赖项：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```bash yarn
+yarn add -D vitest dotenv
+```
+
+```bash npm
+npm install -D vitest dotenv
+```
+
+```bash pnpm
+pnpm add -D vitest dotenv
+```
+
+</CodeGroup>
+
+以下示例还需要 `openai`（以及 `langsmith`）作为依赖项：
+
+<CodeGroup>
+
+```bash yarn
+yarn add langsmith openai
+```
+
+```bash npm
+npm install langsmith openai
+```
+
+```bash pnpm
+pnpm add langsmith openai
+```
+
+</CodeGroup>
+
+然后，创建一个单独的 `ls.vitest.config.ts` 文件，使用以下基础配置：
+
+</fragment>
+
+```typescript
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    include: ["**/*.eval.?(c|m)[jt]s"],
+    reporters: ["langsmith/vitest/reporter"],
+    setupFiles: ["dotenv/config"],
+    testTimeout: 30000,
+  },
+});
+```
+
+* `include` 确保只有以 `eval.ts` 变体结尾的文件会在你的项目中运行
+* `reporters` 负责将你的输出格式化为上面展示的精美格式
+* `setupFiles` 在运行你的评估之前运行 `dotenv` 来加载环境变量
+* `testTimeout` 为每个测试设置全局默认超时时间。由于 LLM 调用可能较慢，我们将其从 Vitest 默认值增加
+
+<Warning>
+JSDom 环境目前不受支持。你应该从配置中省略 `"environment"` 字段，或将其设置为 `"node"`。
+</Warning>
+
+最后，将以下内容添加到你的 `package.json` 的 `scripts` 字段中，以使用你刚创建的配置文件运行 Vitest：
+
+```json
+{
+  "name": "YOUR_PROJECT_NAME",
+  "scripts": {
+    "eval": "vitest run --config ls.vitest.config.ts"
+  },
+  "dependencies": {
+    ...
+  },
+  "devDependencies": {
+    ...
+  }
+}
+```
+
+请注意，此脚本禁用了 Vitest 的默认监视模式以运行评估，因为许多评估器可能包含较长的 LLM 调用。
+
+### Jest
+
+如果尚未安装，请安装所需的开发依赖项：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```bash yarn
+yarn add -D jest dotenv
+```
+
+```bash npm
+npm install -D jest dotenv
+```
+
+```bash pnpm
+pnpm add -D jest dotenv
+```
+
+</CodeGroup>
+
+以下示例还需要 `openai`（以及 `langsmith`）作为依赖项：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```bash yarn
+yarn add langsmith openai
+```
+
+```bash npm
+npm install langsmith openai
+```
+
+```bash pnpm
+pnpm add langsmith openai
+```
+
+</CodeGroup>
+
+<Info>
+以下设置说明适用于基本的 JS 文件和 CJS。如需添加对 TypeScript 和 ESM 的支持，请参阅 Jest 官方文档或使用 [Vitest](#vitest)。
+</Info>
+
+然后，创建一个名为 `ls.jest.config.cjs` 的独立配置文件：
+
+```javascript
+module.exports = {
+  testMatch: ["**/*.eval.?(c|m)[jt]s"],
+  reporters: ["langsmith/jest/reporter"],
+  setupFiles: ["dotenv/config"],
+  testTimeout: 30000,
+};
+```
+
+* `testMatch` 确保只有以 `eval.js` 各种变体结尾的文件会在项目中运行
+* `reporters` 负责将你的输出格式化为上面显示的美观格式
+* `setupFiles` 在运行 eval 之前先运行 `dotenv` 来加载环境变量
+* `testTimeout` 为每个测试设置全局默认超时时间。由于 LLM 调用可能很慢，我们将超时时间从 Jest 默认值增加
+
+<Warning>
+目前不支持 JSDom 环境。你应该从配置中省略 `"testEnvironment"` 字段或将其设置为 `"node"`。
+</Warning>
+
+最后，将以下内容添加到 `package.json` 的 `scripts` 字段中，以使用你刚刚创建的配置运行 Jest：
+
+```json
+{
+  "name": "YOUR_PROJECT_NAME",
+  "scripts": {
+    "eval": "jest --config ls.jest.config.cjs"
+  },
+  "dependencies": {
+    ...
+  },
+  "devDependencies": {
+    ...
+  }
+}
+```
+
+## 定义并运行评估
+
+你现在可以使用熟悉的 Vitest/Jest 语法将评估定义为测试，但需要注意以下几点：
+
+- 你应该从 @[`langsmith/jest`][langsmith/jest] 或 @[`langsmith/vitest`][langsmith/vitest] 入口点导入 `describe` 和 `test`。
+- 你必须将测试用例包装在 `describe` 块中。
+- 声明测试时，签名略有不同——有一个额外的参数包含示例输入和预期输出。
+
+请尝试创建一个名为 `sql.eval.ts`（或如果使用不带 TypeScript 的 Jest，则为 `sql.eval.js`）的文件，然后将以下代码粘贴到其中：
+
+```typescript
+import * as ls from "langsmith/vitest";
+import { expect } from "vitest";
+// import * as ls from "langsmith/jest";
+// import { expect } from "@jest/globals";
+import OpenAI from "openai";
+import { traceable } from "langsmith/traceable";
+import { wrapOpenAI } from "langsmith/wrappers/openai";
+
+// Add "openai" as a dependency and set OPENAI_API_KEY as an environment variable
+const tracedClient = wrapOpenAI(new OpenAI());
+
+const generateSql = traceable(
+  async (userQuery: string) => {
+    const result = await tracedClient.chat.completions.create({
+      model: "gpt-5.4-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Convert the user query to a SQL query. Do not wrap in any markdown tags.",
+        },
+        {
+          role: "user",
+          content: userQuery,
+        },
+      ],
+    });
+    return result.choices[0].message.content;
+  },
+  { name: "generate_sql" }
+);
+
+ls.describe("generate sql demo", () => {
+  ls.test(
+    "generates select all",
+    {
+      inputs: { userQuery: "Get all users from the customers table" },
+      referenceOutputs: { sql: "SELECT * FROM customers;" },
+    },
+    async ({ inputs, referenceOutputs }) => {
+      const sql = await generateSql(inputs.userQuery);
+      ls.logOutputs({ sql }); // <-- Log run outputs, optional
+      expect(sql).toEqual(referenceOutputs?.sql); // <-- Assertion result logged under 'pass' feedback key
+    }
+  );
+});
+```
+
+你可以将每个 @[ls.test][ls.test] 测试用例视为对应一个数据集示例，将 @[`ls.describe()`][ls.describe] 视为定义一个 LangSmith 数据集。如果在运行测试套件时设置了 LangSmith [追踪环境变量](#setup)，SDK 会执行以下操作：
+
+* 如果不存在，会在 LangSmith 中创建一个与传递给 `ls.describe()` 的名称相同的[数据集](/langsmith/evaluation-concepts#datasets)。
+* 如果不存在匹配项，会在数据集中为每个传入测试用例的输入和预期输出创建一个[示例](/langsmith/evaluation-concepts#datasets)。
+* 会创建一个新的[实验](/langsmith/evaluation-concepts#experiment)，每个测试用例对应一个结果。
+* 会收集每个测试用例在 `pass` 反馈键下的通过/失败率。
+
+运行此测试时，它会根据测试用例的通过/失败情况生成一个默认的 `pass` 布尔反馈键。它还会跟踪你使用 @[`ls.logOutputs()`][ls.logOutputs] 记录或从测试函数返回的任何输出，作为应用在实验中的"实际"结果值。
+
+创建一个包含 `OPENAI_API_KEY` 和 LangSmith 凭证的 `.env` 文件（如果你还没有）：
+
+```bash
+OPENAI_API_KEY="YOUR_KEY_HERE"
+LANGSMITH_API_KEY="YOUR_LANGSMITH_KEY"
+LANGSMITH_TRACING="true"
+```
+
+现在使用我们在上一步中设置的 `eval` 脚本来运行测试：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```bash yarn
+yarn run eval
+```
+
+```bash npm
+npm run eval
+```
+
+```bash pnpm
+pnpm run eval
+```
+
+</CodeGroup>
+
+然后你声明的测试应该会运行！
+
+完成后，如果你已经设置了 LangSmith 环境变量，你应该会看到一个链接，指向 LangSmith 中创建的实验以及测试结果。
+
+以下是该测试套件的实验示例：
+
+![Experiment](/langsmith/images/simple-vitest.png)
+
+## 追踪反馈
+
+默认情况下，LangSmith 会收集每个测试用例在 `pass` 反馈键下的通过/失败率。你可以使用 @[`ls.logFeedback()`][ls.logFeedback] 或 @[`ls.wrapEvaluator()`][ls.wrapEvaluator] 添加其他反馈。要实现这一点，请尝试将以下内容作为你的 `sql.eval.ts` 文件（或如果你使用不带 TypeScript 的 Jest，则是 `sql.eval.js`）：
+
+```typescript
+import * as ls from "langsmith/vitest";
+// import * as ls from "langsmith/jest";
+import OpenAI from "openai";
+import { traceable } from "langsmith/traceable";
+import { wrapOpenAI } from "langsmith/wrappers/openai";
+
+// Add "openai" as a dependency and set OPENAI_API_KEY as an environment variable
+const tracedClient = wrapOpenAI(new OpenAI());
+
+const generateSql = traceable(
+  async (userQuery: string) => {
+    const result = await tracedClient.chat.completions.create({
+      model: "gpt-5.4-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Convert the user query to a SQL query. Do not wrap in any markdown tags.",
+        },
+        {
+          role: "user",
+          content: userQuery,
+        },
+      ],
+    });
+    return result.choices[0].message.content ?? "";
+  },
+  { name: "generate_sql" }
+);
+
+const myEvaluator = async (params: {
+  outputs: { sql: string };
+  referenceOutputs: { sql: string };
+}) => {
+  const { outputs, referenceOutputs } = params;
+  const instructions = [
+    "Return 1 if the ACTUAL and EXPECTED answers are semantically equivalent, ",
+    "otherwise return 0. Return only 0 or 1 and nothing else.",
+  ].join("\n");
+  const grade = await tracedClient.chat.completions.create({
+    model: "gpt-5.4-mini",
+    messages: [
+      {
+        role: "system",
+        content: instructions,
+      },
+      {
+        role: "user",
+        content: `ACTUAL: ${outputs.sql}\nEXPECTED: ${referenceOutputs?.sql}`,
+      },
+    ],
+  });
+  const score = parseInt(grade.choices[0].message.content ?? "");
+  return { key: "correctness", score };
+};
+
+ls.describe("generate sql demo", () => {
+  ls.test(
+    "generates select all",
+    {
+      inputs: { userQuery: "Get all users from the customers table" },
+      referenceOutputs: { sql: "SELECT * FROM customers;" },
+    },
+    async ({ inputs, referenceOutputs }) => {
+      const sql = await generateSql(inputs.userQuery);
+      ls.logOutputs({ sql });
+      const wrappedEvaluator = ls.wrapEvaluator(myEvaluator);
+      // Will automatically log "correctness" as feedback
+      await wrappedEvaluator({
+        outputs: { sql },
+        referenceOutputs,
+      });
+      // You can also manually log feedback with `ls.logFeedback()`
+      ls.logFeedback({
+        key: "harmfulness",
+        score: 0.2,
+      });
+    }
+  );
+  ls.test(
+    "offtopic input",
+    {
+      inputs: { userQuery: "what's up" },
+      referenceOutputs: { sql: "sorry that is not a valid query" },
+    },
+    async ({ inputs, referenceOutputs }) => {
+      const sql = await generateSql(inputs.userQuery);
+      ls.logOutputs({ sql });
+      const wrappedEvaluator = ls.wrapEvaluator(myEvaluator);
+      // Will automatically log "correctness" as feedback
+      await wrappedEvaluator({
+        outputs: { sql },
+        referenceOutputs,
+      });
+      // You can also manually log feedback with `ls.logFeedback()`
+      ls.logFeedback({
+        key: "harmfulness",
+        score: 0.2,
+      });
+    }
+  );
+});
+```
+
+请注意在 `myEvaluator` 函数周围使用 @[`ls.wrapEvaluator()`][ls.wrapEvaluator]。这使得 LLM 评判调用与测试用例的其余部分分开追踪以避免混乱，并且如果被包装函数的返回值匹配 `{ key: string; score: number | boolean }`，则会便捷地创建反馈。在这种情况下，评估器追踪不会显示在主测试用例运行中，而是会显示在与 `correctness` 反馈键关联的追踪中。
+
+您可以通过在 UI 中点击相应的反馈标签来查看 LangSmith 中的评估器运行情况。
+
+## 针对测试用例运行多个示例
+
+您可以使用 @[`ls.test.each()`][ls.test.each] 对多个示例运行相同的测试用例并参数化测试。当您希望以相同方式针对不同输入评估您的应用时，这非常有用：
+
+```typescript
+import * as ls from "langsmith/vitest";
+// import * as ls from "langsmith/jest";
+
+const DATASET = [
+  {
+    inputs: { userQuery: "what's up" },
+    referenceOutputs: { sql: "sorry that is not a valid query" }
+  },
+  {
+    inputs: { userQuery: "what color is the sky?" },
+    referenceOutputs: { sql: "sorry that is not a valid query" }
+  },
+  {
+    inputs: { userQuery: "how are you today?" },
+    referenceOutputs: { sql: "sorry that is not a valid query" }
+  }
+];
+
+ls.describe("generate sql demo", () => {
+  ls.test.each(DATASET)(
+    "offtopic inputs",
+    async ({ inputs, referenceOutputs }) => {
+      ...
+    },
+  );
+});
+```
+
+如果启用了跟踪，本地数据集中的每个示例都将同步到 LangSmith 中创建的数据集。
+
+## 使用现有数据集（仅限 Vitest）
+
+无需内联定义[示例](/langsmith/evaluation-concepts#examples)，您可以针对 LangSmith 中现有的数据集运行测试：
+
+- 使用 @[`client.listExamples()`][Client.listExamples] 从 LangSmith 中已存在的数据集中获取示例。
+- 通过迭代异步生成器将示例收集到一个数组中（例如 `testExamples`）。
+- 将数组传递给 @[`ls.test.each()`][ls.test.each]，以针对数据集中的每个示例运行测试逻辑。
+
+```typescript {3,30-43,47}
+import * as ls from "langsmith/vitest";
+import { expect } from "vitest";
+import { Client, Example } from "langsmith";
+import OpenAI from "openai";
+import { traceable } from "langsmith/traceable";
+import { wrapOpenAI } from "langsmith/wrappers/openai";
+
+const tracedClient = wrapOpenAI(new OpenAI());
+
+const generateSql = traceable(
+  async (userQuery: string) => {
+    const result = await tracedClient.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Convert the user query to a SQL query. Do not wrap in any markdown tags.",
+        },
+        {
+          role: "user",
+          content: userQuery,
+        },
+      ],
+    });
+    return result.choices[0].message.content;
+  },
+  { name: "generate_sql" }
+);
+
+// Fetch examples from an existing dataset
+const client = new Client();
+
+const examples = client.listExamples({
+  datasetName: "generate sql demo",
+});
+
+const testExamples: Example[] = [];
+
+for await (const example of examples) {
+  testExamples.push(example);
+}
+
+ls.describe(
+  "generate sql demo",
+  () => {
+    ls.test.each(testExamples)(
+      "generates valid sql",
+      async ({ inputs, referenceOutputs }) => {
+        const sql = await generateSql(inputs.userQuery);
+        ls.logOutputs({ sql });
+        expect(sql).toEqual(referenceOutputs?.sql);
+      }
+    );
+  }
+);
+```
+
+## 日志输出
+
+每次运行测试时，我们都会将其同步到数据集示例中，并将其作为运行进行跟踪。要跟踪运行的最终输出，你可以像这样使用 @[`ls.logOutputs()`][ls.logOutputs]：
+
+```typescript
+import * as ls from "langsmith/vitest";
+// import * as ls from "langsmith/jest";
+
+ls.describe("generate sql demo", () => {
+  ls.test(
+    "offtopic input",
+    {
+      inputs: { userQuery: "..." },
+      referenceOutputs: { sql: "..." }
+    },
+    async ({ inputs, referenceOutputs }) => {
+      ls.logOutputs({ sql: "SELECT * FROM users;" })
+    },
+  );
+});
+```
+
+记录输出将显示在您的报告摘要和 LangSmith 中。
+
+您也可以直接从测试函数中返回值：
+
+```typescript
+import * as ls from "langsmith/vitest";
+// import * as ls from "langsmith/jest";
+
+ls.describe("generate sql demo", () => {
+  ls.test(
+    "offtopic input",
+    {
+      inputs: { userQuery: "..." },
+      referenceOutputs: { sql: "..." }
+    },
+    async ({ inputs, referenceOutputs }) => {
+      return { sql: "SELECT * FROM users;" }
+    },
+  );
+});
+```
+
+但是请记住，如果你这样做，如果测试因断言失败或其他错误而未能完成，你的输出将不会显示。
+
+## 追踪中间调用
+
+LangSmith 会自动追踪测试用例执行过程中发生的任何可追踪的中间调用。
+
+## 聚焦或跳过测试
+
+你可以在 `ls.test()` 和 `ls.describe()` 上链式调用 Vitest/Jest 的 `.skip` 和 `.only` 方法：
+
+```typescript
+import * as ls from "langsmith/vitest";
+// import * as ls from "langsmith/jest";
+
+ls.describe("generate sql demo", () => {
+  ls.test.skip(
+    "offtopic input",
+    {
+      inputs: { userQuery: "..." },
+      referenceOutputs: { sql: "..." }
+    },
+    async ({ inputs, referenceOutputs }) => {
+      return { sql: "SELECT * FROM users;" }
+    },
+  );
+  ls.test.only(
+    "other",
+    {
+      inputs: { userQuery: "..." },
+      referenceOutputs: { sql: "..." }
+    },
+    async ({ inputs, referenceOutputs }) => {
+      return { sql: "SELECT * FROM users;" }
+    },
+  );
+});
+```
+
+## 配置测试套件
+
+你可以通过向 `ls.describe()` 传递额外参数来为整个测试套件配置元数据或自定义客户端等值，也可以通过向 `ls.test()` 传递 `config` 字段来为单个测试配置：
+
+```typescript
+ls.describe("test suite name", () => {
+  ls.test(
+    "test name",
+    {
+      inputs: { ... },
+      referenceOutputs: { ... },
+      // Extra config for the test run
+      config: { tags: [...], metadata: { ... } }
+    },
+    {
+      name: "test name",
+      tags: ["tag1", "tag2"],
+      skip: true,
+      only: true,
+    }
+  );
+}, {
+  testSuiteName: "overridden value",
+  metadata: { ... },
+  // Custom client
+  client: new Client(),
+});
+```
+
+测试套件还会自动从 `process.env.ENVIRONMENT`、`process.env.NODE_ENV` 和 `process.env.LANGSMITH_ENVIRONMENT` 中提取环境变量，并将它们设置为创建实验的元数据。然后你可以在 LangSmith 的 UI 中按元数据筛选实验。
+
+请参阅 [API 参考文档](https://docs.smith.langchain.com/reference/js/functions/vitest.describe) 获取完整的配置选项列表。
+
+## 试运行模式
+
+如果你想在不同步结果到 LangSmith 的情况下运行测试，可以省略你的 LangSmith tracing 环境变量，或在环境中设置 `LANGSMITH_TEST_TRACKING=false`。
+
+测试会正常运行，但实验日志不会发送到 LangSmith。

@@ -1,0 +1,169 @@
+---
+title: "Oracle AI vector search generate integration"
+description: "使用 LangChain Python 与 Oracle AI vector search generate 嵌入模型集成。"
+---
+
+Oracle AI Database 支持 AI 工作负载，您可以通过**含义**（语义）而非关键词来查询数据。它将**非结构化内容的语义搜索**与**业务数据的关联过滤**结合在单一系统中——因此您可以构建检索工作流（如 RAG），而无需引入单独的向量数据库，也不会导致数据分散在多个平台上。
+
+本指南演示了如何使用 `OracleEmbeddings` 为您的内容生成嵌入向量。
+
+> **为什么要在 Oracle 中（或通过 Oracle）生成嵌入向量？**
+> 您可以将数据治理和运维保证（安全性、事务处理、可用性）保持在 AI 工作流的附近——同时选择适合您环境的嵌入提供程序模型。
+
+### 先决条件
+
+安装 `langchain-oracledb`。`python-oracledb` 驱动程序将作为依赖项自动安装。
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install -qU langchain-oracledb
+```
+```bash uv
+uv add langchain-oracledb
+```
+</CodeGroup>
+
+### 连接到 Oracle 数据库
+
+以下示例代码将展示如何连接到 Oracle 数据库。默认情况下，python-oracledb 以"瘦"模式运行，该模式直接连接到 Oracle 数据库。此模式不需要 Oracle Client 库。但是，当 python-oracledb 使用它们时，会提供一些额外的功能。当使用 Oracle Client 库时，python-oracledb 被称为处于"厚"模式。两种模式都提供了全面功能，支持 Python Database API v2.0 规范。请参阅以下[指南](https://python-oracledb.readthedocs.io/en/latest/user_guide/appendix_a.html#featuresummary)，了解每种模式支持的功能。如果无法使用瘦模式，您可能需要切换到厚模式。
+
+```python
+import sys
+
+import oracledb
+
+# Please update with your username, password, hostname, port and service_name
+username = "<username>"
+password = "<password>"
+dsn = "<hostname>:<port>/<service_name>"
+
+connection = oracledb.connect(user=username, password=password, dsn=dsn)
+print("Connection successful!")
+```
+
+对于嵌入生成，用户可以使用多种提供商选项，包括数据库内嵌入生成以及OcigenAI、Hugging Face和OpenAI等第三方服务。选择第三方提供商的用户必须建立包含所需身份验证信息的凭证。或者，如果用户选择"database"作为提供商，则需要在Oracle Database中加载ONNX模型以促进嵌入生成。
+
+### 加载ONNX模型
+
+Oracle支持多种嵌入提供商，使用户能够在专有数据库解决方案和OCIGENAI、HuggingFace等第三方服务之间进行选择。此选择决定了生成和管理嵌入的方法。
+
+***重要***：如果用户选择数据库选项，则必须将ONNX模型上传到Oracle Database。相反，如果选择第三方提供商进行嵌入生成，则不需要将ONNX模型上传到Oracle Database。
+
+直接在Oracle内使用ONNX模型的一个重要优势是增强了安全性和性能，因为它消除了向外部方传输数据的需求。此外，此方法还避免了与网络或REST API调用通常相关的延迟。
+
+以下是用于将ONNX模型上传到Oracle Database的示例代码：
+
+```python
+from langchain_oracledb.embeddings.oracleai import OracleEmbeddings
+
+# Update the directory and file names for your ONNX model
+# make sure that you have onnx file in the system
+onnx_dir = "DEMO_DIR"
+onnx_file = "tinybert.onnx"
+model_name = "demo_model"
+
+try:
+    OracleEmbeddings.load_onnx_model(conn, onnx_dir, onnx_file, model_name)
+    print("ONNX model loaded.")
+except Exception as e:
+    print("ONNX model loading failed!")
+    sys.exit(1)
+```
+
+### 创建凭证
+
+在选择第三方提供商来生成向量时，用户需要建立凭证以安全地访问提供商的端点。
+
+***重要提示：*** 选择使用 'database' 提供商生成向量时，无需创建凭证。但是，如果用户决定使用第三方提供商，则必须为所选提供商创建特定的凭证。
+
+以下是一个示例：
+
+```python
+try:
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+       declare
+           jo json_object_t;
+       begin
+           -- HuggingFace
+           dbms_vector_chain.drop_credential(credential_name  => 'HF_CRED');
+           jo := json_object_t();
+           jo.put('access_token', '<access_token>');
+           dbms_vector_chain.create_credential(
+               credential_name   =>  'HF_CRED',
+               params            => json(jo.to_string));
+
+           -- OCIGENAI
+           dbms_vector_chain.drop_credential(credential_name  => 'OCI_CRED');
+           jo := json_object_t();
+           jo.put('user_ocid','<user_ocid>');
+           jo.put('tenancy_ocid','<tenancy_ocid>');
+           jo.put('compartment_ocid','<compartment_ocid>');
+           jo.put('private_key','<private_key>');
+           jo.put('fingerprint','<fingerprint>');
+           dbms_vector_chain.create_credential(
+               credential_name   => 'OCI_CRED',
+               params            => json(jo.to_string));
+       end;
+       """
+    )
+    cursor.close()
+    print("Credentials created.")
+except Exception as ex:
+    cursor.close()
+    raise
+```
+
+### 生成嵌入向量
+
+Oracle AI Vector Search 提供多种生成嵌入向量的方法，可以使用本地托管的 ONNX 模型或第三方 API。有关配置这些替代方案的详细说明，请参阅 [Oracle AI Vector Search 指南](https://docs.oracle.com/en/database/oracle/oracle-database/23/arpls/dbms_vector_chain1.html#GUID-C6439E94-4E86-4ECD-954E-4B73D53579DE)。
+
+***注意：*** 用户可能需要配置代理才能使用第三方嵌入向量生成提供程序，使用 ONNX 模型的 'database' 提供程序除外。
+
+```python
+# proxy to be used when we instantiate summary and embedder object
+proxy = "<proxy>"
+```
+
+以下示例代码将展示如何生成嵌入向量：
+
+```python
+from langchain_oracledb.embeddings.oracleai import OracleEmbeddings
+from langchain_core.documents import Document
+
+"""
+# using ocigenai
+embedder_params = {
+    "provider": "ocigenai",
+    "credential_name": "OCI_CRED",
+    "url": "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/20231130/actions/embedText",
+    "model": "cohere.embed-english-light-v3.0",
+}
+
+# using huggingface
+embedder_params = {
+    "provider": "huggingface",
+    "credential_name": "HF_CRED",
+    "url": "https://api-inference.huggingface.co/pipeline/feature-extraction/",
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "wait_for_model": "true"
+}
+"""
+
+# using ONNX model loaded to Oracle Database
+embedder_params = {"provider": "database", "model": "demo_model"}
+
+# If a proxy is not required for your environment, you can omit the 'proxy' parameter below
+embedder = OracleEmbeddings(conn=conn, params=embedder_params, proxy=proxy)
+embed = embedder.embed_query("Hello World!")
+
+""" verify """
+print(f"Embedding generated by OracleEmbeddings: {embed}")
+```
+
+### 端到端演示
+
+请参阅我们完整的演示指南 [Oracle AI Vector Search End-to-End Demo Guide](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb)，来借助 Oracle AI Vector Search 构建端到端 RAG 管道。

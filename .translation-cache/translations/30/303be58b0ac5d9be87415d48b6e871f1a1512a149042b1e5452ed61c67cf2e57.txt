@@ -1,0 +1,294 @@
+---
+title: "BigTableByteStore 集成"
+description: "使用 LangChain Python 与 BigTableByteStore 存储集成。"
+---
+
+# BigtableByteStore
+
+本指南介绍如何使用 Google Cloud Bigtable 作为键值存储。
+
+[Bigtable](https://cloud.google.com/bigtable) 是一种键值和宽列存储，非常适合快速访问结构化、半结构化或非结构化数据。
+
+[![在 Colab 中打开](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/googleapis/langchain-google-bigtable-python/blob/main/docs/key_value_store.ipynb)
+
+## 概览
+
+`BigtableByteStore` 使用 Google Cloud Bigtable 作为键值存储的后端。它支持设置、获取和删除键值对的同步和异步操作。
+
+### 集成详情
+| 类 | 包 | 本地 | JS 支持 | 包下载量 | 最新包版本 |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| [`BigtableByteStore`](https://github.com/googleapis/langchain-google-bigtable-python/blob/main/src/langchain_google_bigtable/key_value_store.py) | [`langchain-google-bigtable`](https://pypi.org/project/langchain-google-bigtable/) | ❌ | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-google-bigtable?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-google-bigtable) |
+
+## 设置
+
+### 前提条件
+
+要开始使用，您需要一个具有活动 Bigtable 实例和表的 Google Cloud 项目。
+* [创建 Google Cloud 项目](https://developers.google.com/workspace/guides/create-project)
+* [启用 Bigtable API](https://console.cloud.google.com/flows/enableapi?apiid=bigtable.googleapis.com)
+* [创建 Bigtable 实例和表](https://cloud.google.com/bigtable/docs/creating-instance)
+
+### 安装
+
+该集成位于 `langchain-google-bigtable` 包中。下面的命令还会安装 `langchain-google-vertexai` 用于嵌入缓存示例。
+
+```python
+pip install -qU langchain-google-bigtable langchain-google-vertexai
+```
+
+### 设置您的 Google Cloud 项目
+将您的 Google Cloud 项目设置为在此笔记本中使用其资源。
+
+如果您不知道项目 ID，可以运行 `gcloud config list` 或查看支持页面：[Locate the project ID](https://support.google.com/googleapi/answer/7014113)。
+
+```python
+# @markdown Please fill in your project, instance, and table details.
+PROJECT_ID = "your-gcp-project-id"  # @param {type:"string"}
+INSTANCE_ID = "your-instance-id"  # @param {type:"string"}
+TABLE_ID = "your-table-id"  # @param {type:"string"}
+
+!gcloud config set project {PROJECT_ID}
+```
+
+### 身份验证
+
+向 Google Cloud 进行身份验证以访问您的项目资源。
+
+- 对于 **Colab**，请使用下面的单元格。
+- 对于 **Vertex AI Workbench**，请参阅[设置说明](https://github.com/GoogleCloudPlatform/generative-ai/tree/main/setup-env)。
+
+```python
+from google.colab import auth
+
+auth.authenticate_user()
+```
+
+## 实例化
+
+要使用 `BigtableByteStore`，我们首先确保表已存在，然后初始化 `BigtableEngine` 来管理连接。
+
+```python
+from langchain_google_bigtable import (
+    BigtableByteStore,
+    BigtableEngine,
+    init_key_value_store_table,
+)
+
+# Ensure the table and column family exist.
+init_key_value_store_table(
+    project_id=PROJECT_ID,
+    instance_id=INSTANCE_ID,
+    table_id=TABLE_ID,
+)
+```
+
+### BigtableEngine
+`BigtableEngine` 对象处理存储的执行上下文，特别是在异步操作方面。建议初始化单个引擎并在多个存储中重复使用它以获得更好的性能。
+
+```python
+# Initialize the engine to manage async operations.
+engine = await BigtableEngine.async_initialize(
+    project_id=PROJECT_ID, instance_id=INSTANCE_ID
+)
+```
+
+### BigtableByteStore
+
+这是用于与键值存储进行交互的主要类。它提供了设置、获取和删除数据的方法。
+
+```python
+# Initialize the store.
+store = await BigtableByteStore.create(engine=engine, table_id=TABLE_ID)
+```
+
+## 使用方法
+
+该存储支持同步方法（`mset`、`mget`）和异步方法（`amset`、`amget`）。本指南使用异步版本。
+
+### 设置
+
+使用 `amset` 将键值对保存到存储中。
+
+```python
+kv_pairs = [
+    ("key1", b"value1"),
+    ("key2", b"value2"),
+    ("key3", b"value3"),
+]
+
+await store.amset(kv_pairs)
+```
+
+### 获取
+使用 `amget` 检索值。如果未找到某个键，则返回该键的 `None`。
+
+```python
+retrieved_vals = await store.amget(["key1", "key2", "nonexistent_key"])
+print(retrieved_vals)
+```
+
+### 删除
+使用 `amdelete` 从存储中删除键。
+
+```python
+await store.amdelete(["key3"])
+
+# Verifying the key was deleted
+await store.amget(["key1", "key3"])
+```
+
+### 遍历键
+使用 `ayield_keys` 遍历所有键或具有特定前缀的键。
+
+```python
+all_keys = [key async for key in store.ayield_keys()]
+print(f"All keys: {all_keys}")
+
+prefixed_keys = [key async for key in store.ayield_keys(prefix="key1")]
+print(f"Prefixed keys: {prefixed_keys}")
+```
+
+## 高级用法：嵌入缓存
+
+键值存储的一个常见用例是缓存昂贵的操作（如计算文本嵌入），从而节省时间和成本。
+
+```python
+from langchain.embeddings import CacheBackedEmbeddings
+from langchain_google_vertexai.embeddings import VertexAIEmbeddings
+
+underlying_embeddings = VertexAIEmbeddings(
+    project=PROJECT_ID, model_name="textembedding-gecko@003"
+)
+
+# Use a namespace to avoid key collisions with other data.
+cached_embedder = CacheBackedEmbeddings.from_bytes_store(
+    underlying_embeddings, store, namespace="text-embeddings"
+)
+```
+
+```python
+print("First call (computes and caches embedding):")
+%time embedding_result_1 = await cached_embedder.aembed_query("Hello, world!")
+```
+
+```python
+print("\nSecond call (retrieves from cache):")
+%time embedding_result_2 = await cached_embedder.aembed_query("Hello, world!")
+```
+
+### 作为简单的文档检索器
+
+本节介绍如何使用 Bigtable 存储创建简单的检索器。它充当文档持久层，获取与查询前缀匹配的文档。
+
+```python
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.documents import Document
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from typing import List, Optional, Any, Union
+import json
+
+
+class SimpleKVStoreRetriever(BaseRetriever):
+    """A simple retriever that retrieves documents based on a prefix match in the key-value store."""
+
+    store: BigtableByteStore
+    documents: List[Union[Document, str]]
+    k: int
+
+    def set_up_store(self):
+        kv_pairs_to_set = []
+        for i, doc in enumerate(self.documents):
+            if isinstance(doc, str):
+                doc = Document(page_content=doc)
+            if not doc.id:
+                doc.id = str(i)
+            value = (
+                "Page Content\n"
+                + doc.page_content
+                + "\nMetadata"
+                + json.dumps(doc.metadata)
+            )
+            kv_pairs_to_set.append((doc.id, value.encode("utf-8")))
+        self.store.mset(kv_pairs_to_set)
+
+    async def _aget_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: Optional[CallbackManagerForRetrieverRun] = None,
+    ) -> List[Document]:
+        keys = [key async for key in self.store.ayield_keys(prefix=query)][: self.k]
+        documents_retrieved = []
+        async for document in await self.store.amget(keys):
+            if document:
+                document_str = document.decode("utf-8")
+                page_content = document_str.split("Content\n")[1].split("\nMetadata")[0]
+                metadata = json.loads(document_str.split("\nMetadata")[1])
+                documents_retrieved.append(
+                    Document(page_content=page_content, metadata=metadata)
+                )
+        return documents_retrieved
+
+    def _get_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: Optional[CallbackManagerForRetrieverRun] = None,
+    ) -> list[Document]:
+        keys = [key for key in self.store.yield_keys(prefix=query)][: self.k]
+        documents_retrieved = []
+        for document in self.store.mget(keys):
+            if document:
+                document_str = document.decode("utf-8")
+                page_content = document_str.split("Content\n")[1].split("\nMetadata")[0]
+                metadata = json.loads(document_str.split("\nMetadata")[1])
+                documents_retrieved.append(
+                    Document(page_content=page_content, metadata=metadata)
+                )
+        return documents_retrieved
+```
+
+```python
+documents = [
+    Document(
+        page_content="Goldfish are popular pets for beginners, requiring relatively simple care.",
+        metadata={"type": "fish", "trait": "low maintenance"},
+        id="fish#Goldfish",
+    ),
+    Document(
+        page_content="Cats are independent pets that often enjoy their own space.",
+        metadata={"type": "cat", "trait": "independence"},
+        id="mammals#Cats",
+    ),
+    Document(
+        page_content="Rabbits are social animals that need plenty of space to hop around.",
+        metadata={"type": "rabbit", "trait": "social"},
+        id="mammals#Rabbits",
+    ),
+]
+```
+
+```python
+retriever_store = BigtableByteStore.create_sync(
+    engine=engine, instance_id=INSTANCE_ID, table_id=TABLE_ID
+)
+
+KVDocumentRetriever = SimpleKVStoreRetriever(
+    store=retriever_store, documents=documents, k=2
+)
+
+KVDocumentRetriever.set_up_store()
+```
+
+```python
+KVDocumentRetriever.invoke("fish")
+```
+
+```python
+KVDocumentRetriever.invoke("mammals")
+```
+
+## API 参考
+
+有关 `BigtableByteStore` 类的完整详情，请参阅 [GitHub](https://github.com/googleapis/langchain-google-bigtable-python/blob/main/src/langchain_google_bigtable/key_value_store.py) 上的源代码。

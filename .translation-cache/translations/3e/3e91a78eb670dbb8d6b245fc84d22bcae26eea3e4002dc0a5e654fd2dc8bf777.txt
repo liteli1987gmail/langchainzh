@@ -1,0 +1,332 @@
+---
+title: "Perigon 集成"
+description: "使用 LangChain Python 与 Perigon 检索器集成。"
+---
+
+import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
+
+Perigon API 套件提供对全球新闻和事件的快速、结构化访问，帮助您构建实时、数据驱动的产品。无论您是在追踪新兴风险、呈现相关文章，还是发掘关键洞察，Perigon 都能为您提供以编程方式完成这些任务的工具。
+
+与传统的基于关键词的搜索不同，Perigon 的语义搜索功能使其能够理解上下文中的查询，并返回相关文档。
+
+本笔记本演示了如何将 Perigon 的检索器与 LangChain 结合使用，用于新闻文章和 Wikipedia 内容。
+
+## 设置
+
+### 安装
+
+安装 LangChain Perigon 集成包：
+
+```python
+pip install -qU langchain-perigon
+
+# and some deps for this notebook
+pip install -qU langchain langchain-openai langchain-community
+```
+
+<LangchainCommunityUnmaintained />
+
+### 凭证
+
+您需要一个 Perigon API 密钥来使用此集成。在 [Perigon.io](https://perigon.io/) 注册以获取您的 API 密钥。
+
+```python
+import getpass
+import os
+
+if not os.environ.get("PERIGON_API_KEY"):
+    os.environ["PERIGON_API_KEY"] = getpass.getpass("Perigon API key:\n")
+```
+
+## 使用 ArticlesRetriever
+
+ArticlesRetriever 允许你使用语义搜索功能搜索新闻文章：
+
+### 基本用法
+
+```python
+from langchain_perigon import ArticlesRetriever
+
+# Create a new instance of the ArticlesRetriever
+# PERIGON_API_KEY is automatically read from environment variables
+retriever = ArticlesRetriever()
+
+try:
+    # Search for articles using semantic search
+    documents = retriever.invoke("artificial intelligence developments")
+
+    # Check if we got results
+    if not documents:
+        print("No articles found for the given query.")
+    else:
+        print(f"Found {len(documents)} articles")
+
+        # Display first 3 results with metadata
+        for doc in documents[:3]:
+            # Safely extract metadata with fallbacks
+            print(f"Title: {doc.metadata.get('title', 'N/A')}")
+            print(f"URL: {doc.metadata.get('url', 'N/A')}")
+            print(f"Published: {doc.metadata.get('publishedAt', 'N/A')}")
+            print(f"Content: {doc.page_content[:200]}...")
+            print("-" * 80)
+except Exception as e:
+    print(f"Error retrieving articles: {e}")
+```
+
+### 使用过滤的高级功能
+
+您可以使用高级过滤选项来缩小搜索结果范围：
+
+```python
+from langchain_perigon import ArticlesRetriever, ArticlesFilter
+
+# Create retriever with custom parameters
+# PERIGON_API_KEY is automatically read from environment variables
+retriever = ArticlesRetriever(
+    k=10  # Number of results to return
+)
+
+# Define advanced filter options
+options: ArticlesFilter = {
+    "size": 10,
+    "showReprints": False,  # Exclude reprints
+    "filter": {
+        "country": "us",  # Only US articles
+        "category": "tech",  # Technology category
+        "source": ["techcrunch.com", "wired.com"]  # Specific sources
+    }
+}
+
+try:
+    # Search with advanced filters applied
+    documents = retriever.invoke("machine learning breakthroughs", options=options)
+
+    if not documents:
+        print("No articles found matching the filter criteria.")
+    else:
+        print(f"Found {len(documents)} filtered articles")
+
+        # Display results with relevant metadata
+        for doc in documents[:3]:
+            print(f"Title: {doc.metadata.get('title', 'N/A')}")
+            print(f"Source: {doc.metadata.get('source', 'N/A')}")
+            print(f"Category: {doc.metadata.get('category', 'N/A')}")
+            print(f"Content: {doc.page_content[:150]}...")
+            print("-" * 80)
+
+except Exception as e:
+    print(f"Error retrieving filtered articles: {e}")
+```
+
+### 基于位置的筛选
+
+您可以按地理相关性筛选文章：
+
+```python
+from langchain_perigon.types import ArticlesFilter
+from langchain_perigon import ArticlesRetriever
+
+retriever = ArticlesRetriever()
+
+# Filter by location
+location_options: ArticlesFilter = {
+    "size": 5,
+    "filter": {"country": "us", "state": "CA", "city": "San Francisco"},
+}
+
+documents = retriever.invoke("startup funding rounds", options=location_options)
+
+print(f"Found {len(documents)} San Francisco startup articles")
+for doc in documents:
+    print(f"Title: {doc.metadata.get('title', 'N/A')}")
+    print("-" * 60)
+```
+
+## 使用 WikipediaRetriever
+
+WikipediaRetriever 提供对 Wikipedia 内容的语义搜索功能，并附带丰富的元数据：
+
+### 基本用法
+
+```python
+from langchain_perigon import WikipediaRetriever
+
+# Create a new instance of the WikipediaRetriever
+# PERIGON_API_KEY is automatically read from environment variables
+wiki_retriever = WikipediaRetriever()
+
+try:
+    # Search for Wikipedia articles using semantic search
+    documents = wiki_retriever.invoke("quantum computing")
+
+    # Validate results before processing
+    if not documents:
+        print("No Wikipedia articles found for the given query.")
+    else:
+        print(f"Found {len(documents)} Wikipedia articles")
+
+        # Display first 3 results with rich metadata
+        for doc in documents[:3]:
+            # Extract Wikipedia-specific metadata safely
+            print(f"Title: {doc.metadata.get('title', 'N/A')}")
+            print(f"Pageviews: {doc.metadata.get('pageviews', 'N/A')}")
+            print(f"Wikidata ID: {doc.metadata.get('wikidataId', 'N/A')}")
+            print(f"Content: {doc.page_content[:200]}...")
+            print("-" * 80)
+except Exception as e:
+    print(f"Error retrieving Wikipedia articles: {e}")
+```
+
+### 高级维基百科搜索
+
+您可以按热度、分类和其他元数据筛选维基百科结果：
+
+```python
+from langchain_perigon import WikipediaRetriever, WikipediaOptions
+
+# Create retriever with custom parameters
+# PERIGON_API_KEY is automatically read from environment variables
+wiki_retriever = WikipediaRetriever(k=5)
+
+# Define advanced filter options
+wiki_options: WikipediaOptions = {
+    "size": 5,
+    "pageviewsFrom": 100,  # Only popular pages with 100+ daily views
+    "filter": {
+        "wikidataInstanceOfLabel": ["academic discipline"],
+        "category": ["Computer science", "Physics"],
+    },
+}
+
+# Search with filters
+documents = wiki_retriever.invoke("machine learning", options=wiki_options)
+
+print(f"Found {len(documents)} academic Wikipedia articles")
+for doc in documents:
+    print(f"Title: {doc.metadata.get('title', 'N/A')}")
+    print(f"Daily pageviews: {doc.metadata.get('pageviews', 'N/A')}")
+    print(f"Instance of: {doc.metadata.get('wikidataInstanceOf', 'N/A')}")
+    print(f"Wiki code: {doc.metadata.get('wikiCode', 'N/A')}")
+    print("-" * 80)
+```
+
+### 基于时间的维基百科过滤
+
+按修订日期过滤维基百科文章：
+
+```python
+from langchain_perigon import WikipediaRetriever, WikipediaOptions
+
+wiki_retriever = WikipediaRetriever()
+
+# Filter by recent revisions
+recent_options: WikipediaOptions = {
+    "size": 10,
+    "wiki_revision_from": "2025-09-22T00:00:00.000",  # Recently updated articles
+    "filter": {"with_pageviews": True},  # Only articles with pageview data
+}
+
+documents = wiki_retriever.invoke("artificial intelligence", options=recent_options)
+
+print(f"Found {len(documents)} recently updated AI articles")
+for doc in documents:
+    print(f"Title: {doc.metadata.get('title', 'N/A')}")
+    print(f"Last revision: {doc.metadata.get('wikiRevisionTs', 'N/A')}")
+    print(f"Pageviews: {doc.metadata.get('pageviews', 'N/A')}")
+    print("-" * 60)
+
+```
+
+## 异步用法
+
+两个检索器都支持异步操作，以获得更好的性能：
+
+```python
+import asyncio
+from langchain_perigon import (
+    ArticlesRetriever,
+    WikipediaRetriever,
+    ArticlesFilter,
+    WikipediaOptions,
+)
+
+
+async def search_both():
+    """Perform concurrent searches across news articles and Wikipedia.
+
+    Returns:
+        tuple: (news_articles, wikipedia_docs) - Results from both retrievers
+
+    Raises:
+        Exception: If either retriever fails or API errors occur
+    """
+    # Initialize retrievers with automatic API key detection
+    articles_retriever = ArticlesRetriever()
+    wiki_retriever = WikipediaRetriever()
+
+    # Configure search options for targeted results
+    articles_options: ArticlesFilter = {
+        "size": 3,  # Limit to 3 articles for faster response
+        "filter": {
+            "country": "us",      # US-based news sources
+            "category": "tech",   # Technology category only
+        },
+    }
+
+    # Filter Wikipedia results by popularity (pageviews)
+    wiki_options: WikipediaOptions = {
+        "size": 3,           # Limit to 3 articles
+        "pageviewsFrom": 50  # Only articles with 50+ daily views
+    }
+
+    try:
+        # Perform concurrent async searches for better performance
+        articles_task = articles_retriever.ainvoke(
+            "climate change", options=articles_options
+        )
+        wiki_task = wiki_retriever.ainvoke(
+            "climate change", options=wiki_options
+        )
+
+        # Wait for both searches to complete simultaneously
+        articles, wiki_docs = await asyncio.gather(
+            articles_task, wiki_task, return_exceptions=True
+        )
+
+        # Handle potential exceptions from either retriever
+        if isinstance(articles, Exception):
+            print(f"Articles retrieval failed: {articles}")
+            articles = []
+        if isinstance(wiki_docs, Exception):
+            print(f"Wikipedia retrieval failed: {wiki_docs}")
+            wiki_docs = []
+
+        return articles, wiki_docs
+
+    except Exception as e:
+        print(f"Error in concurrent search: {e}")
+        return [], []
+
+
+# Run async search with error handling
+try:
+    articles, wiki_docs = asyncio.run(search_both())
+
+    # Display results summary
+    print(f"Found {len(articles)} news articles and {len(wiki_docs)} Wikipedia articles")
+
+    # Show sample results if available
+    if articles:
+        print(f"Sample article: {articles[0].metadata.get('title', 'N/A')}")
+    if wiki_docs:
+        print(f"Sample Wikipedia: {wiki_docs[0].metadata.get('title', 'N/A')}")
+
+except Exception as e:
+    print(f"Async search failed: {e}")
+```
+
+---
+
+## API 参考
+
+有关所有 Perigon API 功能和配置的详细文档，请访问 [Perigon API 文档](https://dev.perigon.io/docs)。

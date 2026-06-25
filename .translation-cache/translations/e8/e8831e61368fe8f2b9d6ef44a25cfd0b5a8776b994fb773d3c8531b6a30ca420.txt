@@ -1,0 +1,174 @@
+---
+title: "Parallel Monitor 集成"
+description: "使用 LangChain Python 与 ParallelMonitor 类型集成。"
+---
+
+>[Parallel](https://platform.parallel.ai/) 是一个专为 LLM 和 AI 应用构建的实时网络搜索和内容提取平台。
+
+`ParallelMonitor` 调用 Parallel 的 [Monitor API](https://docs.parallel.ai/monitor-api/monitor-quickstart) 来按固定周期（1 小时到 30 天）安排查询，并通过 webhook 或轮询在相关新内容出现时通知您。适用于持续的竞争情报、监管跟踪或主题监控。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 最新版本包 |
+| :--- | :--- | :---: | :---: | :--- |
+| @[`ParallelMonitor`] | @[`langchain-parallel`] | ❌ | ❌ | <a href="https://pypi.org/project/langchain-parallel/" target="_blank"><img src="https://img.shields.io/pypi/v/langchain-parallel?style=flat-square&label=%20&color=orange" alt="PyPI - Latest version" noZoom height="100" class="rounded" /></a> |
+
+## 设置
+
+该集成位于 `langchain-parallel` 包中。
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install -U langchain-parallel
+    ```
+    ```bash uv
+    uv add langchain-parallel
+    ```
+</CodeGroup>
+
+### 凭证
+
+前往 [Parallel](https://platform.parallel.ai) 注册并生成 API 密钥。在您的环境变量中设置 `PARALLEL_API_KEY`：
+
+```python
+import getpass
+import os
+
+if not os.environ.get("PARALLEL_API_KEY"):
+    os.environ["PARALLEL_API_KEY"] = getpass.getpass("Parallel API key:\n")
+```
+
+## 实例化
+
+```python
+from langchain_parallel import ParallelMonitor
+
+client = ParallelMonitor()
+```
+
+## 创建监控器
+
+`frequency` 是 `<n><unit>` 的格式，其中 unit 为 `h`、`d` 或 `w`，最终时长位于 `[1h, 30d]` 范围内（例如 `"1h"`、`"6h"`、`"3d"`、`"1w"`、`"2w"`）。
+
+```python
+from langchain_parallel import MonitorWebhook
+
+monitor = client.create(
+    query="Latest peer-reviewed papers on net-energy-gain fusion",
+    frequency="1d",
+    metadata={"label": "fusion-watch"},
+    # Optional: receive new events on a webhook endpoint.
+    # webhook=MonitorWebhook(
+    #     url="https://example.com/parallel/webhook",
+    #     event_types=["monitor.event.detected"],
+    # ),
+)
+
+print(monitor["monitor_id"], "—", monitor["status"])
+```
+
+有效的 `event_types` 是 `monitor.event.detected`、`monitor.execution.completed` 和 `monitor.execution.failed`。省略此字段以接收全部三种。
+
+## 获取、列出、删除
+
+```python
+got = client.retrieve(monitor["monitor_id"])
+
+monitors = client.list(limit=20)
+
+deleted = client.delete(monitor["monitor_id"])
+```
+
+## 列出事件
+
+`list_events()` 返回一个扁平的 `{"events": [...]}` 列表。新创建的监控器通常没有事件，直到首次计划执行；调用结构无论哪种情况都能正常工作。
+
+```python
+events = client.list_events(monitor["monitor_id"], lookback_period="7d")
+for ev in events.get("events", []):
+    print(ev["type"], ev.get("event_date"))
+```
+
+要检查单个事件组：
+
+```python
+group = client.get_event_group(monitor["monitor_id"], event_group_id="...")
+```
+
+## 模拟事件
+
+在配置 Webhook 处理器时非常有用。`simulate_event()` 将请求类型的合成事件（默认：`monitor.event.detected`）发布到监控器的 Webhook。
+
+<Note>
+    `simulate_event()` 要求在监控器上配置 Webhook。先调用 `create()` 时传入 `webhook=MonitorWebhook(...)`；否则 API 将返回 `400 — 未在此监控器上配置 Webhook`。
+</Note>
+
+```python
+client.simulate_event(monitor["monitor_id"], event_type="monitor.event.detected")
+```
+
+## 异步
+
+每个 CRUD 和事件方法都有一个以 `a` 为前缀的异步对应方法：
+
+```python
+monitor = await client.acreate(query="...", frequency="6h")
+events = await client.alist_events(monitor["monitor_id"], lookback_period="7d")
+await client.adelete(monitor["monitor_id"])
+```
+
+## Webhook 签名验证
+
+Webhook 投递使用 Standard Webhooks 方案进行签名（对 `<webhook-id>.<webhook-timestamp>.<body>` 进行 HMAC-SHA256 签名，base64 编码，格式为 `v1,<sig>`，包含重放保护）。使用 `verify_webhook` 进行验证：
+
+```python
+from langchain_parallel import verify_webhook
+
+ok = verify_webhook(
+    body,
+    webhook_id=request.headers["webhook-id"],
+    webhook_timestamp=request.headers["webhook-timestamp"],
+    webhook_signature=request.headers["webhook-signature"],
+    secret=os.environ["PARALLEL_WEBHOOK_SECRET"],
+)
+```
+
+签名密钥在 Parallel 控制台的 org webhook-endpoint 级别配置，而不是每个 monitor 级别配置。请参阅 [webhook 设置](https://docs.parallel.ai/resources/webhook-setup) 了解完整的交付契约。
+
+## 响应格式
+
+`create()` 和 `retrieve()` 返回一个 monitor 字典。`list_events()` 返回一个扁平的事件信封。
+
+```python
+# create() / retrieve()
+{
+    "monitor_id": "mon_abc",
+    "status": "active",
+    "query": "...",
+    "frequency": "1d",
+    "metadata": {...},
+    "webhook": {"url": "...", "event_types": [...]},
+    "created_at": "2026-04-15T10:30:00Z",
+    # ... additional API-side fields
+}
+
+# list_events()
+{
+    "events": [
+        {
+            "type": "event",            # or "completion" / "error"
+            "event_date": "2026-04-15T10:30:00Z",
+            "event_group_id": "...",
+            # ... event-type-specific fields
+        },
+    ],
+}
+```
+
+## API 参考
+
+有关详细文档，请参阅 @[`ParallelMonitor`] API 参考或 [Monitor API 指南](https://docs.parallel.ai/monitor-api/monitor-quickstart)。

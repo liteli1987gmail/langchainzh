@@ -1,0 +1,207 @@
+---
+title: "MemoryVectorStore 集成"
+description: "使用 LangChain JavaScript 与 MemoryVectorStore 集成。"
+---
+
+LangChain 提供了一个内存中的临时向量存储，它在内存中存储嵌入向量，并进行精确的线性搜索以查找最相似的嵌入向量。默认的相似度度量是余弦相似度，但可以更改为 [ml-distance](https://mljs.github.io/distance/modules/similarity.html) 支持的任何相似度度量。
+
+由于其面向演示场景，因此尚不支持 ID 或删除功能。
+
+本指南提供了快速入门 `MemoryVectorStore` [向量存储](/oss/integrations/vectorstores) 的概述。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | PY 支持 | 版本 |
+| :--- | :--- | :--- | :--- |
+| `MemoryVectorStore` | [`langchain`](https://www.npmjs.com/package/langchain) | ❌ | ![NPM - Version](https://img.shields.io/npm/v/langchain?style=flat-square&label=%20&) |
+
+## 设置
+
+要使用内存向量存储，你需要安装 `langchain` 包：
+
+本指南还将使用 [OpenAI 嵌入模型](/oss/integrations/embeddings/openai)，需要你安装 `@langchain/openai` 集成包。如果你愿意，也可以使用[其他支持的嵌入模型](/oss/integrations/embeddings)。
+
+<CodeGroup>
+
+</CodeGroup>
+```bash npm
+npm install langchain @langchain/openai @langchain/core
+```
+```bash yarn
+yarn add langchain @langchain/openai @langchain/core
+```
+```bash pnpm
+pnpm add langchain @langchain/openai @langchain/core
+```
+</CodeGroup>
+
+### 凭证
+
+使用内存向量存储无需任何必需凭证。
+
+如果您在本指南中使用 OpenAI 嵌入，还需要设置您的 OpenAI 密钥：
+
+```typescript
+process.env.OPENAI_API_KEY = "YOUR_API_KEY";
+```
+
+如果您想自动追踪您的模型调用，您还可以通过取消下方注释来设置您的 [LangSmith](/langsmith/observability) API密钥：
+
+```typescript
+// process.env.LANGSMITH_TRACING="true"
+// process.env.LANGSMITH_API_KEY="your-api-key"
+```
+
+## 实例化
+
+```typescript
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+import { OpenAIEmbeddings } from "@langchain/openai";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-small",
+});
+
+const vectorStore = new MemoryVectorStore(embeddings);
+```
+
+## 管理向量存储
+
+### 向向量存储添加项目
+
+```typescript
+import type { Document } from "@langchain/core/documents";
+
+const document1: Document = {
+  pageContent: "The powerhouse of the cell is the mitochondria",
+  metadata: { source: "https://example.com" }
+};
+
+const document2: Document = {
+  pageContent: "Buildings are made out of brick",
+  metadata: { source: "https://example.com" }
+};
+
+const document3: Document = {
+  pageContent: "Mitochondria are made out of lipids",
+  metadata: { source: "https://example.com" }
+};
+
+const documents = [document1, document2, document3];
+
+await vectorStore.addDocuments(documents);
+```
+
+## 查询向量存储
+
+一旦创建了向量存储并添加了相关文档，您很可能希望在链或代理运行期间对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以按如下方式进行：
+
+```typescript
+const filter = (doc) => doc.metadata.source === "https://example.com";
+
+const similaritySearchResults = await vectorStore.similaritySearch("biology", 2, filter)
+
+for (const doc of similaritySearchResults) {
+  console.log(`* ${doc.pageContent} [${JSON.stringify(doc.metadata, null)}]`);
+}
+```
+
+```text
+* The powerhouse of the cell is the mitochondria [{"source":"https://example.com"}]
+* Mitochondria are made out of lipids [{"source":"https://example.com"}]
+```
+
+过滤器是可选的，必须是一个谓词函数，它接收一个文档作为输入，并根据该文档是否应该被返回返回 `true` 或 `false`。
+
+如果您想执行相似性搜索并获取相应的分数，可以运行：
+
+```typescript
+const similaritySearchWithScoreResults = await vectorStore.similaritySearchWithScore("biology", 2, filter)
+
+for (const [doc, score] of similaritySearchWithScoreResults) {
+  console.log(`* [SIM=${score.toFixed(3)}] ${doc.pageContent} [${JSON.stringify(doc.metadata)}]`);
+}
+```
+
+```text
+* [SIM=0.165] The powerhouse of the cell is the mitochondria [{"source":"https://example.com"}]
+* [SIM=0.148] Mitochondria are made out of lipids [{"source":"https://example.com"}]
+```
+
+### 通过转换为检索器进行查询
+
+您还可以将向量存储转换为[检索器](/oss/langchain/retrieval)以便于在链中更方便地使用：
+
+```typescript
+const retriever = vectorStore.asRetriever({
+  // Optional filter
+  filter: filter,
+  k: 2,
+});
+
+await retriever.invoke("biology");
+```
+
+```javascript
+[
+  Document {
+    pageContent: 'The powerhouse of the cell is the mitochondria',
+    metadata: { source: 'https://example.com' },
+    id: undefined
+  },
+  Document {
+    pageContent: 'Mitochondria are made out of lipids',
+    metadata: { source: 'https://example.com' },
+    id: undefined
+  }
+]
+```
+
+### Maximal marginal relevance
+
+此向量存储还支持最大边际相关性 (MMR)，这是一种技术，首先通过经典相似性搜索获取更多结果（由 `searchKwargs.fetchK` 指定），然后重新排序以提高多样性，并返回前 `k` 个结果。这有助于避免冗余信息：
+
+```typescript
+const mmrRetriever = vectorStore.asRetriever({
+  searchType: "mmr",
+  searchKwargs: {
+    fetchK: 10,
+  },
+  // Optional filter
+  filter: filter,
+  k: 2,
+});
+
+await mmrRetriever.invoke("biology");
+```
+
+```javascript
+[
+  Document {
+    pageContent: 'The powerhouse of the cell is the mitochondria',
+    metadata: { source: 'https://example.com' },
+    id: undefined
+  },
+  Document {
+    pageContent: 'Buildings are made out of brick',
+    metadata: { source: 'https://example.com' },
+    id: undefined
+  }
+]
+```
+
+### 用于检索增强生成
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下部分：
+
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [代理式 RAG](/oss/langgraph/agentic-rag)
+- [检索文档](/oss/langchain/retrieval)
+
+---

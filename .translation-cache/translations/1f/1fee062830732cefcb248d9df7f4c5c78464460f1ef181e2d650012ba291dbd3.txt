@@ -1,0 +1,1369 @@
+---
+title: 工具
+---
+
+import ToolReturnValuesPy from '/snippets/code-samples/tool-return-values-py.mdx';
+import ToolReturnValuesJs from '/snippets/code-samples/tool-return-values-js.mdx';
+import ToolReturnObjectPy from '/snippets/code-samples/tool-return-object-py.mdx';
+import ToolReturnObjectJs from '/snippets/code-samples/tool-return-object-js.mdx';
+import ToolReturnCommandPy from '/snippets/code-samples/tool-return-command-py.mdx';
+import ToolReturnCommandJs from '/snippets/code-samples/tool-return-command-js.mdx';
+import ToolReturnDirectPy from '/snippets/code-samples/tool-return-direct-py.mdx';
+import ToolReturnDirectJs from '/snippets/code-samples/tool-return-direct-js.mdx';
+import ToolUpdateStatePy from '/snippets/code-samples/tool-update-state-py.mdx';
+import ToolErrorHandlingPy from '/snippets/code-samples/tool-error-handling-py.mdx';
+import ToolErrorHandlingJs from '/snippets/code-samples/tool-error-handling-js.mdx';
+import ToolRuntimeContextThreadJs from '/snippets/code-samples/tool-runtime-context-thread-js.mdx';
+import ToolRuntimeContextThreadPy from '/snippets/code-samples/tool-runtime-context-thread-py.mdx';
+
+工具扩展了代理的能力——使其能够获取实时数据、执行代码、查询外部数据库，并在世界中执行操作。
+
+在底层，工具是具有明确定义输入和输出的可调用函数，会被传递给聊天模型。模型根据对话上下文决定何时调用工具，以及提供哪些输入参数。
+
+<Tip>
+有关模型如何处理工具调用的详细信息，请参阅[工具调用](/oss/langchain/models#tool-calling)。使用 [LangSmith](https://smith.langchain.com) 跟踪工具调用并调试错误。按照[跟踪快速入门](/langsmith/trace-with-langchain)进行设置。
+
+我们还建议您设置 [LangSmith Engine](/langsmith/engine)，它会监控您的跟踪、检测问题并提出修复建议。
+</Tip>
+
+## 创建工具
+
+### 基本工具定义
+
+:::python
+创建工具最简单的方式是使用 @[`@tool`] 装饰器。默认情况下，函数的文档字符串会成为工具的描述，帮助模型理解何时使用它：
+
+:::
+
+```python
+from langchain.tools import tool
+
+@tool
+def search_database(query: str, limit: int = 10) -> str:
+    """Search the customer database for records matching the query.
+
+    Args:
+        query: Search terms to look for
+        limit: Maximum number of results to return
+    """
+    return f"Found {limit} results for '{query}'"
+```
+
+类型提示是**必需的**，因为它们定义了工具的输入模式。docstring 应该是信息丰富且简洁的，以帮助模型理解工具的用途。
+:::
+
+:::js
+创建工具最简单的方法是从 `langchain` 包中导入 `tool` 函数。你可以使用 [zod](https://zod.dev/) 来定义工具的输入模式：
+
+</fragment>
+
+```ts
+import * as z from "zod"
+import { tool } from "langchain"
+
+const searchDatabase = tool(
+  ({ query, limit }) => `Found ${limit} results for '${query}'`,
+  {
+    name: "search_database",
+    description: "Search the customer database for records matching the query.",
+    schema: z.object({
+      query: z.string().describe("Search terms to look for"),
+      limit: z.number().describe("Maximum number of results to return"),
+    }),
+  }
+);
+```
+
+:::
+
+<Note>
+    **服务端工具调用：** 某些聊天模型内置了工具（网页搜索、代码解释器），这些工具在服务端执行。详见[服务端工具调用](#server-side-tool-use)。
+</Note>
+
+<Warning>
+    建议使用 `snake_case` 命名工具（例如，用 `web_search` 而非 `Web Search`）。某些模型提供商在处理包含空格或特殊字符的工具名称时存在问题或直接拒绝，导致错误。始终坚持使用字母、数字、下划线和连字符，有助于提高跨提供商的兼容性。
+</Warning>
+
+:::python
+
+### 自定义工具属性
+
+#### 自定义工具名称
+
+默认情况下，工具名称取自函数名称。如需更具体、更具描述性的名称，可以进行覆盖：
+
+```python
+@tool("web_search")  # Custom name
+def search(query: str) -> str:
+    """Search the web for information."""
+    return f"Results for: {query}"
+
+print(search.name)  # web_search
+```
+
+#### 自定义工具描述
+
+覆盖自动生成的工具描述，以便为模型提供更清晰的指导：
+
+```python
+@tool("calculator", description="Performs arithmetic calculations. Use this for any math problems.")
+def calc(expression: str) -> str:
+    """Evaluate mathematical expressions."""
+    return str(eval(expression))
+```
+
+### 高级 schema 定义
+
+使用 Pydantic 模型或 JSON schema 定义复杂输入：
+
+<CodeGroup>
+    ```python Pydantic model
+    from pydantic import BaseModel, Field
+    from typing import Literal
+
+    class WeatherInput(BaseModel):
+        """Input for weather queries."""
+        location: str = Field(description="City name or coordinates")
+        units: Literal["celsius", "fahrenheit"] = Field(
+            default="celsius",
+            description="Temperature unit preference"
+        )
+        include_forecast: bool = Field(
+            default=False,
+            description="Include 5-day forecast"
+        )
+
+    @tool(args_schema=WeatherInput)
+    def get_weather(location: str, units: str = "celsius", include_forecast: bool = False) -> str:
+        """Get current weather and optional forecast."""
+        temp = 22 if units == "celsius" else 72
+        result = f"Current weather in {location}: {temp} degrees {units[0].upper()}"
+        if include_forecast:
+            result += "\nNext 5 days: Sunny"
+        return result
+    ```
+
+    ```python JSON Schema
+    weather_schema = {
+        "type": "object",
+        "properties": {
+            "location": {"type": "string"},
+            "units": {"type": "string"},
+            "include_forecast": {"type": "boolean"}
+        },
+        "required": ["location", "units", "include_forecast"]
+    }
+
+    @tool(args_schema=weather_schema)
+    def get_weather(location: str, units: str = "celsius", include_forecast: bool = False) -> str:
+        """Get current weather and optional forecast."""
+        temp = 22 if units == "celsius" else 72
+        result = f"Current weather in {location}: {temp} degrees {units[0].upper()}"
+        if include_forecast:
+            result += "\nNext 5 days: Sunny"
+        return result
+    ```
+</CodeGroup>
+
+### 保留的参数名称
+
+以下参数名称是保留的，不能用作工具参数。使用这些名称将导致运行时错误。
+
+| 参数名称 | 用途 |
+|----------------|---------|
+| `config` | 内部传递 `RunnableConfig` 给工具 |
+| `runtime` | `ToolRuntime` 参数（访问状态、上下文、存储）|
+
+要访问运行时信息，请使用 @[`ToolRuntime`] 参数，而不是将自己的参数命名为 `config` 或 `runtime`。
+
+如果您使用 `InjectedState`、`InjectedStore`、`get_runtime()` 或 `InjectedToolCallId`，请参阅[从旧版注入模式迁移](#migrate-from-older-injection-patterns)。
+:::
+
+## 访问上下文
+
+工具在能够访问对话历史、用户数据和持久内存等运行时信息时最为强大。本节介绍如何从工具内部访问和更新这些信息。
+
+:::python
+工具可以通过 @[`ToolRuntime`] 参数访问运行时信息，该参数提供：
+
+| 组件 | 描述 | 用例 |
+|-----------|-------------|----------|
+| **State** | 短期内存 - 存在于当前对话中的可变数据（消息、计数器、自定义字段） | 访问对话历史、跟踪工具调用次数 |
+| **Context** | 调用时传递的不可变配置（用户 ID、会话信息） | 根据用户身份个性化响应 |
+| **Store** | 长期内存 - 跨对话持久存在的数据 | 保存用户偏好、维护知识库 |
+| **Stream Writer** | 在工具执行过程中发出实时更新 | 显示长时间运行的进度 |
+| **Execution Info** | 当前执行的标识和重试信息（线程 ID、运行 ID、重试次数） | 访问线程/运行 ID，根据重试状态调整行为 |
+| **Server Info** | 在 LangGraph Server 上运行时特定于服务器的元数据（助手 ID、图 ID、已认证用户） | 访问助手 ID、图 ID 或已认证用户信息 |
+| **Config** | 执行的 @[`RunnableConfig`] | 访问回调、标签和元数据 |
+| **Tool Call ID** | 当前工具调用的唯一标识符 | 关联工具调用以进行日志和模型调用 |
+
+```mermaid
+graph LR
+    %% Runtime Context
+    subgraph "🔧 Tool Runtime Context"
+        A[Tool Call] --> B[ToolRuntime]
+        B --> C[State Access]
+        B --> D[Context Access]
+        B --> E[Store Access]
+        B --> F[Stream Writer]
+    end
+
+    %% Available Resources
+    subgraph "📊 Available Resources"
+        C --> G[Messages]
+        C --> H[Custom State]
+        D --> I[User ID]
+        D --> J[Session Info]
+        E --> K[Long-term Memory]
+        E --> L[User Preferences]
+    end
+
+    %% Tool Capabilities
+    subgraph "⚡ Enhanced Tool Capabilities"
+        M[Context-Aware Tools]
+        N[Stateful Tools]
+        O[Memory-Enabled Tools]
+        P[Streaming Tools]
+    end
+
+    %% Connections
+    G --> M
+    H --> N
+    I --> M
+    J --> M
+    K --> O
+    L --> O
+    F --> P
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef output fill:#EBD0F0,stroke:#885270,stroke-width:2px,color:#441E33
+    classDef neutral fill:#F2FAFF,stroke:#40668D,stroke-width:2px,color:#2F4B68
+
+    class A trigger
+    class B,C,D,E,F process
+    class G,H,I,J,K,L neutral
+    class M,N,O,P output
+```
+
+### 短期记忆（State）
+
+State 表示存在于整个对话期间的短期记忆。它包括消息历史记录以及您在[图状态](/oss/langgraph/graph-api#state)中定义的任何自定义字段。
+
+<Info>
+    在工具签名中添加 `runtime: ToolRuntime` 以访问 state。此参数会自动注入并对 LLM 隐藏——它不会出现在工具的 schema 中。
+</Info>
+
+#### 访问 state
+
+工具可以使用 `runtime.state` 访问当前对话状态：
+
+```python
+from langchain.tools import tool, ToolRuntime
+from langchain.messages import HumanMessage
+
+@tool
+def get_last_user_message(runtime: ToolRuntime) -> str:
+    """Get the most recent message from the user."""
+    messages = runtime.state["messages"]
+
+    # Find the last human message
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            return message.content
+
+    return "No user messages found"
+
+# Access custom state fields
+@tool
+def get_user_preference(
+    pref_name: str,
+    runtime: ToolRuntime
+) -> str:
+    """Get a user preference value."""
+    preferences = runtime.state.get("user_preferences", {})
+    return preferences.get(pref_name, "Not set")
+```
+
+<Warning>
+    `runtime` 参数对模型隐藏。对于上面的示例，模型只能在工具 schema 中看到 `pref_name`。
+</Warning>
+
+#### 更新状态
+
+使用 @[`Command`] 更新智能体的状态。这对于需要更新自定义状态字段的工具很有用。
+在更新中包含 `ToolMessage`，以便模型能够看到工具调用的结果：
+
+<ToolUpdateStatePy />
+
+<Tip>
+    当工具更新状态变量时，请考虑为这些字段定义一个 [reducer](/oss/langgraph/graph-api#reducers)。由于 LLM 可以并行调用多个工具，reducer 决定如何解决并发工具调用更新同一状态字段时的冲突。
+</Tip>
+:::
+
+### Context
+
+Context 提供在调用时传递的不可变配置数据。将其用于用户 ID、会话详情或应用程序特定设置，这些内容在对话期间不应更改。
+
+<Note>
+虽然 `thread_id`（通过 `config={"configurable": {"thread_id": ...}}` 传递）限定*对话*的范围：消息历史和检查点，但 `context` 携带*每次运行*的数据，您的工具和中间件在调用时读取。在生产环境中，您通常同时传递两者：每个对话一个稳定的 `thread_id`，以及每次 invoke 的 `context` 对象。
+</Note>
+
+:::python
+通过 `runtime.context` 访问 context。将其与 `thread_id` 一起传递，以便对话在多次交互中保持：
+
+<ToolRuntimeContextThreadPy />
+
+:::
+
+:::js
+工具可以通过 `config` 参数访问智能体的运行时上下文。传递 `context` 以及 `thread_id`，以便对话在多次交互中保持：
+
+<ToolRuntimeContextThreadJs />
+
+:::
+
+### 长期记忆（Store）
+
+@[`BaseStore`] 提供跨对话持久化的存储。与状态（短期记忆）不同，保存到 store 的数据在未来的会话中仍然可用。
+
+:::python
+通过 `runtime.store` 访问 store。store 使用 namespace/key 模式来组织数据：
+
+<Tip>
+    对于生产部署，请使用持久化 store 实现（如 @[`PostgresStore`]）而不是 `InMemoryStore`。有关设置详情，请参阅[记忆文档](/oss/langgraph/add-memory)。
+</Tip>
+
+```python expandable
+from typing import Any
+from langgraph.store.memory import InMemoryStore
+from langchain.agents import create_agent
+from langchain.tools import tool, ToolRuntime
+from langchain_openai import ChatOpenAI
+
+# Access memory
+@tool
+def get_user_info(user_id: str, runtime: ToolRuntime) -> str:
+    """Look up user info."""
+    store = runtime.store
+    user_info = store.get(("users",), user_id)
+    return str(user_info.value) if user_info else "Unknown user"
+
+# Update memory
+@tool
+def save_user_info(user_id: str, user_info: dict[str, Any], runtime: ToolRuntime) -> str:
+    """Save user info."""
+    store = runtime.store
+    store.put(("users",), user_id, user_info)
+    return "Successfully saved user info."
+
+model = ChatOpenAI(model="gpt-5.5")
+
+store = InMemoryStore()
+agent = create_agent(
+    model,
+    tools=[get_user_info, save_user_info],
+    store=store
+)
+
+# First session: save user info
+agent.invoke({
+    "messages": [{"role": "user", "content": "Save the following user: userid: abc123, name: Foo, age: 25, email: foo@langchain.dev"}]
+})
+
+# Second session: get user info
+agent.invoke({
+    "messages": [{"role": "user", "content": "Get user info for user with id 'abc123'"}]
+})
+# Here is the user info for user with ID "abc123":
+# - Name: Foo
+# - Age: 25
+# - Email: foo@langchain.dev
+```
+
+:::
+
+:::js
+通过 `config.store` 访问 store。store 使用命名空间/键值模式来组织数据：
+
+:::
+
+```ts expandable
+import * as z from "zod";
+import { createAgent, tool } from "langchain";
+import { InMemoryStore } from "@langchain/langgraph";
+import { ChatOpenAI } from "@langchain/openai";
+
+const store = new InMemoryStore();
+
+// Access memory
+const getUserInfo = tool(
+  async ({ user_id }) => {
+    const value = await store.get(["users"], user_id);
+    console.log("get_user_info", user_id, value);
+    return value;
+  },
+  {
+    name: "get_user_info",
+    description: "Look up user info.",
+    schema: z.object({
+      user_id: z.string(),
+    }),
+  }
+);
+
+// Update memory
+const saveUserInfo = tool(
+  async ({ user_id, name, age, email }) => {
+    console.log("save_user_info", user_id, name, age, email);
+    await store.put(["users"], user_id, { name, age, email });
+    return "Successfully saved user info.";
+  },
+  {
+    name: "save_user_info",
+    description: "Save user info.",
+    schema: z.object({
+      user_id: z.string(),
+      name: z.string(),
+      age: z.number(),
+      email: z.string(),
+    }),
+  }
+);
+
+const agent = createAgent({
+  model: new ChatOpenAI({ model: "gpt-5.5" }),
+  tools: [getUserInfo, saveUserInfo],
+  store,
+});
+
+// First session: save user info
+await agent.invoke({
+  messages: [
+    {
+      role: "user",
+      content: "Save the following user: userid: abc123, name: Foo, age: 25, email: foo@langchain.dev",
+    },
+  ],
+});
+
+// Second session: get user info
+const result = await agent.invoke({
+  messages: [
+    { role: "user", content: "Get user info for user with id 'abc123'" },
+  ],
+});
+
+console.log(result);
+// Here is the user info for user with ID "abc123":
+// - Name: Foo
+// - Age: 25
+// - Email: foo@langchain.dev
+```
+
+:::
+
+### Stream writer
+
+在执行过程中从工具流式传输实时更新。这对于在长时间运行的操作期间向用户提供进度反馈非常有用。
+
+:::python
+使用 `runtime.stream_writer` 发出自定义更新：
+
+
+:::
+
+```python
+from langchain.tools import tool, ToolRuntime
+
+@tool
+def get_weather(city: str, runtime: ToolRuntime) -> str:
+    """Get weather for a given city."""
+    writer = runtime.stream_writer
+
+    # Stream custom updates as the tool executes
+    writer(f"Looking up data for city: {city}")
+    writer(f"Acquired data for city: {city}")
+
+    return f"It's always sunny in {city}!"
+```
+
+<Note>
+如果您在工具内部使用 `runtime.stream_writer`，则必须在 LangGraph 执行上下文中调用该工具。详见 [Streaming](/oss/langchain/streaming)。
+</Note>
+:::
+
+:::js
+使用 `config.writer` 发出自定义更新：
+```
+
+```ts
+import * as z from "zod";
+import { tool, ToolRuntime } from "langchain";
+
+const getWeather = tool(
+  ({ city }, config: ToolRuntime) => {
+    const writer = config.writer;
+
+    // Stream custom updates as the tool executes
+    if (writer) {
+      writer(`Looking up data for city: ${city}`);
+      writer(`Acquired data for city: ${city}`);
+    }
+
+    return `It's always sunny in ${city}!`;
+  },
+  {
+    name: "get_weather",
+    description: "Get weather for a given city.",
+    schema: z.object({
+      city: z.string(),
+    }),
+  }
+);
+```
+
+:::
+
+### 执行信息
+
+通过 `runtime.execution_info` 从工具内部访问线程 ID、运行 ID 和重试状态：
+
+:::python
+
+:::
+```python
+from langchain.tools import tool, ToolRuntime
+
+@tool
+def log_execution_context(runtime: ToolRuntime) -> str:
+    """Log execution identity information."""
+    info = runtime.execution_info
+    print(f"Thread: {info.thread_id}, Run: {info.run_id}")  # [!code highlight]
+    print(f"Attempt: {info.node_attempt}")
+    return "done"
+```
+:::
+
+:::js
+```ts
+import { tool } from "langchain";
+import * as z from "zod";
+
+const logExecutionContext = tool(
+  async (_input, runtime) => {
+    const info = runtime.executionInfo;
+    console.log(`Thread: ${info.threadId}, Run: ${info.runId}`);  // [!code highlight]
+    console.log(`Attempt: ${info.nodeAttempt}`);
+    return "done";
+  },
+  {
+    name: "log_execution_context",
+    description: "Log execution identity information.",
+    schema: z.object({}),
+  }
+);
+```
+:::
+
+:::python
+<Note>
+需要 `deepagents>=0.5.0`（或 `langgraph>=1.1.5`）。
+</Note>
+:::
+
+:::js
+<Note>
+需要 `deepagents>=1.9.0`（或 `@langchain/langgraph>=1.2.8`）。
+</Note>
+:::
+
+### 服务器信息
+
+当您的工具在 LangGraph Server 上运行时，可以通过 `runtime.server_info` 访问助手 ID、图 ID 和已认证用户：
+
+:::python
+```python
+from langchain.tools import tool, ToolRuntime
+
+@tool
+def get_assistant_scoped_data(runtime: ToolRuntime) -> str:
+    """Fetch data scoped to the current assistant."""
+    server = runtime.server_info
+    if server is not None:
+        print(f"Assistant: {server.assistant_id}, Graph: {server.graph_id}")  # [!code highlight]
+        if server.user is not None:
+            print(f"User: {server.user.identity}")  # [!code highlight]
+    return "done"
+```
+
+当 `server_info` 为 `None` 时，表示该工具未在 LangGraph Server 上运行（例如在本地开发或测试期间）。
+:::
+
+:::js
+```ts
+import { tool } from "langchain";
+import * as z from "zod";
+
+const getAssistantScopedData = tool(
+  async (_input, runtime) => {
+    const server = runtime.serverInfo;
+    if (server != null) {
+      console.log(`Assistant: ${server.assistantId}, Graph: ${server.graphId}`);  // [!code highlight]
+      if (server.user != null) {
+        console.log(`User: ${server.user.identity}`);  // [!code highlight]
+      }
+    }
+    return "done";
+  },
+  {
+    name: "get_assistant_scoped_data",
+    description: "Fetch data scoped to the current assistant.",
+    schema: z.object({}),
+  }
+);
+```
+
+`serverInfo` 在工具未在 LangGraph Server 上运行时为 `null`。
+:::
+
+:::python
+<Note>
+需要 `deepagents>=0.5.0`（或 `langgraph>=1.1.5`）。
+</Note>
+:::
+
+:::js
+<Note>
+需要 `deepagents>=1.9.0`（或 `@langchain/langgraph>=1.2.8`）。
+</Note>
+:::
+
+:::python
+<Accordion title="迁移到旧版注入模式" id="migrate-from-older-injection-patterns">
+
+旧版示例使用 `InjectedState`、`InjectedStore`、`get_runtime()` 或 `InjectedToolCallId`。请改用 @[`ToolRuntime`]，以获得统一的状态、上下文、存储和执行元数据接口。
+
+#### 旧版模式
+
+
+</Accordion>
+
+```python
+from langchain.tools import tool, InjectedState
+
+@tool
+def summarize(state: InjectedState) -> str:
+    """Summarize the conversation."""
+    messages = state["messages"]
+    return f"Conversation length: {len(messages)} messages."
+```
+
+#### 推荐模式
+
+```python
+from langchain.tools import tool, ToolRuntime
+
+@tool
+def summarize(runtime: ToolRuntime) -> str:
+    """Summarize the conversation."""
+    messages = runtime.state["messages"]
+    return f"Conversation length: {len(messages)} messages."
+```
+
+对于 Agent 级别的迁移（例如 `create_react_agent` 和自定义状态），请参阅 [LangChain v1 迁移指南](/oss/migrate/langchain-v1)。
+
+</Accordion>
+:::
+
+## 工具执行
+
+在 LangChain 中，工具由 Agent 使用（例如通过 @[`create_agent`]），工具错误处理通过[中间件](/oss/langchain/middleware)配置。
+
+对于 LangGraph 工作流，工具执行由 @[`ToolNode`] 处理。请参阅 [ToolNode](/oss/langgraph/workflows-agents#toolnode) 了解 Graph API 用法，包括工具如何访问当前图状态和运行作用域上下文。
+
+### 工具返回值
+
+您可以为工具选择不同的返回值：
+
+- 返回 `string` 以获取人类可读的结果。
+- 返回 `object` 以获取模型应解析的结构化结果。
+- 需要写入状态时，返回带可选消息的 `Command`。
+
+#### 返回字符串
+
+当工具应提供纯文本供模型读取并在下一响应中使用时，返回字符串。
+
+:::python
+
+<ToolReturnValuesPy />
+
+:::
+
+:::js
+
+<ToolReturnValuesJs />
+
+:::
+
+行为：
+
+- 返回值被转换为 `ToolMessage`。
+- 模型看到该文本后决定下一步操作。
+- Agent 状态字段不会被直接修改，除非模型或其他工具后续进行更改。
+
+当结果本质上是人类可读的文本时使用此方式。
+
+#### 返回对象
+
+当工具生成模型应检查的结构化数据时，返回一个对象（例如 `dict`）。
+
+:::python
+
+<ToolReturnObjectPy />
+
+:::
+
+:::js
+
+<ToolReturnObjectJs />
+
+:::
+
+行为：
+
+- 对象被序列化后作为工具输出返回。
+- 模型可以读取特定字段并进行推理。
+- 与字符串返回一样，这不会直接更新图状态。
+
+当下游推理受益于显式字段而不是自由文本时使用此方式。
+
+#### 返回多模态内容
+
+工具不限于纯文本。当模型支持多模态工具结果时，工具可以返回[标准内容块](/oss/langchain/messages#standard-content-blocks)，以便模型在一个工具结果中接收文本、图像和其他媒体。
+
+:::python
+```python
+from langchain.tools import tool
+
+
+@tool
+def capture_screenshot() -> list[dict]:
+    """Capture a screenshot of the current page."""
+    return [
+        {"type": "text", "text": "Screenshot of the current page:"},
+        {"type": "image", "url": "https://example.com/page.png"},
+    ]
+```
+:::
+
+:::js
+```typescript
+import { tool } from "langchain";
+import { z } from "zod";
+
+const captureScreenshot = tool(
+  async () => [
+    { type: "text", text: "Screenshot of the current page:" },
+    { type: "image", url: "https://example.com/page.png" },
+  ],
+  {
+    name: "capture_screenshot",
+    description: "Capture a screenshot of the current page.",
+    schema: z.object({}),
+  }
+);
+```
+:::
+
+行为：
+
+- 返回值被转换为包含多模态 `content` 的 `ToolMessage`。
+- 在工具运行后，使用 `message.content_blocks` 读取规范化的块列表。
+- 模型必须支持你返回的模态。在返回图像、音频或视频之前，请检查你的[模型能力](/oss/integrations/chat)。
+
+有关块类型和特定提供商的要求，请参阅[多模态消息](/oss/langchain/messages#multimodal)。返回图像或混合内容的 MCP 工具以相同方式转换；请参阅[多模态工具内容](/oss/langchain/mcp#multimodal-tool-content)。
+
+#### 返回 Command
+
+当工具需要更新图状态（例如设置用户偏好或应用状态）时返回 @[`Command`]。
+你可以返回包含或不包含 `ToolMessage` 的 `Command`。
+如果模型需要确认工具成功执行（例如确认偏好变更），请在更新中包含 `ToolMessage`，并使用 `runtime.tool_call_id` 作为 `tool_call_id` 参数。
+
+:::python
+
+<ToolReturnCommandPy />
+
+:::
+
+:::js
+
+<ToolReturnCommandJs />
+
+:::
+
+行为：
+
+- 该命令使用 `update` 更新状态。
+- 更新后的状态在同一次运行的后续步骤中可用。
+- 对于可能被并行工具调用更新的字段，请使用 reducer。
+
+当工具不仅返回数据，而且还改变 agent 状态时使用此功能。
+
+#### 直接从工具返回
+
+在工具上设置 return direct 以短路 agent 循环：agent 立即将工具的输出返回给调用者，而不将其发送回模型进行进一步处理。
+
+:::python
+
+<ToolReturnDirectPy />
+
+:::
+
+:::js
+
+<ToolReturnDirectJs />
+
+:::
+
+行为：
+
+- 工具正常执行，其输出被包装在 `ToolMessage` 中。
+- agent 停止循环并将工具的输出作为最终响应返回，跳过任何额外的模型调用。
+- 如果模型在单次调用中调用多个工具，`return_direct` 仅在**所有**被调用的工具都设置了 `return_direct=True` 时才生效。
+
+在以下情况下使用：
+
+- 工具的输出是完整的、用户可直接使用的答案（例如，返回可直接显示结果的查询）。
+- 当不需要额外推理时，你想避免额外的模型调用。
+- 你需要确定性的、未修改的输出——模型无法重新措辞、总结或对工具结果采取行动。
+
+<Warning>
+    由于模型不处理工具的输出，`return_direct=True` 不适合那些结果需要进一步推理、总结或与其他工具调用链式组合的工具。
+</Warning>
+
+### 错误处理
+
+使用 LangChain agent [中间件](/oss/langchain/middleware)处理工具错误，以重试失败的工具调用或返回自定义错误消息：
+
+:::python
+
+<ToolErrorHandlingPy />
+
+:::
+
+:::js
+
+<ToolErrorHandlingJs />
+
+:::
+
+### 状态注入
+
+工具通过 @[`ToolRuntime`] 访问图状态。请参阅[访问上下文](#access-context)了解状态、上下文、存储和流 API。
+
+:::python
+```python
+from langchain.tools import tool, ToolRuntime
+
+@tool
+def get_message_count(runtime: ToolRuntime) -> str:
+    """Get the number of messages in the conversation."""
+    messages = runtime.state["messages"]
+    return f"There are {len(messages)} messages."
+```
+有关从工具访问状态、上下文和长期存储的更多详细信息，请参阅[访问上下文](#access-context)。
+
+## 动态工具选择
+
+使用动态工具时，代理可用的工具集在运行时进行修改，而不是预先全部定义。并非每个工具都适用于每种情况。工具过多可能会使模型不堪重负（上下文过载）并增加错误；工具过少则会限制能力。动态工具选择支持根据身份验证状态、用户权限、功能标志或对话阶段调整可用工具集。
+
+根据工具是否事先已知，有两种方法：
+
+<Tabs>
+  <Tab title="Filtering pre-registered tools">
+
+    当所有可能的工具在代理创建时已知时，你可以预先注册它们，并根据状态、权限或上下文动态筛选向模型公开的工具。
+
+    <Tabs>
+      <Tab title="State">
+        在某些对话里程碑之后启用高级工具：
+
+        :::python
+
+        ```python
+        from langchain.agents import create_agent
+        from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+        from typing import Callable
+
+        @wrap_model_call
+        def state_based_tools(
+            request: ModelRequest,
+            handler: Callable[[ModelRequest], ModelResponse]
+        ) -> ModelResponse:
+            """Filter tools based on conversation State."""
+            # Read from State: check if user has authenticated
+            state = request.state
+            is_authenticated = state.get("authenticated", False)
+            message_count = len(state["messages"])
+
+            # Only enable sensitive tools after authentication
+            if not is_authenticated:
+                tools = [t for t in request.tools if t.name.startswith("public_")]
+                request = request.override(tools=tools)
+            elif message_count < 5:
+                # Limit tools early in conversation
+                tools = [t for t in request.tools if t.name != "advanced_search"]
+                request = request.override(tools=tools)
+
+            return handler(request)
+
+        agent = create_agent(
+            model="gpt-5.5",
+            tools=[public_search, private_search, advanced_search],
+            middleware=[state_based_tools]
+        )
+        ```
+
+        :::
+
+        :::js
+
+        ```typescript
+        import { createMiddleware, tool } from "langchain";
+        import { createDeepAgent } from "deepagents";
+
+        const stateBasedTools = createMiddleware({
+            name: "StateBasedTools",
+            wrapModelCall: (request, handler) => {
+                // Read from State: check authentication and conversation length
+                const state = request.state as typeof request.state & {
+                    authenticated?: boolean;
+                };
+                const isAuthenticated = state.authenticated ?? false;
+                const messageCount = state.messages.length;
+
+                let filteredTools = request.tools;
+
+                // Only enable sensitive tools after authentication
+                if (!isAuthenticated) {
+                    filteredTools = request.tools.filter(
+                        (t: any) => typeof t.name === "string" && t.name.startsWith("public_"),
+                    );
+                } else if (messageCount < 5) {
+                    filteredTools = request.tools.filter(
+                        (t: any) => typeof t.name === "string" && t.name !== "advanced_search",
+                    );
+                }
+
+                return handler({ ...request, tools: filteredTools });
+            },
+        });
+
+        const agent = await createDeepAgent({
+            model: "claude-sonnet-4-20250514",
+            tools: tools,
+            middleware: [stateBasedTools] as any,
+        });
+        ```
+
+:::
+      </Tab>
+
+      <Tab title="Store">
+        根据用户偏好或功能标志筛选 Store 中的工具：
+
+        :::python
+
+</fragment>
+
+        ```python
+        from dataclasses import dataclass
+        from langchain.agents import create_agent
+        from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+        from typing import Callable
+        from langgraph.store.memory import InMemoryStore
+
+        @dataclass
+        class Context:
+            user_id: str
+
+        @wrap_model_call
+        def store_based_tools(
+            request: ModelRequest,
+            handler: Callable[[ModelRequest], ModelResponse]
+        ) -> ModelResponse:
+            """Filter tools based on Store preferences."""
+            user_id = request.runtime.context.user_id
+
+            # Read from Store: get user's enabled features
+            store = request.runtime.store
+            feature_flags = store.get(("features",), user_id)
+
+            if feature_flags:
+                enabled_features = feature_flags.value.get("enabled_tools", [])
+                # Only include tools that are enabled for this user
+                tools = [t for t in request.tools if t.name in enabled_features]
+                request = request.override(tools=tools)
+
+            return handler(request)
+
+        agent = create_agent(
+            model="gpt-5.5",
+            tools=[search_tool, analysis_tool, export_tool],
+            middleware=[store_based_tools],
+            context_schema=Context,
+            store=InMemoryStore()
+        )
+        ```
+
+        :::
+
+        :::js
+
+        ```typescript
+        import { createMiddleware } from "langchain";
+        import { createDeepAgent, StoreBackend } from "deepagents";
+        import * as z from "zod";
+        import { InMemoryStore } from "@langchain/langgraph";
+
+        const contextSchema = z.object({
+          userId: z.string(),
+        });
+
+        const storeBasedTools = createMiddleware({
+          name: "StoreBasedTools",
+          contextSchema,
+          wrapModelCall: async (request, handler) => {
+            const userId =
+              (request.runtime?.context as { userId?: string } | undefined)?.userId ??
+                "user-123";
+
+            // Read from Store: get user's enabled features
+            const runtimeStore = request.runtime?.store as InMemoryStore | undefined;
+            const rawFlags = (await runtimeStore?.get(
+              ["features"],
+              userId as string,
+            )) as unknown;
+            const featureFlags = rawFlags as FeatureFlags | undefined;
+
+            let filteredTools = request.tools;
+
+            if (featureFlags) {
+              const enabledFeatures = featureFlags.enabledTools || [];
+              filteredTools = request.tools.filter((t) =>
+                enabledFeatures.includes(t.name as string)
+              );
+            }
+
+            return handler({ ...request, tools: filteredTools });
+          },
+        });
+
+        const agent = await createDeepAgent({
+          model: "claude-sonnet-4-20250514",
+          backend: new StoreBackend(),
+          store,
+          checkpointer,
+          tools,
+          middleware: [storeBasedTools] as any,
+        });
+        ```
+
+<Tab title="Runtime Context">
+        根据运行时上下文中的用户权限筛选工具：
+
+        :::python
+
+        ```python
+        from dataclasses import dataclass
+        from langchain.agents import create_agent
+        from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+        from typing import Callable
+
+        @dataclass
+        class Context:
+            user_role: str
+
+        @wrap_model_call
+        def context_based_tools(
+            request: ModelRequest,
+            handler: Callable[[ModelRequest], ModelResponse]
+        ) -> ModelResponse:
+            """Filter tools based on Runtime Context permissions."""
+            # Read from Runtime Context: get user role
+            if request.runtime is None or request.runtime.context is None:
+                # If no context provided, default to viewer (most restrictive)
+                user_role = "viewer"
+            else:
+                user_role = request.runtime.context.user_role
+
+            if user_role == "admin":
+                # Admins get all tools
+                pass
+            elif user_role == "editor":
+                # Editors can't delete
+                tools = [t for t in request.tools if t.name != "delete_data"]
+                request = request.override(tools=tools)
+            else:
+                # Viewers get read-only tools
+                tools = [t for t in request.tools if t.name.startswith("read_")]
+                request = request.override(tools=tools)
+
+            return handler(request)
+
+        agent = create_agent(
+            model="gpt-5.5",
+            tools=[read_data, write_data, delete_data],
+            middleware=[context_based_tools],
+            context_schema=Context
+        )
+        ```
+
+        :::
+
+        :::js
+
+        ```typescript
+        import * as z from "zod";
+        import { createMiddleware } from "langchain";
+        import { createDeepAgent } from "deepagents";
+
+        const contextSchema = z.object({
+          userRole: z.string(),
+        });
+
+        const contextBasedTools = createMiddleware({
+          name: "ContextBasedTools",
+          contextSchema,
+          wrapModelCall: (request, handler) => {
+            // Read from Runtime Context: get user role
+            const userRole = request.runtime.context.userRole;
+
+            let filteredTools = request.tools;
+
+            if (userRole === "admin") {
+              // Admins get all tools
+            } else if (userRole === "editor") {
+              filteredTools = request.tools.filter((t) => t.name !== "delete_data");
+            } else {
+              filteredTools = request.tools.filter(
+                (t) => (t.name as string).startsWith("read_"),
+              );
+            }
+
+            return handler({ ...request, tools: filteredTools });
+          },
+        });
+
+        const agent = await createDeepAgent({
+          model: "claude-sonnet-4-20250514",
+          store,
+          checkpointer,
+          tools,
+          middleware: [contextBasedTools] as any,
+        });
+        ```
+
+<fragment>
+
+        :::
+      </Tab>
+    </Tabs>
+
+    这种方法最适合以下情况：
+    - 所有可能的工具在编译/启动时已知
+    - 您想根据权限、功能标志或对话状态进行过滤
+    - 工具是静态的，但它们的可用性是动态的
+
+    更多示例请参见[动态选择工具](/oss/langchain/middleware/custom#dynamically-selecting-tools)。
+
+  </Tab>
+
+  <Tab title="运行时工具注册">
+
+    当工具在运行时被发现或创建时（例如从 MCP 服务器加载、基于用户数据生成，或从远程注册表获取），您需要同时注册工具并动态处理它们的执行。
+
+    这需要两个中间件钩子：
+    1. `wrap_model_call` - 将动态工具添加到请求中
+    2. `wrap_tool_call` - 处理动态添加的工具执行
+
+    :::python
+
+
+</fragment>
+
+    ```python
+    from langchain.tools import tool
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import AgentMiddleware, ModelRequest, ToolCallRequest
+
+    # A tool that will be added dynamically at runtime
+    @tool
+    def calculate_tip(bill_amount: float, tip_percentage: float = 20.0) -> str:
+        """Calculate the tip amount for a bill."""
+        tip = bill_amount * (tip_percentage / 100)
+        return f"Tip: ${tip:.2f}, Total: ${bill_amount + tip:.2f}"
+
+    class DynamicToolMiddleware(AgentMiddleware):
+        """Middleware that registers and handles dynamic tools."""
+
+        def wrap_model_call(self, request: ModelRequest, handler):
+            # Add dynamic tool to the request
+            # This could be loaded from an MCP server, database, etc.
+            updated = request.override(tools=[*request.tools, calculate_tip])
+            return handler(updated)
+
+        def wrap_tool_call(self, request: ToolCallRequest, handler):
+            # Handle execution of the dynamic tool
+            if request.tool_call["name"] == "calculate_tip":
+                return handler(request.override(tool=calculate_tip))
+            return handler(request)
+
+    agent = create_agent(
+        model="gpt-4o",
+        tools=[get_weather],  # Only static tools registered here
+        middleware=[DynamicToolMiddleware()],
+    )
+
+    # The agent can now use both get_weather AND calculate_tip
+    result = agent.invoke({
+        "messages": [{"role": "user", "content": "Calculate a 20% tip on $85"}]
+    })
+    ```
+
+    :::
+
+    :::js
+
+    ```typescript
+    import { createAgent, createMiddleware, tool } from "langchain";
+    import * as z from "zod";
+
+    // A tool that will be added dynamically at runtime
+    const calculateTip = tool(
+      ({ billAmount, tipPercentage = 20 }) => {
+        const tip = billAmount * (tipPercentage / 100);
+        return `Tip: $${tip.toFixed(2)}, Total: $${(billAmount + tip).toFixed(2)}`;
+      },
+      {
+        name: "calculate_tip",
+        description: "Calculate the tip amount for a bill",
+        schema: z.object({
+          billAmount: z.number().describe("The bill amount"),
+          tipPercentage: z.number().default(20).describe("Tip percentage"),
+        }),
+      }
+    );
+
+    const dynamicToolMiddleware = createMiddleware({
+      name: "DynamicToolMiddleware",
+      wrapModelCall: (request, handler) => {
+        // Add dynamic tool to the request
+        // This could be loaded from an MCP server, database, etc.
+        return handler({
+          ...request,
+          tools: [...request.tools, calculateTip],
+        });
+      },
+      wrapToolCall: (request, handler) => {
+        // Handle execution of the dynamic tool
+        if (request.toolCall.name === "calculate_tip") {
+          return handler({ ...request, tool: calculateTip });
+        }
+        return handler(request);
+      },
+    });
+
+    const agent = createAgent({
+      model: "gpt-4o",
+      tools: [getWeather], // Only static tools registered here
+      middleware: [dynamicToolMiddleware],
+    });
+
+    // The agent can now use both getWeather AND calculateTip
+    const result = await agent.invoke({
+      messages: [{ role: "user", content: "Calculate a 20% tip on $85" }],
+    });
+    ```
+
+:::
+
+此方法最适合以下情况：
+    - 工具在运行时被发现（例如从 MCP 服务器）
+    - 工具根据用户数据或配置动态生成
+    - 你正在与外部工具注册表集成
+
+<Note>
+`wrap_tool_call` 钩子是运行时注册工具所必需的，因为代理需要知道如何执行不在原始工具列表中的工具。如果没有它，代理将不知道如何调用动态添加的工具。
+</Note>
+
+</Tab>
+</Tabs>
+
+## 无头工具
+
+有些工具应该运行在**用户应用运行的地方**（通常是浏览器），而不是在进程内部。**无头工具**是工具定义，包括名称、描述和参数模式，你在**服务器**上与代理一起注册。**实现**只在**客户端**注册，并在简短的中断/恢复握手后执行。
+
+这与普通工具不同，普通工具的函数体在服务器上运行；也与[服务器端工具使用](#server-side-tool-use)不同，后者是由模型提供商远程执行内置工具。
+
+### 何时使用无头工具
+
+在以下情况下使用它们：工作取决于仅存在于客户端的**环境、设备或 UI**。例如：
+
+- **浏览器 API：** 地理位置、IndexedDB、剪贴板、Canvas 2D、文件选择器、Battery API 等。
+- **隐私和本地性：** 数据保留在设备上（例如 IndexedDB 中的本地“内存”）。
+- **延迟：** 纯本地操作无需额外的服务器往返。
+- **结构化、安全的副作用：** 优先使用许多小的、带类型的工具（例如每个 canvas 图元一个工具），而不是向 `eval` 发送任意代码。
+
+### 模式工作原理
+
+在两个运行时中，模型看到一个可以调用的普通工具，但实际执行发生在服务器进程之外。
+
+:::python
+1. **定义**一个带有 `tool(name=..., description=..., args_schema=...)` 的无头工具，来自 `langchain.tools`。无头工具仅包含模式，没有进程内实现。
+2. **注册**该工具与 `create_agent` 或你的 LangGraph 图，以便模型可以正常调用它。
+3. **处理**工具被调用时的中断负载。图不会在本地运行，而是暂停，负载形状类似 `{"type": "tool", "tool_call": {"id", "name", "args"}}`。
+4. **恢复**你的应用、另一个服务或人工步骤执行操作后恢复图。对于基于浏览器的流程，你可以在前端镜像模式并在那里附加 `.implement(...)`。
+
+<Info>
+如果你在 Python 中仅用 `name`、`description` 和 `args_schema` 调用 `tool(...)`，LangChain 会返回一个 `HeadlessTool`。Python 端没有 `.implement()` API。
+</Info>
+:::
+
+:::js
+1. **定义**带有 `tool({ name, description, schema })` 的工具，来自 `langchain`，仅包含元数据和验证，没有服务器端运行器。
+2. **附加**真实行为使用 `.implement(async (args) => { ... })`，它返回一个**无头工具实现**（定义 + `execute` 函数）。
+3. **注册**步骤 1 中的定义与 `createAgent` 或你的图，以便模型在其常规工具调用循环中看到该工具。
+4. **传递**步骤 2 中的实现到你的流式钩子的 `tools` 选项。
+
+<Info>
+将**工具定义**（`tool({ name, description, schema })`）和**实现**（`.implement(...)`）放在**不同的模块中**。从你的服务器代理和前端导入共享定义文件，以便名称和模式保持一致；将仅客户端的执行逻辑保留在服务器从不加载的实现模块中。
+</Info>
+:::
+
+当模型发出其中一个工具的工具调用时，运行**中断**而不是在本地执行工具。你的应用可以检查负载，在正确的环境（例如浏览器、另一个服务或人工审查步骤）中执行操作，然后**恢复**图并返回工具结果。当你使用支持的 JS SDK 钩子时，它们可以检测无头工具中断，运行匹配的客户端实现，并为你提交恢复命令。
+
+使用可选的 **`onTool`** 回调来观察生命周期事件（`start`、`success`、`error`），以便为 UI 提供反馈（如微调器或 toast 通知）。
+
+<Card
+    title="无头工具前端模式"
+    href="/oss/langchain/frontend/headless-tools"
+    icon="device-desktop"
+    arrow="true"
+    horizontal
+>
+    查看在客户端中使用 `useStream` 执行纯模式工具的端到端示例。
+</Card>
+
+## 预构建工具
+
+LangChain 为常见任务（如网络搜索、代码解释、数据库访问等）提供了大量预构建工具和工具包。这些即用型工具可以直接集成到你的代理中，无需编写自定义代码。
+
+请参阅[工具和工具包](/oss/integrations/tools)集成页面，获取按类别组织的可用工具完整列表。
+
+## 服务器端工具使用
+
+某些聊天模型具有内置工具，由模型提供商在服务器端执行。这些包括网络搜索和代码解释器等功能，无需你定义或托管工具逻辑。
+
+请参阅各个[聊天模型集成页面](/oss/integrations/providers)和[工具调用文档](/oss/langchain/models#server-side-tool-use)，了解启用和使用这些内置工具的详细信息。

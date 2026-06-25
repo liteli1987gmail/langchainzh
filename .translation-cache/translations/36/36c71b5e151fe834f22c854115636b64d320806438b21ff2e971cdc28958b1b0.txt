@@ -1,0 +1,124 @@
+---
+title: Studio 中的可观测性
+sidebarTitle: 追踪、数据集、提示词
+---
+
+LangSmith [Studio](/langsmith/studio) 提供了工具来检查、调试和改进应用超越执行层面的内容。通过追踪、数据集和提示词，您可以详细了解应用的行为，衡量其性能，并优化输出：
+
+- [优化提示词](#iterate-on-prompts)：直接在图节点中修改提示词，或使用 Playground。
+- [在数据集上运行实验](#run-experiments-over-a-dataset)：在 LangSmith 数据集上执行助手以评分并比较结果。
+- [调试 LangSmith 追踪](#debug-langsmith-traces)：将追踪的运行导入到 Studio，并可选择将其克隆到本地代理中。
+- [将节点添加到数据集](#add-node-to-dataset)：将对话历史的某些部分转化为数据集示例，用于评估或进一步分析。
+
+## 优化提示词
+
+Studio 支持以下修改图中提示词的方法：
+
+- [直接节点编辑](#direct-node-editing)
+- [Playground 界面](#playground)
+
+### 直接节点编辑
+
+Studio 允许您直接从图形界面编辑各个节点中使用的提示词。
+
+### 图配置
+
+定义您的[配置](/oss/langgraph/use-graph-api#add-runtime-configuration)，使用 `langgraph_nodes` 和 `langgraph_type` 键指定提示词字段及其关联的节点。
+
+#### `langgraph_nodes`
+
+- **描述**：指定配置字段关联的图节点。
+- **值类型**：字符串数组，其中每个字符串都是图中节点的名称。
+- **使用上下文**：包含在 Pydantic 模型的 `json_schema_extra` 字典或 dataclass 的 `metadata["json_schema_extra"]` 字典中。
+- **示例**：
+  ```python
+  system_prompt: str = Field(
+      default="You are a helpful AI assistant.",
+      json_schema_extra={"langgraph_nodes": ["call_model", "other_node"]},
+  )
+  ```
+
+#### `langgraph_type`
+
+- **描述**: 指定配置字段的类型，该类型决定其在 UI 中的处理方式。
+- **值类型**: 字符串
+- **支持的值**:
+  * `"prompt"`: 表示该字段包含提示文本，在 UI 中应被特殊处理。
+- **使用上下文**: 包含在 Pydantic 模型的 `json_schema_extra` 字典中，或数据类的 `metadata["json_schema_extra"]` 字典中。
+- **示例**:
+  ```python
+  system_prompt: str = Field(
+      default="You are a helpful AI assistant.",
+      json_schema_extra={
+          "langgraph_nodes": ["call_model"],
+          "langgraph_type": "prompt",
+      },
+  )
+  ```
+
+<Accordion title="完整示例配置">
+
+
+</Accordion>
+
+```python
+## Using Pydantic
+from pydantic import BaseModel, Field
+from typing import Annotated, Literal
+
+class Configuration(BaseModel):
+    """The configuration for the agent."""
+
+    system_prompt: str = Field(
+        default="You are a helpful AI assistant.",
+        description="The system prompt to use for the agent's interactions. "
+        "This prompt sets the context and behavior for the agent.",
+        json_schema_extra={
+            "langgraph_nodes": ["call_model"],
+            "langgraph_type": "prompt",
+        },
+    )
+
+    model: Annotated[
+        Literal[
+            "anthropic/claude-sonnet-4-6",
+            "anthropic/claude-haiku-4-5-20251001",
+            "openai/o1",
+            "openai/gpt-5.4-mini",
+            "openai/o1-mini",
+            "openai/o3-mini",
+        ],
+        {"__template_metadata__": {"kind": "llm"}},
+    ] = Field(
+        default="openai/gpt-5.4-mini",
+        description="The name of the language model to use for the agent's main interactions. "
+        "Should be in the form: provider/model-name.",
+        json_schema_extra={"langgraph_nodes": ["call_model"]},
+    )
+
+## Using Dataclasses
+from dataclasses import dataclass, field
+
+@dataclass(kw_only=True)
+class Configuration:
+    """The configuration for the agent."""
+
+    system_prompt: str = field(
+        default="You are a helpful AI assistant.",
+        metadata={
+            "description": "The system prompt to use for the agent's interactions. "
+            "This prompt sets the context and behavior for the agent.",
+            "json_schema_extra": {"langgraph_nodes": ["call_model"]},
+        },
+    )
+
+    model: Annotated[str, {"__template_metadata__": {"kind": "llm"}}] = field(
+        default="anthropic/claude-3-5-sonnet-20240620",
+        metadata={
+            "description": "The name of the language model to use for the agent's main interactions. "
+            "Should be in the form: provider/model-name.",
+            "json_schema_extra": {"langgraph_nodes": ["call_model"]},
+        },
+    )
+
+```

@@ -1,0 +1,56 @@
+---
+title: "(弃用) 实验性 Anthropic 工具包装器集成"
+description: "使用 LangChain Python 与（弃用）实验性 Anthropic 工具包装器聊天模型集成。"
+---
+
+<Warning>
+**Anthropic API 正式支持工具调用，因此此变通方案不再需要。请使用带有 `langchain-anthropic>=0.1.15` 的 [ChatAnthropic](/oss/integrations/chat/anthropic)。**
+
+</Warning>
+
+本笔记本展示了如何使用围绕 Anthropic 的实验性包装器，使其具备工具调用和结构化输出能力。它遵循 [Anthropic 的工具使用指南](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)
+
+该包装器可从 `langchain-anthropic` 包获取，还需要可选依赖项 `defusedxml` 来解析 llm 的 XML 输出。
+
+注意：这是一个测试版功能，将被 Anthropic 正式的工具调用实现取代，但在此期间可用于测试和实验。
+
+```python
+pip install -qU langchain-anthropic defusedxml
+from langchain_anthropic.experimental import ChatAnthropicTools
+```
+
+## 工具绑定
+
+`ChatAnthropicTools` 暴露了一个 `bind_tools` 方法，允许你向 llm 传递 Pydantic 模型或 BaseTools。
+
+```python
+from pydantic import BaseModel
+
+
+class Person(BaseModel):
+    name: str
+    age: int
+
+
+model = ChatAnthropicTools(model="claude-3-opus-20240229").bind_tools(tools=[Person])
+model.invoke("I am a 27 year old named Erick")
+```
+
+```text
+AIMessage(content='', additional_kwargs={'tool_calls': [{'function': {'name': 'Person', 'arguments': '{"name": "Erick", "age": "27"}'}, 'type': 'function'}]})
+```
+
+## 结构化输出
+
+`ChatAnthropicTools` 也实现了 [`with_structured_output` 规范](/oss/langchain/structured-output) 用于提取值。注意：这可能不如明确提供工具调用的模型那样稳定。
+
+```python
+chain = ChatAnthropicTools(model="claude-3-opus-20240229").with_structured_output(
+    Person
+)
+chain.invoke("I am a 27 year old named Erick")
+```
+
+```text
+Person(name='Erick', age=27)
+```

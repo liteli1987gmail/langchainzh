@@ -1,0 +1,475 @@
+---
+title: Managed Deep Agents CLI 参考
+sidebarTitle: CLI 参考
+description: Managed Deep Agents CLI 命令、项目文件和部署行为的参考文档。
+---
+
+`deepagents` CLI（从 `deepagents-cli` 包安装）为 [Managed Deep Agents](/langsmith/managed-deep-agents-overview) 提供部署工具。使用它可以在本地搭建 agent 项目、部署到 LangSmith、管理 Managed Deep Agent 资源以及注册 MCP 服务器。
+
+<Note>
+Managed Deep Agents 处于**私人测试阶段**，仅在 [LangSmith Cloud](/langsmith/cloud) 美国区域可用。[加入等待列表](https://www.langchain.com/langsmith-managed-deep-agents-waitlist) 申请访问权限。
+</Note>
+
+如需最快完成端到端流程，请参阅[快速入门](/langsmith/managed-deep-agents-quickstart)。如需工作流指南，请参阅[连接工具](/langsmith/managed-deep-agents-mcp)、[部署 Agent](/langsmith/managed-deep-agents-deploy)和[运行 Agent](/langsmith/managed-deep-agents-invoke)。
+
+## 要求
+
+<Note>
+    Managed Deep Agents 需要 `deepagents-cli>=0.2.2`。
+</Note>
+
+使用 `uv`（推荐）或 `pip` 安装 `deepagents-cli`：
+
+<CodeGroup>
+
+```bash uv
+uv tool install "deepagents-cli>=0.2.2"
+```
+
+```bash pip
+pip install -U "deepagents-cli>=0.2.2"
+```
+
+</CodeGroup>
+
+要升级现有的 `uv` 安装，请运行 `uv tool upgrade deepagents-cli`。
+
+CLI 会读取 `LANGSMITH_API_KEY`。要创建密钥，请参阅[创建 API 密钥](/langsmith/create-account-api-key)。要覆盖默认端点，请设置 `LANGSMITH_ENDPOINT`。
+
+```bash
+export LANGSMITH_API_KEY="<LANGSMITH_API_KEY>"
+```
+
+项目 `.env` 文件可以设置 API 密钥。项目 `.env` 文件无法设置托管 API 请求的 endpoint、proxy 或 TLS 环境变量。请在您的 shell 或 `~/.deepagents/.env` 中设置这些覆盖值。
+
+## 命令概览
+
+| Command | Use |
+| --- | --- |
+| `deepagents --help` | 显示 CLI 帮助信息。 |
+| `deepagents --version` | 显示已安装的 `deepagents-cli` 版本。 |
+| `deepagents init [name]` | 脚手架一个新的托管 Deep Agents 项目。 |
+| `deepagents deploy` | 从本地项目文件创建或更新托管 Deep Agent。 |
+| `deepagents agents list` | 列出工作区中的托管 Deep Agents。 |
+| `deepagents agents get <agent_id>` | 检查一个托管 Deep Agent。 |
+| `deepagents agents delete <agent_id>` | 删除一个托管 Deep Agent。 |
+| `deepagents mcp-servers list` | 列出已注册的工作区 MCP 服务器。 |
+| `deepagents mcp-servers add` | 注册工作区 MCP 服务器。 |
+| `deepagents mcp-servers get <server>` | 检查一个 MCP 服务器，header 值已编辑。 |
+| `deepagents mcp-servers tools <server>` | 列出服务器的工具并打印 `tools.json` 片段。 |
+| `deepagents mcp-servers update <server>` | 更新 MCP 服务器 URL、headers 或 auth 类型。 |
+| `deepagents mcp-servers delete <server>` | 删除一个 MCP 服务器。 |
+| `deepagents mcp-servers connect <server>` | 完成 OAuth MCP 服务器的 OAuth。 |
+
+裸 `deepagents` 调用不会启动交互式 REPL。请安装并运行 [Deep Agents Code](/oss/deepagents/code/overview) 以进行交互式编码会话。
+
+## 初始化项目
+
+使用 `deepagents init` 创建项目目录：
+
+```bash
+deepagents init my-agent
+```
+
+如果省略项目名称，CLI 会提示输入：
+
+```bash
+deepagents init
+```
+
+| Argument or flag | Use |
+| --- | --- |
+| `name` | 项目目录名称。如果省略，CLI 会提示输入名称。 |
+| `--force` | 覆盖现有项目目录中的文件。 |
+| `-h`, `--help` | 显示命令帮助。 |
+
+`init` 命令会在项目目录中创建以下文件：
+
+| File or directory | Description |
+| --- | --- |
+| `agent.json` | Agent 元数据、模型、后端、权限和可选的目标 `agent_id`。请参阅 [agent.json](#agent-json) 部分。 |
+| `AGENTS.md` | 主 Agent 指令。请参阅 [AGENTS.md](#agents-md) 部分。 |
+| `tools.json` | 空工具配置。注册服务器后可添加 MCP 支持的工具。请参阅 [tools.json](#tools-json) 部分。 |
+| `skills/example-skill/` | 示例技能目录。可编辑、替换或删除。请参阅 [skills](#skills) 部分。 |
+| `subagents/researcher/` | 示例子代理目录。可编辑、替换或删除。请参阅 [subagents](#subagents) 部分。 |
+| `.gitignore` | 排除本地 `.env` 文件。 |
+
+## 部署项目
+
+从项目目录运行 `deepagents deploy`：
+
+```bash
+deepagents deploy
+```
+
+首次部署会创建一个托管深度智能体。后续部署则更新同一个智能体。部署状态是用户本地的，存储在你的项目外部，因此提交到仓库的文件不会改变你部署到的智能体。
+
+默认情况下，部署会上传项目、轮询智能体健康端点，并打印智能体名称、ID、短修订版本、智能体 URL 以及部署后的 MCP 健康检查。使用 `--detach` 可跳过轮询，并在创建或更新后立即退出。
+
+| 标志 | 用法 |
+| --- | --- |
+| `--dir DIR` | 项目目录。默认为当前工作目录。 |
+| `--dry-run` | 打印智能体负载和托管文件树，而不发送请求。 |
+| `--detach` | 在创建或更新后退出，而不轮询智能体健康端点。 |
+| `--reset` | 丢弃本地部署状态并创建新的智能体。当 `agent.json` 声明 `agent_id` 时不可用。 |
+| `--yes` | 在确认目标智能体更新时不提示。 |
+| `-h`, `--help` | 显示命令帮助。 |
+
+`deepagents deploy --dry-run` 打印 JSON，包含：
+
+| 字段 | 描述 |
+| --- | --- |
+| `agent_payload` | 托管深度智能体资源的创建或更新负载。 |
+| `directory_files` | 部署同步到 Context Hub 的托管文件树。 |
+
+### 面向现有智能体
+
+对于共享仓库或有意更新现有托管深度智能体，请在 `agent.json` 中声明目标：
+
+```json
+{
+  "name": "my-agent",
+  "agent_id": "agent-uuid",
+  "model": "openai:gpt-5.5",
+  "backend": {
+    "type": "state"
+  }
+}
+```
+
+首次使用时，CLI 会在更新远程代理前要求您确认。使用 `--yes` 可跳过此提示。
+
+### 部署前验证项目
+
+当项目格式不正确时，部署会在发送请求前失败。常见验证规则包括：
+
+- 必须包含 `agent.json` 和 `AGENTS.md`。
+- `agent.json` 必须包含非空 `name`。
+- `backend.sandbox_config` 要求 `backend.type` 为 `sandbox`。
+- `backend.sandbox_config.scope` 必须为 `thread` 或 `agent`。
+- `backend.sandbox_config.policy_ids` 必须为字符串数组。
+- `backend.sandbox_config.idle_ttl_seconds` 和 `backend.sandbox_config.delete_after_stop_seconds` 必须为整数。
+- 部署项目输入中不允许使用符号链接。
+- `tools.json` 必须包含 `tools` 数组。
+- `tools.json` 中的每个工具必须包含 `name` 和 `mcp_server_url`。
+- Skill 文件需要在 YAML frontmatter 中包含 `name` 和 `description`。
+- 子代理目录需要包含 `agent.json` 和 `AGENTS.md`。
+- 旧的 `deepagents.toml` 和 `mcp.json` 文件会生成迁移提示，而不是被部署。
+
+在部署前，CLI 还会验证引用的 MCP 服务器 URL。如果服务器 URL 未注册，部署会失败并显示添加它的命令提示。如果 OAuth 服务器已注册但调用者无法调用它，部署会失败并显示运行 `deepagents mcp-servers connect <id|name|url>` 的提示。
+
+## 管理代理
+
+列出代理：
+
+```bash
+deepagents agents list
+```
+
+该命令输出制表符分隔的行，包含代理 ID、代理名称和更新时间：
+
+```text
+e2de7a35-9dda-462b-b982-9e57051993bc\tmy-agent\t2026-06-01T12:00:00Z
+```
+
+检查代理：
+
+```bash
+deepagents agents get <agent_id>
+```
+
+<fragment>
+
+Include managed files in the response:
+
+
+</fragment>
+
+```bash
+deepagents agents get <agent_id> --include-files
+```
+
+| Flag | Use |
+| --- | --- |
+| `--include-files` | 在响应中包含托管文件。 |
+| `-h`, `--help` | 显示命令帮助。 |
+
+删除代理：
+
+```bash
+deepagents agents delete <agent_id>
+```
+
+delete 命令会要求确认。使用 `--yes` 可以跳过提示：
+
+```bash
+deepagents agents delete <agent_id> --yes
+```
+
+| 标志 | 用途 |
+| --- | --- |
+| `--yes` | 跳过确认提示。 |
+| `-h`, `--help` | 显示命令帮助。 |
+
+## 管理 MCP 服务器
+
+如需实际设置指南，请参阅[连接工具](/langsmith/managed-deep-agents-mcp)。
+
+| 命令 | 用途 |
+| --- | --- |
+| `deepagents mcp-servers list` | 列出 MCP 服务器 ID、名称和 URL。 |
+| `deepagents mcp-servers add --url URL` | 注册静态标头 MCP 服务器。 |
+| `deepagents mcp-servers add --url URL --auth-type oauth` | 注册 OAuth MCP 服务器。 |
+| `deepagents mcp-servers get <server>` | 将一个 MCP 服务器打印为 JSON，标头值已编辑。 |
+| `deepagents mcp-servers tools <server>` | 列出服务器工具并打印 `tools.json` 片段。 |
+| `deepagents mcp-servers update <server>` | 更新服务器 URL、标头或认证类型。 |
+| `deepagents mcp-servers delete <server>` | 删除一个 MCP 服务器。 |
+| `deepagents mcp-servers connect <server>` | 为一个 MCP 服务器启动或重用 OAuth 授权。 |
+
+接受 `<server>` 的命令接受 MCP 服务器 ID、精确名称或 URL。非 ID 值会针对 `deepagents mcp-servers list` 进行解析；URL 匹配忽略大小写和尾部斜杠。如果名称或 URL 匹配多个服务器，请使用服务器 ID 重新运行命令。
+
+### 添加 MCP 服务器
+
+注册一个静态标头服务器：
+
+```bash
+deepagents mcp-servers add \
+  --url https://example.com/mcp \
+  --name my-tools \
+  --header Authorization="Bearer <token>"
+```
+
+| 标志 | 用途 |
+| --- | --- |
+| `--url URL` | MCP 服务器 URL。必填。 |
+| `--name NAME` | 显示名称。默认为 URL 主机名。 |
+| `--header KEY=VALUE` | 静态凭证头。如有多个请求头，请重复使用此选项。 |
+| `--auth-type headers` | 静态请求头认证。这是默认选项。 |
+| `--auth-type oauth` | OAuth 认证。不可与 `--header` 一起使用。 |
+| `--connect` | 创建 OAuth MCP 服务器后启动 OAuth 连接。需要 `--auth-type oauth`。 |
+| `--no-tools` | 注册后跳过最佳效果工具列表。 |
+
+注册 OAuth MCP 服务器：
+
+```bash
+deepagents mcp-servers add \
+  --url https://example.com/mcp \
+  --name github-tools \
+  --auth-type oauth \
+  --connect
+```
+
+OAuth `add` 支持与 [`connect`](/langsmith/managed-deep-agents-cli#connect-oauth-mcp-servers) 相同的 OAuth 标志：`--scope`、`--force-new`、`--timeout` 和 `--no-browser`。
+
+### 列出 MCP 服务器工具
+
+列出已注册服务器的工具：
+
+```bash
+deepagents mcp-servers tools <id|name|url>
+```
+
+该命令打印每个工具名称及其描述的第一行，然后打印一个可粘贴的 `tools.json` 代码片段。对于 OAuth 服务器，请先连接以使 MCP 服务器记录包含调用者的 `oauth_provider_id`。
+
+### 更新 MCP 服务器
+
+更新服务器 URL 或请求头：
+
+```bash
+deepagents mcp-servers update <id|name|url> \
+  --url https://new.example.com/mcp \
+  --header Authorization="Bearer <token>"
+```
+
+| Flag | Use |
+| --- | --- |
+| `--url URL` | 替换服务器 URL。 |
+| `--header KEY=VALUE` | 使用提供的请求头集替换存储的请求头。如需添加多个请求头，请重复此操作。 |
+| `--clear-headers` | 清除存储的请求头。不能与 `--header` 结合使用。 |
+| `--auth-type headers` | 将身份验证类型设置为静态请求头。 |
+
+此命令需要至少一个更改标志。
+
+删除 MCP 服务器：
+
+```bash
+deepagents mcp-servers delete <id|name|url>
+```
+
+delete 命令会请求确认。使用 `--yes` 跳过提示：
+
+```bash
+deepagents mcp-servers delete <id|name|url> --yes
+```
+
+### 连接 OAuth MCP 服务器
+
+启动或复用 OAuth 授权：
+
+```bash
+deepagents mcp-servers connect <id|name|url>
+```
+
+| 标志 | 用法 |
+| --- | --- |
+| `--scope SCOPE` | 请求的 OAuth 范围。如有多个范围可重复使用。 |
+| `--force-new` | 创建新的 OAuth 会话，而非重用现有令牌。 |
+| `--timeout SECONDS` | 等待 OAuth 完成的时间（秒）。使用 `0` 跳过轮询。默认为 `300`。 |
+| `--no-browser` | 打印验证 URL 而不打开浏览器。 |
+
+如果授权待处理，CLI 会打印验证 URL。设置 `--timeout 0` 后，CLI 会启动授权并退出。稍后重新运行 `deepagents mcp-servers connect <id|name|url>` 以完成或重用连接。
+
+## 项目文件引用
+
+托管 Deep Agents 项目使用以下布局：
+
+```text
+my-agent/
+  agent.json
+  AGENTS.md
+  tools.json
+  skills/<name>/SKILL.md
+  skills/<name>/<file>
+  subagents/<name>/agent.json
+  subagents/<name>/AGENTS.md
+  subagents/<name>/tools.json
+  subagents/<name>/skills/<skill-name>/SKILL.md
+```
+
+### agent.json
+
+`agent.json` 配置托管深度代理资源：
+
+```json
+{
+  "name": "my-agent",
+  "description": "A managed deep agent.",
+  "model": "openai:gpt-5.5",
+  "backend": {
+    "type": "state"
+  }
+}
+```
+
+| 字段 | 描述 |
+| --- | --- |
+| `name` | 必填，非空代理名称。 |
+| `description` | 可选的代理描述。 |
+| `agent_id` | 可选，要更新的现有 Managed Deep Agent ID。 |
+| `model` | 可选，简化的模型标识符，格式为 `{provider}:{model_id}`。 |
+| `runtime` | 可选，API 形状的运行时对象。请使用 `model` 或 `runtime` 之一，不要同时使用。 |
+| `backend` | 可选的后端配置。 |
+| `permissions` | 可选的身份、可见性和租户访问设置。 |
+| `extras` | 可选的额外元数据，将传递给 API。 |
+
+### 配置后端
+
+由 `deepagents-cli>=0.2.2` 生成的 Managed Deep Agents 项目使用 `state` 后端。当代理需要隔离环境进行代码执行、文件系统操作或长时间运行的任务时，请使用 [LangSmith sandbox](/langsmith/sandboxes) 后端。
+
+| 后端类型 | 用途 |
+| --- | --- |
+| `state` | 不使用沙箱特定的后端行为。 |
+| `sandbox` 配合 `sandbox_config.scope: "thread"` | 将 LangSmith 沙箱资源限制在每个线程范围内。 |
+| `sandbox` 配合 `sandbox_config.scope: "agent"` | 将 LangSmith 沙箱资源限制在代理范围内。 |
+
+沙箱后端可以包含可选的沙箱设置：
+
+```json
+{
+  "backend": {
+    "type": "sandbox",
+    "sandbox_config": {
+      "scope": "thread",
+      "policy_ids": ["policy-id"],
+      "idle_ttl_seconds": 900,
+      "delete_after_stop_seconds": 300
+    }
+  }
+}
+```
+
+`backend.sandbox_config` 仅在 `backend.type` 为 `sandbox` 时有效。独立沙箱功能（如快照、服务 URL、权限、CLI 命令和 SDK 使用），请参阅 [LangSmith 沙箱概述](/langsmith/sandboxes)。
+
+| 字段 | 描述 |
+| --- | --- |
+| `scope` | 沙箱范围。使用 `thread` 为每个线程分配一个沙箱，或使用 `agent` 为代理分配一个共享沙箱。 |
+| `policy_ids` | 沙箱策略 ID 数组。 |
+| `idle_ttl_seconds` | 整数空闲超时。 |
+| `delete_after_stop_seconds` | 停止后的整数删除延迟。 |
+
+### 配置权限
+
+`agent.json` 中可选的 `permissions` 字段用于设置身份、可见性和租户访问权限。支持的值如下：
+
+| 字段 | 值 |
+| --- | --- |
+| `identity` | `personal`、`shared` |
+| `visibility` | `tenant`、`user` |
+| `tenant_access_level` | `read`、`run`、`write` |
+
+### AGENTS.md
+
+`AGENTS.md` 包含主代理指令。CLI 将此内容作为代理系统提示发送，并将其存储在托管文件树中。
+
+### tools.json
+
+`tools.json` 配置 MCP 支持的工具。`deepagents init` 创建此文件，包含一个空的 `tools` 数组。注册 MCP 服务器后添加工具条目：
+
+```json
+{
+  "tools": [
+    {
+      "name": "example_tool",
+      "mcp_server_url": "https://example.com/mcp",
+      "mcp_server_name": "my-tools",
+      "display_name": "example_tool"
+    }
+  ],
+  "interrupt_config": {
+    "https://example.com/mcp::example_tool": true
+  }
+}
+```
+
+每个工具需要 `name` 和 `mcp_server_url`。`mcp_server_name` 和 `display_name` 是可选的。`interrupt_config` 是可选的，如果存在则必须是一个对象。使用 `"{mcp_server_url}::{tool_name}"` 作为每个中断条目的键。为保持兼容性，也接受额外的 `::{mcp_server_name}` 组件。
+
+### 技能
+
+每个技能位于 `skills/<name>/SKILL.md`，需要 YAML frontmatter：
+
+```mdx
+---
+name: summarize
+description: Summarize text into a one-paragraph summary.
+---
+
+# Summarize
+
+Given a text, produce a one-paragraph summary.
+```
+
+CLI 会递归包含技能目录中的所有其他文件，但排除隐藏路径。
+
+### 子代理
+
+每个子代理位于 `subagents/<name>/` 下，并需要：
+
+| 文件 | 描述 |
+| --- | --- |
+| `agent.json` | 子代理元数据。支持 `description` 和 `model`。 |
+| `AGENTS.md` | 子代理指令。 |
+| `tools.json` | 子代理的可选 MCP 工具。 |
+| `skills/` | 可选的子代理本地技能。 |
+
+示例子代理 `agent.json`：
+
+```json
+{
+  "description": "Researches a topic.",
+  "model": "openai:gpt-5.5"
+}
+```
+
+旧的 `model_id` 键仍然被本地子代理文件接受，但新项目应该使用 `model`。REST API `SubagentSpec` 使用 `model_id`。
+
+子代理名称来自目录名称。名称检查时不区分大小写，以检测重复。

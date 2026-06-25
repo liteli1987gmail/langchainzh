@@ -1,0 +1,278 @@
+---
+title: "Amazon Bedrock agentcore 浏览器集成"
+description: "使用 LangChain Python 与 Amazon Bedrock agentcore 浏览器工具集成。"
+---
+
+[Amazon Bedrock AgentCore Browser](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/browser-tool.html) 使代理能够通过托管的 Chrome 浏览器与网页进行交互。代理可以在安全托管的环境中导航网站、提取内容、填写表单、点击元素和截取屏幕截图。
+
+## 概览
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [JS 支持](https://js.langchain.com/docs/integrations/tools/) | 版本 |
+|:------|:--------|:------------:|:---------------------------------------------------------------:|:--------:|
+| [`BrowserToolkit`](https://github.com/langchain-ai/langchain-aws/tree/main/libs/aws/langchain_aws/tools) | [`langchain-aws`](https://pypi.org/project/langchain-aws/) | ✅ | ❌ | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-aws?style=flat-square&label=%20) |
+
+### 工具特性
+
+| [返回制品](/oss/langchain/tools) | 原生异步 | 支持浏览器交互 | 定价 |
+|:-----------------------------------------------:|:------------:|:----------------------------:|:-------:|
+| ✅ | ✅ | ✅ | 按需付费 (AWS) |
+
+### 可用工具
+
+该工具包提供多个浏览器自动化工具：
+
+| 工具 | 描述 |
+|:-----|:------------|
+| `navigate_browser` | 导航到 URL |
+| `click_element` | 使用 CSS 选择器点击元素 |
+| `type_text` | 在输入框中输入文本 |
+| `extract_text` | 提取页面所有文本内容 |
+| `extract_hyperlinks` | 提取页面所有超链接 |
+| `get_elements` | 获取匹配 CSS 选择器的元素 |
+| `current_webpage` | 获取当前页面 URL 和标题 |
+| `navigate_back` | 返回上一页 |
+| `take_screenshot` | 截取页面截图 |
+| `scroll_page` | 沿指定方向滚动页面 |
+| `wait_for_element` | 等待元素出现 |
+
+## 设置
+
+该集成位于 `langchain-aws` 包中。它还需要 `playwright` 和 `beautifulsoup4` 用于浏览器自动化和 HTML 解析。
+
+<CodeGroup>
+    ```bash pip
+    pip install -U langchain-aws bedrock-agentcore playwright beautifulsoup4
+    playwright install chromium
+    ```
+    ```bash uv
+    uv add langchain-aws bedrock-agentcore playwright beautifulsoup4
+    playwright install chromium
+    ```
+</CodeGroup>
+
+### 凭证
+
+您需要配置具有 Bedrock AgentCore Browser 权限的 AWS 凭证。有关所需的 IAM 权限，请参阅 [Amazon Bedrock AgentCore 文档](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)。
+
+设置 LangSmith 以获得最佳可观测性也很有帮助（但不是必需的）：
+
+```python
+import os
+
+os.environ["LANGSMITH_API_KEY"] = "your-api-key"
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+## 实例化
+
+工具包通过以下方式创建，使用工厂函数：
+
+```python
+from langchain_aws.tools import create_browser_toolkit
+
+# Create toolkit and get tools
+toolkit, browser_tools = create_browser_toolkit(region="us-west-2")
+```
+
+## 调用
+
+### 直接使用工具
+
+获取特定工具并调用它们：
+
+```python
+# Get tools by name
+tools_by_name = toolkit.get_tools_by_name()
+
+# Navigate to a URL (requires config with thread_id)
+config = {"configurable": {"thread_id": "session-123"}}
+
+result = tools_by_name["navigate_browser"].invoke(
+    {"url": "https://example.com"},
+    config=config
+)
+print(result)
+
+# Extract text from the page
+text = tools_by_name["extract_text"].invoke({}, config=config)
+print(text)
+```
+
+### 在代理中使用
+
+```python
+import asyncio
+from langchain.agents import create_react_agent
+from langchain.chat_models import init_chat_model
+from langchain_aws.tools import create_browser_toolkit
+
+async def main():
+    # Create toolkit
+    toolkit, browser_tools = create_browser_toolkit(region="us-west-2")
+
+    # Initialize chat model
+    llm = init_chat_model(
+        "us.anthropic.claude-sonnet-4-20250514-v1:0",
+        model_provider="bedrock_converse",
+    )
+
+    # Create agent with browser tools
+    agent = create_react_agent(
+        model=llm,
+        tools=browser_tools,
+    )
+
+    # Create config with thread_id for session isolation
+    config = {"configurable": {"thread_id": "research-session"}}
+
+    # Run the agent
+    result = await agent.ainvoke(
+        {"messages": [{
+            "role": "user",
+            "content": "Navigate to https://example.com and tell me the main heading"
+        }]},
+        config=config
+    )
+    print(result["messages"][-1].content)
+
+    # Clean up when done
+    await toolkit.cleanup()
+
+asyncio.run(main())
+```
+
+## 基于线程的会话隔离
+
+工具包为每个 `thread_id` 维护独立的浏览器会话。这使得并发使用互不干扰：
+
+```python
+# Each thread gets its own browser session
+config_user1 = {"configurable": {"thread_id": "user-1"}}
+config_user2 = {"configurable": {"thread_id": "user-2"}}
+
+# User 1 navigates to site A
+tools_by_name["navigate_browser"].invoke(
+    {"url": "https://site-a.com"},
+    config=config_user1
+)
+
+# User 2 navigates to site B (different browser session)
+tools_by_name["navigate_browser"].invoke(
+    {"url": "https://site-b.com"},
+    config=config_user2
+)
+```
+
+## 浏览器操作
+
+### 导航
+
+```python
+config = {"configurable": {"thread_id": "session-123"}}
+
+# Navigate to URL
+tools_by_name["navigate_browser"].invoke({"url": "https://example.com"}, config=config)
+
+# Go back
+tools_by_name["navigate_back"].invoke({}, config=config)
+
+# Get current page info
+current = tools_by_name["current_webpage"].invoke({}, config=config)
+print(current)  # URL and title
+```
+
+### 与元素交互
+
+```python
+# Click an element
+tools_by_name["click_element"].invoke({"selector": "#submit-button"}, config=config)
+
+# Type into an input field
+tools_by_name["type_text"].invoke({
+    "selector": "input[name='search']",
+    "text": "search query"
+}, config=config)
+
+# Wait for element to appear
+tools_by_name["wait_for_element"].invoke({
+    "selector": ".results",
+    "timeout": 10000,  # 10 seconds
+    "state": "visible"
+}, config=config)
+```
+
+### 提取内容
+
+```python
+# Extract all text
+text = tools_by_name["extract_text"].invoke({}, config=config)
+
+# Extract all hyperlinks
+links = tools_by_name["extract_hyperlinks"].invoke({}, config=config)
+
+# Get specific elements
+elements = tools_by_name["get_elements"].invoke(
+    {"selector": "article h2"},
+    config=config
+)
+```
+
+### 截图和滚动
+
+```python
+# Take screenshot of visible viewport (returns base64 image)
+screenshot = tools_by_name["take_screenshot"].invoke(
+    {"capture_type": "viewport"},
+    config=config
+)
+
+# Take screenshot of entire scrollable page
+full_screenshot = tools_by_name["take_screenshot"].invoke(
+    {"capture_type": "full_page"},
+    config=config
+)
+
+# Scroll the page
+tools_by_name["scroll_page"].invoke({
+    "direction": "down",
+    "amount": 500  # pixels
+}, config=config)
+```
+
+## 会话清理
+
+完成后务必清理浏览器会话，以释放资源：
+
+```python
+# Clean up all browser sessions
+await toolkit.cleanup()
+```
+
+> **注意：** 虽然 `create_browser_toolkit()` 是同步的，但 `cleanup()` 方法是异步的，必须使用 await 等待。
+
+## 并发保护
+
+该工具包包含内置的并发保护功能。每个浏览器会话都绑定到特定的 `thread_id`，如果尝试在会话已被使用时再次访问，将引发 `RuntimeError`。并发操作请使用不同的 `thread_id` 值。
+
+```python
+# Good: Different thread IDs for concurrent operations
+config_a = {"configurable": {"thread_id": "task-a"}}
+config_b = {"configurable": {"thread_id": "task-b"}}
+
+# These can run concurrently without conflicts
+await asyncio.gather(
+    agent.ainvoke({"messages": [...]}, config=config_a),
+    agent.ainvoke({"messages": [...]}, config=config_b),
+)
+```
+
+---
+
+## API 参考
+
+有关所有功能和配置的详细文档，请参阅：
+
+- [langchain-aws API 参考](https://reference.langchain.com/python/langchain-aws)
+- [Amazon Bedrock AgentCore 文档](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)

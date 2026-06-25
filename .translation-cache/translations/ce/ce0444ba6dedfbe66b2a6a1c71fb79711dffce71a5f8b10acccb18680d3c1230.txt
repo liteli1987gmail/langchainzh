@@ -1,0 +1,177 @@
+---
+title: 技能
+description: 使用技能为您的代理提供特定能力。
+keywords: [ "skillify", "skill capture", "skill description", "skill routing", "routing trigger", "resolver", "resolver eval", "evals", "tracing" ]
+---
+
+技能是可重用的功能，为您的代理提供专业工作流程和领域知识。每个技能存储在代理的长期记忆中，位置为 `memories/skills/<skill-name>`。技能名称和描述在代理启动时加载。代理根据这些信息决定是否使用该技能。只有当代理确定技能与当前任务相关时，才会加载完整的技能文件。任何被引用的附加资源在变得相关时也可能被代理加载。
+
+使用技能可以带来以下帮助：
+
+- 仅提供与当前任务相关的上下文，从而节省 token 使用量。
+- 防止代理在系统提示中包含过多上下文，从而避免幻觉和错误响应。
+
+<Info>
+Fleet 技能基于 [Deep Agents](/oss/deepagents/skills) 构建，并遵循 [Agent Skills 规范](https://agentskills.io/specification)。有关技能结构、`SKILL.md` 格式和编写最佳实践的详细信息，请参阅 [Deep Agents 技能文档](/oss/deepagents/skills)。
+</Info>
+
+## 私有技能与共享技能
+
+技能可以是单个代理的**私有**技能，也可以在工作空间中**共享**：
+
+- **私有技能**：属于所属代理私有，存储在代理的长期记忆中。
+- **共享技能**：在工作空间中共享，并在 [**技能**](https://smith.langchain.com/agents/skills) 页面上列出。
+    - 工作空间中的所有代理都可见。
+    - 只有创建技能的用户才能编辑或删除它。
+    - 可以添加到工作空间中的任何代理，并在技能更新时保持同步。
+    - 通用聊天自动访问。
+
+## 编写有效的技能描述
+
+将描述写成何时使用该技能的说明，而不是对技能功能的标签。代理仅根据描述来路由任务。只有在决定使用该技能后，才会读取完整的技能文件。
+
+例如，不要写"帮助处理邮件"，而要写："在起草、回复或总结邮件时使用。包括语气调整、后续安排和收件箱分类。"
+
+描述过于宽泛意味着代理可能不会使用该技能，即使它能正确处理任务。描述与另一个技能重叠意味着代理可能会路由到错误的技能或无法做出选择。随着技能库的增多，需要检查描述是否存在重叠，并收窄任何模糊的描述。
+
+## 创建技能
+
+您可以通过两种方式创建技能：
+
+- **使用 AI**：用自然语言描述技能，代理会为您创建它。您还可以添加额外的资源。任何额外的文件都必须在 `SKILL.md` 中引用，代理才能识别它们。
+- **手动**：使用 `SKILL.md` 文件创建技能。
+
+<Note>
+默认情况下，技能属于所属代理**私有**，存储在代理的长期记忆中。您可以[将技能共享给工作空间](#share-a-skill)。
+</Note>
+
+<Tabs>
+    <Tab title="使用 AI">
+    在 [Fleet](https://smith.langchain.com/agents) 中，选择一个代理并提示它创建技能：
+
+    <Prompt description="Create a skill that helps the agent use the web to research a topic.">
+    创建一个帮助代理使用网络研究主题的技能。在被要求研究主题、人物、公司、技术、活动或任何需要从网络上收集和综合信息的问题时使用。包括新闻查询、竞品分析、背景研究和事实核查任务。对于大多数查询，优先使用 `tavily_web_search`。
+    </Prompt>
+
+    您也可以随时将之前的对话转换为可重用的技能。完成任务后，请代理捕获工作流程：
+
+    <Prompt description="Turn this conversation into a reusable skill.">
+    将我们刚才做的转换为一个技能，这样您将来可以重复它。
+    </Prompt>
+
+    </Tab>
+    <Tab title="从模板">
+
+    1. 导航到 [**Fleet > 技能**](https://smith.langchain.com/agents/skills)。
+    1. 浏览可用的模板并选择一个添加到您的代理。
+
+    </Tab>
+
+    <Tab title="手动">
+
+    1. 在 [Fleet](https://smith.langchain.com/agents) 中选择一个代理。
+    1. 点击 <Icon icon="pencil"/> **编辑代理**。
+    1. 在 **技能** 部分，点击 **创建**。
+    1. 输入技能名称、描述和指令。
+    1. 点击 **保存更改**。
+
+    </Tab>
+</Tabs>
+
+<Tip>
+创建新代理时，如果代理会从中受益，Fleet 会自动生成相关技能。这些技能默认是私有的。您可以从代理编辑器中[将它们共享到您的工作空间](#share-a-skill)。
+</Tip>
+
+## 修复重复出现的错误
+
+对于代理错误，默认响应是即时纠正。技能改变了这一点：它为代理提供明确的规则，在每次遇到该类任务时遵循，这样同样的错误就不会再次发生。
+
+当代理错误处理任务时，纠正它，然后请它捕获修复：
+
+<Prompt description="Capture this fix as a skill.">
+将这个纠正转换为一个技能，这样您总是以这种方式处理它。
+</Prompt>
+
+代理创建一个编码正确行为的 `SKILL.md`。在未来的会话中，它在处理该任务之前读取技能，而不是从头开始推理。
+
+## 编辑私有技能
+
+1. 在 [Fleet](https://smith.langchain.com/agents) 中选择一个代理。
+1. 点击 <Icon icon="pencil"/> **编辑代理**。
+1. 在 **技能** 部分，选择要编辑的技能。
+1. 更新技能名称、描述或指令。
+1. 点击 **保存更改**。
+
+## 编辑共享技能
+
+<Note>
+只有创建共享技能的用户才能编辑它。
+</Note>
+
+1. 导航到 [**Fleet > 技能**](https://smith.langchain.com/agents/skills)。
+1. 选择要编辑的技能。
+1. 更新技能名称、描述或指令。
+1. 点击 **保存更改**。
+
+## 共享技能
+
+1. 在 [Fleet](https://smith.langchain.com/agents) 中选择一个代理。
+1. 点击 <Icon icon="pencil"/> **编辑代理**。
+1. 在图形视图的 **技能** 部分，选择要共享的技能。
+1. 点击 <Icon icon="share"/>**共享**。
+
+共享后，技能会出现在 [**技能**](https://smith.langchain.com/agents/skills) 页面上。您可以从代理编辑器中将共享技能添加到工作空间中的任何代理，通用聊天会自动拾取它们。
+
+<Note>
+只有共享技能的创建者才能编辑或删除它。
+</Note>
+
+## 删除私有技能
+
+删除私有技能会永久移除它，因为它存储在该代理的内存中。
+
+1. 在 [Fleet](https://smith.langchain.com/agents) 中选择代理。
+1. 点击 <Icon icon="pencil"/> **编辑代理**。
+1. 在 **技能** 部分，点击要删除的技能的 <Icon icon="trash"/> 图标。
+
+## 删除共享技能
+
+只有创建共享技能的用户才能删除它。
+
+<Warning>
+删除技能会将其从工作空间和使用它的所有代理中移除。此操作无法撤消。
+</Warning>
+
+1. 导航到 [**Fleet > 技能**](https://smith.langchain.com/agents/skills)。
+1. 选择要删除的技能。
+1. 点击 <Icon icon="trash"/> **删除技能** 图标。
+
+## 在本地开发中使用 Fleet 技能
+
+使用 LangSmith CLI 从您的 Fleet 工作空间下载技能并本地安装，以便在 Claude Code、Cursor 或 Codex 等编码代理中使用。
+
+默认情况下，文件保存到 `~/.agents/skills/[skill-name]/` 并符号链接到 `~/.claude/skills/[skill-name]/`。
+
+```bash
+langsmith fleet skills pull [skill-name] [flags]
+```
+
+| 标志 | 描述 |
+|------|-------------|
+| `--global=false` | 安装到项目级目录（`.agents/` 和 `.claude/`）而不是主目录。 |
+| `--agent` | 指定特定的代理（`claude`、`cursor`、`codex`）。 |
+| `--copy` | 复制文件而不是创建符号链接。 |
+| `--format pretty` | 显示已安装技能的目录树。 |
+
+例如：
+
+```bash
+$ langsmith fleet skills pull web-research --format pretty
+Installed skill "web-research" to ~/.agents/skills/web-research
+  Linked: ~/.claude/skills/web-research
+
+web-research/
+├── SKILL.md
+└── references/
+    └── search-tips.md
+```

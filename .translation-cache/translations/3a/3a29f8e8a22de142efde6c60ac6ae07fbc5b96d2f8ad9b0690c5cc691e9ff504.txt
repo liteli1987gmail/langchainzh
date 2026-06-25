@@ -1,0 +1,67 @@
+---
+title: GRAPH_RECURSION_LIMIT
+---
+
+您的 LangGraph [`StateGraph`](https://langchain-ai.github.io/langgraph/reference/graphs/#langgraph.graph.state.StateGraph) 在达到停止条件之前已达到最大步数限制。
+这通常是由如下代码导致的无限循环造成的：
+
+:::python
+```python
+class State(TypedDict):
+    some_key: str
+
+builder = StateGraph(State)
+builder.add_node("a", ...)
+builder.add_node("b", ...)
+builder.add_edge("a", "b")
+builder.add_edge("b", "a")
+...
+
+graph = builder.compile()
+```
+:::
+
+:::js
+```typescript
+import { StateGraph, StateSchema } from "@langchain/langgraph";
+import { z } from "zod/v4";
+
+const State = new StateSchema({
+  someKey: z.string(),
+});
+
+const builder = new StateGraph(State)
+  .addNode("a", ...)
+  .addNode("b", ...)
+  .addEdge("a", "b")
+  .addEdge("b", "a")
+  ...
+
+const graph = builder.compile();
+```
+:::
+
+然而，复杂图可能会自然地触及默认限制。
+
+## 故障排除
+
+* 如果你并不期望图经历多次迭代，那么你可能遇到了循环。请检查你的逻辑中是否存在无限循环。
+
+:::python
+* 如果你的图很复杂，你可以在调用图时将更高的 `recursion_limit` 值传入 `config` 对象中，像这样：
+
+```python
+graph.invoke({...}, {"recursion_limit": 1000})
+```
+:::
+
+:::js
+* 如果你有一个复杂的图，你可以在调用图时向 `config` 对象传入更高的 `recursionLimit` 值，像这样：
+
+
+</fragment>
+
+```typescript
+await graph.invoke({...}, { recursionLimit: 1000 });
+```
+:::

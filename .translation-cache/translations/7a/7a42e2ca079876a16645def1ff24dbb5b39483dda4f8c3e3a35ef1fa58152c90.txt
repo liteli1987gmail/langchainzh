@@ -1,0 +1,142 @@
+---
+title: "NomicEmbeddings 集成"
+description: "使用 LangChain Python 集成 NomicEmbeddings 嵌入模型。"
+---
+
+这将帮助您开始使用 LangChain 的 Nomic 嵌入模型。有关 `NomicEmbeddings` 功能配置选项的详细文档，请参阅 [API 参考文档](https://reference.langchain.com/python/langchain-nomic/embeddings/NomicEmbeddings)。
+
+## 概述
+
+### 集成详情
+
+<ItemTable category="embeddings" item="Nomic" />
+
+## 安装
+
+要访问 Nomic 嵌入模型，您需要创建一个 Nomic 账户，获取 API 密钥，并安装 `langchain-nomic` 集成包。
+
+### 凭证
+
+访问 [https://atlas.nomic.ai/](https://atlas.nomic.ai/) 注册 Nomic 并生成 API 密钥。完成此操作后，设置 `NOMIC_API_KEY` 环境变量：
+
+```python
+import getpass
+import os
+
+if not os.getenv("NOMIC_API_KEY"):
+    os.environ["NOMIC_API_KEY"] = getpass.getpass("Enter your Nomic API key: ")
+```
+
+要启用模型调用的自动追踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+```
+
+### 安装
+
+LangChain Nomic 集成位于 `langchain-nomic` 包中：
+
+```python
+pip install -qU langchain-nomic
+```
+
+## 实例化
+
+现在我们可以实例化模型对象并生成聊天补全：
+
+```python
+from langchain_nomic import NomicEmbeddings
+
+embeddings = NomicEmbeddings(
+    model="nomic-embed-text-v1.5",
+    # dimensionality=256,
+    # Nomic's `nomic-embed-text-v1.5` model was [trained with Matryoshka learning](https://blog.nomic.ai/posts/nomic-embed-matryoshka)
+    # to enable variable-length embeddings with a single model.
+    # This means that you can specify the dimensionality of the embeddings at inference time.
+    # The model supports dimensionality from 64 to 768.
+    # inference_mode="remote",
+    # One of `remote`, `local` (Embed4All), or `dynamic` (automatic). Defaults to `remote`.
+    # api_key=... , # if using remote inference,
+    # device="cpu",
+    # The device to use for local embeddings. Choices include
+    # `cpu`, `gpu`, `nvidia`, `amd`, or a specific device name. See
+    # the docstring for `GPT4All.__init__` for more info. Typically
+    # defaults to CPU. Do not use on macOS.
+)
+```
+
+## 索引与检索
+
+嵌入模型常用于检索增强生成（RAG）流程，既可以作为索引数据的一部分，也可以在后续检索时使用。更多详细说明，请参阅我们的 [RAG 教程](/oss/langchain/rag)。
+
+下文展示如何使用上面初始化的 `embeddings` 对象来索引和检索数据。在本例中，我们将在 `InMemoryVectorStore` 中索引和检索一个示例文档。
+
+```python
+# Create a vector store with a sample text
+from langchain_core.vectorstores import InMemoryVectorStore
+
+text = "LangChain is the framework for building context-aware reasoning applications"
+
+vectorstore = InMemoryVectorStore.from_texts(
+    [text],
+    embedding=embeddings,
+)
+
+# Use the vectorstore as a retriever
+retriever = vectorstore.as_retriever()
+
+# Retrieve the most similar text
+retrieved_documents = retriever.invoke("What is LangChain?")
+
+# show the retrieved document's content
+retrieved_documents[0].page_content
+```
+
+```text
+'LangChain is the framework for building context-aware reasoning applications'
+```
+
+## 直接使用
+
+在底层，向量存储和检索器的实现会调用 `embeddings.embed_documents(...)` 和 `embeddings.embed_query(...)` 来分别为 `from_texts` 和检索 `invoke` 操作中使用的文本创建嵌入。
+
+您可以直接调用这些方法为您的自定义用例获取嵌入。
+
+### 嵌入单个文本
+
+您可以使用 `embed_query` 嵌入单个文本或文档：
+
+```python
+single_vector = embeddings.embed_query(text)
+print(str(single_vector)[:100])  # Show the first 100 characters of the vector
+```
+
+```text
+[0.024642944, 0.029083252, -0.14013672, -0.09082031, 0.058898926, -0.07489014, -0.0138168335, 0.0037
+```
+
+### 嵌入多个文本
+
+你可以使用 `embed_documents` 嵌入多个文本：
+
+```python
+text2 = (
+    "LangGraph is a library for building stateful, multi-actor applications with LLMs"
+)
+two_vectors = embeddings.embed_documents([text, text2])
+for vector in two_vectors:
+    print(str(vector)[:100])  # Show the first 100 characters of the vector
+```
+
+```text
+[0.012771606, 0.023727417, -0.12365723, -0.083740234, 0.06530762, -0.07110596, -0.021896362, -0.0068
+[-0.019058228, 0.04058838, -0.15222168, -0.06842041, -0.012130737, -0.07128906, -0.04534912, 0.00522
+```
+
+---
+
+## API 参考
+
+有关 `NomicEmbeddings` 功能和配置选项的详细文档，请参阅 [API 参考](https://reference.langchain.com/python/langchain-nomic/embeddings/NomicEmbeddings)。

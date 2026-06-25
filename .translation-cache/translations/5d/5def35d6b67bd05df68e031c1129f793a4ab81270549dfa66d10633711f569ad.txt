@@ -1,0 +1,327 @@
+---
+title: 自定义工作流
+---
+
+在**自定义工作流**架构中，您可以使用 [LangGraph](/oss/langgraph/overview) 定义自己定制化的执行流程。您可以完全控制图结构——包括顺序步骤、条件分支、循环和并行执行。
+
+```mermaid
+graph LR
+    A([Input]) --> B{{Conditional}}
+    B -->|path_a| C[Deterministic step]
+    B -->|path_b| D((Agentic step))
+    C --> G([Output])
+    D --> G([Output])
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef decision fill:#FDF3FF,stroke:#7E65AE,stroke-width:2px,color:#504B5F
+
+    class A,G trigger
+    class C,D process
+    class B decision
+```
+
+## 主要特点
+
+- 完全控制图形结构
+- 将确定性逻辑与代理行为混合使用
+- 支持顺序步骤、条件分支、循环和并行执行
+- 在工作流中将其他模式作为节点嵌入
+
+## 使用场景
+
+当标准模式（子代理、技能等）不符合您的需求、您需要将确定性逻辑与代理行为混合使用，或您的用例需要复杂路由或多阶段处理时，请使用自定义工作流。
+
+工作流中的每个节点可以是简单的函数、LLM 调用或带有[工具](/oss/langchain/tools)的完整[代理](/oss/langchain/agents)。您还可以在自定义工作流中组合其他架构——例如，将多代理系统作为单个节点嵌入。
+
+有关自定义工作流的完整示例，请参阅下面的教程。
+
+<Card
+    title="教程：使用路由构建多源知识库"
+    icon="book"
+    href="/oss/langchain/multi-agent/router-knowledge-base"
+    arrow cta="了解更多"
+>
+    [路由模式](/oss/langchain/multi-agent/router) 是自定义工作流的一个示例。本教程将逐步引导您构建一个可并行查询 GitHub、Notion 和 Slack 的路由器，然后综合处理结果。
+>
+</Card>
+
+## 基本实现
+
+核心洞察是您可以直接在任何 LangGraph 节点内调用 LangChain 代理，将自定义工作流的灵活性与预构建代理的便利性相结合：
+
+:::python
+```python
+from langchain.agents import create_agent
+from langgraph.graph import StateGraph, START, END
+
+agent = create_agent(model="openai:gpt-5.5", tools=[...])
+
+def agent_node(state: State) -> dict:
+    """A LangGraph node that invokes a LangChain agent."""
+    result = agent.invoke({
+        "messages": [{"role": "user", "content": state["query"]}]
+    })
+    return {"answer": result["messages"][-1].content}
+
+# Build a simple workflow
+workflow = (
+    StateGraph(State)
+    .add_node("agent", agent_node)
+    .add_edge(START, "agent")
+    .add_edge("agent", END)
+    .compile()
+)
+```
+:::
+:::js
+```typescript
+import { z } from "zod";
+import { createAgent } from "langchain";
+import { StateGraph, START, END, StateSchema, MessagesValue } from "@langchain/langgraph";
+
+const agent = createAgent({ model: "openai:gpt-4o", tools: [...] });
+
+const AgentState = new StateSchema({
+  messages: MessagesValue,
+  query: z.string(),
+});
+
+const agentNode: GraphNode<typeof AgentState> = (state) => {
+  // A LangGraph node that invokes a LangChain agent
+  const result = await agent.invoke({
+    messages: [{ role: "user", content: state.query }]
+  });
+  return { answer: result.messages.at(-1)?.content };
+}
+
+// Build a simple workflow
+const workflow = new StateGraph(State)
+  .addNode("agent", agentNode)
+  .addEdge(START, "agent")
+  .addEdge("agent", END)
+  .compile();
+```
+## 示例：RAG 管道
+
+一个常见用例是将[检索](/oss/langchain/retrieval)与智能体结合使用。本示例构建了一个 WNBA 数据统计助手，能够从知识库检索信息并获取实时新闻。
+
+<Accordion title="自定义 RAG 工作流">
+
+该工作流展示了三种类型的节点：
+
+- **模型节点** (Rewrite)：使用[结构化输出](/oss/langchain/structured-output)重写用户查询，以实现更好的检索效果。
+- **确定性节点** (Retrieve)：执行向量相似度搜索——不涉及 LLM。
+- **智能体节点** (Agent)：对检索到的上下文进行推理，并能通过工具获取额外信息。
+
+```mermaid
+graph LR
+    A([Query]) --> B{{Rewrite}}
+    B --> C[(Retrieve)]
+    C --> D((Agent))
+    D --> E([Response])
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+
+    class A,E trigger
+    class B,C,D process
+```
+
+<Tip>
+您可以使用 LangGraph 状态在工作流步骤之间传递信息。这允许工作流的每个部分读取和更新结构化字段，从而可以轻松地在节点之间共享数据和上下文。
+</Tip>
+
+:::python
+```python
+from typing import TypedDict
+from pydantic import BaseModel
+from langgraph.graph import StateGraph, START, END
+from langchain.agents import create_agent
+from langchain.tools import tool
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.vectorstores import InMemoryVectorStore
+
+class State(TypedDict):
+    question: str
+    rewritten_query: str
+    documents: list[str]
+    answer: str
+
+# WNBA knowledge base with rosters, game results, and player stats
+embeddings = OpenAIEmbeddings()
+vector_store = InMemoryVectorStore(embeddings)
+vector_store.add_texts([
+    # Rosters
+    "New York Liberty 2024 roster: Breanna Stewart, Sabrina Ionescu, Jonquel Jones, Courtney Vandersloot.",
+    "Las Vegas Aces 2024 roster: A'ja Wilson, Kelsey Plum, Jackie Young, Chelsea Gray.",
+    "Indiana Fever 2024 roster: Caitlin Clark, Aliyah Boston, Kelsey Mitchell, NaLyssa Smith.",
+    # Game results
+    "2024 WNBA Finals: New York Liberty defeated Minnesota Lynx 3-2 to win the championship.",
+    "June 15, 2024: Indiana Fever 85, Chicago Sky 79. Caitlin Clark had 23 points and 8 assists.",
+    "August 20, 2024: Las Vegas Aces 92, Phoenix Mercury 84. A'ja Wilson scored 35 points.",
+    # Player stats
+    "A'ja Wilson 2024 season stats: 26.9 PPG, 11.9 RPG, 2.6 BPG. Won MVP award.",
+    "Caitlin Clark 2024 rookie stats: 19.2 PPG, 8.4 APG, 5.7 RPG. Won Rookie of the Year.",
+    "Breanna Stewart 2024 stats: 20.4 PPG, 8.5 RPG, 3.5 APG.",
+])
+retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+
+@tool
+def get_latest_news(query: str) -> str:
+    """Get the latest WNBA news and updates."""
+    # Your news API here
+    return "Latest: The WNBA announced expanded playoff format for 2025..."
+
+agent = create_agent(
+    model="openai:gpt-5.5",
+    tools=[get_latest_news],
+)
+
+model = ChatOpenAI(model="gpt-5.5")
+
+class RewrittenQuery(BaseModel):
+    query: str
+
+def rewrite_query(state: State) -> dict:
+    """Rewrite the user query for better retrieval."""
+    system_prompt = """Rewrite this query to retrieve relevant WNBA information.
+The knowledge base contains: team rosters, game results with scores, and player statistics (PPG, RPG, APG).
+Focus on specific player names, team names, or stat categories mentioned."""
+    response = model.with_structured_output(RewrittenQuery).invoke([
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": state["question"]}
+    ])
+    return {"rewritten_query": response.query}
+
+def retrieve(state: State) -> dict:
+    """Retrieve documents based on the rewritten query."""
+    docs = retriever.invoke(state["rewritten_query"])
+    return {"documents": [doc.page_content for doc in docs]}
+
+def call_agent(state: State) -> dict:
+    """Generate answer using retrieved context."""
+    context = "\n\n".join(state["documents"])
+    prompt = f"Context:\n{context}\n\nQuestion: {state['question']}"
+    response = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+    return {"answer": response["messages"][-1].content_blocks}
+
+workflow = (
+    StateGraph(State)
+    .add_node("rewrite", rewrite_query)
+    .add_node("retrieve", retrieve)
+    .add_node("agent", call_agent)
+    .add_edge(START, "rewrite")
+    .add_edge("rewrite", "retrieve")
+    .add_edge("retrieve", "agent")
+    .add_edge("agent", END)
+    .compile()
+)
+
+result = workflow.invoke({"question": "Who won the 2024 WNBA Championship?"})
+print(result["answer"])
+```
+:::
+:::js
+```typescript
+import { StateGraph, Annotation, START, END } from "@langchain/langgraph";
+import { createAgent, tool } from "langchain";
+import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+import * as z from "zod";
+
+const State = Annotation.Root({
+  question: Annotation<string>(),
+  rewrittenQuery: Annotation<string>(),
+  documents: Annotation<string[]>(),
+  answer: Annotation<string>(),
+});
+
+// WNBA knowledge base with rosters, game results, and player stats
+const embeddings = new OpenAIEmbeddings();
+const vectorStore = await MemoryVectorStore.fromTexts(
+  [
+    // Rosters
+    "New York Liberty 2024 roster: Breanna Stewart, Sabrina Ionescu, Jonquel Jones, Courtney Vandersloot.",
+    "Las Vegas Aces 2024 roster: A'ja Wilson, Kelsey Plum, Jackie Young, Chelsea Gray.",
+    "Indiana Fever 2024 roster: Caitlin Clark, Aliyah Boston, Kelsey Mitchell, NaLyssa Smith.",
+    // Game results
+    "2024 WNBA Finals: New York Liberty defeated Minnesota Lynx 3-2 to win the championship.",
+    "June 15, 2024: Indiana Fever 85, Chicago Sky 79. Caitlin Clark had 23 points and 8 assists.",
+    "August 20, 2024: Las Vegas Aces 92, Phoenix Mercury 84. A'ja Wilson scored 35 points.",
+    // Player stats
+    "A'ja Wilson 2024 season stats: 26.9 PPG, 11.9 RPG, 2.6 BPG. Won MVP award.",
+    "Caitlin Clark 2024 rookie stats: 19.2 PPG, 8.4 APG, 5.7 RPG. Won Rookie of the Year.",
+    "Breanna Stewart 2024 stats: 20.4 PPG, 8.5 RPG, 3.5 APG.",
+  ],
+  [{}, {}, {}, {}, {}, {}, {}, {}, {}],
+  embeddings
+);
+const retriever = vectorStore.asRetriever({ k: 5 });
+
+const getLatestNews = tool(
+  async ({ query }) => {
+    // Your news API here
+    return "Latest: The WNBA announced expanded playoff format for 2025...";
+  },
+  {
+    name: "get_latest_news",
+    description: "Get the latest WNBA news and updates",
+    schema: z.object({ query: z.string() }),
+  }
+);
+
+const agent = createAgent({
+  model: "openai:gpt-5.5",
+  tools: [getLatestNews],
+});
+
+const model = new ChatOpenAI({ model: "gpt-5.5" });
+
+const RewrittenQuery = z.object({ query: z.string() });
+
+async function rewriteQuery(state: typeof State.State) {
+  const systemPrompt = `Rewrite this query to retrieve relevant WNBA information.
+The knowledge base contains: team rosters, game results with scores, and player statistics (PPG, RPG, APG).
+Focus on specific player names, team names, or stat categories mentioned.`;
+  const response = await model.withStructuredOutput(RewrittenQuery).invoke([
+    { role: "system", content: systemPrompt },
+    { role: "user", content: state.question },
+  ]);
+  return { rewrittenQuery: response.query };
+}
+
+async function retrieve(state: typeof State.State) {
+  const docs = await retriever.invoke(state.rewrittenQuery);
+  return { documents: docs.map((doc) => doc.pageContent) };
+}
+
+async function callAgent(state: typeof State.State) {
+  const context = state.documents.join("\n\n");
+  const prompt = `Context:\n${context}\n\nQuestion: ${state.question}`;
+  const response = await agent.invoke({
+    messages: [{ role: "user", content: prompt }],
+  });
+  return { answer: response.messages.at(-1)?.contentBlocks };
+}
+
+const workflow = new StateGraph(State)
+  .addNode("rewrite", rewriteQuery)
+  .addNode("retrieve", retrieve)
+  .addNode("agent", callAgent)
+  .addEdge(START, "rewrite")
+  .addEdge("rewrite", "retrieve")
+  .addEdge("retrieve", "agent")
+  .addEdge("agent", END)
+  .compile();
+
+const result = await workflow.invoke({
+  question: "Who won the 2024 WNBA Championship?",
+});
+console.log(result.answer);
+```
+```md
+:::
+
+</Accordion>
+```

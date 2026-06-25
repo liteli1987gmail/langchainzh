@@ -1,0 +1,243 @@
+---
+title: 使用服务器 API 进行时间旅行
+sidebarTitle: 使用服务器 API 进行时间旅行
+---
+
+LangGraph 提供了[**时间旅行**](/oss/langgraph/use-time-travel)功能，可以从先前的检查点恢复执行，既可以重放相同的状态，也可以修改它以探索替代方案。在所有情况下，恢复过去的执行都会在历史中产生一个新的分支。
+
+要使用 LangSmith Deployment API（通过 LangGraph SDK）进行时间旅行：
+
+1. **使用初始输入运行图**：使用 [LangGraph SDK](/langsmith/langgraph-python-sdk) 的 @[client.runs.wait] 或 @[client.runs.stream] API 运行图。
+2. **识别现有线程中的检查点**：使用 @[client.threads.get_history] 方法获取特定 `thread_id` 的执行历史，并找到所需的 `checkpoint_id`。
+  或者，在要暂停执行的节点之前设置[断点](/oss/langgraph/interrupts)。然后可以找到该断点之前记录的最新检查点。
+3. **（可选）修改图状态**：使用 @[client.threads.update_state] 方法在检查点处修改图的状态，并从替代状态恢复执行。
+4. **从检查点恢复执行**：使用 @[client.runs.wait] 或 @[client.runs.stream] API，输入为 `None`，并提供相应的 `thread_id` 和 `checkpoint_id`。
+
+## 在工作流中使用时间旅行
+
+<Accordion title="示例图">
+
+</fragment>
+    ```python
+    from typing_extensions import TypedDict, NotRequired
+    from langgraph.graph import StateGraph, START, END
+    from langchain.chat_models import init_chat_model
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    class State(TypedDict):
+        topic: NotRequired[str]
+        joke: NotRequired[str]
+
+    model = init_chat_model(
+        "claude-sonnet-4-6",
+        temperature=0,
+    )
+
+    def generate_topic(state: State):
+        """LLM call to generate a topic for the joke"""
+        msg = model.invoke("Give me a funny topic for a joke")
+        return {"topic": msg.content}
+
+    def write_joke(state: State):
+        """LLM call to write a joke based on the topic"""
+        msg = model.invoke(f"Write a short joke about {state['topic']}")
+        return {"joke": msg.content}
+
+    # Build workflow
+    builder = StateGraph(State)
+
+    # Add nodes
+    builder.add_node("generate_topic", generate_topic)
+    builder.add_node("write_joke", write_joke)
+
+    # Add edges to connect nodes
+    builder.add_edge(START, "generate_topic")
+    builder.add_edge("generate_topic", "write_joke")
+
+    # Compile
+    graph = builder.compile()
+    ```
+</Accordion>
+
+### 1. 运行图表
+
+<Tabs>
+    <Tab title="Python">
+    ```python
+    from langgraph_sdk import get_client
+    client = get_client(url=<DEPLOYMENT_URL>)
+
+    # Using the graph deployed with the name "agent"
+    assistant_id = "agent"
+
+    # create a thread
+    thread = await client.threads.create()
+    thread_id = thread["thread_id"]
+
+    # Run the graph
+    result = await client.runs.wait(
+        thread_id,
+        assistant_id,
+        input={}
+    )
+    ```
+</Tab>
+    <Tab title="JavaScript">
+    ```js
+    import { Client } from "@langchain/langgraph-sdk";
+    const client = new Client({ apiUrl: <DEPLOYMENT_URL> });
+
+    // Using the graph deployed with the name "agent"
+    const assistantID = "agent";
+
+    // create a thread
+    const thread = await client.threads.create();
+    const threadID = thread["thread_id"];
+
+    // Run the graph
+    const result = await client.runs.wait(
+      threadID,
+      assistantID,
+      { input: {}}
+    );
+    ```
+</Tab>
+<Tab title="cURL">
+创建线程：
+
+    ```bash
+    curl --request POST \
+    --url <DEPLOYMENT_URL>/threads \
+    --header 'Content-Type: application/json' \
+    --data '{}'
+    ```
+
+运行图:
+
+    ```bash
+    curl --request POST \
+    --url <DEPLOYMENT_URL>/threads/<THREAD_ID>/runs/wait \
+    --header 'Content-Type: application/json' \
+    --data "{
+      \"assistant_id\": \"agent\",
+      \"input\": {}
+    }"
+    ```
+</Tab>
+</Tabs>
+
+### 2. 识别检查点
+
+<Tabs>
+    <Tab title="Python">
+    ```python
+    # The states are returned in reverse chronological order.
+    states = await client.threads.get_history(thread_id)
+    selected_state = states[1]
+    print(selected_state)
+    ```
+</Tab>
+    <Tab title="JavaScript">
+    ```js
+    // The states are returned in reverse chronological order.
+    const states = await client.threads.getHistory(threadID);
+    const selectedState = states[1];
+    console.log(selectedState);
+    ```
+</Tab>
+    <Tab title="cURL">
+    ```bash
+    curl --request GET \
+    --url <DEPLOYMENT_URL>/threads/<THREAD_ID>/history \
+    --header 'Content-Type: application/json'
+    ```
+</Tab>
+</Tabs>
+
+<a id="optional"></a>
+### 3. 更新状态
+
+@[`update_state`] 会创建一个新的检查点。新的检查点将与同一个线程关联，但会有一个新的检查点 ID。
+
+<Tabs>
+    <Tab title="Python">
+
+</fragment>
+    ```python {highlight={4}}
+    new_config = await client.threads.update_state(
+        thread_id,
+        {"topic": "chickens"},
+        checkpoint_id=selected_state["checkpoint_id"]
+    )
+    print(new_config)
+```
+</Tab>
+    <Tab title="JavaScript">
+    ```js
+    const newConfig = await client.threads.updateState(
+      threadID,
+      {
+        values: { "topic": "chickens" },
+        checkpointId: selectedState["checkpoint_id"]
+      }
+    );
+    console.log(newConfig);
+    ```
+</Tab>
+    <Tab title="cURL">
+
+</fragment>
+    ```bash
+    curl --request POST \
+    --url <DEPLOYMENT_URL>/threads/<THREAD_ID>/state \
+    --header 'Content-Type: application/json' \
+    --data "{
+      \"assistant_id\": \"agent\",
+      \"checkpoint_id\": <CHECKPOINT_ID>,
+      \"values\": {\"topic\": \"chickens\"}
+    }"
+    ```
+</Tab>
+</Tabs>
+
+### 4. 从检查点恢复执行
+
+<Tabs>
+    <Tab title="Python">
+    ```python {highlight={4,5}}
+    await client.runs.wait(
+        thread_id,
+        assistant_id,
+        input=None,
+        checkpoint_id=new_config["checkpoint_id"]
+    )
+```
+</Tab>
+    <Tab title="JavaScript">
+    ```javascript {highlight={5,6}}
+    await client.runs.wait(
+      threadID,
+      assistantID,
+      {
+        input: null,
+        checkpointId: newConfig["checkpoint_id"]
+      }
+    );
+```
+</Tab>
+    <Tab title="cURL">
+    ```bash
+    curl --request POST \
+    --url <DEPLOYMENT_URL>/threads/<THREAD_ID>/runs/wait \
+    --header 'Content-Type: application/json' \
+    --data "{
+      \"assistant_id\": \"agent\",
+      \"checkpoint_id\": <CHECKPOINT_ID>
+    }"
+    ```
+</Tab>
+</Tabs>
+
+## 了解更多
+
+* [**LangGraph 时间旅行指南**](/oss/langgraph/use-time-travel)：了解更多关于在 LangGraph 中使用时间旅行的信息。

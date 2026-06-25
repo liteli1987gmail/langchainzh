@@ -1,0 +1,228 @@
+---
+title: 使用 LangSmith Engine 查找并修复 Agent 故障
+sidebarTitle: 查找并修复问题
+description: 使用 LangSmith Engine 自动检测并解决追踪项目中的重复问题。
+---
+
+LangSmith Engine 将您的追踪转化为一个持续改进的工作流程。它会发现重复出现的问题，诊断其根本原因，并指导您修复这些问题并防止它们再次发生。
+
+每个问题都经历一个闭环：追踪中检测到重复失败 → 诊断根本原因 → 提出修复方案 → 部署评估器以捕获回归 → 如果问题在关闭后再次出现，它会自动重新打开。
+
+对于每个问题，LangSmith Engine 会显示相关追踪，提出修复方案，生成自定义评估器以防止回归，并从生产追踪输入创建自定义真值 [数据集示例](/langsmith/manage-datasets)，用于离线评估。
+
+## 您可以做什么
+
+<CardGroup cols={2}>
+  <Card title="构建：打开拉取请求" icon="git-pull-request" href="#open-a-pull-request">
+    通过在已连接的仓库中打开拉取请求来应用提议的修复方案。
+  </Card>
+  <Card title="测试：向数据集添加离线示例" icon="database" href="#add-offline-examples">
+    从生产追踪生成自定义真值数据集示例，用于离线评估。
+  </Card>
+  <Card title="监控：创建在线评估器" icon="chart-line" href="#create-an-evaluator">
+    部署自定义评估器以捕获未来追踪中的回归。
+  </Card>
+</CardGroup>
+
+## 设置 LangSmith Engine
+
+设置 LangSmith Engine 需要两个步骤：[组织管理员](/langsmith/rbac#organization-admin) 首先为工作区启用 Engine，然后任何用户都可以为每个追踪项目配置 Engine。
+
+### 为您的组织启用 Engine
+
+<Note>您必须是 [**组织管理员**](/langsmith/rbac#organization-admin) 才能启用 Engine。要查找管理员，请打开 **设置**，在 **访问和安全** 下选择 **成员**，然后查找具有 **组织管理员** 角色的成员。</Note>
+
+<Steps>
+  <Step title="打开 Engine 启用设置">
+    在 [LangSmith 控制台](https://smith.langchain.com) 中，点击左下角的 **设置**，然后在 **Engine** 下选择 **Engine 启用**。
+  </Step>
+  <Step title="切换启用 Engine">
+    开启 **启用 Engine** 开关并确认 AI 功能服务条款：
+
+    > LangSmith AI 功能由 LangChain 管理的推理提供支持，为您的可观测性工作流程带来智能。启用 LangSmith AI 后，您的团队可以更快地发现问题的解决方案，运行更智能的评估，并构建更可靠的 LLM 应用程序。启用此功能后，您组织的追踪数据将使用 LangChain 管理的 LLM 密钥进行处理。须遵守我们的服务条款。
+  </Step>
+</Steps>
+
+启用 Engine 后，组织中的任何团队成员都可以为其追踪项目进行设置。
+
+<Tip>
+  如果您想关闭 Engine，请将相同的设置切换为关闭。这将停止 Engine 的所有自动运行，并停止您账户中的未来计费。
+</Tip>
+
+### 了解 LCU 成本
+
+Engine 以 **LangChain 计算单元 (LCU)** 计费，这是一种结合了计算、存储、内存和 LLM 支出的标准化工作单元。追踪、深度思考和所需工作量越多，Engine 消耗的 LCU 就越多。每个 LCU 的成本为 **1.50 美元**。
+
+Engine 以两个阶段运行：
+
+| 阶段 | 触发条件 | 典型 LCU 使用量 |
+|---|---|---|
+| **初始化** | 首次在项目上启用 Engine 时 | 30-40 个 LCU |
+| **定期扫描** | 每 6 小时自动运行 | 10-15 个 LCU |
+
+实际使用量因追踪量和复杂度而异。
+
+在初始化时，Engine 会审计过去的追踪，按严重程度对问题进行聚类和优先级排序，并就提示或代码提出修复方案（如果已连接仓库）。定期扫描会发现之前未发现的新改进。
+
+### 设置消费限额并监控使用情况
+
+组织管理员可以在两个级别设置消费限额：
+
+- **全组织限额**：打开 **设置**，在 **Engine** 下选择 **Engine 启用**，然后在 **每月 LCU 消费限额** 下输入一个值。
+- **每个项目限额**：打开追踪项目中的 **Engine** 选项卡，点击 **Engine 设置** 齿轮图标，然后在 **每月 LCU 消费限额** 下设置限额。
+
+您可以输入以 LCU 或美元为单位的限额（1 LCU = 1.50 美元）。当达到限额时，LangSmith 会暂停新的 Engine 运行，直到限额提高或下一个月度计费周期开始。
+
+将限额留空以允许无限 Engine 消费。要完全停止 Engine，请在 **设置 > Engine 启用** 中使用 **启用 Engine** 开关。
+
+要监控使用情况，您可以查看 **设置** 中 **Engine 启用** 页面上组织的每月 LCU 消费，或在每个追踪项目的 **Engine 设置** 面板中查看每个项目的消费情况。
+
+### 为追踪项目设置 Engine
+
+<Steps>
+  <Step title="打开 Engine 选项卡">
+    在 [LangSmith 控制台](https://smith.langchain.com) 中，导航到 UI 侧边栏中的 **追踪**，选择一个项目，然后在项目导航中点击 **Engine** 选项卡。
+  </Step>
+  <Step title="连接代码仓库（可选）">
+    虽然是可选的，但建议连接 GitHub 仓库。LangSmith Engine 使用您的源代码来诊断问题、生成更高质量的修复方案，并直接从问题中打开拉取请求。在 **连接 Agent 的代码仓库** 下选择一个仓库。只有 GitHub 应用可以访问的仓库才会显示。点击 **管理应用访问权限 →** 以更新权限。您可以随时在 [**Engine 设置**](#configure-langsmith-engine) 中更新 **代码仓库**。
+  </Step>
+  <Step title="选择优先级类别（可选）">
+    在 **对您最重要的是什么？** 下，选择要优先审查的类别（例如 **工具调用失败** 或 **延迟**）。点击 **+ 添加具体内容** 来描述自定义关注点。您可以随时在 [**Engine 设置**](#configure-langsmith-engine) 中更新 **优先级**。
+  </Step>
+  <Step title="开始分析">
+    点击 **开始分析**。LangSmith Engine 可能需要长达 20 分钟来分析您项目的追踪并开始提出建议。在等待期间，您可以在设置面板中 [设置通知](#get-notified-about-new-issues)，以便在发现不同优先级的问题时通过 Slack 或 Webhook 接收警报。
+  </Step>
+  <Step title="查看 Agent 概述文档">
+    在显示问题之前，LangSmith Engine 会生成一个 Agent 概述文档，根据您的追踪描述项目目的、架构和关键指标。查看并编辑文档，然后点击 **接受并继续** 以继续。如果概述不准确，请在继续之前编辑它，因为 LangSmith Engine 将其用作所有分析的上下文，因此此处的准确性会影响检测问题的质量。您可以随时在 [**Engine 设置**](#configure-langsmith-engine) 中更新它。
+  </Step>
+</Steps>
+
+<Frame caption="设置对话框">
+  <img
+    className="block dark:hidden"
+    src="/langsmith/images/langsmith-engine-setup-light.png"
+    alt="设置对话框，显示代码仓库字段和用于优先排序问题类型的类别选择"
+  />
+  <img
+    className="hidden dark:block"
+    src="/langsmith/images/langsmith-engine-setup-dark.png"
+    alt="设置对话框，显示代码仓库字段和用于优先排序问题类型的类别选择"
+  />
+</Frame>
+
+## 浏览和筛选问题
+
+设置完成后，**Engine** 选项卡在左侧面板中显示自动检测到的问题列表。每个条目显示标题、简短描述、贡献追踪的数量以及问题最近观察到的时间。
+
+在列表顶部，您可以点击：
+
+- **筛选问题** 图标以按 **优先级**、**状态** 和 **标签** 筛选。
+- **排序问题** 图标以按 **严重程度**、**最后更新** 和 **创建时间** 排序。
+- **Engine 设置** 齿轮图标以 [配置 LangSmith Engine](#configure-langsmith-engine)。
+
+点击任意问题可在右侧面板中显示其详情。
+
+如果设置完成后没有显示问题，说明 LangSmith Engine 在分析的追踪中未发现重复模式。请尝试在收集更多追踪后再回来查看。
+
+## 查看问题详情
+
+点击列表中的任意问题以打开其详情面板。在顶部，诊断结果描述了问题及其影响。
+
+**关联追踪** 部分列出了支持诊断结果的追踪。点击任意追踪以打开其详情面板。更多信息，请参阅 [管理追踪](/langsmith/manage-trace)。点击此部分右下角的 [**添加离线示例**](#add-offline-examples)，从生产追踪输入生成自定义真值 [数据集示例](/langsmith/manage-datasets)，用于离线评估。
+
+**提议的修复方案** 部分描述了问题并建议如何解决，如果已连接仓库，可能包括特定的代码或提示更改。
+
+**建议的评估器** 部分提供了一个可立即使用的评估器，您可以部署它来捕获未来追踪中的问题。如果在您关闭问题后评估器被触发，问题会自动重新打开，以表明问题仍然存在。
+
+**离线示例** 部分提议从触发问题的生产追踪输入生成的数据集示例，用于离线评估。
+
+## 对问题采取行动
+
+### 更改优先级
+
+从优先级下拉菜单中选择 **低**、**中** 或 **高** 来更新问题的优先级。您可以选择性地提供原因，这会反馈到 LangSmith Engine 以帮助改进其分析。
+
+### 创建评估器
+
+1. 点击 **创建评估器** 来部署该问题的建议评估器。
+2. 配置名称、运行筛选器和采样率。如有需要，可直接在内置编辑器中编辑代码。
+3. 启用 **应用于过去的运行** 以查看在部署之前评估器会标记多少历史追踪。
+
+更多信息，请参阅 [评估器](/langsmith/evaluators)。
+
+### 添加离线示例
+
+1. 点击 **关联追踪** 列表底部的 **添加离线示例** 以打开 **添加为离线示例** 对话框。
+2. 查看每个追踪。对话框显示输入、Agent 产生的错误输出，以及作为自定义真值示例的提议预期输出。
+3. 点击 **添加到数据集** 直接添加，或点击 **在标注队列中编辑** 先进行审查。
+4. 在标注队列中，每个示例显示运行输入以及 LangSmith Engine 提议的参考输出，结构化为从追踪分析生成的命名 [断言](/langsmith/assertions)。每个断言是一个简短的声明，描述正确答案应该或不应该包含什么。如有需要，请编辑断言，使用 **+ 添加断言** 添加新断言，然后点击 **添加到数据集并继续** 以处理每个示例。
+
+更多信息，请参阅 [管理数据集](/langsmith/manage-datasets)、[使用标注队列](/langsmith/annotation-queues) 和 [使用断言](/langsmith/assertions)。
+
+### 复制问题提示
+
+点击 **复制修复上下文** 复制图标，将包含问题详情的提示保存到剪贴板。然后您可以将其与 LLM 或编码助手一起使用来帮助解决问题。
+
+### 打开拉取请求
+
+点击 **打开 PR** 在已连接的仓库中打开一个包含提议修复方案的 GitHub 拉取请求。一旦拉取请求打开，按钮会变为 **查看 PR**。LangSmith Engine 可以对任何已连接的仓库提出代码更改，包括使用 [Deep Agents](/oss/deepagents/overview)、[LangChain](/oss/langchain/overview) 和 [LangGraph](/oss/langgraph/overview) 构建的 Agent。
+
+### 解决或忽略问题
+
+点击 **解决** 将问题标记为已修复，或点击 **忽略** 将其作为非真实问题或不值得修复的问题关闭。您可以选择性地为任一操作提供原因。
+
+### 重新打开问题
+
+要重新打开之前关闭的问题，请打开问题详情视图并点击 **重新打开**。
+
+## 通过 CLI 列出问题
+
+您可以使用 [LangSmith CLI](/langsmith/cli) 以编程方式列出问题。
+
+```bash
+# List issues for a project
+langsmith project issues list --project <project-name>
+```
+
+## 获取新问题的通知
+
+LangSmith Engine 可在打开新问题、将新跟踪链接到现有问题或运行失败时向您发送通知。这些通知可发送至 **Slack 频道**、**HTTP Webhook 端点**，或同时发送至两者。每个目标都有其自己的事件类型和最低优先级设置，因此您可以将紧急问题路由到寻呼 Webhook，同时将所有问题发送到 Slack 频道。
+
+从 **Engine 设置** 面板管理通知目标：为跟踪项目打开 **Engine** 选项卡，点击 **Engine 设置** 齿轮图标，然后在 **Notifications** 下点击 **+ 添加目标**。
+
+### 通知 Slack 频道
+
+<Steps>
+  <Step title="连接 Slack 工作区">
+    连接 Slack 工作区是一个组织级别的操作，只需执行一次，无需针对每个项目进行。连接或断开工作区需要 `organization:manage` 权限。在 [LangSmith 控制台](https://smith.langchain.com) 中，打开 **设置**，进入您组织的 **通用** 设置，然后在 **Slack** 下点击 **连接 Slack**。在 Slack 中授权 LangSmith 应用。您可以将多个 Slack 工作区连接到一个组织。
+  </Step>
+  <Step title="添加 Slack 目标">
+    在跟踪项目的 **Engine** 选项卡上，点击 **Engine 设置** 齿轮图标，然后点击 **添加目标**。将 **发送至** 字段设置为 **Slack**，然后在 **频道** 下选择工作区和频道。
+  </Step>
+  <Step title="选择事件和优先级">
+    在 **通知条件** 下，选择哪些 [事件类型](/langsmith/engine-webhooks#event-types)会向频道发布消息。在 **最低优先级** 下，选择触发通知的最低 [严重性](/langsmith/engine-webhooks#severity-filtering)。点击 **添加目标** 保存。
+  </Step>
+</Steps>
+
+LangSmith 会自动加入您选择的公共频道。要发布到私人频道，请先在 Slack 中邀请 LangSmith 应用加入该频道。
+
+每条 Slack 消息都包含问题标题、描述和严重性、一个返回 LangSmith 的 **查看问题** 链接，以及（对于问题事件）显示问题随时间复发的图表。如果工作区的连接变得无效（例如，应用被从 Slack 中移除），则其目标将停止传递，直到您从组织的 **通用** 设置中重新连接。
+
+### 发送到 Webhook
+
+要将 Engine 事件转发到您自己的事件管理、寻呼或聊天工具，请添加目标并将 **发送至** 字段设置为 **Webhook**。输入 URL，并可选择输入自定义标头。Webhook 传递经过签名，以便您验证其真实性。有关完整的事件负载参考、签名密钥验证和传递语义，请参阅 [Engine Webhook 事件](/langsmith/engine-webhooks)。
+
+## 配置 LangSmith Engine
+
+<Note>
+LangSmith Engine 专使用 **LangChain 托管推理**。不支持自备密钥 (BYOK)；您无法为 Engine 提供自己的提供商 API 密钥。
+</Note>
+
+在跟踪项目中，点击 **Engine** 选项卡上的 **Engine 设置** 齿轮图标，打开 **编辑 Engine 设置** 面板。您可以在此处配置以下内容：
+
+- **Agent 概览**：编辑您的 Agent 概览文档，以保持 LangSmith Engine 对您项目的理解随着应用程序的发展而保持准确。
+- **优先级**：LangSmith Engine 在扫描跟踪时应额外关注的领域。更改将在下一次扫描时生效。
+- **代码仓库**：更新连接的 GitHub 仓库或子文件夹。
+- **通知**：添加 Slack 频道或 Webhook 目标，这些目标在 LangSmith Engine 检测到新问题时接收通知。为每个目标设置最低优先级级别，以控制哪些问题触发通知。请参阅[获取新问题的通知](#get-notified-about-new-issues)。
+- **暂停 Engine**：LangSmith Engine 默认每 6 小时扫描一次您的跟踪。点击 **暂停** 可暂停扫描，或点击 **恢复** 可恢复扫描。
+- **删除所有问题**：此操作无法撤消。所有问题和设置将被永久移除。

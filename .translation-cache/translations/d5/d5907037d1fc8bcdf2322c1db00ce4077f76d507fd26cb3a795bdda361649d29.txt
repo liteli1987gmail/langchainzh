@@ -1,0 +1,153 @@
+
+
+```bash
+AZURE_OPENAI_API_INSTANCE_NAME=<YOUR_INSTANCE_NAME>
+AZURE_OPENAI_API_DEPLOYMENT_NAME=<YOUR_DEPLOYMENT_NAME>
+AZURE_OPENAI_API_KEY=<YOUR_KEY>
+AZURE_OPENAI_API_VERSION="2024-02-01"
+```
+
+或者，您也可以直接将值传递给 `AzureOpenAI` 构造函数。
+
+如果您想获取模型调用的自动化追踪功能，也可以通过取消下方注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```bash
+# export LANGSMITH_TRACING="true"
+# export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+LangChain AzureOpenAI 集成位于 `@langchain/openai` 包中：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash npm
+npm install @langchain/openai @langchain/core
+```
+```bash yarn
+yarn add @langchain/openai @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/openai @langchain/core
+```
+</CodeGroup>
+
+## 实例化
+
+现在我们可以实例化模型对象并生成聊天补全：
+
+```typescript
+import { AzureOpenAI } from "@langchain/openai"
+
+const llm = new AzureOpenAI({
+  model: "gpt-3.5-turbo-instruct",
+  azureOpenAIApiKey: "<your_key>", // In Node.js defaults to process.env.AZURE_OPENAI_API_KEY
+  azureOpenAIApiInstanceName: "<your_instance_name>", // In Node.js defaults to process.env.AZURE_OPENAI_API_INSTANCE_NAME
+  azureOpenAIApiDeploymentName: "<your_deployment_name>", // In Node.js defaults to process.env.AZURE_OPENAI_API_DEPLOYMENT_NAME
+  azureOpenAIApiVersion: "<api_version>", // In Node.js defaults to process.env.AZURE_OPENAI_API_VERSION
+  temperature: 0,
+  maxTokens: undefined,
+  timeout: undefined,
+  maxRetries: 2,
+  // other params...
+})
+```
+
+## 调用
+
+```typescript
+const inputText = "AzureOpenAI is an AI company that "
+
+const completion = await llm.invoke(inputText)
+completion
+```
+
+```text
+provides AI solutions to businesses. They offer a range of services including natural language processing, computer vision, and machine learning. Their solutions are designed to help businesses automate processes, gain insights from data, and improve decision-making. AzureOpenAI also offers consulting services to help businesses identify and implement the best AI solutions for their specific needs. They work with a variety of industries, including healthcare, finance, and retail. With their expertise in AI and their partnership with Microsoft Azure, AzureOpenAI is a trusted provider of AI solutions for businesses looking to stay ahead in the rapidly evolving world of technology.
+```
+
+## 使用 Azure 托管标识
+
+如果您使用的是 Azure 托管标识，可以按如下方式配置凭据：
+
+```typescript
+import {
+  DefaultAzureCredential,
+  getBearerTokenProvider,
+} from "@azure/identity";
+import { AzureOpenAI } from "@langchain/openai";
+
+const credentials = new DefaultAzureCredential();
+const azureADTokenProvider = getBearerTokenProvider(
+  credentials,
+  "https://cognitiveservices.azure.com/.default"
+);
+
+const managedIdentityLLM = new AzureOpenAI({
+  azureADTokenProvider,
+  azureOpenAIApiInstanceName: "<your_instance_name>",
+  azureOpenAIApiDeploymentName: "<your_deployment_name>",
+  azureOpenAIApiVersion: "<api_version>",
+});
+
+```
+
+## 使用不同的域名
+
+如果你的实例托管在默认域名 `openai.azure.com` 以外的其他域名下，你需要使用备用的 `AZURE_OPENAI_BASE_PATH` 环境变量。
+例如，以下是连接到域 `https://westeurope.api.microsoft.com/openai/deployments/{DEPLOYMENT_NAME}` 的方式：
+
+```typescript
+import { AzureOpenAI } from "@langchain/openai";
+
+const differentDomainLLM = new AzureOpenAI({
+  azureOpenAIApiKey: "<your_key>", // In Node.js defaults to process.env.AZURE_OPENAI_API_KEY
+  azureOpenAIApiDeploymentName: "<your_deployment_name>", // In Node.js defaults to process.env.AZURE_OPENAI_API_DEPLOYMENT_NAME
+  azureOpenAIApiVersion: "<api_version>", // In Node.js defaults to process.env.AZURE_OPENAI_API_VERSION
+  azureOpenAIBasePath:
+    "https://westeurope.api.microsoft.com/openai/deployments", // In Node.js defaults to process.env.AZURE_OPENAI_BASE_PATH
+});
+
+```
+
+## 从 Azure OpenAI SDK 迁移
+
+如果您正在使用已弃用的 Azure OpenAI SDK 与 `@langchain/azure-openai` 包，您可以按照以下步骤更新代码以使用新的 Azure 集成：
+
+1. 安装新的 `@langchain/openai` 包并删除之前的 `@langchain/azure-openai` 包：
+
+   ```bash
+   npm install @langchain/openai
+   npm uninstall @langchain/azure-openai
+   ```
+
+2. 更新你的导入以使用新的 `AzureOpenAI` 和 @[`AzureChatOpenAI`] 类，从 `@langchain/openai` 包中导入：
+
+   ```typescript
+   import { AzureOpenAI } from "@langchain/openai";
+   ```
+
+3. 更新你的代码以使用新的 `AzureOpenAI` 和 @[`AzureChatOpenAI`] 类，并传递所需参数：
+
+   ```typescript
+   const model = new AzureOpenAI({
+     azureOpenAIApiKey: "<your_key>",
+     azureOpenAIApiInstanceName: "<your_instance_name>",
+     azureOpenAIApiDeploymentName: "<your_deployment_name>",
+     azureOpenAIApiVersion: "<api_version>",
+   });
+   ```
+
+请注意，构造函数现在需要 `azureOpenAIApiInstanceName` 参数，而不是 `azureOpenAIEndpoint` 参数，并添加了 `azureOpenAIApiVersion` 参数来指定 API 版本。
+
+- 如果您使用的是 Azure 托管标识，现在需要使用 `azureADTokenProvider` 参数而不是 `credentials` 参数，请参阅[Azure 托管标识](#using-azure-managed-identity)部分了解更多详情。
+
+- 如果您使用的是环境变量，现在必须设置 `AZURE_OPENAI_API_INSTANCE_NAME` 环境变量而不是 `AZURE_OPENAI_API_ENDPOINT`，并添加 `AZURE_OPENAI_API_VERSION` 环境变量来指定 API 版本。
+
+---
+
+## API 参考
+
+有关 `AzureOpenAI` 所有功能和配置的详细文档，请前往 [API 参考](https://reference.langchain.com/javascript/langchain-openai/AzureOpenAI)。

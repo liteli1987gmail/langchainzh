@@ -1,0 +1,228 @@
+---
+title: "BedrockEmbeddings 集成"
+sidebarTitle: "嵌入"
+description: "使用 LangChain JavaScript 与 BedrockEmbeddings 嵌入模型集成。"
+---
+
+
+[Amazon Bedrock](https://aws.amazon.com/bedrock/) 是一项完全托管的服务，通过单一 API 提供来自 AI21 Labs、Anthropic、Cohere、Meta、Stability AI 和 Amazon 等领先 AI 公司的高性能基础模型 (FM)，以及构建生成式 AI 应用程序所需的各种功能，包括安全性、隐私性和负责任的 AI。
+
+这将帮助您开始使用 LangChain 与 Amazon Bedrock [嵌入模型](/oss/integrations/embeddings)。有关 `Bedrock` 功能和配置选项的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-aws/BedrockEmbeddings)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 本地 | [Python 支持](https://python.langchain.com/docs/integrations/embeddings/bedrock/) | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: |  :---: | :---: |
+| [`Bedrock`](https://reference.langchain.com/javascript/langchain-aws/BedrockEmbeddings) | [`@langchain/aws`](https://www.npmjs.com/package/@langchain/aws) | ❌ | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/aws?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/aws?style=flat-square&label=%20&) |
+
+## 安装
+
+要访问 Bedrock 嵌入模型，您需要创建一个 AWS 账户、获取 API 密钥并安装 `@langchain/aws` 集成包。
+
+请前往 [AWS 文档](https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started.html) 注册 AWS 并设置您的凭证。您还需要为您的账户开启模型访问权限，您可以通过[遵循这些说明](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html)来操作。
+
+### 凭证
+
+如果您想自动跟踪模型调用，还可以通过取消下方注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```bash
+# export LANGSMITH_TRACING="true"
+# export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+LangChain Bedrock 集成位于 `@langchain/aws` 包中：
+
+<CodeGroup>
+```bash npm
+npm install @langchain/aws @langchain/core
+```
+```bash yarn
+yarn add @langchain/aws @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/aws @langchain/core
+```
+</CodeGroup>
+
+## 实例化
+
+现在我们可以实例化模型对象并嵌入文本。
+
+有几种不同的方式向 AWS 进行身份验证——以下示例依赖于在环境变量中设置的访问密钥、私密访问密钥和区域：
+
+```typescript
+import { BedrockEmbeddings } from "@langchain/aws";
+
+const embeddings = new BedrockEmbeddings({
+  region: process.env.BEDROCK_AWS_REGION!,
+  credentials: {
+    accessKeyId: process.env.BEDROCK_AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.BEDROCK_AWS_SECRET_ACCESS_KEY!,
+  },
+  model: "amazon.titan-embed-text-v1",
+});
+```
+
+## 索引和检索
+
+Embedding 模型常用于检索增强生成 (RAG) 流程，既用于索引数据，也用于后续检索。如需更详细的说明，请参阅[**学习**标签页](/oss/learn/)下的 RAG 教程。
+
+以下是使用上面初始化的 `embeddings` 对象来索引和检索数据的示例。在本例中，我们将使用演示版 [`MemoryVectorStore`](/oss/integrations/vectorstores/memory) 来索引和检索示例文档。
+
+```typescript
+// Create a vector store with a sample text
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+
+const text = "LangChain is the framework for building context-aware reasoning applications";
+
+const vectorstore = await MemoryVectorStore.fromDocuments(
+  [{ pageContent: text, metadata: {} }],
+  embeddings,
+);
+
+// Use the vector store as a retriever that returns a single document
+const retriever = vectorstore.asRetriever(1);
+
+// Retrieve the most similar text
+const retrievedDocuments = await retriever.invoke("What is LangChain?");
+
+retrievedDocuments[0].pageContent;
+```
+
+```text
+LangChain is the framework for building context-aware reasoning applications
+```
+
+## 直接使用
+
+在底层，向量存储和检索器的实现正在调用 `embeddings.embedDocument(...)` 和 `embeddings.embedQuery(...)` 来为 `fromDocuments` 和检索器的 `invoke` 操作中使用的文本创建嵌入。
+
+你可以直接调用这些方法来获取用于你自己用例的嵌入。
+
+### 嵌入单个文本
+
+你可以使用 `embedQuery` 来嵌入搜索查询。这会生成一个特定于查询的向量表示：
+
+```typescript
+const singleVector = await embeddings.embedQuery(text);
+
+console.log(singleVector.slice(0, 100));
+```
+
+```text
+[
+         0.625,  0.111328125,      0.265625,   -0.20019531,  0.40820312,
+  -0.010803223,  -0.22460938, -0.0002937317,    0.29882812, -0.14355469,
+  -0.068847656,   -0.3984375,          0.75,    -0.1953125,  -0.5546875,
+  -0.087402344,       0.5625,      1.390625,    -0.3515625,  0.39257812,
+  -0.061767578,      0.65625,   -0.36328125,   -0.06591797,    0.234375,
+   -0.36132812,   0.42382812,  -0.115234375,   -0.28710938, -0.29296875,
+     -0.765625,  -0.16894531,    0.23046875,     0.6328125, -0.08544922,
+    0.13671875, 0.0004272461,        0.3125,    0.12207031,   -0.546875,
+    0.14257812, -0.119628906,  -0.111328125,    0.61328125,      0.6875,
+     0.3671875,   -0.2578125,   -0.27734375,      0.703125,    0.203125,
+    0.17675781,  -0.26757812,   -0.76171875,    0.71484375,  0.77734375,
+    -0.1953125, -0.007232666,  -0.044921875,    0.23632812, -0.24121094,
+  -0.012207031,    0.5078125,    0.08984375,    0.56640625,  -0.3046875,
+     0.6484375,        -0.25,   -0.37890625,    -0.2421875,  0.38476562,
+   -0.18164062,  -0.05810547,     0.7578125,    0.04296875,    0.609375,
+    0.50390625,  0.023803711,   -0.23046875,   0.099121094,  0.79296875,
+     -1.296875,     0.671875,   -0.66796875,    0.43359375, 0.087890625,
+    0.14550781,  -0.37304688,  -0.068359375, 0.00012874603, -0.47265625,
+     -0.765625,   0.07861328,  -0.029663086,   0.076660156, -0.32617188,
+     -0.453125,   -0.5546875,   -0.45703125,     1.1015625, -0.29492188
+]
+```
+
+### 嵌入多个文本
+
+你可以使用 `embedDocuments` 嵌入多个文本用于索引。该方法使用的内部实现可能（但并非必须）与嵌入查询不同：
+
+```typescript
+const text2 = "LangGraph is a library for building stateful, multi-actor applications with LLMs";
+
+const vectors = await embeddings.embedDocuments([text, text2]);
+
+console.log(vectors[0].slice(0, 100));
+console.log(vectors[1].slice(0, 100));
+```
+
+```text
+[
+         0.625,  0.111328125,      0.265625,   -0.20019531,  0.40820312,
+  -0.010803223,  -0.22460938, -0.0002937317,    0.29882812, -0.14355469,
+  -0.068847656,   -0.3984375,          0.75,    -0.1953125,  -0.5546875,
+  -0.087402344,       0.5625,      1.390625,    -0.3515625,  0.39257812,
+  -0.061767578,      0.65625,   -0.36328125,   -0.06591797,    0.234375,
+   -0.36132812,   0.42382812,  -0.115234375,   -0.28710938, -0.29296875,
+     -0.765625,  -0.16894531,    0.23046875,     0.6328125, -0.08544922,
+    0.13671875, 0.0004272461,        0.3125,    0.12207031,   -0.546875,
+    0.14257812, -0.119628906,  -0.111328125,    0.61328125,      0.6875,
+     0.3671875,   -0.2578125,   -0.27734375,      0.703125,    0.203125,
+    0.17675781,  -0.26757812,   -0.76171875,    0.71484375,  0.77734375,
+    -0.1953125, -0.007232666,  -0.044921875,    0.23632812, -0.24121094,
+  -0.012207031,    0.5078125,    0.08984375,    0.56640625,  -0.3046875,
+     0.6484375,        -0.25,   -0.37890625,    -0.2421875,  0.38476562,
+   -0.18164062,  -0.05810547,     0.7578125,    0.04296875,    0.609375,
+    0.50390625,  0.023803711,   -0.23046875,   0.099121094,  0.79296875,
+     -1.296875,     0.671875,   -0.66796875,    0.43359375, 0.087890625,
+    0.14550781,  -0.37304688,  -0.068359375, 0.00012874603, -0.47265625,
+     -0.765625,   0.07861328,  -0.029663086,   0.076660156, -0.32617188,
+     -0.453125,   -0.5546875,   -0.45703125,     1.1015625, -0.29492188
+]
+[
+       0.65625,    0.48242188,    0.70703125,   -0.13378906,    0.859375,
+     0.2578125,   -0.13378906, -0.0002670288,      -0.34375,  0.25585938,
+   -0.33984375,   -0.26367188,      0.828125,   -0.23242188, -0.61328125,
+    0.12695312,    0.43359375,     1.3828125,  -0.099121094,   0.3203125,
+   -0.34765625,    0.35351562,   -0.28710938,   0.009521484, 0.083496094,
+   0.040283203,   -0.25390625,    0.17871094,   0.044189453, -0.19628906,
+    0.45898438,    0.21191406,    0.67578125,     0.8359375, -0.29101562,
+   0.021118164,    0.13671875,   0.083984375,    0.34570312,  0.30859375,
+  -0.001625061,    0.31835938,   -0.18164062, -0.0058288574,  0.22460938,
+    0.26757812,   -0.09082031,    0.17480469,     1.4921875, -0.24316406,
+    0.36523438,    0.14550781,     -0.609375,    0.33007812,  0.10595703,
+     0.3671875,    0.18359375,   -0.62109375,    0.51171875, 0.024047852,
+   0.092285156,   -0.44335938,     0.4921875,      0.609375, -0.48242188,
+      0.796875,   -0.47851562,      -0.53125,   -0.66796875,  0.68359375,
+   -0.16796875,   0.110839844,    0.84765625,      0.703125,   0.8671875,
+    0.37695312, -0.0022888184,   -0.30664062,     0.3671875,  0.16503906,
+   -0.59765625,     0.3203125,      -0.34375,    0.08251953,    0.890625,
+    0.38476562,   -0.24707031,        -0.125, 0.00013160706, -0.69921875,
+      -0.53125,   0.052490234,    0.27734375,    0.42773438, -0.38867188,
+    -0.2578125,         -0.25,      -0.46875,      0.828125, -0.94140625
+]
+```
+
+## 配置 Bedrock 运行时客户端
+
+如果您想自定义 `credentials`、`region`、`retryPolicy` 等选项，可以传入自己的 `BedrockRuntimeClient` 实例。
+
+```typescript
+import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime";
+import { BedrockEmbeddings } from "@langchain/aws";
+
+const getCredentials = () => {
+  // do something to get credentials
+}
+
+// @lc-ts-ignore
+const client = new BedrockRuntimeClient({
+  region: "us-east-1",
+  credentials: getCredentials(),
+});
+
+const embeddingsWithCustomClient = new BedrockEmbeddings({
+  client,
+});
+```
+
+---
+
+## API 参考
+
+有关所有 Bedrock 功能和配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-aws/BedrockEmbeddings)。

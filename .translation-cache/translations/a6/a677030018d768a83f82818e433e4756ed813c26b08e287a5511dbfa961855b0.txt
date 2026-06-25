@@ -1,0 +1,653 @@
+---
+title: 编程式子代理
+description: 使用解释器从代码中调度和编排 Deep Agents 子代理
+---
+
+编程式子代理允许代理从解释器代码中调度[子代理](/oss/deepagents/subagents)。代理可以使用 JavaScript 循环、分支和并行批次在工作流中路由任务到已配置的子代理并综合结果，而不是让模型一次选择一个子代理调用。
+
+当工作涉及多个独立单元、需要多角度分析或受益于递归分析时，使用此模式。有关通用解释器设置，请参阅[解释器](/oss/deepagents/interpreters)。
+
+<Warning>
+    编程式子代理使用解释器运行时，处于[**beta**](/oss/versioning)阶段。API 和生命周期行为可能在不同版本之间发生变化。
+</Warning>
+
+:::python
+<Note>
+    解释器需要 `langchain-quickjs>=0.1.0` 和 Python `>=3.11`。
+</Note>
+:::
+
+## 工作原理
+
+当代理同时配置了[子代理](/oss/deepagents/subagents)和解释器中间件时，解释器会暴露一个内置的 `task()` 全局函数用于从代码中调度子代理。对于涉及多个独立单元的任务（如审查目录中的每个文件或分批处理工单），可以将其实现为循环结构，将工作分散并行执行，从而以确定性的方式完成，而非依赖模型逐次选择工具调用。
+
+子代理编排还支持递归语言模型 (RLM) 工作流，即 [Recursive Language Models 论文](https://arxiv.org/abs/2512.24601) 中描述的方法：将工作集保持在解释器变量中，选择切片，通过 `task()` 调用子代理，然后综合结果。
+
+`task()` 接受以下参数：
+
+- `description`：子代理的提示词
+- `subagentType`：要运行的已配置子代理
+- `responseSchema`（可选）：结构化输出
+
+`task()` 运行一个完整的代理循环并解析为子代理的结果：
+
+```javascript
+const review = await task({
+  description: "Review src/auth/login.ts for auth issues. Cite line numbers.",
+  subagentType: "reviewer",
+  responseSchema: {
+    type: "object",
+    properties: {
+      issues: { type: "array", items: { type: "object", properties: {
+        file: { type: "string" }, line: { type: "number" },
+        severity: { type: "string" }, description: { type: "string" },
+      }}},
+    },
+  },
+});
+
+// With responseSchema, the result is already a typed value, so no JSON.parse is needed.
+const critical = review.issues.filter((issue) => issue.severity === "high");
+```
+
+当你传递 `responseSchema` 时，已解析的值已经是一个类型化的 JavaScript 对象；只有当子代理故意返回 JSON 字符串时才调用 `JSON.parse`。
+
+## 指南编排
+
+解释器中间件在系统提示词中附带编排指导，因此代理已经知道如何以有限批次展开、在轮次之间过滤并综合结果。你不需要手动编写该逻辑或逐轮提示。
+
+要塑造代理的编排行为，请通过它已有的输入进行调整：
+
+- **你配置的子代理。** 它们的 `name` 和 `description` 定义了可用的角色。`reviewer` 配合 `verifier` 适合两轮检查；单个 `analyzer` 则适合直接展开。
+- **任务消息。** 类似"我只需要确认的问题，不要可能"或"要全面"这样的措辞会引导代理倾向于验证或全面搜索。
+- **系统提示词。** 当你需要跨运行保持一致的策略时，使用 `systemPrompt`（或代理的指令）添加持续的指导。
+
+## 模式
+
+代理从任务形态中选择策略；这些策略源自其编写解释器代码的方式，而非配置，你提供的子代理决定了它的能力范围。每个模式都遵循同一模型：将工作保存在 JS 变量中，使用 `task()` 分派子代理，并通过代码合并结果。下方的图表展示了常见形态，每个都配有可运行的示例。
+
+### 分类并行动
+
+项目首先被分类，然后根据其分类由专门的子代理处理。这样可以处理混合输入，其中不同项目需要不同的专业能力。
+
+```mermaid
+graph LR
+    Task[Task] --> Classify{Classifier}
+    Classify --> |bug| A[Agent A]
+    Classify --> |feature| B[Agent B]
+    Classify --> |question| C[Agent C]
+```
+
+**使用场景：** 对支持工单、错误日志、用户反馈或任何需要根据类型进行不同处理的批量项目进行分类。
+
+<Accordion title="示例：分类并采取行动">
+
+**配置项**
+
+:::python
+```python
+agent = create_deep_agent(
+    model="openai:gpt-5.5",
+    subagents=[
+        {
+            "name": "bug-fixer",
+            "description": "Investigates bug reports and provides reproduction steps",
+            "system_prompt": "You are a bug triage specialist. Investigate each bug report and provide clear reproduction steps.",
+        },
+        {
+            "name": "feature-analyst",
+            "description": "Evaluates feature requests for feasibility and effort",
+            "system_prompt": "You are a product analyst. Evaluate each feature request for technical feasibility, estimated effort, and potential impact.",
+        },
+        {
+            "name": "support-agent",
+            "description": "Answers user questions based on documentation",
+            "system_prompt": "You are a support specialist. Answer user questions clearly based on the available documentation.",
+        },
+    ],
+    middleware=[CodeInterpreterMiddleware()],
+)
+
+result = await agent.ainvoke({
+    "messages": [{"role": "user", "content": "Go through these 30 support tickets. Categorize each one, then for bugs give me reproduction steps, and for feature requests give me a feasibility assessment."}]
+})
+```
+:::
+
+:::js
+```typescript
+const agent = createDeepAgent({
+  model: "openai:gpt-5.5",
+  subagents: [
+    {
+      name: "bug-fixer",
+      description: "Investigates bug reports and provides reproduction steps",
+      systemPrompt: "You are a bug triage specialist. Investigate each bug report and provide clear reproduction steps.",
+    },
+    {
+      name: "feature-analyst",
+      description: "Evaluates feature requests for feasibility and effort",
+      systemPrompt: "You are a product analyst. Evaluate each feature request for technical feasibility, estimated effort, and potential impact.",
+    },
+    {
+      name: "support-agent",
+      description: "Answers user questions based on documentation",
+      systemPrompt: "You are a support specialist. Answer user questions clearly based on the available documentation.",
+    },
+  ],
+  middleware: [createCodeInterpreterMiddleware()],
+});
+
+const result = await agent.invoke({
+  messages: [{ role: "user", content: "Go through these 30 support tickets. Categorize each one, then for bugs give me reproduction steps, and for feature requests give me a feasibility assessment." }],
+});
+```
+:::
+
+**代理写入的内容**
+
+:::
+
+```javascript
+// The agent has already classified each ticket; this routes every item to
+// the right specialist and collects the handled results.
+const SPECIALIST = { bug: "bug-fixer", feature: "feature-analyst", question: "support-agent" };
+
+const handled = await Promise.all(
+  tickets.map((ticket) =>
+    task({
+      description: `Handle this ${ticket.category}:\n${ticket.text}`,
+      subagentType: SPECIALIST[ticket.category],
+    }),
+  ),
+);
+// ... group handled results by category into a single triage report
+handled;
+```
+</Accordion>
+
+### Fan-out and synthesize
+
+智能体并行地向多个项目分派相同类型的工作，然后将结果合并。
+
+```mermaid
+graph LR
+    Items[Items] --> W1[Worker]
+    Items --> W2[Worker]
+    Items --> W3[Worker]
+    W1 --> Collect[Collect]
+    W2 --> Collect
+    W3 --> Collect
+    Collect --> Synth[Synthesize]
+```
+
+**使用场景：** 跨目录进行代码审查、分析批量文档、处理日志文件、对多个服务运行相同的检查。
+
+<Accordion title="示例：扇出与综合">
+
+**配置内容**
+
+:::python
+```python
+from deepagents import create_deep_agent
+from langchain_quickjs import CodeInterpreterMiddleware
+
+agent = create_deep_agent(
+    model="openai:gpt-5.5",
+    subagents=[{
+        "name": "reviewer",
+        "description": "Reviews code for security issues, citing lines and severity",
+        "system_prompt": "You are a security-focused code reviewer. Read the file carefully and report any authentication or authorization issues with line numbers and severity.",
+    }],
+    middleware=[CodeInterpreterMiddleware()],
+)
+
+result = await agent.ainvoke({
+    "messages": [{"role": "user", "content": "Review all the route handlers in src/routes/ for authentication issues. Summarize the top risks."}]
+})
+```
+:::
+
+:::js
+```typescript
+import { createDeepAgent } from "deepagents";
+import { createCodeInterpreterMiddleware } from "@langchain/quickjs";
+
+const agent = createDeepAgent({
+  model: "openai:gpt-5.5",
+  subagents: [{
+    name: "reviewer",
+    description: "Reviews code for security issues, citing lines and severity",
+    systemPrompt: "You are a security-focused code reviewer. Read the file carefully and report any authentication or authorization issues with line numbers and severity.",
+  }],
+  middleware: [createCodeInterpreterMiddleware()],
+});
+
+const result = await agent.invoke({
+  messages: [{ role: "user", content: "Review all the route handlers in src/routes/ for authentication issues. Summarize the top risks." }],
+});
+```
+:::
+
+**智能体写入的内容**
+
+
+</fragment>
+
+```javascript
+// One reviewer per file, dispatched in parallel, then findings merged.
+const files = (await tools.glob({ pattern: "src/routes/**/*.ts" }))
+  .split("\n")
+  .filter(Boolean);
+
+const reviews = await Promise.all(
+  files.map((file) =>
+    task({
+      description: `Review ${file} for authentication issues. Cite line numbers.`,
+      subagentType: "reviewer",
+      responseSchema: issuesSchema, // -> { issues: [{ file, line, severity }] }
+    }),
+  ),
+);
+
+const issues = reviews.flatMap((r) => r.issues);
+// ... sort by severity, drop duplicates, summarize the top risks
+issues;
+```
+</Accordion>
+
+### 对抗性验证
+
+一种两轮模式。第一轮生成结果。第二轮将每个结果发送给独立的验证器，只有通过验证的结果才会被保留。当置信度比速度更重要时，这可以减少误报。
+
+```mermaid
+graph LR
+    Items[Items] --> Workers[Workers]
+    Workers --> Findings[Findings]
+    Findings --> V1[Verifier]
+    Findings --> V2[Verifier]
+    Findings --> V3[Verifier]
+    V1 --> Vote[Majority vote]
+    V2 --> Vote
+    V3 --> Vote
+    Vote --> Confirmed[Confirmed]
+```
+
+**使用场景：**安全审计（误报代价高昂）、合规检查、需要对发现结果高度信任的任何审查。
+
+<Accordion title="示例：对抗性验证">
+
+**配置项**
+
+:::python
+```python
+agent = create_deep_agent(
+    model="openai:gpt-5.5",
+    subagents=[
+        {
+            "name": "reviewer",
+            "description": "Finds potential security vulnerabilities in code",
+            "system_prompt": "You are a security auditor. Find potential vulnerabilities and report each with file, line, and description.",
+        },
+        {
+            "name": "verifier",
+            "description": "Independently verifies whether a reported vulnerability is real",
+            "system_prompt": "You are a security verification specialist. Given a reported vulnerability, independently verify whether it is exploitable. Be skeptical. Only confirm real issues.",
+        },
+    ],
+    middleware=[CodeInterpreterMiddleware()],
+)
+
+result = await agent.ainvoke({
+    "messages": [{"role": "user", "content": "Do a thorough security audit of the payments module. I only want confirmed vulnerabilities, not maybes."}]
+})
+```
+:::
+
+:::js
+```typescript
+const agent = createDeepAgent({
+  model: "openai:gpt-5.5",
+  subagents: [
+    {
+      name: "reviewer",
+      description: "Finds potential security vulnerabilities in code",
+      systemPrompt: "You are a security auditor. Find potential vulnerabilities and report each with file, line, and description.",
+    },
+    {
+      name: "verifier",
+      description: "Independently verifies whether a reported vulnerability is real",
+      systemPrompt: "You are a security verification specialist. Given a reported vulnerability, independently verify whether it is exploitable. Be skeptical. Only confirm real issues.",
+    },
+  ],
+  middleware: [createCodeInterpreterMiddleware()],
+});
+
+const result = await agent.invoke({
+  messages: [{ role: "user", content: "Do a thorough security audit of the payments module. I only want confirmed vulnerabilities, not maybes." }],
+});
+```
+```markdown
+:::
+
+**代理编写的内容**
+
+
+:::
+```
+
+```javascript
+// Pass 1: audit. Pass 2: verify each finding independently; keep only confirmed.
+const { findings } = await task({
+  description: "Audit the payments module for vulnerabilities.",
+  subagentType: "auditor",
+  responseSchema: findingsSchema, // -> { findings: [{ id, file, line, description }] }
+});
+
+const verdicts = await Promise.all(
+  findings.map((f) =>
+    task({
+      description: `Verify ${f.file}:${f.line} (${f.description}). Confirm or refute.`,
+      subagentType: "verifier",
+      responseSchema: verdictSchema, // -> { confirmed: boolean }
+    }),
+  ),
+);
+
+const confirmed = findings.filter((_, i) => verdicts[i]?.confirmed);
+// ... report only the confirmed vulnerabilities
+confirmed;
+```
+</Accordion>
+
+### 生成与筛选
+
+多个子代理独立生成同一问题的解决方案。代理在代码中对结果进行比较、评分和筛选，仅保留最佳方案。
+
+```mermaid
+graph LR
+    Prompt[Prompt] --> G1[Generator]
+    Prompt --> G2[Generator]
+    Prompt --> G3[Generator]
+    G1 --> Filter[Filter + rank]
+    G2 --> Filter
+    G3 --> Filter
+    Filter --> Best[Best result]
+```
+
+**使用场景：** 架构提案、重构策略、内容变体、任何在确定最终方案前探索多种选项以获得更好结果的任务。
+
+<Accordion title="示例：生成和筛选">
+
+**配置项**
+
+:::python
+```python
+agent = create_deep_agent(
+    model="openai:gpt-5.5",
+    subagents=[{
+        "name": "architect",
+        "description": "Proposes a database schema design with tradeoff analysis",
+        "system_prompt": "You are a database architect. Propose a schema design for the given requirements. Include tradeoffs, migration considerations, and a clear rationale.",
+    }],
+    middleware=[CodeInterpreterMiddleware()],
+)
+
+result = await agent.ainvoke({
+    "messages": [{"role": "user", "content": "Generate three different approaches to restructure the database schema for the orders system, then pick the best one."}]
+})
+```
+:::
+
+:::js
+```typescript
+const agent = createDeepAgent({
+  model: "openai:gpt-5.5",
+  subagents: [{
+    name: "architect",
+    description: "Proposes a database schema design with tradeoff analysis",
+    systemPrompt: "You are a database architect. Propose a schema design for the given requirements. Include tradeoffs, migration considerations, and a clear rationale.",
+  }],
+  middleware: [createCodeInterpreterMiddleware()],
+});
+
+const result = await agent.invoke({
+  messages: [{ role: "user", content: "Generate three different approaches to restructure the database schema for the orders system, then pick the best one." }],
+});
+```
+:::
+**智能体写入的内容**
+:::
+
+```javascript
+// Generate independent proposals in parallel, then score and keep the best.
+const proposals = await Promise.all(
+  [1, 2, 3].map((n) =>
+    task({
+      description: `Approach ${n}: redesign the orders schema, with tradeoffs.`,
+      subagentType: "architect",
+      responseSchema: designSchema, // -> { design, tradeoffs }
+    }),
+  ),
+);
+
+// ... score each proposal against the requirements
+const best = proposals.sort((a, b) => score(b) - score(a))[0];
+best;
+```
+</Accordion>
+
+### 锦标赛
+
+变体由评判子智能体进行一对一对决比较，获胜者通过淘汰轮晋级。
+
+```mermaid
+graph LR
+    A1[Attempt] --> J1{Judge}
+    A2[Attempt] --> J1
+    A3[Attempt] --> J2{Judge}
+    A4[Attempt] --> J2
+    J1 --> JF{Final}
+    J2 --> JF
+    JF --> Winner[Winner]
+```
+
+**使用场景：** 主观标准下的优化、风格选择、在竞争性实现之间进行选择。
+
+<Accordion title="示例：锦标赛">
+
+**您配置的内容**
+
+:::python
+```python
+agent = create_deep_agent(
+    model="openai:gpt-5.5",
+    subagents=[
+        {
+            "name": "writer",
+            "description": "Rewrites a function with a focus on readability and clarity",
+            "system_prompt": "You are an expert programmer focused on clean code. Rewrite the given function to maximize readability. Explain your choices.",
+        },
+        {
+            "name": "judge",
+            "description": "Compares two code implementations and picks the more readable one",
+            "system_prompt": "You are a code quality judge. Compare two implementations and pick the more readable one. Justify your choice with specific criteria.",
+        },
+    ],
+    middleware=[CodeInterpreterMiddleware()],
+)
+
+result = await agent.ainvoke({
+    "messages": [{"role": "user", "content": "Rewrite the processOrder function in src/checkout.ts five different ways and find the most readable version."}]
+})
+```
+:::
+
+:::js
+```typescript
+const agent = createDeepAgent({
+  model: "openai:gpt-5.5",
+  subagents: [
+    {
+      name: "writer",
+      description: "Rewrites a function with a focus on readability and clarity",
+      systemPrompt: "You are an expert programmer focused on clean code. Rewrite the given function to maximize readability. Explain your choices.",
+    },
+    {
+      name: "judge",
+      description: "Compares two code implementations and picks the more readable one",
+      systemPrompt: "You are a code quality judge. Compare two implementations and pick the more readable one. Justify your choice with specific criteria.",
+    },
+  ],
+  middleware: [createCodeInterpreterMiddleware()],
+});
+
+const result = await agent.invoke({
+  messages: [{ role: "user", content: "Rewrite the processOrder function in src/checkout.ts five different ways and find the most readable version." }],
+});
+```
+:::
+
+**代理写入的内容**
+
+:::
+
+```javascript
+// Generate variants, then judge pairwise until a single winner remains.
+let bracket = await Promise.all(
+  [1, 2, 3, 4, 5].map((n) =>
+    task({ description: `Rewrite processOrder for readability (variant ${n}).`, subagentType: "writer" }),
+  ),
+);
+
+while (bracket.length > 1) {
+  const winners = [];
+  for (let i = 0; i < bracket.length; i += 2) {
+    if (bracket[i + 1] === undefined) { winners.push(bracket[i]); break; }
+    const { winner } = await task({
+      description: `Pick the more readable:\n\nA:\n${bracket[i]}\n\nB:\n${bracket[i + 1]}`,
+      subagentType: "judge",
+      responseSchema: pickSchema, // -> { winner: "A" | "B" }
+    });
+    winners.push(winner === "A" ? bracket[i] : bracket[i + 1]);
+  }
+  bracket = winners;
+}
+bracket[0]; // the winning rewrite
+```
+</Accordion>
+
+### 循环直到完成
+
+代理运行一个发现循环，与已找到的结果进行去重，直到没有新的结果出现。当工作的范围无法提前确定时，这非常有用。
+
+```mermaid
+graph LR
+    Agent[Agent] --> Check{New findings?}
+    Check --> |yes| Agent
+    Check --> |no| Done[Done]
+```
+
+**使用场景：** 穷尽式搜索、死代码检测、依赖审计、任何需要完整覆盖而非固定数量结果的全量扫描。
+
+<Accordion title="Example: loop until done">
+
+**配置项**
+
+:::python
+```python
+agent = create_deep_agent(
+    model="openai:gpt-5.5",
+    subagents=[{
+        "name": "analyzer",
+        "description": "Analyzes code for unused exports, functions, and dead code paths",
+        "system_prompt": "You are a code analyst specializing in dead code detection. Find unused exports, unreachable functions, and orphaned modules. Report each with file path and evidence.",
+    }],
+    middleware=[CodeInterpreterMiddleware()],
+)
+
+result = await agent.ainvoke({
+    "messages": [{"role": "user", "content": "Find all the dead code in this repo. Be thorough. I want every unused export and unreachable function."}]
+})
+```
+:::
+
+:::js
+```typescript
+const agent = createDeepAgent({
+  model: "openai:gpt-5.5",
+  subagents: [{
+    name: "analyzer",
+    description: "Analyzes code for unused exports, functions, and dead code paths",
+    systemPrompt: "You are a code analyst specializing in dead code detection. Find unused exports, unreachable functions, and orphaned modules. Report each with file path and evidence.",
+  }],
+  middleware: [createCodeInterpreterMiddleware()],
+});
+
+const result = await agent.invoke({
+  messages: [{ role: "user", content: "Find all the dead code in this repo. Be thorough. I want every unused export and unreachable function." }],
+});
+```
+:::
+
+**代理写入的内容**
+
+```javascript
+// Keep dispatching rounds, deduping against what's found, until a round adds nothing.
+const seen = new Set();
+const found = [];
+
+while (true) {
+  const { items } = await task({
+    description: `Find dead code. Already found: ${[...seen].join(", ") || "(none)"}.`,
+    subagentType: "analyzer",
+    responseSchema: itemsSchema, // -> { items: [{ id, file }] }
+  });
+  const fresh = items.filter((i) => !seen.has(i.id));
+  if (fresh.length === 0) break; // converged: nothing new
+  for (const i of fresh) { seen.add(i.id); found.push(i); }
+}
+found;
+```
+</Accordion>
+
+:::python
+<Warning>
+    `task()` 从已在运行的 `eval` 调用内部进行调度。它不会经过正常的工具调用路径，因此父代理上的 `interrupt_on` 审批工作流不会在每次调度时被强制执行。如果需要在子代理编排运行前获得审批，请对 `eval` 工具本身进行门控。
+</Warning>
+:::
+:::js
+<Warning>
+    `task()` 从已在运行的 `eval` 调用内部进行调度。它不会经过正常的工具调用路径，因此父代理上的 `interruptOn` 审批工作流不会在每次调度时被强制执行。如果需要在子代理编排运行前获得审批，请对 `eval` 工具本身进行门控。
+</Warning>
+:::
+
+## 禁用编程式子代理
+
+只要代理拥有子代理，子代理调度就会默认开启。如果希望子代理只能通过正常的 `task` 工具路径使用，请将其禁用。
+
+:::python
+```python
+from deepagents import create_deep_agent
+from langchain_quickjs import CodeInterpreterMiddleware
+
+agent = create_deep_agent(
+    model="openai:gpt-5.5",
+    subagents=[{"name": "reviewer", "description": "Reviews code", "system_prompt": "Review code."}],
+    middleware=[CodeInterpreterMiddleware(subagents=False)],
+)
+```
+:::
+
+:::js
+```typescript
+import { createDeepAgent } from "deepagents";
+import { createCodeInterpreterMiddleware } from "@langchain/quickjs";
+
+const agent = createDeepAgent({
+  model: "openai:gpt-5.5",
+  subagents: [{ name: "reviewer", description: "Reviews code", systemPrompt: "Review code." }],
+  middleware: [createCodeInterpreterMiddleware({ subagents: false })],
+});
+```
+:::

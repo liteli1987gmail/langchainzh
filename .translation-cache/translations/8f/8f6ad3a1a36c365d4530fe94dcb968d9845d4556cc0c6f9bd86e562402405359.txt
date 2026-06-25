@@ -1,0 +1,77 @@
+---
+title: "RunloopSandbox 集成"
+description: "使用 LangChain Python 与 RunloopSandbox 沙箱后端集成"
+---
+
+[Runloop](https://www.runloop.ai/) 提供可丢弃的开发环境，用于在隔离环境中运行代码。请参阅 [Runloop 文档](https://docs.runloop.ai/) 获取注册、认证和平台详情。
+
+## 安装
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install langchain-runloop
+```
+
+```bash uv
+uv add langchain-runloop
+```
+</CodeGroup>
+
+## 创建沙箱后端
+
+在 Python 中，您可以使用提供程序 SDK 创建 devbox，然后用 [deepagents 后端](/oss/deepagents/backends) 将其包装。
+
+```python
+from runloop_api_client import RunloopSDK
+
+from langchain_runloop import RunloopSandbox
+
+api_key = "..."
+client = RunloopSDK(bearer_token=api_key)
+
+devbox = client.devbox.create()
+backend = RunloopSandbox(devbox=devbox)
+
+try:
+    result = backend.execute("echo hello")
+    print(result.output)
+finally:
+    devbox.shutdown()
+```
+
+## 与 Deep Agents 结合使用
+
+```python
+from runloop_api_client import RunloopSDK
+from langchain_anthropic import ChatAnthropic
+
+from deepagents import create_deep_agent
+from langchain_runloop import RunloopSandbox
+
+api_key = "..."
+client = RunloopSDK(bearer_token=api_key)
+
+devbox = client.devbox.create()
+backend = RunloopSandbox(devbox=devbox)
+
+agent = create_deep_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-20250514"),
+    system_prompt="You are a coding assistant with sandbox access.",
+    backend=backend,
+)
+
+try:
+    result = agent.invoke(
+        {"messages": [{"role": "user", "content": "Create a small Python project and run tests"}]}
+    )
+finally:
+    devbox.shutdown()
+```
+
+## 清理
+
+完成工作后，请务必关闭 devbox，避免持续占用资源。
+
+另请参阅：[Sandboxes](/oss/deepagents/sandboxes)。

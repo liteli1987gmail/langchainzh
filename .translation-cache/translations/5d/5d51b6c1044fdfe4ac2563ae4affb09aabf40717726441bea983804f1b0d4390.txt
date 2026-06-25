@@ -1,0 +1,151 @@
+---
+title: 语音追踪基础
+sidebarTitle: 语音基础
+description: 在 LangSmith 中追踪语音和音频智能体的最佳实践，包括对话音频、单追踪对话和音频模态标志。
+---
+
+[追踪](/langsmith/observability-concepts#traces) 语音智能体与追踪文本智能体不同。对话是连续的、双向的、可中断的：用户会抢话、在句子中间改变话题，并期望亚秒级响应。为了调试和评估这些系统，你的追踪需要将对话捕获为一个单一的、音频感知的单元，而不是一系列断开连接的文本交换。
+
+本页面介绍了在 LangSmith 中追踪语音应用的核心约定。无论你使用哪个框架或模型提供商（[OpenAI Realtime](/langsmith/trace-openai-realtime)、[Gemini Live](/langsmith/trace-gemini-live)、[LiveKit](/langsmith/trace-with-livekit)、[Pipecat](/langsmith/trace-with-pipecat) 或你自己的），都应遵循这些模式。
+
+<Note>
+这些约定假设你通过支持的[追踪设置](/langsmith/observability)将追踪导出到 LangSmith。关于 UI 中的音频渲染和播放，请参阅[记录多模态追踪](/langsmith/log-multimodal-traces)和[使用追踪上传文件](/langsmith/upload-files-with-traces)。
+</Note>
+
+## 两种架构，两种追踪形态
+
+你构建语音智能体的方式决定了追踪的外观。有两种常见架构，它们产生根本不同的追踪。
+
+### 级联
+
+级联将独立的单一用途模型链接在一起：语音转文本 (STT) 转录用户的音频，语言模型 (LLM) 根据文本进行推理并决定下一步操作，文本转语音 (TTS) 合成交换回复。中间件、工具调用和检索步骤位于中间。
+
+由于每个阶段都是一个具有明确输入和输出的离散模型调用，级联追踪方式与任何其他智能体管道相同。追踪是一棵 `STT`、`LLM`、`TTS`、工具和中间件运行的树：阶段可以并行运行，每个对话轮次都会重复新的 STT → LLM → TTS 循环。这些运行具有有意义的输入/输出对（音频输入 → 转录文本输出，提示输入 → 完成输出）。
+
+构建级联语音智能体最常见的两个框架是 [LiveKit](/langsmith/trace-with-livekit) 和 [Pipecat](/langsmith/trace-with-pipecat)。
+
+### 语音转语音 (S2S)
+
+语音转语音模型（如 [OpenAI Realtime API](/langsmith/trace-openai-realtime) 或 [Gemini Live](/langsmith/trace-gemini-live)）原生处理音频并通过单一持久连接（通常为 WebSocket）以音频形式回复。没有 STT/LLM/TTS 分解需要追踪。
+
+相反，模型服务器和客户端通过线路交换**事件**流：音频块、转录片段、工具调用请求、轮次边界、中断和错误。追踪的自然单元是**事件负载**，而不是请求/响应对。你记录的每个事件都成为一个 span，其内容是穿越线路的有效负载。
+
+本页面其余部分描述适用于两种架构的约定。提供商指南涵盖了 [OpenAI Realtime](/langsmith/trace-openai-realtime) 和 [Gemini Live](/langsmith/trace-gemini-live) 的事件流细节。
+
+## 核心约定
+
+这些是我们推荐的充分利用 LangSmith 中语音追踪的最佳实践。你应该以最适合你的基础设施和实现的方式追踪你的语音应用，但遵循我们在此建议的结构将有助于使你的追踪保持一致且易于调试和评估。
+
+我们建议三个高层约定：
+
+1. [**将每个对话作为单个追踪**](#trace-each-conversation-as-a-single-trace)，而不是将其拆分为多个追踪。
+2. [**录制一个组合音频文件**](#record-a-single-combined-audio-file) 并将其附加到根运行。
+3. [**使用 `ls_modality` 将追踪标记为音频**](#mark-the-trace-as-audio)，以便将其渲染和过滤为语音追踪。
+
+### 将每个对话作为单个追踪
+
+对话是单一交互，因此我们建议将其保持在单个追踪中，单独的模型调用或事件嵌套在一个代表整个对话的根运行下。
+
+不要将对话拆分为多个追踪。如果为每次交换启动新的追踪，你会丢失存在于交换**之间**的信息：
+
+- **中断**：用户抢话且智能体停止（打断）。
+- **时间和延迟**：说话者之间的间隔，以及智能体响应所需的时间。
+- **上下文**：回顾对话的早期部分。
+- **对话级结果**：用户的最终目标是否已解决。
+
+根运行下方的内容取决于你的[架构](#two-architectures-two-trace-shapes)。对于[级联](#cascade)，子项是模型调用和中间件：
+
+```text
+conversation                      ← root run (whole conversation; combined audio; ls_modality="audio")
+│
+├─ stt                            ← a transcription call
+├─ llm                            ← a model call (may include middleware and tool runs)
+├─ tts                            ← a synthesis call
+└─ ...                            ← the pattern repeats as the conversation continues
+```
+
+对于[语音转语音](#speech-to-speech-s2s)智能体，子元素是穿过套接字的 **events**：
+
+```text
+conversation                      ← root run (whole conversation; combined audio; ls_modality="audio")
+│
+├─ input_transcription            ← a fragment of the user's speech transcript
+├─ output_transcription           ← a fragment of the agent's speech transcript
+├─ function_call: get_weather     ← the model requested a tool
+├─ function_response: get_weather ← the tool result heading back to the model
+├─ turn_complete                  ← a turn boundary reported by the server
+└─ interrupted                    ← the server detected user barge-in
+```
+
+<Note>
+语音代理没有可靠的"轮次"概念。说话者会重叠、打断、拖长尾音。不要将运行分组为合成的轮次，而是追踪真实的单元：级联中的模型调用，或者语音转语音流中的事件负载。
+</Note>
+
+要了解分组相关运行的背景信息，请参阅[嵌套追踪](/langsmith/nest-traces)。要将多个独立会话归为一个用户，请使用[线程](/langsmith/threads)。
+
+### 录制单个合并音频文件
+
+将**一个**音频文件附加到根运行，该文件包含**用户和代理双方的**音频，录制的是**实际播放给客户端的内容**，而不是模型生成的音频。
+
+在客户端录制。常见做法是使用立体声 WAV 文件，将用户的麦克风放在一个声道，代理的语音（从扬声器捕获）放在另一个声道。这很重要，因为生成的音频和用户听到的音频不是一回事：网络延迟、数据包丢失或重排，以及插话都会改变用户的实际体验。一次截断代理说话的插话应该在录音中呈现截断状态，因为这确实是发生的情况。录制实际播放的内容，而不是可能从未被听到的生成内容，这样才能使追踪忠实于真实交互。
+
+使用[附件 API](/langsmith/upload-files-with-traces)附加文件：
+
+```python Python
+from langsmith import traceable
+from langsmith.schemas import Attachment
+
+@traceable(name="conversation", metadata={"ls_modality": "audio"})
+def run_conversation(session_id: str, conversation_audio: bytes):
+    # conversation_audio: a single recording of what was played to the client
+    # (e.g. stereo WAV: user mic on L, agent speech at the speaker on R)
+    ...
+    return {"conversation": Attachment(mime_type="audio/wav", data=conversation_audio)}
+```
+
+<Tip>
+音频文件可能很大。对于高负载的生产工作流，建议降低采样率、使用压缩格式（如 MP3 或 Opus），或选择性地记录部分对话。
+</Tip>
+
+### 将跟踪标记为音频
+
+在根运行上设置 `ls_modality` 元数据字段为 `"audio"`。这会将跟踪标记为语音跟踪，以便 LangSmith 可以正确渲染它，并且您可以在项目中[筛选](/langsmith/filter-traces-in-application)语音跟踪。
+
+```python Python
+from langsmith import traceable
+
+@traceable(
+    name="conversation",
+    metadata={"ls_modality": "audio"},
+)
+def run_conversation(session_id: str):
+    ...
+```
+
+<Note>
+有关其他 `ls_` 元数据字段，请参阅[元数据参数参考](/langsmith/ls-metadata-parameters)。
+</Note>
+
+
+## 后续步骤
+
+<CardGroup cols={2}>
+  <Card title="追踪 OpenAI Realtime" icon="microphone" href="/langsmith/trace-openai-realtime">
+    追踪基于 OpenAI Realtime API 构建的语音代理。
+  </Card>
+  <Card title="追踪 Gemini Live" icon="microphone" href="/langsmith/trace-gemini-live">
+    追踪基于 Gemini Live API 构建的语音代理。
+  </Card>
+  <Card title="追踪 LiveKit" icon="microphone" href="/langsmith/trace-with-livekit">
+    追踪使用 LiveKit Agents 构建的语音代理。
+  </Card>
+  <Card title="追踪 Pipecat" icon="microphone" href="/langsmith/trace-with-pipecat">
+    追踪使用 Pipecat 构建的语音代理。
+  </Card>
+  <Card title="随追踪上传文件" icon="paperclip" href="/langsmith/upload-files-with-traces">
+    将对话音频录音附加到您的追踪中。
+  </Card>
+  <Card title="记录多模态追踪" icon="photo" href="/langsmith/log-multimodal-traces">
+    在 LangSmith UI 中渲染音频和其他媒体。
+  </Card>
+</CardGroup>

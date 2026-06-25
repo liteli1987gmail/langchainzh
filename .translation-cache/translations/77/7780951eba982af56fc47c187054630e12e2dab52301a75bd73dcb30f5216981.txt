@@ -1,0 +1,153 @@
+---
+title: Agent Server
+sidebarTitle: Overview
+---
+
+LangSmith Deployment 的 **Agent Server** 提供了一个用于创建和管理基于代理的应用程序的 API。它建立在 [助手 (Assistants)](/langsmith/assistants) 的概念之上，助手是为特定任务配置的代理，并包含内置的 [持久化](/oss/langgraph/persistence#memory-store) 和 [**任务队列**](#task-queue)。这个多功能的 API 支持广泛的代理应用程序用例，从后台处理到实时交互。
+
+使用 Agent Server 创建和管理：
+
+<CardGroup cols={4}>
+  <Card title="Assistants" icon="robot" href="/langsmith/assistants" />
+  <Card title="Threads" icon="messages" href="/langsmith/use-threads" />
+  <Card title="Runs" icon="player-play" href="/langsmith/runs" />
+  <Card title="Cron jobs" icon="clock" href="/langsmith/cron-jobs" />
+</CardGroup>
+
+<Tip>
+**API 参考文档**<br></br>
+有关 API 端点和数据模型的详细信息，请参阅 [Agent Server API 参考文档](/langsmith/server-api-ref)。
+</Tip>
+
+## 应用程序结构
+
+要部署 Agent Server 应用程序，你需要指定要部署的图 (graph)，以及任何相关的配置设置，例如依赖项和环境变量。
+
+阅读 [应用程序结构](/langsmith/application-structure) 指南，了解如何为部署构建 LangGraph 应用程序。
+
+<Note>
+[LangSmith 云](/langsmith/cloud) 为你管理数据库。如果你正在 [自行部署](/langsmith/self-hosted)，则需要自行设置。
+</Note>
+
+## 部署的组成部分
+
+当你部署 Agent Server 时，你部署的是一个或多个[图](#graphs)、用于[持久化](/oss/langgraph/persistence)的数据库，以及一个[任务队列](#task-queue)。
+
+### 图
+
+当你在 Agent Server 中部署一个图时，你部署的是一个[助手](/langsmith/assistants)的"蓝图"。
+
+一个图最常见的是实现一个[代理](/oss/langgraph/workflows-agents)，但并非必须如此。例如，一个图可以实现一个简单的聊天机器人，只支持来回对话，而不影响任何应用程序控制流。实际上，随着应用程序变得越来越复杂，一个图通常会实现更复杂的流程，可能会使用[多个代理](/oss/langchain/multi-agent)协同工作。
+
+图不必用 LangGraph 编写。你也可以使用 LangGraph 函数式 API 部署用其他框架构建的代理，例如 Strands 或 Google ADK。详细信息请参阅[部署其他框架](/langsmith/deploy-other-frameworks)。
+
+#### 图的加载和编译
+
+图的编译方式和时间取决于你如何在[应用程序结构](/langsmith/application-structure)中注册它：
+
+1. **已编译的图**（推荐）：导出一个已编译的 `CompiledGraph` 实例。服务器在容器启动时加载一次，并在每次运行中重复使用它——每个请求没有编译开销。
+2. **工厂函数**：导出一个代理工厂函数，服务器在需要图时调用它。仅在你需要每次运行自定义图时使用此方法（例如，根据助手配置选择不同的模型或工具）。保持工厂函数轻量级，因为它们每次调用都会运行。
+
+<Tip>
+除非你明确需要每次运行自定义，否则使用已编译的图。工厂函数每次调用都会增加开销；已编译的图不会。
+</Tip>
+
+在这两种情况下，服务器会在运行时自动注入为该部署配置的检查点和内存存储。**不要在图代码中配置这些**，因为服务器需要管理它们用于其他操作。
+
+### 持久化
+
+Agent Server 持久化三种类型的数据，默认都使用 [PostgreSQL](https://www.postgresql.org/) 作为后端：
+
+- **核心资源数据**：助手、线程、运行和定时任务。始终存储在 PostgreSQL 中。
+- **检查点（短期记忆）**：每一步写入的图执行状态快照。它们使运行具有持久性：如果工作线程被中断，运行可以从最后一个检查点恢复，而不是从头开始。持久性模式控制检查点频率——`async`（默认）在每一步后写入；`exit` 只存储最终状态。LangSmith 默认将此存储在 PostgreSQL 中；但你可以切换到 [MongoDB](https://www.mongodb.com/) 或自定义实现。详细信息请参阅[配置检查点后端](/langsmith/configure-checkpointer)。
+- **存储（长期记忆）**：跨线程持久化的记忆，使代理能够保留分离对话之间的信息。默认存储在 PostgreSQL 中，但可以用自定义实现替换。详细信息请参阅[添加自定义存储](/langsmith/custom-store)。
+
+### 任务队列
+
+当客户端创建运行时，API 服务器将其加入队列，队列工作线程拾取它执行。工作线程也可以被信号通知取消正在进行的运行，并发布输出事件，将打开的 `/stream` 连接实时转发给客户端。
+
+[Redis](https://redis.io/) 处理 API 服务器和队列工作线程之间的信号传递、取消和流式发布/订阅。它只存储临时数据——Redis 中不持久化用户或运行数据。运行数据本身始终从 PostgreSQL 读取和写入。
+
+有关如何设置和管理这些组件的更多信息，请查看[托管选项](/langsmith/platform-setup)指南。
+
+## 运行时架构
+
+### 部署模式
+
+Agent Server 支持三种运行时配置：
+
+- **单主机**：API 服务器直接管理任务队列，没有单独的队列工作线程。这是自托管部署的默认配置，适合开发和低流量用例。
+- **分离 API 和队列**：专用队列工作线程在与 API 服务器单独的主机上处理运行执行。对于自托管部署，通过在配置中设置 `queue.enabled: true` 来启用此模式。每个层级独立扩展——API 服务器按请求量扩展，队列工作线程按待处理运行数扩展。
+- **分布式运行时**：API 和队列进程再次分开运行，但分布式运行时不是使用单个队列进程处理图的编排和执行，而是使用一个进程进行编排，一个进程进行执行。对于具有高并发要求的大规模部署使用此模式。
+
+下面描述的容器架构和运行生命周期适用于单主机和分离 API 和队列配置。
+
+### 容器架构
+
+典型的部署由两种长期运行的容器组成，两者都从同一个 Docker 镜像构建（在项目代码安装在其上的基础镜像之上）：
+
+- **API 服务器**处理客户端请求（创建运行、读取线程状态、流式传输结果），但不自行执行代理代码。
+- **队列工作线程**是执行引擎。它们监听持久化任务队列，执行图代码，并写入检查点。
+
+容器是**无状态的**但持久的。至少 1 个队列工作线程必须随时监听任务队列，以确保不会丢失任何运行。容器可以在其生命周期内处理多次运行。
+
+API 服务器和队列工作线程是独立的容器池，可以[独立扩展](/langsmith/data-plane#autoscaling)。
+
+```mermaid
+flowchart TB
+    User["User"]
+
+    API["API Servers"]
+
+    subgraph WorkerContainer["Worker Containers"]
+        QueueLoop["Queue Loop"]
+        W1["Worker"]
+        W2["Worker"]
+        Wn["..."]
+        QueueLoop -->|dispatch| W1
+        QueueLoop -->|dispatch| W2
+    end
+
+    DB[(Postgres)]
+    Redis[(Redis)]
+
+    User -->|request| API
+    API -->|create run| DB
+    API -->|notify| Redis
+
+    Redis -->|wake| QueueLoop
+    QueueLoop -->|claim next run| DB
+
+    WorkerContainer -->|save checkpoints / update status| DB
+    WorkerContainer -->|publish events| Redis
+
+    Redis -->|stream events| API
+    API -->|SSE response| User
+
+    style User fill:#F2FAFF,stroke:#40668D,stroke-width:2px,color:#2F4B68
+    style API fill:#EBD0F0,stroke:#885270,stroke-width:2px,color:#441E33
+    style DB fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    style Redis fill:#F8E8E6,stroke:#B27D75,stroke-width:2px,color:#634643
+    style WorkerContainer fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    style QueueLoop fill:#FDF3FF,stroke:#7E65AE,stroke-width:2px,color:#504B5F
+    style W1 fill:#F2FAFF,stroke:#40668D,stroke-width:2px,color:#2F4B68
+    style W2 fill:#F2FAFF,stroke:#40668D,stroke-width:2px,color:#2F4B68
+    style Wn fill:#F2FAFF,stroke:#40668D,stroke-width:2px,color:#2F4B68
+```
+
+### 运行执行生命周期
+
+当您调用一个运行时，请求会流经多个组件：
+
+1. 客户端向 API 服务器发送请求，API 服务器会在持久任务队列中创建一个待处理的运行。
+2. 队列工作器拾取该运行，获取其租约，加载相应的图，并开始执行。队列强制执行：对于给定的线程，一次最多只能执行 1 个运行。
+3. 在图执行过程中，工作器会向持久层写入检查点（频率取决于[持久性模式](/oss/langgraph/persistence#durability-modes)），并通过配置的 pubsub 提供者广播流式事件。
+4. 如果客户端打开了 `/stream` 连接，API 服务器会订阅 pubsub 通道，并通过 server-sent 事件实时将事件转发给客户端。
+5. 当执行完成时，工作器会更新运行状态并释放其槽位以供下一个运行使用。
+
+每个工作器最多可同时处理 [`N_JOBS_PER_WORKER`](/langsmith/env-var-cloud) 个运行（默认：10），因此单个工作器容器可以并行处理多个运行。请参阅[配置 Agent Server 以实现扩展](/langsmith/agent-server-scale) 以获取调优指南。
+
+## 了解更多
+
+- [应用结构](/langsmith/application-structure) 指南介绍了如何构建应用程序以进行部署。
+- [API 参考](https://docs.langchain.com/langsmith/server-api-ref) 提供了 API 端点和数据模型的详细信息。

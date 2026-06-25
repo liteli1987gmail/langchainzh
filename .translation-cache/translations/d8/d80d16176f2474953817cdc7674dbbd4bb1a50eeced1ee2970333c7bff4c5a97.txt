@@ -1,0 +1,259 @@
+---
+title: SAP HANA Cloud 知识图谱引擎
+---
+
+[SAP HANA Cloud 知识图谱](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/sap-hana-cloud-sap-hana-database-knowledge-graph-engine-guide) 是 `SAP HANA Cloud` 数据库中一个完全集成的知识图谱解决方案。
+
+## 设置与安装
+
+您必须拥有一个已启用**三元组存储**功能的 SAP HANA Cloud 实例。
+有关详细说明，请参阅：[启用三元组存储](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/enable-triple-store/)
+
+要将 SAP HANA 知识图谱引擎与 LangChain 结合使用，请安装 `langchain-hana` 包：
+
+```python
+pip install langchain_hana
+```
+
+首先，创建与您的 SAP HANA Cloud 实例的连接。
+
+```python
+import os
+
+from dotenv import load_dotenv
+from hdbcli import dbapi
+
+# Load environment variables if needed
+load_dotenv()
+
+# Establish connection to SAP HANA Cloud
+connection = dbapi.connect(
+    address=os.environ.get("HANA_DB_ADDRESS"),
+    port=os.environ.get("HANA_DB_PORT"),
+    user=os.environ.get("HANA_DB_USER"),
+    password=os.environ.get("HANA_DB_PASSWORD")
+)
+```
+
+然后，导入 `HanaRdfGraph` 类
+
+```python
+from langchain_hana import HanaRdfGraph
+```
+
+## 创建 `HanaRdfGraph` 实例
+
+构造函数需要：
+
+- **`connection`**：一个活跃的 `hdbcli.dbapi.connect(...)` 实例
+- **`graph_uri`**：包含 RDF 数据的有名称图（或 `"DEFAULT"`）
+- **以下之一**：
+  1. **`ontology_query`**：用于提取模式三元组的 SPARQL CONSTRUCT
+  2. **`ontology_uri`**：托管本体图的 URI
+  3. **`ontology_local_file`** + **`ontology_local_file_format`**：本地 Turtle/RDF 文件
+  4. **`auto_extract_ontology=True`**（不推荐用于生产环境——请参见注释）
+
+`graph_uri` 与本体
+
+- **`graph_uri`**：
+  SAP HANA Cloud 实例中包含实例数据的有名称图（有时超过 10 万条三元组）。
+  如果提供 `None`、`""` 或 `"DEFAULT"`，则使用默认图。
+- **本体**：一个精简的模式（通常约 50-100 条三元组），用于描述类、属性、域、范围、标签、注释和子类关系。本体指导 SPARQL 生成和结果解释。
+
+### 使用 **DEFAULT** 图创建图实例
+
+有关 DEFAULT 图的更多信息，请参阅 [DEFAULT 图和有名称图](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/default-graph-and-named-graphs)。
+
+```python
+
+graph = HanaRdfGraph(
+    connection=connection,
+    auto_extract_ontology=True,
+)
+
+# graph = HanaRdfGraph(
+#     connection=connection,
+#     graph_uri="DEFAULT",
+#     auto_extract_ontology=True,
+# )
+
+# graph = HanaRdfGraph(
+#     connection=connection,
+#     graph_uri="",
+#     auto_extract_ontology=True,
+# )
+```
+
+### 使用 `graph_uri` 创建图实例
+
+```python
+graph = HanaRdfGraph(
+    connection=connection,
+    graph_uri="http://example.org/movies",
+    auto_extract_ontology=True,
+)
+```
+
+### 使用远程 `ontology_uri` 创建图形实例
+
+直接从托管的图形 URI 加载模式。
+
+```python
+graph = HanaRdfGraph(
+    connection=connection,
+    ontology_uri="<your_ontology_graph_uri>",
+)
+```
+
+### 使用自定义 `ontology_query` 创建图实例
+
+使用自定义 `CONSTRUCT` 查询来选择性地提取模式三元组。
+
+```python
+ontology_query = """
+    PREFIX owl: <http://www.w3.org/2002/07/owl#>
+    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+    CONSTRUCT {?cls rdf:type owl:Class . ?cls rdfs:label ?clsLabel . ?rel rdf:type ?propertyType . ?rel rdfs:label ?relLabel . ?rel rdfs:domain ?domain . ?rel rdfs:range ?range .}
+    FROM <kgdocu_movies>
+    WHERE { # get properties
+        {SELECT DISTINCT ?domain ?rel ?relLabel ?propertyType ?range
+        WHERE {
+            ?subj ?rel ?obj .
+            ?subj a ?domain .
+            OPTIONAL{?obj a ?rangeClass .}
+            FILTER(?rel != rdf:type)
+            BIND(IF(isIRI(?obj) = true, owl:ObjectProperty, owl:DatatypeProperty) AS ?propertyType)
+            BIND(COALESCE(?rangeClass, DATATYPE(?obj)) AS ?range)
+            BIND(STR(?rel) AS ?uriStr)       # Convert URI to string
+            BIND(REPLACE(?uriStr, "^.*[/#]", "") AS ?relLabel)
+        }}
+        UNION { # get classes
+            SELECT DISTINCT ?cls ?clsLabel
+            WHERE {
+                ?instance a/rdfs:subClassOf* ?cls .
+                FILTER (isIRI(?cls)) .
+                BIND(STR(?cls) AS ?uriStr)       # Convert URI to string
+                BIND(REPLACE(?uriStr, "^.*[/#]", "") AS ?clsLabel)
+            }
+        }
+    }
+"""
+
+# can provide the graph_uri param as well if needed
+graph = HanaRdfGraph(
+    connection=connection,
+    ontology_query=ontology_query,
+)
+```
+
+### 使用本地 RDF 文件创建图实例
+
+(`ontology_local_file` + `ontology_local_file_format`): 从本地 RDF 本体文件加载模式。
+
+支持的 RDF 格式包括 `Turtle`、`RDF/XML`、`JSON-LD`、`N-Triples`、`Notation-3`、`Trig`、`Trix`、`N-Quads`。
+
+```python
+graph = HanaRdfGraph(
+    connection=connection,
+    ontology_local_file="<your_ontology_file_path>", # e.g., "ontology.ttl"
+    ontology_local_file_format="<your_ontology_file_format>",  # e.g., "Turtle", "RDF/XML", "JSON-LD", "N-Triples", "Notation-3", "Trig", "Trix", "N-Quads"
+)
+```
+
+### 自动提取本体论
+
+（`auto_extract_ontology=True`）：直接从实例数据中推断模式信息。
+
+```python
+graph = HanaRdfGraph(
+    connection=connection,
+    graph_uri="<your_graph_uri>",
+    auto_extract_ontology=True,
+)
+```
+
+> **注意**：自动提取**不建议**用于生产环境——它通常会忽略重要的三元组，如 `rdfs:label`、`rdfs:comment` 和 `rdfs:subClassOf`。
+
+## 执行 SPARQL 查询
+
+您可以使用 `query()` 方法在数据图上执行任意 SPARQL 查询（`SELECT`、`ASK`、`CONSTRUCT` 等）。
+
+该函数具有以下参数
+
+* **query**：SPARQL 查询字符串。
+* **content_type**：输出的响应格式（默认为 CSV）
+
+请使用以下字符串来指定相应的格式。
+
+* CSV: `"sparql-results+xml"`
+* JSON: `"sparql-results+json"`
+* XML: `"sparql-results+csv"`
+* TSV: `"sparql-results+tsv"`
+
+> **注意**：CONSTRUCT 和 ASK 查询分别返回 `turtle` 和 `boolean` 格式。
+
+让我们向 `Puppets` 图中插入一些数据。
+
+```python
+cursor = connection.cursor()
+try:
+    result = cursor.callproc(
+        "SYS.SPARQL_EXECUTE", (
+        """
+        INSERT DATA {
+        GRAPH <Puppets> {
+            <P1> a <Puppet>; <name> "Ernie"; <show> "Sesame Street".
+            <P2> a <Puppet>; <name> "Bert"; <show> "Sesame Street" .
+            }
+        }
+        """, "", "?", "?"
+        )
+    )
+    response = result[2]
+except dbapi.Error as db_error:
+    raise RuntimeError(
+        f'The database query failed: '
+        f'{db_error.errortext.split("; Server Connection")[0]}'
+    )
+finally:
+    cursor.close()
+```
+
+然后，我们为 `Puppets` 图创建一个图实例。
+
+```python
+puppets_graph = HanaRdfGraph(
+    connection=connection,
+    graph_uri="Puppets",
+    auto_extract_ontology=True,
+)
+```
+
+给定的查询列出了 `Puppets` 图中的所有元组。
+
+```python
+query = """
+SELECT ?s ?p ?o
+WHERE {
+    GRAPH <Puppets> {
+        ?s ?p ?o .
+    }
+}
+ORDER BY ?s
+"""
+
+result = puppets_graph.query(query)
+print(result)
+```
+
+```output
+s,p,o
+P1,name,Ernie
+P1,show,Sesame Street
+P1,http://www.w3.org/1999/02/22-rdf-syntax-ns#type,Puppet
+P2,name,Bert
+P2,show,Sesame Street
+P2,http://www.w3.org/1999/02/22-rdf-syntax-ns#type,Puppet
+```

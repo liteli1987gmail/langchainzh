@@ -218,6 +218,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-if-unchanged", action="store_true")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument(
+        "--translation-workers",
+        type=int,
+        default=int(os.environ.get("TRANSLATION_WORKERS", "1")),
+    )
+    parser.add_argument(
+        "--translation-max-chars",
+        type=int,
+        default=int(os.environ.get("TRANSLATION_MAX_CHARS", "24000")),
+    )
+    parser.add_argument(
+        "--translation-retries",
+        type=int,
+        default=int(os.environ.get("TRANSLATION_RETRIES", "6")),
+    )
+    parser.add_argument(
+        "--translation-retry-delay",
+        type=float,
+        default=float(os.environ.get("TRANSLATION_RETRY_DELAY", "5")),
+    )
+    parser.add_argument(
+        "--failure-log",
+        type=Path,
+        default=Path(".translation-cache/failures.json"),
+    )
+    parser.add_argument(
         "--mock-translator",
         action="store_true",
         help="Do not call MiniMax; use unchanged source text for smoke tests.",
@@ -255,6 +280,17 @@ def main() -> int:
         str(translated_src),
         "--cache",
         str(args.cache),
+        "--workers",
+        str(args.translation_workers),
+        "--max-chars",
+        str(args.translation_max_chars),
+        "--retries",
+        str(args.translation_retries),
+        "--retry-delay",
+        str(args.translation_retry_delay),
+        "--keep-going",
+        "--failure-log",
+        str(args.failure_log),
     ]
     if args.limit:
         translate_command.extend(["--limit", str(args.limit)])
@@ -274,6 +310,14 @@ def main() -> int:
                 "--build-dir",
                 str(upstream_dir / "build"),
                 "--out-dir",
+                str(args.site_dir),
+            ]
+        )
+        run(
+            [
+                sys.executable,
+                "scripts/optimize_site_assets.py",
+                "--site-dir",
                 str(args.site_dir),
             ]
         )

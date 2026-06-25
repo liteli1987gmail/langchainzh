@@ -1,0 +1,223 @@
+---
+title: "Deno"
+sidebarTitle: "Deno"
+description: "将 Deno 沙箱后端与 deepagents 结合使用，在 Linux 微虚拟机中实现隔离代码执行"
+---
+
+[Deno Deploy](https://deno.com) 提供 Linux 微虚拟机用于隔离代码执行。最适合 Deno 和 JavaScript 工作负载。
+
+## 设置
+
+<CodeGroup>
+    ```bash npm
+    npm install @langchain/deno
+    ```
+
+    ```bash yarn
+    yarn add @langchain/deno
+    ```
+
+    ```bash pnpm
+    pnpm add @langchain/deno
+    ```
+</CodeGroup>
+
+### 身份验证
+
+从以下位置获取您的令牌 [app.deno.com](https://app.deno.com) → 设置 → 组织令牌。
+
+```bash
+export DENO_DEPLOY_TOKEN=your_token
+```
+
+或者直接传递凭证：
+
+```typescript
+const sandbox = await DenoSandbox.create({
+  auth: { token: "your-token-here" },
+});
+```
+
+
+```typescript
+import { createDeepAgent } from "deepagents";
+import { ChatAnthropic } from "@langchain/anthropic";
+import { DenoSandbox } from "@langchain/deno";
+
+const sandbox = await DenoSandbox.create({
+  memoryMb: 1024,
+  lifetime: "10m",
+});
+
+try {
+  const agent = createDeepAgent({
+    model: new ChatAnthropic({ model: "claude-sonnet-4-20250514" }),
+    systemPrompt: "You are a coding assistant with sandbox access.",
+    backend: sandbox,
+  });
+
+  const result = await agent.invoke({
+    messages: [{ role: "user", content: "Create a hello world Deno app and run it" }],
+  });
+} finally {
+  await sandbox.close();
+}
+```
+:::
+
+## 独立使用
+
+:::js
+```typescript
+import { DenoSandbox } from "@langchain/deno";
+
+const sandbox = await DenoSandbox.create({
+  memoryMb: 1024,
+  lifetime: "10m",
+});
+
+const result = await sandbox.execute("deno --version");
+console.log(result.output);
+
+await sandbox.close();
+```
+:::
+
+## 配置
+
+| 选项 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `memoryMb` | `number` | `768` | 内存大小（MB）(768-4096) |
+| `lifetime` | `"session" \| string` | `"session"` | 生命周期 (`"session"`, `"5m"`, `"30s"`) |
+| `region` | `string` | - | 区域。可选值：`"ams" \| "ord"` |
+
+### 可用区域
+
+| 区域代码 | 位置 |
+|----------|------|
+| `ams` | 阿姆斯特丹 |
+| `ord` | 芝加哥 |
+
+### 生命周期选项
+
+- `"session"` (默认)：当您关闭/释放客户端时，沙箱将关闭
+- 时间字符串：让沙箱保持运行指定时间（例如 `"5m"`, `"30s"`）
+
+## 访问 Deno SDK
+
+如需高级功能，可访问底层 Deno SDK：
+
+:::js
+```typescript
+const denoSandbox = await DenoSandbox.create();
+const sdk = denoSandbox.sandbox;
+
+// Expose HTTP port
+const url = await sdk.exposeHttp({ port: 3000 });
+
+// Expose SSH
+const ssh = await sdk.exposeSsh();
+
+// Evaluate JavaScript
+const result = await sdk.eval("1 + 2");
+
+// Set environment variables
+await sdk.env.set("API_KEY", "secret");
+
+// Shell template literals
+const output = await sdk.sh`echo "Hello from Deno!"`.text();
+
+// Start a JavaScript runtime
+const runtime = await sdk.createJsRuntime({ entrypoint: "server.ts" });
+```
+:::
+
+## 重新连接到现有沙箱
+
+重新连接需要基于时长的生命周期（不是 `"session"`）：
+
+:::js
+```typescript
+// Create with duration lifetime
+const sandbox = await DenoSandbox.create({
+  memoryMb: 1024,
+  lifetime: "30m",
+});
+const sandboxId = sandbox.id;
+await sandbox.close(); // Close connection, sandbox keeps running
+
+// Later: reconnect
+const reconnected = await DenoSandbox.connect(sandboxId);
+const result = await reconnected.execute("ls -la");
+```
+:::
+
+## 工厂函数
+
+:::js
+```typescript
+import { createDenoSandboxFactory, createDenoSandboxFactoryFromSandbox } from "@langchain/deno";
+
+// Create new sandbox per invocation
+const factory = createDenoSandboxFactory({ memoryMb: 1024 });
+
+// Or reuse an existing sandbox across invocations
+const sandbox = await DenoSandbox.create();
+const reuseFactory = createDenoSandboxFactoryFromSandbox(sandbox);
+```
+:::
+
+## 错误处理
+
+```typescript
+import { DenoSandboxError } from "@langchain/deno";
+
+try {
+  await sandbox.execute("some command");
+} catch (error) {
+  if (error instanceof DenoSandboxError) {
+    switch (error.code) {
+      case "NOT_INITIALIZED":
+        await sandbox.initialize();
+        break;
+      case "COMMAND_TIMEOUT":
+        console.error("Command took too long");
+        break;
+      case "AUTHENTICATION_FAILED":
+        console.error("Check your Deno Deploy token");
+        break;
+    }
+  }
+}
+```
+
+### 错误码
+
+| 代码 | 描述 |
+|------|-------------|
+| `NOT_INITIALIZED` | 沙箱未初始化 - 请调用 `initialize()` |
+| `ALREADY_INITIALIZED` | 无法重复初始化 |
+| `AUTHENTICATION_FAILED` | Deno Deploy 令牌无效或缺失 |
+| `SANDBOX_CREATION_FAILED` | 创建沙箱失败 |
+| `SANDBOX_NOT_FOUND` | 沙箱 ID 未找到或已过期 |
+| `COMMAND_TIMEOUT` | 命令执行超时 |
+| `COMMAND_FAILED` | 命令执行失败 |
+| `FILE_OPERATION_FAILED` | 文件读写失败 |
+| `RESOURCE_LIMIT_EXCEEDED` | 超出 CPU、内存或存储限制 |
+
+## 限制与约束
+
+| 限制项 | 值 |
+|------------|-------------|
+| 最小内存 | 768 MB |
+| 最大内存 | 4096&#160;MB (4&#160;GB) |
+| 磁盘空间 | 10 GB |
+| vCPU | 2 |
+| 工作目录 | `/home/app` |
+| 网络访问 | 完全（默认） |
+
+## 环境变量
+
+| 变量 | 描述 |
+|----------|-------------|
+| `DENO_DEPLOY_TOKEN` | Deno Deploy 组织访问令牌 |

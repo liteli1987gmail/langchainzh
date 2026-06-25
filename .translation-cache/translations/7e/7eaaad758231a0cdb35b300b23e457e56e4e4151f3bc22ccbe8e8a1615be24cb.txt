@@ -1,0 +1,125 @@
+---
+title: 在 Helm chart 中配置环境变量
+sidebarTitle: 环境变量
+description: 了解如何在 Helm chart 中使用 commonEnv 和 extraEnv 来配置 LangSmith 服务中的环境变量。
+---
+
+LangSmith Helm chart 提供了两种向服务注入环境变量的方式：`commonEnv` 和 `extraEnv`。了解它们之间的区别有助于您正确配置部署并避免运行时错误。
+
+## commonEnv
+
+`commonEnv` 是 `values.yaml` 中的顶级字段，适用于 **除 `playground` 和 `aceBackend` 服务之外的所有 deployments 和 statefulsets**，这两个服务是沙盒化的，不接收 `commonEnv` 值。
+
+当某个变量需要同时被大多数服务使用时（例如自定义 CA 证书路径、代理设置或影响整个平台的特性开关），请使用 `commonEnv`。
+
+```yaml
+commonEnv:
+  - name: MY_ENV_VAR
+    value: "my-value"
+```
+
+### 接收 commonEnv 的服务
+
+以下服务接收 `commonEnv`：
+
+- `backend`
+- `platformBackend`
+- `queue`
+- `ingestQueue`
+- `frontend`
+- `hostBackend`
+
+### 不接收 commonEnv 的服务
+
+以下服务在沙箱中运行，**不会**接收 `commonEnv`：
+
+- `playground`
+- `aceBackend`
+
+若要为这些服务设置环境变量，请直接使用其 `extraEnv`：
+
+```yaml
+playground:
+  deployment:
+    extraEnv:
+      - name: MY_ENV_VAR
+        value: "my-value"
+
+aceBackend:
+  deployment:
+    extraEnv:
+      - name: MY_ENV_VAR
+        value: "my-value"
+```
+
+## extraEnv
+
+`extraEnv` 是一个按服务配置的字段，用于向特定服务添加环境变量。每个支持 `extraEnv` 的服务都会在 `<service>.deployment.extraEnv` 下暴露该配置。
+
+当变量仅适用于单个服务时，或当您需要在 `playground` 或 `aceBackend` 上设置 `commonEnv` 无法覆盖的变量时，请使用 `extraEnv`。
+
+```yaml
+backend:
+  deployment:
+    extraEnv:
+      - name: MY_BACKEND_VAR
+        value: "backend-value"
+```
+
+## 禁止重复的变量名
+
+Chart 使用 `detectDuplicates` 辅助函数来验证每个服务的环境变量名称。如果在服务的合并变量列表中（包含从 `commonEnv`、`extraEnv` 和 chart 托管的变量中添加的变量）同一变量名出现多次，Helm 会在模板渲染时失败，并显示类似以下的错误：
+
+```
+Duplicate keys detected: [MY_ENV_VAR]
+```
+
+要解决此问题，请从 `commonEnv` 或服务的 `extraEnv` 中删除重复项，使每个变量名在每个服务中只出现一次。
+
+<Warning>
+Chart 托管的变量（由 Helm chart 内部设置）会被计入重复检测。请勿将 chart 已托管的变量名添加到 `commonEnv` 或 `extraEnv`。请查看 [chart values 文件](https://github.com/langchain-ai/helm/blob/main/charts/langsmith/values.yaml) 了解 chart 默认设置的变量。
+</Warning>
+
+## 示例：在大多数服务上设置变量，但在一个服务上覆盖它
+
+要为大多数服务使用通用值，同时覆盖特定服务的值，请在 `commonEnv` 中设置它，然后将该覆盖添加到该服务的 `extraEnv`。由于 `playground` 和 `aceBackend` 不会接收 `commonEnv`，因此必须始终通过它们自己的 `extraEnv` 为这些服务设置变量。
+
+```yaml
+# Apply to all services that receive commonEnv
+commonEnv:
+  - name: SSRF_ALLOW_K8S_INTERNAL
+    value: "true"
+
+# playground does not receive commonEnv — set it directly
+playground:
+  deployment:
+    extraEnv:
+      - name: SSRF_ALLOW_K8S_INTERNAL
+        value: "true"
+      - name: SSRF_ALLOW_PRIVATE_IPS_PLAYGROUND
+        value: "true"
+```
+
+## 常见功能开关
+
+### 减少批处理运行持久化日志
+
+默认情况下，LangSmith 每次通过基于 Go 的摄取队列持久化一批运行时都会记录一条成功消息。在处理大量跟踪的部署中，这可能会产生过多的日志噪音。
+
+`FF_PERSIST_BATCHED_RUNS_SUCCESS_LOGGING` 默认为 `true`，当 `ingestQueue.enabled` 为 `true`（默认值）时，会通过 `commonEnv` 注入到所有服务中。要禁用这些成功日志消息，请在 `commonEnv` 中覆盖它：
+
+```yaml
+commonEnv:
+  - name: FF_PERSIST_BATCHED_RUNS_SUCCESS_LOGGING
+    value: "false"
+```
+
+<Note>
+将此标志设置为 `false` 仅抑制每批次的成功消息。错误仍会被记录。
+</Note>
+
+## 相关页面
+
+- [Configure LangSmith for scale](/langsmith/self-host-scale)
+- [Playground environment settings](/langsmith/self-host-playground-environment-settings)
+- [LangSmith Helm chart values.yaml](https://github.com/langchain-ai/helm/blob/main/charts/langsmith/values.yaml)

@@ -1,0 +1,182 @@
+---
+title: "Google Vertex AI 特性集成"
+description: "使用 LangChain Python 与 Google Vertex AI 特性向量存储集成。"
+---
+
+> [Google Cloud Vertex Feature Store](https://cloud.google.com/vertex-ai/docs/featurestore/latest/overview) 通过让您以低延迟方式在 [Google Cloud BigQuery](https://cloud.google.com/bigquery?hl=en) 中提供数据（包括执行嵌入近似邻域检索的能力）来简化 ML 特性管理和在线服务流程
+
+本教程向您展示如何轻松地从 BigQuery 数据直接执行低延迟向量搜索和近似最近邻检索，以最少的设置实现强大的 ML 应用。我们将使用 `VertexFSVectorStore` 类来完成此操作。
+
+此类是一组 2 个类的集合，能够在 Google Cloud 中提供统一的数据存储和灵活的向量搜索：
+
+- **BigQuery 向量搜索**：使用 `BigQueryVectorStore` 类，非常适合无需基础设施设置和批量检索的快速原型开发。
+- **Feature Store Online Store**：使用 `VertexFSVectorStore` 类，支持手动或定时数据同步的低延迟检索。非常适合生产级面向用户的 GenAI 应用。
+
+![图表 BQ-VertexFS](data:image/png;base64,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)
+
+## 入门指南
+
+### 安装库
+
+```python
+pip install -qU  langchain langchain-google-vertexai "langchain-google-community[featurestore]"
+```
+
+要在此 Jupyter 运行时中使用新安装的包，必须重启运行时。您可以通过运行下面的代码单元来重启当前内核。
+
+```python
+import IPython
+
+app = IPython.Application.instance()
+app.kernel.do_shutdown(True)
+```
+
+## 准备工作
+
+#### 设置项目 ID
+
+如果您不知道自己的项目 ID，请尝试以下操作：
+- 运行 `gcloud config list`。
+- 运行 `gcloud projects list`。
+- 请参阅支持页面：[查找项目 ID](https://support.google.com/googleapi/answer/7014113)。
+
+```python
+PROJECT_ID = ""  # @param {type:"string"}
+
+# Set the project id
+! gcloud config set project {PROJECT_ID}
+```
+
+#### 设置区域
+
+您还可以更改 BigQuery 使用的 `REGION` 变量。详细了解 [BigQuery 区域](https://cloud.google.com/bigquery/docs/locations#supported_locations)。
+
+```python
+REGION = "us-central1"  # @param {type: "string"}
+```
+
+#### 设置数据集和表名称
+
+它们将成为你的 BigQuery Vector Store。
+
+```python
+DATASET = "my_langchain_dataset"  # @param {type: "string"}
+TABLE = "doc_and_vectors"  # @param {type: "string"}
+```
+
+### 对笔记本环境进行身份验证
+
+- 如果您使用 **Colab** 来运行此笔记本，请取消注释下面的单元格并继续。
+- 如果您使用 **Vertex AI Workbench**，请参阅 [Vertex AI Workbench 设置说明](https://github.com/GoogleCloudPlatform/generative-ai/tree/main/setup-env)。
+
+```python
+# from google.colab import auth as google_auth
+
+# google_auth.authenticate_user()
+```
+
+## 演示：VertexFSVectorStore
+
+### 创建 embedding 类实例
+
+您可能需要通过运行以下命令在项目中启用 Vertex AI API：
+`gcloud services enable aiplatform.googleapis.com --project {PROJECT_ID}`
+（请将 `{PROJECT_ID}` 替换为您的项目名称）。
+
+您可以使用任意 [LangChain embedding 模型](/oss/integrations/embeddings/)。
+
+```python
+from langchain_google_vertexai import VertexAIEmbeddings
+
+embedding = VertexAIEmbeddings(
+    model_name="textembedding-gecko@latest", project=PROJECT_ID
+)
+```
+
+### 初始化 VertexFSVectorStore
+
+如果 BigQuery 数据集和表不存在，将自动创建。请参阅 [class definition](https://github.com/langchain-ai/langchain-google/blob/main/libs/community/langchain_google_community/bq_storage_vectorstores/featurestore.py#L33) 以获取所有可选参数。
+
+```python
+from langchain_google_community import VertexFSVectorStore
+
+store = VertexFSVectorStore(
+    project_id=PROJECT_ID,
+    dataset_name=DATASET,
+    table_name=TABLE,
+    location=REGION,
+    embedding=embedding,
+)
+```
+
+### 添加文本
+
+> 注意：由于创建功能在线商店，首次同步过程将需要约 20 分钟。
+
+```python
+all_texts = ["Apples and oranges", "Cars and airplanes", "Pineapple", "Train", "Banana"]
+metadatas = [{"len": len(t)} for t in all_texts]
+
+store.add_texts(all_texts, metadatas=metadatas)
+```
+
+您也可以通过执行 `sync_data` 方法来按需启动同步。
+
+```python
+store.sync_data()
+```
+
+在生产环境中，您也可以使用 `cron_schedule` 类参数来设置自动计划同步。
+例如：
+
+```python
+store = VertexFSVectorStore(cron_schedule="TZ=America/Los_Angeles 00 13 11 8 *", ...)
+```
+
+### 搜索文档
+
+```python
+query = "I'd like a fruit."
+docs = store.similarity_search(query)
+print(docs)
+```
+
+### 按向量搜索文档
+
+```python
+query_vector = embedding.embed_query(query)
+docs = store.similarity_search_by_vector(query_vector, k=2)
+print(docs)
+```
+
+### 使用元数据筛选器搜索文档
+
+```python
+# This should only return "Banana" document.
+docs = store.similarity_search_by_vector(query_vector, filter={"len": 6})
+print(docs)
+```
+
+### 使用嵌入添加文本
+
+您还可以使用 `add_texts_with_embeddings` 方法携带您自己的嵌入。
+这对于多模态数据特别有用，因为这些数据在生成嵌入之前可能需要自定义预处理。
+
+```python
+items = ["some text"]
+embs = embedding.embed(items)
+
+ids = store.add_texts_with_embeddings(
+    texts=["some text"], embs=embs, metadatas=[{"len": 1}]
+)
+```
+
+### 配合 BigQuery 的批量服务
+
+您可以直接使用 `.to_bq_vector_store()` 方法来获取 BigQueryVectorStore 对象，它针对批量场景提供了优化性能。所有必需参数都会从现有类自动转移。请参阅[类定义](https://github.com/langchain-ai/langchain-google/blob/main/libs/community/langchain_google_community/bq_storage_vectorstores/bigquery.py#L26)了解所有可用参数。
+
+使用同样便捷的 `.to_vertex_fs_vector_store()` 方法也可以轻松返回 BigQueryVectorStore。
+
+```python
+store.to_bq_vector_store()  # pass optional VertexFSVectorStore parameters as arguments
+```

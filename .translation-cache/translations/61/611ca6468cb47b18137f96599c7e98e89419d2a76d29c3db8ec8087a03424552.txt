@@ -1,0 +1,472 @@
+---
+title: 时间旅行
+description: 检查、导航并从对话历史中的任何检查点恢复执行
+---
+
+LangGraph 代理中的每个状态变更都会创建一个**检查点**，即代理在那一时刻的完整状态快照。时间旅行让你能够检查任何检查点，查看代理持有的确切状态，并**从该点恢复执行**以探索替代路径。它集调试器、撤销按钮和审计日志于一身。
+
+import { PatternEmbed } from "/snippets/pattern-embed.jsx"
+
+<PatternEmbed pattern="time-travel" />
+
+import RequiresLanggraphServer from '/snippets/oss/requires-langgraph-server.mdx';
+import UseStreamTypeInference from '/snippets/oss/use-stream-type-inference.mdx';
+
+<RequiresLanggraphServer />
+
+## 检查点工作原理
+
+LangGraph 在每个节点执行后持久化 agent 状态。每个持久化的状态都是一个 @[ThreadState][ThreadStateJS] 对象，包含：
+
+- **checkpoint**：识别此特定快照的元数据（ID、时间戳）
+- **values**：此时完整的 agent 状态（messages、自定义键）
+- **tasks**：计划下一步运行的图节点
+- **next**：执行计划中即将运行的节点名称
+
+这会创建一条线性时间线，记录 agent 做出的每个决策、调用的每个工具以及生成的每个响应。您的 UI 可以渲染此时间线，并允许用户跳转到任意时间点。
+
+## 设置 `useStream`
+
+为您的 agent 创建 stream，然后从 LangGraph 客户端显式获取活动线程的检查点历史记录。从检查点恢复使用 `forkFrom: { checkpointId }`。
+
+<UseStreamTypeInference />
+
+<CodeGroup>
+
+</CodeGroup>
+```tsx React
+import { useStream } from "@langchain/react";
+import { useEffect, useState } from "react";
+
+const AGENT_URL = "http://localhost:2024";
+
+export function TimeTravelChat() {
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [history, setHistory] = useState<ThreadState[]>([]);
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "time_travel",
+    threadId,
+    onThreadId: setThreadId,
+  });
+
+  useEffect(() => {
+    if (!threadId || stream.isLoading) return;
+    stream.client.threads.getHistory(threadId).then(setHistory);
+  }, [stream.client, threadId, stream.isLoading]);
+
+  function resumeFrom(cp: ThreadState) {
+    stream.submit({}, {
+      forkFrom: { checkpointId: cp.checkpoint.checkpoint_id },
+    });
+  }
+
+  return (
+    <div className="flex h-screen">
+      <ChatPanel messages={stream.messages} />
+      <TimelineSidebar history={history} onSelect={resumeFrom} />
+    </div>
+  );
+}
+```
+
+```vue Vue
+<script setup lang="ts">
+import { useStream } from "@langchain/vue";
+import { ref, watch } from "vue";
+
+const AGENT_URL = "http://localhost:2024";
+const threadId = ref<string | null>(null);
+const history = ref<ThreadState[]>([]);
+
+const stream = useStream<typeof myAgent>({
+  apiUrl: AGENT_URL,
+  assistantId: "time_travel",
+  threadId,
+  onThreadId: (id) => (threadId.value = id),
+});
+
+watch(
+  [threadId, stream.isLoading],
+  async ([id, isLoading]) => {
+    if (isLoading) return;
+    history.value = id
+      ? ((await stream.client.threads.getHistory(id)) as ThreadState[])
+      : [];
+  },
+  { immediate: true },
+);
+
+function resumeFrom(cp: ThreadState) {
+  stream.submit({}, {
+    forkFrom: { checkpointId: cp.checkpoint.checkpoint_id },
+  });
+}
+</script>
+
+<template>
+  <div class="flex h-screen">
+    <ChatPanel :messages="stream.messages.value" />
+    <TimelineSidebar :history="history" @select="resumeFrom" />
+  </div>
+</template>
+```
+
+```svelte Svelte
+<script lang="ts">
+  import { useStream } from "@langchain/svelte";
+
+  const AGENT_URL = "http://localhost:2024";
+  let threadId = $state<string | null>(null);
+  let history = $state<ThreadState[]>([]);
+
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "time_travel",
+    threadId: () => threadId,
+    onThreadId: (id) => (threadId = id),
+  });
+
+  $effect(() => {
+    if (!threadId) {
+      history = [];
+      return;
+    }
+    if (stream.isLoading) return;
+    stream.client.threads.getHistory(threadId).then((states) => {
+      history = states as ThreadState[];
+    });
+  });
+
+  function resumeFrom(cp: ThreadState) {
+    stream.submit({}, {
+      forkFrom: { checkpointId: cp.checkpoint.checkpoint_id },
+    });
+  }
+</script>
+
+<div class="flex h-screen">
+  <ChatPanel messages={stream.messages} />
+  <TimelineSidebar {history} onSelect={resumeFrom} />
+</div>
+```
+
+```ts Angular
+import { Component, effect, signal } from "@angular/core";
+import { injectStream } from "@langchain/angular";
+
+const AGENT_URL = "http://localhost:2024";
+
+@Component({
+  selector: "app-time-travel-chat",
+  template: `
+    <div class="flex h-screen">
+      <app-chat-panel [messages]="stream.messages()" />
+      <app-timeline-sidebar
+        [history]="history()"
+        (select)="resumeFrom($event)"
+      />
+    </div>
+  `,
+})
+export class TimeTravelChatComponent {
+  threadId = signal<string | null>(null);
+  history = signal<ThreadState[]>([]);
+
+  stream = injectStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "time_travel",
+    threadId: this.threadId,
+    onThreadId: (id) => this.threadId.set(id),
+  });
+
+  constructor() {
+    effect(() => {
+      if (this.stream.isLoading()) return;
+      void this.refreshHistory(this.threadId());
+    });
+  }
+
+  async refreshHistory(id: string | null) {
+    this.history.set(id
+      ? ((await this.stream.client.threads.getHistory(id)) as ThreadState[])
+      : []);
+  }
+
+  resumeFrom(cp: ThreadState) {
+    this.stream.submit({}, {
+      forkFrom: { checkpointId: cp.checkpoint.checkpoint_id },
+    });
+  }
+}
+```
+</CodeGroup>
+
+## 构建检查点时间线
+
+时间线侧边栏将每个检查点显示为可点击的条目。每个条目显示运行的节点以及当时存在的消息数量：
+
+```tsx
+function TimelineSidebar({
+  history,
+  onSelect,
+}: {
+  history: ThreadState[];
+  onSelect: (cp: ThreadState) => void;
+}) {
+  return (
+    <aside className="w-80 overflow-y-auto border-l bg-gray-50 p-4">
+      <h2 className="mb-4 text-sm font-semibold uppercase text-gray-500">
+        Checkpoint Timeline
+      </h2>
+      <div className="space-y-2">
+        {history.map((cp, i) => {
+          const taskName = cp.tasks?.[0]?.name ?? "unknown";
+          const msgCount = (cp.values?.messages as unknown[])?.length ?? 0;
+
+          return (
+            <button
+              key={cp.checkpoint.checkpoint_id}
+              onClick={() => onSelect(cp)}
+              className="w-full rounded-lg border bg-white p-3 text-left
+                         hover:border-blue-400 hover:shadow-sm transition-all"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">#{i + 1}</span>
+                <NodeBadge name={taskName} />
+              </div>
+              <p className="mt-1 text-sm font-medium">{taskName}</p>
+              <p className="text-xs text-gray-500">
+                {msgCount} message{msgCount !== 1 ? "s" : ""}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+```
+
+## 检查检查点状态
+
+点击检查点应显示该点的完整状态。JSON 查看器让开发者能够完全了解智能体的所知和决策：
+
+```tsx
+function CheckpointInspector({ checkpoint }: { checkpoint: ThreadState }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="rounded-lg border bg-white p-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">
+          Checkpoint {checkpoint.checkpoint.checkpoint_id.slice(0, 8)}...
+        </h3>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          {expanded ? "Collapse" : "Expand"} state
+        </button>
+      </div>
+
+      <div className="mt-2 space-y-1 text-sm">
+        <p>
+          <strong>Node:</strong>{" "}
+          {checkpoint.tasks?.[0]?.name ?? "—"}
+        </p>
+        <p>
+          <strong>Next:</strong>{" "}
+          {checkpoint.next?.join(", ") || "—"}
+        </p>
+        <p>
+          <strong>Messages:</strong>{" "}
+          {(checkpoint.values?.messages as unknown[])?.length ?? 0}
+        </p>
+      </div>
+
+      {expanded && (
+        <div className="mt-3 max-h-96 overflow-auto rounded bg-gray-900 p-3">
+          <pre className="text-xs text-gray-200">
+            {JSON.stringify(checkpoint.values, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+<Tip>
+对于生产环境 UI，建议使用带有可折叠节点的 JSON 查看器组件，而不是原始的 `JSON.stringify`。像 `react-json-view` 或 `react-json-tree` 这样的库可以为用户提供更好的浏览体验。
+</Tip>
+
+## 从检查点恢复
+
+时间旅行的核心是能够**从任意先前的检查点恢复执行**。当用户选择一个检查点时，使用 `null` 作为输入调用 `submit`，并传递检查点 ID：
+
+```ts
+stream.submit({}, {
+  forkFrom: { checkpointId: selectedCheckpoint.checkpoint.checkpoint_id },
+});
+```
+
+这告诉 LangGraph：
+
+1. 回滚到选定检查点的状态
+2. 从该点向前重新执行图
+3. 将新结果流式传输到客户端
+
+选定检查点后的现有消息将被新的
+执行路径替换。这实际上会在对话
+时间线中创建一个 **branch**。
+
+<Note>
+从检查点恢复不会删除原始时间线。之前
+的检查点在历史记录中仍然可用。这意味着用户可以随时返回
+并尝试不同的路径，而不会丢失任何先前的工作。
+</Note>
+
+## The SplitView layout
+
+时间旅行最适合使用分屏布局，主聊天窗口在左侧，
+时间线在右侧：
+
+```tsx
+function TimeTravelLayout() {
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [history, setHistory] = useState<ThreadState[]>([]);
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "time_travel",
+    threadId,
+    onThreadId: setThreadId,
+  });
+
+  const [selectedCheckpoint, setSelectedCheckpoint] =
+    useState<ThreadState | null>(null);
+
+  useEffect(() => {
+    if (!threadId || stream.isLoading) return;
+    stream.client.threads.getHistory(threadId).then(setHistory);
+  }, [stream.client, threadId, stream.isLoading]);
+
+  return (
+    <div className="flex h-screen">
+      {/* Main chat area */}
+      <main className="flex-1 overflow-y-auto p-6">
+        <div className="mx-auto max-w-2xl space-y-4">
+          {stream.messages.map((msg) => (
+            <Message key={msg.id} message={msg} />
+          ))}
+        </div>
+        <ChatInput
+          onSubmit={(text) =>
+            stream.submit({ messages: [{ type: "human", content: text }] })
+          }
+          isLoading={stream.isLoading}
+        />
+      </main>
+
+      {/* Timeline sidebar */}
+      <aside className="w-96 overflow-y-auto border-l bg-gray-50">
+        <TimelineSidebar
+          history={history}
+          selected={selectedCheckpoint}
+          onSelect={setSelectedCheckpoint}
+          onResume={(cp) =>
+            stream.submit({}, {
+              forkFrom: { checkpointId: cp.checkpoint.checkpoint_id },
+            })
+          }
+        />
+        {selectedCheckpoint && (
+          <CheckpointInspector checkpoint={selectedCheckpoint} />
+        )}
+      </aside>
+    </div>
+  );
+}
+```
+
+## 提取检查点元数据
+
+将原始检查点数据转换为适合在时间线上显示的条目：
+
+```ts
+function formatCheckpoints(history: ThreadState[]) {
+  return history.map((cp, index) => ({
+    index,
+    id: cp.checkpoint?.checkpoint_id,
+    taskName: cp.tasks?.[0]?.name ?? "unknown",
+    messageCount: (cp.values?.messages as unknown[])?.length ?? 0,
+    hasInterrupts: cp.tasks?.some((t) => t.interrupts?.length) ?? false,
+    nextNodes: cp.next ?? [],
+  }));
+}
+```
+
+这样可以轻松地用有意义的标签渲染时间线条目，而不是原始 ID。
+
+## 使用场景
+
+时间旅行在许多场景中都非常有价值：
+
+- **调试代理行为**：逐步查看代理的决策过程，了解它选择特定路径的原因
+- **撤销操作**：如果代理走错了方向，可以从更早的检查点恢复并重试
+- **探索备选方案**：从对话中期的检查点分叉，看看不同的输入如何改变结果
+- **审计**：查看代理操作的完整历史，用于合规、质量保证或事后分析
+- **教学**：逐步讲解代理的执行过程，解释多步推理的工作原理
+
+<Info>
+当时间旅行与[人在环](/oss/langchain/frontend/human-in-the-loop)模式结合使用时尤其强大。如果人工审核者在中断处拒绝了代理的操作，他们可以从该操作执行前的检查点恢复，并提供更正输入。
+</Info>
+
+## 处理时间线中的中断
+
+包含中断（人在环暂停）的检查点需要特殊的可视化处理。这些代表代理停止并等待人类输入的时刻：
+
+```tsx
+function TimelineEntry({
+  checkpoint,
+  index,
+}: {
+  checkpoint: ThreadState;
+  index: number;
+}) {
+  const hasInterrupt = checkpoint.tasks?.some(
+    (t) => t.interrupts && t.interrupts.length > 0
+  );
+
+  return (
+    <div
+      className={`rounded-lg border p-3 ${
+        hasInterrupt
+          ? "border-amber-300 bg-amber-50"
+          : "border-gray-200 bg-white"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400">#{index + 1}</span>
+        {hasInterrupt && (
+          <span className="rounded bg-amber-200 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+            Interrupt
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-sm font-medium">
+        {checkpoint.tasks?.[0]?.name ?? "—"}
+      </p>
+    </div>
+  );
+}
+```
+
+## 最佳实践
+
+- **延迟加载历史记录**：对于包含数百个检查点的线程，请使用分页或仅加载最近的 N 条记录，以保持 UI 响应性。
+- **显示有意义的标签**：显示节点名称和消息数量，而非原始检查点 ID。用户需要上下文，而非 UUID。
+- **恢复前确认**：从旧检查点恢复会替换当前执行路径。请显示确认对话框，以免用户意外丢失当前对话状态。
+- **高亮当前检查点**：使当前检查点与对话当前状态的对应关系在视觉上一目了然。
+- **支持键盘导航**：高级用户会希望使用方向键逐步浏览检查点。请在时间轴上添加键盘处理器，以获得流畅的调试体验。
+- **比较检查点之间的状态差异**：对于高级用户，显示两个连续检查点之间的变化可以精确揭示智能体状态在每一步是如何演化的。

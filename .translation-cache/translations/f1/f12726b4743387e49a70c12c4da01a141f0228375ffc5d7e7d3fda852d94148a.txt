@@ -1,0 +1,191 @@
+---
+title: 追踪 OpenAI Realtime 应用程序
+sidebarTitle: OpenAI Realtime
+description: 使用 LangSmith SDK 在 LangSmith 中追踪 OpenAI Realtime 语音代理。
+---
+
+[OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime) 为低延迟语音到语音代理提供支持。本指南展示了如何将 Realtime 应用追踪到 LangSmith。
+
+OpenAI Realtime 是一个语音到语音模型：它原生处理音频，并通过持久化的 WebSocket 连接与您的应用交换连续的 JSON 事件流，而不是进行离散的单次请求/响应调用。以下部分展示了这些事件以及如何将它们转换为 LangSmith 追踪。关于从语音代理追踪中获得最大收益的高级理念，请参阅[语音追踪基础](/langsmith/trace-voice-fundamentals)。
+
+有关完整实现，请参阅[语音演示仓库](https://github.com/langchain-ai/voice-demo)。
+
+## 事件模型
+
+每个事件都有一个可辨识的 `type` 字符串，表示它代表的含义：音频、工具调用等。
+
+客户端**发送**事件来配置会话和流式传输音频。您不会将这些作为跨度追踪；它们是请求，其效果作为服务器事件返回：
+
+| 客户端事件 | 功能 |
+| --- | --- |
+| `session.update` | 配置会话：指令、语音、音频格式、转录模型、语音检测、工具。 |
+| `input_audio_buffer.append` | 流式传输 base64 PCM16 麦克风片段。持续发送。 |
+| `conversation.item.create` | 添加一个项目——用于在运行工具后返回 `function_call_output`。 |
+| `response.create` | 请求模型生成响应（当语音检测使用 `create_response: false` 时需要显式调用）。 |
+
+服务器**发送回**事件：
+
+| 服务器事件 | 携带内容 | 是否追踪？ |
+| --- | --- | --- |
+| `session.created` / `session.updated` | 握手 / 配置确认。 | 是 |
+| `input_audio_buffer.speech_started` | 服务器 VAD 检测到用户开始说话——**打断信号**；刷新扬声器缓冲区。 | 是 |
+| `input_audio_buffer.speech_stopped` | 服务器 VAD 检测到用户停止说话。 | 是 |
+| `input_audio_buffer.committed` | 音频缓冲区已成为对话项目。 | 是 |
+| `conversation.item.created` | 服务器端添加了一个项目。 | 是 |
+| `conversation.item.input_audio_transcription.completed` | 该轮次的完整用户转录文本。 | 是 |
+| `response.created` | 模型开始生成。 | 是 |
+| `response.output_audio.delta` | 代理语音的一个片段（base64 PCM16）；每个响应数百个。 | 否——直接播放，不作为跨度 |
+| `response.output_audio_transcript.delta` | 代理转录文本的流式片段。 | 否 |
+| `response.output_audio_transcript.done` | 响应的代理完整转录文本。 | 是 |
+| `response.function_call_arguments.delta` / `.done` | 流式 / 最终的工具调用参数。 | 仅 `.done` |
+| `response.output_item.*`、`response.content_part.*` | 响应的结构化进度。 | 是 |
+| `response.done` | 完整响应对象：所有输出项目（包括每个 `function_call`），以及 token 使用量。 | 是 |
+| `error` | 服务器报告的错误。 | 是 |
+| `rate_limits.updated` | 配额记账。 | 是 |
+
+
+
+## 事件如何映射到 LangSmith 运行
+
+我们建议将整个对话作为单个追踪进行追踪，每个被追踪的事件按到达顺序对应一个跨度：
+
+```text
+realtime_session                                 ← root run (chain)
+│   metadata: thread_id, model, event_count, duration_s, ls_modality=audio
+│   attachments: conversation.wav (stereo: L=user, R=agent)
+│
+├─ input_audio_buffer.speech_started
+├─ input_audio_buffer.speech_stopped
+├─ conversation.item.input_audio_transcription.completed
+├─ response.created
+├─ response.function_call_arguments.done
+├─ response.done
+│   └─ lookup_weather × N                         ← tool runs, nested under the event that announced them
+├─ response.done                                  ← the spoken follow-up after tools
+└─ error                                          ← only if the server sent one
+```
+
+<Note>
+**噪音规则：**我们建议跳过所有以 `.delta` 结尾的事件类型，因为匹配的 `.done` 事件会重复完整的 payload。同时追踪两者会记录所有内容两次。特别是 `response.output_audio.delta`，这是 Agent 的声音：每个响应数百个数据块，会淹没 trace。可以将其播放到扬声器，但绝不要将其作为 span。
+</Note>
+
+## 安装
+
+```bash
+pip install "langsmith>=0.4" "openai>=1.50"
+```
+
+演示还使用 `sounddevice` 和 `numpy` 用于麦克风/扬声器以及构建 WAV 附件。
+
+## 设置您的环境
+
+以下步骤演示如何使用 LangSmith SDK 进行追踪。您也可以直接使用 OpenTelemetry 进行追踪。请参阅[使用 OpenTelemetry 进行追踪](/langsmith/trace-with-opentelemetry)。
+
+```bash
+export LANGSMITH_API_KEY=...
+export LANGSMITH_TRACING=true
+export LANGSMITH_PROJECT=my-voice-app
+export OPENAI_API_KEY=...
+```
+
+## 快速入门
+
+<Note>
+本指南专注于追踪层。它假设您已经有一个可用的 Realtime 应用：WebSocket `connection`、`session.update` 配置以及您的麦克风和扬声器 I/O。如需完整的可运行实现，请参阅 [voice demo repository](https://github.com/langchain-ai/voice-demo/tree/main/src/voice_demo/openai)。在您的 `session.update` 中启用 `input_audio_transcription`（和 agent transcript），否则使 trace 可读所需的转录事件将无法到达。
+</Note>
+
+### 步骤 1：在连接时打开对话根节点
+
+每个对话使用一个 `RunTree`：
+
+```python
+from langsmith import RunTree
+
+root = RunTree(
+    name="realtime_session",
+    run_type="chain",
+    inputs={},
+    project_name="my-voice-app",
+    extra={"metadata": {"thread_id": thread_id, "model": MODEL, "ls_modality": "audio"}},
+)
+root.post()
+```
+
+为每个对话生成一个稳定的 `thread_id`（例如 UUID），可将该追踪归入 LangSmith [thread](/langsmith/threads)；`ls_modality="audio"` 将其标记为语音对话。
+
+### Step 2：为每个接收到的事件创建 span，跳过噪音
+
+定义一个小型辅助函数，为单个事件打开一个子 run，将清理后的 payload 记录为该 run 的输入，并在代码块退出时将其关闭：
+
+```python
+from contextlib import contextmanager
+
+@contextmanager
+def event_span(parent, event, *, name):
+    """Trace one event as a child run, with its payload as the run's input."""
+    payload = event.model_dump(mode="json")
+    child = parent.create_child(name=name, run_type="chain", inputs={"event": payload})
+    child.post()
+    try:
+        yield child
+    finally:
+        child.end()
+        child.patch()
+```
+
+然后遍历你打开的 Realtime `connection` 中的事件，跳过 `.delta` 噪音并追踪其余事件：
+
+```python
+async for event in connection:
+    if event.type.endswith(".delta"):
+        continue  # the matching .done event repeats the full payload
+
+    with event_span(root, event, name=event.type) as event_run:
+        ...  # your handling for this event type
+```
+
+### Step 3: 运行嵌套在宣布事件下的工具
+
+```python
+import json
+
+from langsmith.run_helpers import tracing_context
+
+if event.type == "response.done":
+    calls = [i for i in (event.response.output or []) if i.type == "function_call"]
+    for call in calls:
+        with tracing_context(parent=event_run):
+            result = await execute_tool(call.name, call.arguments)  # traced child
+        await connection.conversation.item.create(item={
+            "type": "function_call_output",
+            "call_id": call.call_id,
+            "output": json.dumps(result),
+        })
+    if calls:
+        await connection.response.create()   # ask for the spoken follow-up
+```
+
+
+## 附加对话音频
+
+要同时收听对话及其转录文本，请将整个对话的单一组合录音附加到根运行。在一个文件中同时录制用户和代理（例如，使用立体声 WAV，用户麦克风在一个声道，代理在另一个声道），从播放给客户端的音频中捕获，以便录音反映实际听到的内容，包括因打断而中断的语音。Realtime API 将代理音频作为 `response.output_audio.delta` 事件流式传输：解码这些字节并写入输出设备，然后从同一输出中获取信号来构建录音。
+
+有关底层附件 API，请参阅[使用跟踪上传文件](/langsmith/upload-files-with-traces)。有关跨提供商的设计原理，请参阅[录制单个组合音频文件](/langsmith/trace-voice-fundamentals#record-a-single-combined-audio-file)。
+
+对话结束时，最终确定根运行：
+
+```python
+root.end()
+root.patch()
+```
+
+## 后续步骤
+
+<CardGroup cols={2}>
+  <Card title="Voice fundamentals" icon="waveform" href="/langsmith/trace-voice-fundamentals">
+    追踪语音代理的核心约定。
+  </Card>
+  <Card title="Upload files with traces" icon="paperclip" href="/langsmith/upload-files-with-traces">
+    将对话音频录制附加到您的追踪中。
+  </Card>
+</CardGroup>

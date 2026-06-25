@@ -1,0 +1,403 @@
+---
+title: "ChatBedrock 集成"
+description: "使用 LangChain Python 与 ChatBedrock 聊天模型集成。"
+---
+
+本指南将帮助您开始使用 AWS Bedrock [聊天模型](/oss/langchain/models)。Amazon Bedrock 是一项完全托管的服务，通过单一 API 提供来自 AI21 Labs、Anthropic、Cohere、Meta、Stability AI 和 Amazon 等领先 AI 公司的高性能基础模型（FM）选择，还提供构建生成式 AI 应用所需的各种功能，包括安全性、隐私性和负责任的 AI。使用 Amazon Bedrock，您可以轻松试验和评估适合您用例的顶级 FM，使用微调和检索增强生成（RAG）等技术通过您的数据私下自定义它们，并构建使用企业系统和数据源执行任务的代理。由于 Amazon Bedrock 是无服务器的，因此您无需管理任何基础设施，并且可以使用您已经熟悉的 AWS 服务安全地将生成式 AI 功能集成和部署到您的应用中。
+
+AWS Bedrock 维护了一个 [Converse API](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html)，为 Bedrock 模型提供统一的对话界面。此 API 尚不支持自定义模型。您可以在[此处](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html)查看所有支持的模型列表。
+
+<Info>
+**我们推荐不需要使用自定义模型的用户使用 Converse API。可以使用 [`ChatBedrockConverse`](https://reference.langchain.com/python/langchain-aws/chat_models/bedrock_converse/ChatBedrockConverse) 进行访问。**
+
+</Info>
+
+<Info>
+**Bedrock 上的 Anthropic 模型**
+
+对于 Anthropic 模型，您可以使用 `ChatAnthropicBedrock`，它扩展了 `ChatAnthropic` 并在 AWS Bedrock 上运行时提供相同的 API。请参阅下面的 [ChatAnthropicBedrock 部分](#chatanthropicbedrock) 获取详细信息。
+</Info>
+
+有关所有 Bedrock 功能和配置的详细文档，请前往 [API 参考](https://reference.langchain.com/python/langchain-aws/chat_models/bedrock_converse/ChatBedrockConverse)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [JS 支持](https://js.langchain.com/docs/integrations/chat/bedrock) | 下载量 | 版本 |
+| :--- | :--- | :---: |  :---: | :---: | :---: |
+| [`ChatBedrock`](https://reference.langchain.com/python/langchain-aws/chat_models/bedrock/ChatBedrock) | [`langchain-aws`](https://reference.langchain.com/python/langchain-aws) | beta | ✅ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-aws?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-aws?style=flat-square&label=%20) |
+| [`ChatBedrockConverse`](https://reference.langchain.com/python/langchain-aws/chat_models/bedrock_converse/ChatBedrockConverse) | [`langchain-aws`](https://reference.langchain.com/python/langchain-aws) | beta | ✅ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-aws?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-aws?style=flat-square&label=%20) |
+
+### 模型功能
+
+以下功能适用于 `ChatBedrock` 和 `ChatBedrockConverse`。
+
+| [工具调用](/oss/langchain/tools) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | 视频输入 | [Token 级流式传输](/oss/langchain/streaming/) | 原生异步 | [Token 使用量](/oss/langchain/models#token-usage) | [Logprobs](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: |  :---: | :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
+
+## 设置
+
+要访问 Bedrock 模型，您需要创建一个 AWS 账户、设置 Bedrock API 服务、获取访问密钥 ID 和密钥，并安装 `langchain-aws` 集成包。
+
+### 凭证
+
+前往 [AWS 文档](https://docs.aws.amazon.com/bedrock/latest/userguide/setting-up.html) 注册 AWS 并设置您的凭证。
+
+或者，`ChatBedrockConverse` 默认会读取以下环境变量：
+
+```python
+# os.environ["AWS_ACCESS_KEY_ID"] = "..."
+# os.environ["AWS_SECRET_ACCESS_KEY"] = "..."
+
+# Not required unless using temporary credentials.
+# os.environ["AWS_SESSION_TOKEN"] = "..."
+```
+
+您还需要为您的账户开启模型访问权限，可以通过遵循[这些说明](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html)来实现。
+
+要启用模型调用的自动化追踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+LangChain Bedrock 集成位于 `langchain-aws` 包中：
+
+```python
+pip install -qU langchain-aws
+```
+
+## 实例化
+
+现在我们可以实例化模型对象并生成聊天补全：
+
+```python
+from langchain_aws import ChatBedrockConverse
+
+llm = ChatBedrockConverse(
+    model_id="anthropic.claude-3-5-sonnet-20240620-v1:0",
+    # region_name=...,
+    # aws_access_key_id=...,
+    # aws_secret_access_key=...,
+    # aws_session_token=...,
+    # temperature=...,
+    # max_tokens=...,
+    # other params...
+)
+```
+
+## 调用
+
+```python
+messages = [
+    (
+        "system",
+        "You are a helpful assistant that translates English to French. Translate the user sentence.",
+    ),
+    ("human", "I love programming."),
+]
+ai_msg = llm.invoke(messages)
+ai_msg
+```
+
+```text
+AIMessage(content="J'adore la programmation.", additional_kwargs={}, response_metadata={'ResponseMetadata': {'RequestId': 'b07d1630-06f2-44b1-82bf-e82538dd2215', 'HTTPStatusCode': 200, 'HTTPHeaders': {'date': 'Wed, 16 Apr 2025 19:35:34 GMT', 'content-type': 'application/json', 'content-length': '206', 'connection': 'keep-alive', 'x-amzn-requestid': 'b07d1630-06f2-44b1-82bf-e82538dd2215'}, 'RetryAttempts': 0}, 'stopReason': 'end_turn', 'metrics': {'latencyMs': [488]}, 'model_name': 'anthropic.claude-3-5-sonnet-20240620-v1:0'}, id='run-d09ed928-146a-4336-b1fd-b63c9e623494-0', usage_metadata={'input_tokens': 29, 'output_tokens': 11, 'total_tokens': 40, 'input_token_details': {'cache_creation': 0, 'cache_read': 0}})
+```
+
+```python
+print(ai_msg.content)
+```
+
+```text
+J'adore la programmation.
+```
+
+### 流式传输
+
+使用 `stream_events` 直接流式传输令牌：
+
+```python
+stream = llm.stream_events(messages, version="v3")
+for token in stream.text:
+    print(token, end="|")
+```
+
+```text
+J|'adore la| programmation.|
+```
+
+### 流式工具调用和结构化输出
+
+使用 Anthropic 模型时，如果使用[工具调用](/oss/langchain/tools)或[结构化输出](/oss/langchain/structured-output)，工具调用参数会默认以部分 JSON 块的形式进行流式传输。
+
+要减少延迟并获得更均匀分布的块，您可以启用 Anthropic 的细粒度工具流式传输测试版：
+
+```python
+from langchain_aws import ChatBedrockConverse
+
+llm = ChatBedrockConverse(
+    model_id="us.anthropic.claude-sonnet-4-5-20250514-v1:0",
+    additional_model_request_fields={
+        "anthropic_beta": ["fine-grained-tool-streaming-2025-05-14"]
+    }
+)
+```
+
+<Note>
+    细粒度工具流在 Claude 4.5+ 模型上支持。详见 [Claude 文档](https://platform.claude.com/docs/en/agents-and-tools/tool-use/fine-grained-tool-streaming) 了解更多信息。
+</Note>
+
+<Warning>
+使用细粒度工具流时，您可能会收到无效或部分 JSON 输入。请确保在代码中处理这些边界情况。
+</Warning>
+
+## 扩展思考
+
+本指南重点介绍如何使用 AWS Bedrock 的 LangChain `ChatBedrockConverse` 集成来实现扩展思考。
+
+### 支持的模型
+
+扩展思考在 AWS Bedrock 上的以下 Claude 模型可用：
+
+| 模型 | 模型 ID |
+|------|---------|
+| **Claude Opus 4** | `anthropic.claude-opus-4-20250514-v1:0` |
+| **Claude Sonnet 4** | `anthropic.claude-sonnet-4-20250514-v1:0` |
+| **Claude 3.7 Sonnet** | `us.anthropic.claude-3-7-sonnet-20250219-v1:0` |
+
+```python
+from langchain_aws import ChatBedrockConverse
+
+llm = ChatBedrockConverse(
+    model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
+    region_name="us-west-2",
+    max_tokens=4096,
+    additional_model_request_fields={
+        "thinking": {"type": "enabled", "budget_tokens": 1024},
+    },
+)
+
+ai_msg = llm.invoke(messages)
+ai_msg.content_blocks
+```
+
+```text
+[{'type': 'reasoning',
+  'reasoning': 'The user wants me to translate "I love programming" from English to French.\n\n"I love" translates to "J\'aime" in French.\n"Programming" translates to "la programmation" in French.\n\nSo the full translation would be "J\'aime la programmation."',
+  'extras': {'signature': 'EpkDCkgIBxABGAIqQGI0KGz8LoVaFwqSAYPN7N+FecI1ZGtb0zpfPr5F8Sb1yxtQHQlmbKUS8JByenWCFGpRKigNaQh1+rLZ59GEX/sSDB+6gxZAT24DJrq4pxoMySVhzwALI6FEC+1UIjDcozOIznjRTYlDWPcYUNYvpt8rwF9IHE38Ha2uqVY8ROJa1tjOMk3OEnbSoV13Pa8q/gETsz+1UwxNX5tgxOa+38jLEryhdFyyAk2JDLrmluZBM6TMrtyzALQvVbZqjpkKAXdtcVCrsz8zUo/LZT1B/92Ukux2dE0O1ZOdcW3tORK+NFLSBaWuqigcFUTDH9XNQoHd2WpQNhl+ypnCItbL2wDRscN/tEBkgGMQugvPmL0LAuLKBmsRKStKRi/RMYGJb3Ft2yEDsRnYNJBJ6TtgxXFvjDwqc/UaI9cIcTxdoVVlsPFsYccpVwirzwAOiz6CSQ1oOQTYJVT90eQ71QW74n1ubbFIZAvDBKk0KG8jK1FGx4FpuuZyFhBpXtfrgOCdrlVSAO/EE9fKCbP9FlhPbRgB'}},
+ {'type': 'text', 'text': "J'aime la programmation."}]
+```
+
+### 扩展思考的工作原理
+
+启用扩展思考后，Claude 会创建思考内容块，在其中输出其内部推理过程。Claude 在生成最终回复前会结合这些推理中获得的洞察。API 响应将包含思考内容块，随后是文本内容块。
+
+```python
+next_messages = messages + [("ai", ai_msg.content), ("human", "I love AI")]
+
+ai_msg = llm.invoke(next_messages)
+ai_msg.content_blocks
+```
+
+```text
+[{'type': 'reasoning',
+  'reasoning': 'The user wants me to translate "I love AI" from English to French. \n\n"I love" translates to "J\'aime" in French.\n"AI" stands for "Artificial Intelligence" which in French is "Intelligence Artificielle" or "IA" (the French abbreviation).\n\nSo the translation would be "J\'aime l\'IA" or "J\'aime l\'intelligence artificielle".\n\nI think using the abbreviation "IA" would be more natural and concise, similar to how the user used "AI" in English.',
+  'extras': {'signature': 'EuAECkgIBxABGAIqQLWbkzJ8RzfxhVN1BhfRj5+On8/M9Utt0yH9kvj9P2zlQkO5xloq6I/AiEeArwwdJeqJVcLRjqLtinh6HIBbSDwSDFwt0GL409TqjSZNBhoMPQtJdZmx/uiPrLHUIjCJXyyjgSK3vzbcSEnsvo7pdpoo+waUFrAPDCGL/CIN5u7c8ueLCuCn8W0qGGc+BNgqxQO6UbV11RnMdnUyFmVgTPJErfzBr6U6KyUHd5dJmFWIUVpbbxT2C9vawpbKMPThaRW3BhItEafWGUpPqztzFhqJpSegXtXehIn5iY4yHzTUZ5FPdkNIuAmTsFNNGxiKr9H/gqknvQ2B7I4ushRHLg+drU4cH18EGZlAo5Tu1O9yH5GbweIEew4Uv7oWje+R8TIku0OFVhrbnQqqqukBicMV2JRifUYuz6dYM1UDYS8SfxQ1MmcVY5t1L9LDpoL4F/CtpL8/6YDsB/FosU37Qc1qm+D+pKEPTYnyxaP5tRXqTBfqUIiNJGqr9Egl17Akoy6NIv234rPfuf8HjTcu5scZoPGhOreG5rWxJ7AbTCIXgGWqpcf2TqDtniOac3jW4OtnlID9fsloKNq6Y5twgXHDR47c4Jh6vWmucZiIlL6hkklQzt5To6vOnqcTOGUtuCis8Y2wRzlNGeR2d8A+ocYm7mBvR/Y5DvDgstJwB/vCLoQlIL+jm6+h8k6EX/24GqOsh5hxsS5IsNIob/p8tr4TBbc9noCoUSYkMhbQPi2xpRrNML9GUIo7Skbh1ni67uqeShj1xuUrFG+cN6x4yzDaRb59LCAYAQ=='}},
+ {'type': 'text', 'text': "J'aime l'IA."}]
+```
+
+## Prompt 缓存
+
+Bedrock 支持对提示词各元素进行[缓存](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html)，包括消息和工具。这允许您重复使用大型文档、指令、[few-shot 文档](/langsmith/create-few-shot-evaluators)和其他数据，以降低延迟和成本。
+
+<Note>
+    **并非所有模型都支持 Prompt 缓存。请参阅 [Bedrock Prompt 缓存支持的模型](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models)。**
+</Note>
+
+<Note>
+    对于 LangChain 代理，请使用 [`BedrockPromptCachingMiddleware`](/oss/integrations/middleware/aws#prompt-caching) 让 LangChain 优化稳定的系统提示词和工具内容。对于直接模型调用，请根据模型和 API 使用手动 `cachePoint` 块或调用级 `cache_control`。
+</Note>
+
+要启用对提示词元素的缓存，请使用 `cachePoint` 键标记其关联的内容块。请参阅以下示例：
+
+```python
+import requests
+from langchain_aws import ChatBedrockConverse
+
+llm = ChatBedrockConverse(model="us.anthropic.claude-sonnet-4-6")
+
+# Pull LangChain readme
+get_response = requests.get(
+    "https://raw.githubusercontent.com/langchain-ai/langchain/b476fdb54aa6e6f5f0b24a68c2f4a94e43b369f9/README.md"
+)
+readme = get_response.text
+
+messages = [
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "text",
+                "text": "What's LangChain, according to its README?",
+            },
+            {
+                "type": "text",
+                "text": f"{readme}",
+            },
+            {
+                "cachePoint": {"type": "default"},
+            },
+        ],
+    },
+]
+
+response_1 = llm.invoke(messages)
+response_2 = llm.invoke(messages)
+
+usage_1 = response_1.usage_metadata["input_token_details"]
+usage_2 = response_2.usage_metadata["input_token_details"]
+
+print(f"First invocation:\n{usage_1}")
+print(f"\nSecond:\n{usage_2}")
+```
+
+```python
+First invocation:
+{'cache_creation': 1528, 'cache_read': 0}
+
+Second:
+{'cache_creation': 0, 'cache_read': 1528}
+```
+
+## 引用
+
+如果输入文档启用了引用，则可以生成引用。文档可以采用 Bedrock 的[原生格式](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_DocumentBlock.html)或 LangChain 的[标准类型](/oss/langchain/messages#multimodal)来指定：
+
+<CodeGroup>
+```python Bedrock format
+from langchain_aws import ChatBedrockConverse
+
+llm = ChatBedrockConverse(model="us.anthropic.claude-sonnet-4-20250514-v1:0")
+
+pdf_path = "path/to/your/file.pdf"
+
+with open(pdf_path, "rb") as f:
+    pdf_bytes = f.read()
+
+document = {
+    "document": {
+        "format": "pdf",
+        "source": {"bytes": pdf_bytes},
+        "name": "my-pdf",
+        "citations": {"enabled": True},  # [!code highlight]
+    },
+}
+
+response = llm.invoke(
+    [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Describe this document."},
+                document,
+            ]
+        },
+    ]
+)
+response.content_blocks
+```
+
+```python LangChain standard format
+import base64
+from langchain_aws import ChatBedrockConverse
+
+llm = ChatBedrockConverse(model="us.anthropic.claude-sonnet-4-20250514-v1:0")
+
+pdf_path = "path/to/your/file.pdf"
+
+with open(pdf_path, "rb") as f:
+    pdf_base64 = base64.b64encode(f.read()).decode("utf-8")
+
+document = {
+    "type": "file",
+    "mime_type": "application/pdf",
+    "base64": pdf_base64,
+    "name": "my-pdf",  # Converse requires a filename
+    "citations": {"enabled": True},  # [!code highlight]
+}
+
+response = llm.invoke(
+    [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Describe this document."},
+                document,
+            ]
+        },
+    ]
+)
+response.content_blocks
+```
+</CodeGroup>
+
+---
+
+## ChatAnthropicBedrock
+
+对于专门使用 Anthropic 模型的 AWS Bedrock 用户，`langchain-aws` 提供了 `ChatAnthropicBedrock`。此类扩展了 `ChatAnthropic`，在 AWS Bedrock 基础设施上运行时提供相同的接口。这利用了 Anthropic SDK 的 [Bedrock 客户端](https://platform.claude.com/docs/en/build-with-claude/claude-on-amazon-bedrock)。
+
+### 安装
+
+安装带有 `anthropic` extra 的 `langchain-aws` 以获取所需的依赖项：
+
+<CodeGroup>
+```bash pip
+pip install --upgrade "langchain-aws[anthropic]"
+```
+```bash uv
+uv add "langchain-aws[anthropic]"
+```
+</CodeGroup>
+
+### 使用方法
+
+`ChatAnthropicBedrock` 支持与 `ChatAnthropic` 相同的功能和参数。您可以通过 AWS 特定的参数进行初始化：
+
+```python
+from langchain_aws import ChatAnthropicBedrock
+
+model = ChatAnthropicBedrock(
+    model="us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    region_name="us-west-2",
+    aws_access_key_id="...",
+    aws_secret_access_key="...",
+    aws_session_token="...",
+)
+```
+
+AWS 凭证也可以从环境变量中读取，或由 boto3 自动发现：
+
+```python
+# Set environment variables
+# os.environ["AWS_ACCESS_KEY_ID"] = "..."
+# os.environ["AWS_SECRET_ACCESS_KEY"] = "..."
+# os.environ["AWS_REGION"] = "..."
+
+from langchain_aws import ChatAnthropicBedrock
+
+model = ChatAnthropicBedrock(model="us.anthropic.claude-haiku-4-5-20251001-v1:0")
+```
+
+有关可用参数和功能的详细文档，请参阅[`ChatAnthropic`集成页面](/oss/integrations/chat/anthropic)。
+
+---
+
+## API 参考
+
+有关所有 `ChatBedrock`、`ChatBedrockConverse` 和 `ChatAnthropicBedrock` 功能配置的详细文档，请访问 [API 参考](https://reference.langchain.com/python/langchain-aws)。

@@ -1,0 +1,370 @@
+---
+title: 使用远程沙箱
+sidebarTitle: 远程沙箱
+description: 在 LangSmith、AgentCore、Daytona、Modal、Runloop 或 Vercel 沙箱中运行 Deep Agents Code 工具执行。安装提供商额外依赖、设置凭证，以及使用标志和设置脚本。
+---
+
+Deep Agents Code 使用[沙箱即工具](/oss/deepagents/sandboxes#sandbox-as-tool-pattern)模式：`dcode` 进程（LLM 循环、内存、工具调度）在你的机器上运行，但代理工具调用（`read_file`、`write_file`、`execute` 等）指向远程沙箱，而非你的本地文件系统。如需将文件传入沙箱，请使用[设置脚本](#setup-scripts)或提供商的文档传输 API（参见[处理文件](/oss/deepagents/sandboxes#working-with-files)）。
+
+要深入了解沙箱架构、集成模式和安全最佳实践，请参阅[沙箱](/oss/deepagents/sandboxes)。
+
+<Steps>
+    <Step title="安装提供商依赖项" icon="download">
+        每个提供商都作为可选额外依赖项提供。在会话中使用 `/install` 安装，或在 shell 中使用 `dcode --install` 安装：
+
+        <Tabs>
+            <Tab title="LangSmith">
+                安装 `deepagents-code` 时默认包含。无需额外安装。
+            </Tab>
+            <Tab title="AgentCore">
+                <CodeGroup>
+                    ```txt In session
+                    /install agentcore
+                    ```
+
+                    ```bash Shell
+                    dcode --install agentcore
+                    ```
+</CodeGroup>
+            </Tab>
+            <Tab title="Daytona">
+                <CodeGroup>
+                    ```txt In session
+                    /install daytona
+                    ```
+
+                    ```bash Shell
+                    dcode --install daytona
+                    ```
+</CodeGroup>
+            </Tab>
+            <Tab title="模态框">
+                <CodeGroup>
+                    ```txt In session
+                    /install modal
+                    ```
+
+                    ```bash Shell
+                    dcode --install modal
+                    ```
+</CodeGroup>
+            </Tab>
+            <Tab title="Runloop">
+                <CodeGroup>
+
+</fragment>
+                    ```txt In session
+                    /install runloop
+                    ```
+
+                    ```bash Shell
+                    dcode --install runloop
+                    ```
+</CodeGroup>
+            </Tab>
+            <Tab title="Vercel">
+                <CodeGroup>
+                    ```txt In session
+                    /install vercel
+                    ```
+
+                    ```bash Shell
+                    dcode --install vercel
+                    ```
+```markdown
+                </CodeGroup>
+            </Tab>
+        </Tabs>
+
+        要一次性安装所有沙箱提供商的支持，请使用 `all-sandboxes` 扩展：在会话中使用 `/install all-sandboxes`，或从 shell 中使用 `dcode --install all-sandboxes`。
+    </Step>
+
+    <Step title="设置提供商凭据" icon="key">
+        <Tabs>
+            <Tab title="LangSmith">
+```
+                ```bash
+                export LANGSMITH_API_KEY="your-key"
+                ```
+</Tab>
+            <Tab title="AgentCore">
+
+</fragment>
+                ```bash
+                export AWS_ACCESS_KEY_ID="your-key"
+                export AWS_SECRET_ACCESS_KEY="your-secret"
+                export AWS_REGION="us-west-2"
+
+                # Only when using temporary/STS credentials:
+                export AWS_SESSION_TOKEN="session-token"
+                ```
+</Tab>
+            <Tab title="Daytona">
+
+</fragment>
+                ```bash
+                export DAYTONA_API_KEY="your-key"
+                ```
+</Tab>
+            <Tab title="模态框">
+                ```bash
+                modal setup
+                ```
+</Tab>
+            <Tab title="Runloop">
+                ```bash
+                export RUNLOOP_API_KEY="your-key"
+                ```
+</Tab>
+            <Tab title="Vercel">
+                ```bash
+                export VERCEL_TOKEN="your-token"
+                export VERCEL_PROJECT_ID="your-project-id"
+                export VERCEL_TEAM_ID="your-team-id"
+                ```
+
+<fragment>
+
+                在 Vercel 上运行时，会自动使用 [OIDC](https://vercel.com/docs/oidc) 凭据。
+            </Tab>
+        </Tabs>
+    </Step>
+
+    <Step title="Run Deep Agents Code with a sandbox" icon="player-play">
+        <Tabs>
+            <Tab title="LangSmith">
+
+</fragment>
+                ```bash
+                dcode --sandbox langsmith
+                ```
+</Tab>
+            <Tab title="AgentCore">
+
+</fragment>
+                ```bash
+                dcode --sandbox agentcore
+                ```
+</Tab>
+            <Tab title="Daytona">
+
+</fragment>
+                ```bash
+                dcode --sandbox daytona
+                ```
+</Tab>
+            <Tab title="模态框">
+                ```bash
+                dcode --sandbox modal
+                ```
+</Tab>
+            <Tab title="运行循环">
+
+</fragment>
+                ```bash
+                dcode --sandbox runloop
+                ```
+</Tab>
+            <Tab title="Vercel">
+
+</Tab>
+                ```bash
+                dcode --sandbox vercel
+                ```
+</Tab>
+        </Tabs>
+    </Step>
+</Steps>
+
+## 沙箱标志和示例
+
+| 标志 | 描述 |
+|------|-------------|
+| `--sandbox TYPE` | 要使用的沙箱提供程序。内置选项：`langsmith`、`agentcore`、`daytona`、`modal`、`runloop`、`vercel`（默认：`none`）。也接受[第三方](#third-party-providers)和[配置声明的](#config-declared-providers)提供程序。传递不带值的 `--sandbox` 以使用配置中的 `[sandboxes].default` |
+| `--sandbox-id ID` | 通过 ID 重用现有沙箱，而不是创建新的。跳过创建和清理步骤。仅适用于支持按 ID 重新连接的提供程序。相关详细信息，请参阅您的沙箱文档 |
+| `--sandbox-snapshot-name NAME` | 使用或创建沙箱快照。支持 `langsmith` 和 `runloop`（以及任何宣传快照支持的第三方提供程序）。不能与 `--sandbox-id` 组合使用 |
+| `--sandbox-setup PATH` | 沙箱创建时要在其中运行设置脚本的路径 |
+
+每个提供程序在沙箱内暴露一个默认工作目录。设置脚本和 `execute` 命令从此目录运行，除非被覆盖：
+
+| 提供程序 | 工作目录 |
+|----------|-------------------|
+| LangSmith | `/root` |
+| AgentCore | `/tmp` |
+| Daytona | `/home/daytona` |
+| Modal | `/workspace` |
+| Runloop | `/home/user` |
+| Vercel | `/vercel/sandbox` |
+
+示例：
+
+```bash
+# Create a new LangSmith sandbox
+dcode --sandbox langsmith
+
+# Reuse an existing sandbox (skips creation and cleanup)
+dcode --sandbox runloop --sandbox-id dbx_abc123
+
+# Run a setup script after sandbox creation
+dcode --sandbox modal --sandbox-setup ./setup.sh
+
+# Use the provider set as [sandboxes].default in config
+dcode --sandbox
+```
+
+<Note>
+    由于 `--sandbox` 接受一个可选值，请将裸形式**放在最后**。否则后续参数（例如 `dcode --sandbox agents`）会被当作该标志的值消耗掉。传入明确的提供商名称以避免歧义。
+</Note>
+
+## 可插拔提供商
+
+上述六个内置提供商并非唯一选项。Deep Agents Code 从三个来源发现沙盒提供商，因此您可以使用其他包提供的提供商，或声明自己的提供商而无需更改 Deep Agents Code：
+
+1. **内置提供商** — 如上所示的精选集合，作为 `deepagents-code` extras 安装。
+2. **[第三方提供商](#third-party-providers)** — 由其他已安装的包通过 Python 入口点发布。
+3. **[配置声明的提供商](#config-declared-providers)** — 在您的 `~/.deepagents/config.toml` 中定义。
+
+当两个来源定义了相同的提供商名称时，**配置优先于第三方入口点，第三方入口点优先于内置提供商**，因此您的配置文件始终可以覆盖发现结果。
+
+### 第三方提供商
+
+一个包可以通过 `deepagents_code.sandbox_providers` [入口点组](https://packaging.python.org/en/latest/specifications/entry-points/)发布沙盒提供商。一旦您安装了这样的包，其提供商将自动可用于 `--sandbox`，无需配置：
+
+```bash
+# Install the package that publishes the provider, then use it
+dcode --sandbox acme
+```
+
+例如，`langchain-e2b` 包发布了一个 `e2b` 提供程序（请参阅[沙箱集成](/oss/integrations/sandboxes)）。将其作为包安装，设置您的凭据，然后选择它：
+
+```bash
+dcode --install langchain-e2b --package
+export E2B_API_KEY="..."
+dcode --sandbox e2b
+```
+
+如果你传递的 `--sandbox` 名称未安装或未声明，Deep Agents Code 会列出可用的 providers，并说明如何安装或配置缺失的 provider。
+
+<Accordion title="发布 sandbox provider" icon="package">
+    要分发一个 provider，让用户在安装您的包后能够运行 `dcode --sandbox <name>`，请实现一个 `SandboxProvider` 子类，并将其注册到 `deepagents_code.sandbox_providers` 入口点组中。
+
+    重写 `metadata` 属性，使 Deep Agents Code 能够在不实例化 provider 的情况下展示您的工作目录和功能标志：
+
+</Accordion>
+
+    ```python
+    from deepagents_code.integrations.sandbox_provider import (
+        SandboxInstallHint,
+        SandboxProvider,
+        SandboxProviderMetadata,
+    )
+
+
+    class AcmeProvider(SandboxProvider):
+        @property
+        def metadata(self) -> SandboxProviderMetadata:
+            return SandboxProviderMetadata(
+                name="acme",
+                working_dir="/workspace",
+                install=SandboxInstallHint(kind="package", name="acme-dcode-sandbox"),
+                supports_sandbox_id=True,
+                supports_snapshot_name=False,
+            )
+
+        def get_or_create(self, *, sandbox_id=None, **kwargs):
+            ...  # return a SandboxBackendProtocol
+
+        def delete(self, *, sandbox_id, **kwargs):
+            ...
+    ```
+
+实现 `get_or_create` 和 `delete`；异步调用方由基类处理。然后在您包的 `pyproject.toml` 中注册入口点：
+
+    ```toml
+    [project.entry-points."deepagents_code.sandbox_providers"]
+    acme = "acme_sandbox.provider:AcmeProvider"
+    ```
+
+如果省略 `metadata` 属性，则使用通用默认值（`/workspace`，不支持快照）。
+
+### 配置声明的提供程序
+
+对于您不想打包的内部或本地提供程序，请在 `~/.deepagents/config.toml` 中的 `[sandboxes.providers]` 下声明。这类似于[任意模型提供程序](/oss/deepagents/code/configuration#arbitrary-providers)，并使用相同的 `class_path` 信任模型。
+
+```toml
+[sandboxes]
+# Used when you run `dcode --sandbox` with no value.
+default = "acme"
+
+[sandboxes.providers.acme]
+# Required: the provider class to import, in module.path:ClassName format.
+class_path = "acme_sandbox.provider:AcmeProvider"
+# Default working directory inside the sandbox.
+working_dir = "/workspace"
+# Package suggested when the provider's dependencies are missing.
+package = "acme-dcode-sandbox"
+# Capability flags (defaults: supports_sandbox_id = true, supports_snapshot_name = false).
+supports_sandbox_id = true
+supports_snapshot_name = false
+
+# Extra keyword arguments forwarded to the provider's get_or_create().
+[sandboxes.providers.acme.params]
+region = "us-east-1"
+```
+
+<ResponseField name="class_path" type="string" post={["required"]}>
+    完全限定的提供者类，格式为 `module.path:ClassName`。Deep Agents Code 会导入并实例化此类。
+</ResponseField>
+
+<ResponseField name="working_dir" type="string" post={["optional"]}>
+    沙箱内的默认工作目录。默认为 `/workspace`。
+</ResponseField>
+
+<ResponseField name="package" type="string" post={["optional"]}>
+    当提供者的依赖缺失时，在错误消息中建议的包名。
+</ResponseField>
+
+<ResponseField name="supports_sandbox_id" type="boolean" post={["optional"]}>
+    此提供者是否允许 `--sandbox-id` 重连。默认为 `true`。
+</ResponseField>
+
+<ResponseField name="supports_snapshot_name" type="boolean" post={["optional"]}>
+    此提供者是否允许 `--sandbox-snapshot-name`。默认为 `false`。
+</ResponseField>
+
+<ResponseField name="params" type="object" post={["optional"]}>
+    转发给提供者 `get_or_create()` 的额外关键字参数。
+</ResponseField>
+
+重用内置提供者名称的配置条目会**覆盖**该内置提供者，同时保留其依赖预检。格式错误的条目会被跳过并发出警告，而不会导致启动崩溃。
+
+<Warning>
+    设置 `class_path` 会导致 Deep Agents Code 从指定的模块导入并运行任意 Python 代码——模块级代码在导入时执行。这与模型 [`class_path`](/oss/deepagents/code/configuration#arbitrary-providers) 相同的信任模型：你控制自己的机器和配置文件。
+</Warning>
+
+## 设置脚本
+
+使用 `--sandbox-setup` 在沙箱创建后运行 shell 脚本。这对于克隆仓库、安装依赖和配置环境变量很有用。
+
+```bash title="setup.sh"
+#!/bin/bash
+set -e
+
+# Clone repository using GitHub token
+git clone https://x-access-token:${GITHUB_TOKEN}@github.com/username/repo.git $HOME/workspace
+cd $HOME/workspace
+
+# Make environment variables persistent
+cat >> ~/.bashrc <<'EOF'
+export GITHUB_TOKEN="${GITHUB_TOKEN}"
+export OPENAI_API_KEY="${OPENAI_API_KEY}"
+cd $HOME/workspace
+EOF
+source ~/.bashrc
+```
+
+Deep Agents Code 使用本地环境变量扩展设置脚本中的 `${VAR}` 引用。将密钥存储在本地 `.env` 文件中，以便设置脚本访问。
+
+<Warning>
+    沙箱隔离代码执行，但智能体仍容易受到来自不受信任输入的提示注入攻击。仅使用人工审批、短生命周期密钥和可信的设置脚本。请参阅[安全注意事项](/oss/deepagents/sandboxes#security-considerations)了解更多详情。
+</Warning>

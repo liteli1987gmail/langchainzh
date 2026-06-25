@@ -1,0 +1,195 @@
+---
+title: "ChatLiteLLM 和 ChatLiteLLMRouter 集成"
+description: "使用 LangChain Python 与 ChatLiteLLM 和 ChatLiteLLMRouter 聊天模型集成。"
+---
+
+[LiteLLM](https://github.com/BerriAI/litellm) 是一个简化调用 Anthropic、Azure、Huggingface、Replicate 等的库。
+
+本页面介绍如何开始使用 LangChain 与 LiteLLM I/O 库。
+
+此集成提供两个聊天模型类：
+
+- @[ChatLiteLLM]：LiteLLM 的主要 LangChain 聊天包装器。
+- @[ChatLiteLLMRouter]：利用 LiteLLM 的 Router 进行负载均衡和降级的 `ChatLiteLLM` 包装器。
+
+该包还包含 @[LiteLLMEmbeddings]、@[LiteLLMEmbeddingsRouter] 和 @[LiteLLMOCRLoader]。有关详细信息，请参阅[providers 页面](/oss/integrations/providers/litellm)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 下载量 | 版本 |
+| :---  | :--- | :---: |  :---: | :---: | :---: |
+| @[ChatLiteLLM] | [`langchain-litellm`](https://pypi.org/project/langchain-litellm/)| ❌ | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-litellm?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-litellm?style=flat-square&label=%20) |
+| @[ChatLiteLLMRouter] | [`langchain-litellm`](https://pypi.org/project/langchain-litellm/)| ❌ | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-litellm?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-litellm?style=flat-square&label=%20) |
+
+### 模型特性
+
+| [工具调用](/oss/langchain/tools) | [结构化输出](/oss/langchain/structured-output) | 图像输入 | 音频输入 | 视频输入 | [Token 级流式处理](/oss/integrations/chat/litellm#async-and-streaming-functionality) | [原生异步](/oss/integrations/chat/litellm#async-and-streaming-functionality) | [Token 使用量](/oss/langchain/models#token-usage) | [Logprobs](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: |  :---: | :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ |
+
+### 设置
+
+要访问 `ChatLiteLLM` 和 `ChatLiteLLMRouter` 模型，您需要安装 `langchain-litellm` 包，并创建一个 OpenAI、Anthropic、Azure、Replicate、OpenRouter、Hugging Face、Together AI 或 Cohere 账户。然后，您需要获取 API 密钥并将其导出为环境变量。
+
+## 凭据
+
+您必须选择要使用的 LLM 提供商并向其注册以获取 API 密钥。
+
+### 示例 - Anthropic
+
+前往 [Claude 控制台](https://console.anthropic.com) 注册并生成 Claude API 密钥。完成此操作后，设置 `ANTHROPIC_API_KEY` 环境变量：
+
+### 示例 - OpenAI
+
+前往 [platform.openai.com/api-keys](https://platform.openai.com/api-keys) 注册 OpenAI 并生成 API 密钥。完成此操作后，设置 `OPENAI_API_KEY` 环境变量。
+
+```python
+## Set ENV variables
+import os
+
+os.environ["OPENAI_API_KEY"] = "your-openai-key"
+os.environ["ANTHROPIC_API_KEY"] = "your-anthropic-key"
+```
+
+### 安装
+
+LangChain LiteLLM 集成在 `langchain-litellm` 包中：
+
+```python
+pip install -qU langchain-litellm
+```
+
+## 实例化
+
+### ChatLiteLLM
+
+您可以通过提供 [LiteLLM 支持的](https://docs.litellm.ai/docs/providers) `model` 名称来实例化 `ChatLiteLLM` 模型。
+
+```python
+from langchain_litellm import ChatLiteLLM
+
+llm = ChatLiteLLM(model="gpt-5.4-nano", temperature=0.1)
+```
+
+### ChatLiteLLMRouter
+
+您还可以利用 LiteLLM 的路由功能，通过定义模型列表来使用路由功能，具体请参阅 [LiteLLM 路由文档](https://docs.litellm.ai/docs/routing)。
+
+```python
+from langchain_litellm import ChatLiteLLMRouter
+from litellm import Router
+
+model_list = [
+    {
+        "model_name": "gpt-5.5",
+        "litellm_params": {
+            "model": "azure/gpt-5.5",
+            "api_key": "<your-api-key>",
+            "api_version": "2024-10-21",
+            "api_base": "https://<your-endpoint>.openai.azure.com/",
+        },
+    },
+    {
+        "model_name": "gpt-5.5",
+        "litellm_params": {
+            "model": "azure/gpt-5.5",
+            "api_key": "<your-api-key>",
+            "api_version": "2024-10-21",
+            "api_base": "https://<your-endpoint>.openai.azure.com/",
+        },
+    },
+]
+litellm_router = Router(model_list=model_list)
+llm = ChatLiteLLMRouter(router=litellm_router, model_name="gpt-5.5", temperature=0.1)
+```
+
+## 调用
+
+无论您是实例化了 `ChatLiteLLM` 还是 `ChatLiteLLMRouter`，现在您都可以通过 LangChain 的 API 来使用 ChatModel。
+
+```python
+response = await llm.ainvoke(
+    "Classify the text into neutral, negative or positive. Text: I think the food was okay. Sentiment:"
+)
+print(response)
+```
+
+```text
+content='Neutral' additional_kwargs={} response_metadata={'token_usage': Usage(completion_tokens=2, prompt_tokens=30, total_tokens=32, completion_tokens_details=CompletionTokensDetailsWrapper(accepted_prediction_tokens=0, audio_tokens=0, reasoning_tokens=0, rejected_prediction_tokens=0, text_tokens=None), prompt_tokens_details=PromptTokensDetailsWrapper(audio_tokens=0, cached_tokens=0, text_tokens=None, image_tokens=None)), 'model': 'gpt-3.5-turbo', 'finish_reason': 'stop', 'model_name': 'gpt-3.5-turbo'} id='run-ab6a3b21-eae8-4c27-acb2-add65a38221a-0' usage_metadata={'input_tokens': 30, 'output_tokens': 2, 'total_tokens': 32}
+```
+
+## 异步和流式功能
+
+`ChatLiteLLM` 和 `ChatLiteLLMRouter` 也支持异步和流式功能：
+
+```python
+stream = await llm.astream_events("Hello, please explain how antibiotics work", version="v3")
+async for token in stream.text:
+    print(token, end="")
+```
+
+```text
+Antibiotics are medications that fight bacterial infections in the body. They work by targeting specific bacteria and either killing them or preventing their growth and reproduction.
+
+There are several different mechanisms by which antibiotics work. Some antibiotics work by disrupting the cell walls of bacteria, causing them to burst and die. Others interfere with the protein synthesis of bacteria, preventing them from growing and reproducing. Some antibiotics target the DNA or RNA of bacteria, disrupting their ability to replicate.
+
+It is important to note that antibiotics only work against bacterial infections and not viral infections. It is also crucial to take antibiotics as prescribed by a healthcare professional and to complete the full course of treatment, even if symptoms improve before the medication is finished. This helps to prevent antibiotic resistance, where bacteria become resistant to the effects of antibiotics.
+```
+
+## 高级功能
+
+### Vertex AI 接地（Google Search）
+
+将 Google Search 接地与 Vertex AI 模型配合使用（例如 `gemini-3.5-flash`）。引用和元数据将在 `response_metadata`（批量）或 `additional_kwargs`（流式）中返回。
+
+**设置**
+
+```python
+import os
+from langchain_litellm import ChatLiteLLM
+
+os.environ["VERTEX_PROJECT"] = "your-project-id"
+os.environ["VERTEX_LOCATION"] = "us-central1"
+
+llm = ChatLiteLLM(model="vertex_ai/gemini-2.5-flash", temperature=0)
+```
+
+**批量使用**
+
+```python
+# Invoke with Google Search tool enabled
+response = llm.invoke(
+    "What is the current stock price of Google?",
+    tools=[{"googleSearch": {}}]
+)
+
+# Access citations & metadata
+provider_fields = response.response_metadata.get("provider_specific_fields")
+if provider_fields:
+    # Vertex returns a list; the first item contains the grounding info
+    print(provider_fields[0])
+```
+
+**流式使用**
+
+```python
+stream = llm.stream_events(
+    "What is the current stock price of Google?",
+    version="v3",
+    tools=[{"googleSearch": {}}],
+)
+for token in stream.text:
+    print(token, end="", flush=True)
+# Metadata is available on the full output message
+output = stream.output
+if "provider_specific_fields" in output.additional_kwargs:
+    print("\n[Metadata Found]:", output.additional_kwargs["provider_specific_fields"])
+```
+
+---
+
+## API 参考
+
+有关所有 `ChatLiteLLM` 和 `ChatLiteLLMRouter` 功能与配置的详细文档，请参阅 @[langchain-litellm] API 参考。

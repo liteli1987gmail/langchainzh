@@ -1,0 +1,881 @@
+---
+title: 防止敏感数据记录到追踪中
+sidebarTitle: 防止敏感数据记录到追踪中
+---
+
+在使用 LangSmith 追踪时，您可能需要防止敏感信息被记录，以维护隐私并满足安全要求。LangSmith 提供了多种方法，在数据发送到后端之前保护您的数据：
+
+- [完全隐藏输入和输出](#hide-inputs-and-outputs) 使用环境变量或 @[Client] 配置。
+- [隐藏元数据](#hide-metadata) 删除或转换运行元数据。
+- [应用基于规则的掩码](#rule-based-masking-of-inputs-and-outputs) 使用正则表达式模式或匿名化库选择性地还原敏感信息。
+- [处理单个函数的输入和输出](#processing-inputs-and-outputs-for-a-single-function) 进行函数级自定义。
+- [使用第三方匿名化工具](#examples) 如 Microsoft Presidio 和 Amazon Comprehend 进行高级 PII 检测。
+- [批量处理运行操作](#batch-processing-for-high-throughput-masking) 以跨多个运行应用昂贵的掩码逻辑，减少每次运行的开销。LangSmith 在后台线程中处理运行，不会阻塞您的应用程序。
+- [按请求 redact 输入和输出](/langsmith/conditional-tracing#conditionally-redact-inputs-and-outputs) 使用 `tracing_context` 仅针对特定调用（例如，基于租户或功能标志）掩码数据，而不影响其他追踪。
+
+<Note>
+如果您的合规性或隐私要求要求某些操作完全不被追踪（例如，具有零保留策略的客户端），请考虑使用[条件追踪](/langsmith/conditional-tracing)来选择性地禁用特定请求的追踪，而不是掩码数据。
+</Note>
+
+## 隐藏输入和输出
+
+如果您想完全隐藏追踪的输入和输出，可以在运行应用程序时设置以下环境变量：
+
+```bash
+LANGSMITH_HIDE_INPUTS=true
+LANGSMITH_HIDE_OUTPUTS=true
+```
+
+这适用于 LangSmith SDK（Python 和 TypeScript）和 LangChain。
+
+您也可以为给定的 @[Client] 实例自定义和覆盖此行为。这可以通过在 @[Client] 对象上设置 `hide_inputs` 和 `hide_outputs` 参数来实现（TypeScript 中为 `hideInputs` 和 `hideOutputs`）。
+
+以下示例为 `hide_inputs` 和 `hide_outputs` 都返回一个空对象，但您可以自定义它以满足您的需求：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+import openai
+from langsmith import Client
+from langsmith.wrappers import wrap_openai
+
+openai_client = wrap_openai(openai.Client())
+langsmith_client = Client(
+    hide_inputs=lambda inputs: {}, hide_outputs=lambda outputs: {}
+)
+
+# The trace produced will have its metadata present, but the inputs will be hidden
+openai_client.chat.completions.create(
+    model="gpt-5.4-mini",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"},
+    ],
+    langsmith_extra={"client": langsmith_client},
+)
+
+# The trace produced will not have hidden inputs and outputs
+openai_client.chat.completions.create(
+    model="gpt-5.4-mini",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"},
+    ],
+)
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+import { Client } from "langsmith";
+import { wrapOpenAI } from "langsmith/wrappers";
+
+const langsmithClient = new Client({
+    hideInputs: (inputs) => ({}),
+    hideOutputs: (outputs) => ({}),
+});
+
+// The trace produced will have its metadata present, but the inputs will be hidden
+const filteredOAIClient = wrapOpenAI(new OpenAI(), {
+    client: langsmithClient,
+});
+await filteredOAIClient.chat.completions.create({
+    model: "gpt-5.4-mini",
+    messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: "Hello!" },
+    ],
+});
+
+const openaiClient = wrapOpenAI(new OpenAI());
+// The trace produced will not have hidden inputs and outputs
+await openaiClient.chat.completions.create({
+    model: "gpt-5.4-mini",
+    messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: "Hello!" },
+    ],
+});
+```
+
+</CodeGroup>
+
+## 隐藏元数据
+
+`hide_metadata` 参数允许您控制在使用 LangSmith Python SDK 进行追踪时，运行时元数据是否被隐藏或转换。元数据在创建运行时通过 `extra` 参数传递（例如 `extra={"metadata": {...}}`）。`hide_metadata` 对于删除敏感信息、满足隐私要求或减少发送到 LangSmith 的数据量非常有用。您可以通过两种方式配置元数据隐藏：
+
+- 使用 SDK：
+
+    ```python
+    from langsmith import Client
+
+    client = Client(hide_metadata=True)
+    ```
+
+- 使用环境变量：
+
+    ```bash
+    export LANGSMITH_HIDE_METADATA=true
+    ```
+
+`hide_metadata` 参数接受三种类型的值：
+
+- `True`：完全移除所有元数据（发送空字典）。
+- `False` 或 `None`：保留元数据不变（默认行为）。
+- `Callable`：自定义函数，用于转换元数据字典。
+
+设置此参数后，它将影响 @[Client] 创建或更新的所有运行的 `extra` 参数中的 `metadata` 字段，包括通过 `@traceable` 装饰器或 LangChain 集成创建的运行。
+
+### 隐藏所有元数据
+
+设置 `hide_metadata=True` 可以从发送到 LangSmith 的运行中完全移除所有元数据：
+
+```python
+from langsmith import Client
+
+# Hide all metadata completely
+client = Client(hide_metadata=True)
+
+# Now when you create runs, metadata will be empty
+client.create_run(
+    "my_run",
+    inputs={"question": "What is 2+2?"},
+    run_type="llm",
+    extra={"metadata": {"user_id": "123", "session": "abc"}}
+)
+# The metadata sent to LangSmith will be {} instead of the provided metadata
+```
+
+### 自定义转换
+
+使用可调用函数在元数据发送到 LangSmith 之前有选择地过滤、编辑或修改元数据：
+
+```python
+# Remove sensitive keys
+def hide_sensitive_metadata(metadata: dict) -> dict:
+    return {k: v for k, v in metadata.items() if not k.startswith("_private")}
+
+client = Client(hide_metadata=hide_sensitive_metadata)
+
+# Redact specific values
+def redact_emails(metadata: dict) -> dict:
+    import re
+    result = {}
+    for k, v in metadata.items():
+        if isinstance(v, str) and "@" in v:
+            result[k] = "[REDACTED_EMAIL]"
+        else:
+            result[k] = v
+    return result
+
+client = Client(hide_metadata=redact_emails)
+
+# Add transformation marker
+def add_marker(metadata: dict) -> dict:
+    return {**metadata, "transformed": True}
+
+client = Client(hide_metadata=add_marker)
+```
+
+## 基于规则的输入输出掩码
+
+<Info>
+此功能在以下 LangSmith SDK 版本中可用：
+
+* Python：0.1.81 及以上版本
+* TypeScript：0.1.33 及以上版本
+</Info>
+
+要对输入和输出中的特定数据进行掩码处理，您可以使用 `create_anonymizer` / `createAnonymizer` 函数，并在实例化 @[Client] 时传入新创建的匿名化器。匿名化器可以由正则表达式模式和替换值的列表构建，也可以由接受并返回字符串值的函数构建。
+
+如果 `LANGSMITH_HIDE_INPUTS = true`，则输入的匿名化器将被跳过。如果 `LANGSMITH_HIDE_OUTPUTS = true`，输出的匿名化器同理。
+
+但是，如果输入或输出要发送到 @[Client]，则 `anonymizer` 方法将优先于 `hide_inputs` 和 `hide_outputs` 中的函数。默认情况下，`create_anonymizer` 最多只会查看 10 层嵌套深度，可通过 `max_depth` 参数进行配置。
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langsmith.anonymizer import create_anonymizer
+from langsmith import Client, traceable
+import re
+
+# create anonymizer from list of regex patterns and replacement values
+anonymizer = create_anonymizer([
+    { "pattern": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+.[a-zA-Z]{2,}", "replace": "<email-address>" },
+    { "pattern": r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "replace": "<UUID>" }
+])
+
+# or create anonymizer from a function
+email_pattern = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+.[a-zA-Z]{2,}")
+uuid_pattern = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+anonymizer = create_anonymizer(
+    lambda text: email_pattern.sub("<email-address>", uuid_pattern.sub("<UUID>", text))
+)
+
+client = Client(anonymizer=anonymizer)
+
+@traceable(client=client)
+def main(inputs: dict) -> dict:
+    ...
+```
+
+```typescript TypeScript
+import { createAnonymizer } from "langsmith/anonymizer"
+import { traceable } from "langsmith/traceable"
+import { Client } from "langsmith"
+
+// create anonymizer from list of regex patterns and replacement values
+const anonymizer = createAnonymizer([
+    { pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+.[a-zA-Z]{2,}/g, replace: "<email>" },
+    { pattern: /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, replace: "<uuid>" }
+])
+
+// or create anonymizer from a function
+const anonymizer = createAnonymizer((value) => value.replace("...", "<value>"))
+
+const client = new Client({ anonymizer })
+
+const main = traceable(async (inputs: any) => {
+    // ...
+}, { client })
+```
+
+</CodeGroup>
+
+请注意，使用匿名化器可能会因复杂的正则表达式或大型负载而产生性能问题，因为匿名化器会在处理前将负载序列化为 JSON。
+
+<Note>
+改进 `anonymizer` API 的性能已在我们的路线图中！如果您在性能方面遇到问题，请通过 [support.langchain.com](https://support.langchain.com) 联系支持团队。
+</Note>
+
+![Hide inputs outputs](/langsmith/images/hide-inputs-outputs.png)
+
+旧版本的 LangSmith SDK 可以使用 `hide_inputs` 和 `hide_outputs` 参数来实现相同的效果。您还可以使用这些参数来更高效地处理输入和输出。
+
+<CodeGroup>
+
+```python Python
+import re
+from langsmith import Client, traceable
+
+# Define the regex patterns for email addresses and UUIDs
+EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+.[a-zA-Z]{2,}"
+UUID_REGEX = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+
+def replace_sensitive_data(data, depth=10):
+    if depth == 0:
+        return data
+    if isinstance(data, dict):
+        return {k: replace_sensitive_data(v, depth-1) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [replace_sensitive_data(item, depth-1) for item in data]
+    elif isinstance(data, str):
+        data = re.sub(EMAIL_REGEX, "<email-address>", data)
+        data = re.sub(UUID_REGEX, "<UUID>", data)
+        return data
+    else:
+        return data
+
+client = Client(
+    hide_inputs=lambda inputs: replace_sensitive_data(inputs),
+    hide_outputs=lambda outputs: replace_sensitive_data(outputs)
+)
+
+inputs = {"role": "user", "content": "Hello! My email is user@example.com and my ID is 123e4567-e89b-12d3-a456-426614174000."}
+outputs = {"role": "assistant", "content": "Hi! I've noted your email as user@example.com and your ID as 123e4567-e89b-12d3-a456-426614174000."}
+
+@traceable(client=client)
+def child(inputs: dict) -> dict:
+    return outputs
+
+@traceable(client=client)
+def parent(inputs: dict) -> dict:
+    child_outputs = child(inputs)
+    return child_outputs
+
+parent(inputs)
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+import { traceable } from "langsmith/traceable";
+
+// Define the regex patterns for email addresses and UUIDs
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+.[a-zA-Z]{2,}/g;
+const UUID_REGEX = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
+
+function replaceSensitiveData(data: any, depth: number = 10): any {
+    if (depth === 0) return data;
+    if (typeof data === "object" && !Array.isArray(data)) {
+        const result: Record<string, any> = {};
+        for (const [key, value] of Object.entries(data)) {
+            result[key] = replaceSensitiveData(value, depth - 1);
+        }
+        return result;
+    } else if (Array.isArray(data)) {
+        return data.map(item => replaceSensitiveData(item, depth - 1));
+    } else if (typeof data === "string") {
+        return data.replace(EMAIL_REGEX, "<email-address>").replace(UUID_REGEX, "<UUID>");
+    } else {
+        return data;
+    }
+}
+
+const langsmithClient = new Client({
+    hideInputs: (inputs) => replaceSensitiveData(inputs),
+    hideOutputs: (outputs) => replaceSensitiveData(outputs)
+});
+
+const inputs = {
+    role: "user",
+    content: "Hello! My email is user@example.com and my ID is 123e4567-e89b-12d3-a456-426614174000."
+};
+const outputs = {
+    role: "assistant",
+    content: "Hi! I've noted your email as <email-address> and your ID as <UUID>."
+};
+
+const child = traceable(async (inputs: any) => {
+    return outputs;
+}, { name: "child", client: langsmithClient });
+
+const parent = traceable(async (inputs: any) => {
+    const childOutputs = await child(inputs);
+    return childOutputs;
+}, { name: "parent", client: langsmithClient });
+
+await parent(inputs);
+```
+
+</CodeGroup>
+
+## 处理单个函数的输入和输出
+
+<Info>
+`process_outputs` 参数适用于 LangSmith SDK Python 版 0.1.98 及更高版本。
+</Info>
+
+除了 @[Client] 级别的输入和输出处理外，LangSmith 还通过 `@traceable` 装饰器的 `process_inputs` 和 `process_outputs` 参数提供函数级别的处理功能。
+
+这些参数接受函数，允许你在将特定函数的输入和输出记录到 LangSmith 之前对其进行转换。这对于减小负载大小、删除敏感信息或自定义对象在 LangSmith 中针对特定函数的序列化和表示方式非常有用。
+
+以下是使用 `process_inputs` 和 `process_outputs` 的示例：
+
+```python
+from langsmith import traceable
+
+def process_inputs(inputs: dict) -> dict:
+    # inputs is a dictionary where keys are argument names and values are the provided arguments
+    # Return a new dictionary with processed inputs
+    return {
+        "processed_key": inputs.get("my_cool_key", "default"),
+        "length": len(inputs.get("my_cool_key", ""))
+    }
+
+def process_outputs(output: Any) -> dict:
+    # output is the direct return value of the function
+    # Transform the output into a dictionary
+    # In this case, "output" will be an integer
+    return {"processed_output": str(output)}
+
+@traceable(process_inputs=process_inputs, process_outputs=process_outputs)
+def my_function(my_cool_key: str) -> int:
+    # Function implementation
+    return len(my_cool_key)
+
+result = my_function("example")
+```
+
+在此示例中，`process_inputs` 创建一个新字典用于存储处理后的输入数据，`process_outputs` 将输出转换为特定格式后再记录到 LangSmith。
+
+<Warning>
+建议避免在处理器函数中修改源对象。而应创建并返回新对象用于存储处理后的数据。
+</Warning>
+
+对于异步函数，用法类似：
+
+```python
+@traceable(process_inputs=process_inputs, process_outputs=process_outputs)
+async def async_function(key: str) -> int:
+    # Async implementation
+    return len(key)
+```
+
+这些函数级处理器在同时定义时优先于 @[Client] 级处理器（`hide_inputs` 和 `hide_outputs`）。
+
+## 示例
+
+您可以将基于规则的掩码与各种匿名化工具结合使用，以清除输入和输出中的敏感信息。以下示例将介绍如何处理 regex、Microsoft Presidio 和 Amazon Comprehend。
+
+### 正则表达式
+
+<Info>
+下面的实现并非详尽无遗，可能会遗漏某些格式或边缘情况。在生产环境中使用之前，请彻底测试任何实现。
+</Info>
+
+您可以使用正则表达式在将输入和输出发送到 LangSmith 之前对其进行掩码处理。下面的实现会掩码电子邮件地址、电话号码、全名、信用卡号码和社会安全号码。
+
+```python
+import re
+import openai
+from langsmith import Client
+from langsmith.wrappers import wrap_openai
+
+# Define regex patterns for various PII
+SSN_PATTERN = re.compile(r'\b\d{3}-\d{2}-\d{4}\b')
+CREDIT_CARD_PATTERN = re.compile(r'\b(?:\d[ -]*?){13,16}\b')
+EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b')
+PHONE_PATTERN = re.compile(r'\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b')
+FULL_NAME_PATTERN = re.compile(r'\b([A-Z][a-z]*\s[A-Z][a-z]*)\b')
+
+def regex_anonymize(text):
+    """
+    Anonymize sensitive information in the text using regex patterns.
+    Args:
+        text (str): The input text to be anonymized.
+    Returns:
+        str: The anonymized text.
+    """
+    # Replace sensitive information with placeholders
+    text = SSN_PATTERN.sub('[REDACTED SSN]', text)
+    text = CREDIT_CARD_PATTERN.sub('[REDACTED CREDIT CARD]', text)
+    text = EMAIL_PATTERN.sub('[REDACTED EMAIL]', text)
+    text = PHONE_PATTERN.sub('[REDACTED PHONE]', text)
+    text = FULL_NAME_PATTERN.sub('[REDACTED NAME]', text)
+    return text
+
+def recursive_anonymize(data, depth=10):
+    """
+    Recursively traverse the data structure and anonymize sensitive information.
+    Args:
+        data (any): The input data to be anonymized.
+        depth (int): The current recursion depth to prevent excessive recursion.
+    Returns:
+        any: The anonymized data.
+    """
+    if depth == 0:
+        return data
+    if isinstance(data, dict):
+        anonymized_dict = {}
+        for k, v in data.items():
+            anonymized_value = recursive_anonymize(v, depth - 1)
+            anonymized_dict[k] = anonymized_value
+        return anonymized_dict
+    elif isinstance(data, list):
+        anonymized_list = []
+        for item in data:
+            anonymized_item = recursive_anonymize(item, depth - 1)
+            anonymized_list.append(anonymized_item)
+        return anonymized_list
+    elif isinstance(data, str):
+        anonymized_data = regex_anonymize(data)
+        return anonymized_data
+    else:
+        return data
+
+openai_client = wrap_openai(openai.Client())
+
+# Initialize the LangSmith @[Client] with the anonymization functions
+langsmith_client = Client(
+    hide_inputs=recursive_anonymize, hide_outputs=recursive_anonymize
+)
+
+# The trace produced will have its metadata present, but the inputs and outputs will be anonymized
+response_with_anonymization = openai_client.chat.completions.create(
+    model="gpt-5.4-mini",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "My name is John Doe, my SSN is 123-45-6789, my credit card number is 4111 1111 1111 1111, my email is john.doe@example.com, and my phone number is (123) 456-7890."},
+    ],
+    langsmith_extra={"client": langsmith_client},
+)
+
+# The trace produced will not have anonymized inputs and outputs
+response_without_anonymization = openai_client.chat.completions.create(
+    model="gpt-5.4-mini",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "My name is John Doe, my SSN is 123-45-6789, my credit card number is 4111 1111 1111 1111, my email is john.doe@example.com, and my phone number is (123) 456-7890."},
+    ],
+)
+```
+
+匿名化运行在 LangSmith 中的样子如下：![匿名化运行](/langsmith/images/regex-anonymized.png)
+
+非匿名化运行在 LangSmith 中的样子如下：![非匿名化运行](/langsmith/images/regex-not-anonymized.png)
+
+### Microsoft Presidio
+
+<Info>
+以下实现提供了一个通用示例，展示了如何对用户与 LLM 之间交换的消息中的敏感信息进行匿名化处理。此示例并非详尽无遗，未涵盖所有情况。在生产环境中使用任何实现之前，请务必进行充分测试。
+</Info>
+
+Microsoft Presidio 是一个数据保护和去标识化 SDK。下面的实现使用 Presidio 在将输入和输出发送到 LangSmith 之前对其进行匿名化处理。最新信息请参阅 Presidio 的[官方文档](https://microsoft.github.io/presidio/)。
+
+要使用 Presidio 及其 spaCy 模型，请安装以下依赖：
+
+<CodeGroup>
+```bash pip
+pip install presidio-analyzer
+pip install presidio-anonymizer
+python -m spacy download en_core_web_lg
+```
+
+```bash uv
+uv add presidio-analyzer
+uv add presidio-anonymizer
+python -m spacy download en_core_web_lg
+```
+</CodeGroup>
+
+同时，安装 OpenAI：
+
+<CodeGroup>
+```bash pip
+pip install openai
+```
+
+```bash uv
+uv add openai
+```
+</CodeGroup>
+
+```python
+import openai
+from langsmith import Client
+from langsmith.wrappers import wrap_openai
+from presidio_anonymizer import AnonymizerEngine
+from presidio_analyzer import AnalyzerEngine
+
+anonymizer = AnonymizerEngine()
+analyzer = AnalyzerEngine()
+
+def presidio_anonymize(data):
+    """
+    Anonymize sensitive information sent by the user or returned by the model.
+    Args:
+        data (any): The data to be anonymized.
+    Returns:
+        any: The anonymized data.
+    """
+    message_list = (
+        data.get('messages') or [data.get('choices', [{}])[0].get('message')]
+    )
+    if not message_list or not all(isinstance(msg, dict) and msg for msg in message_list):
+        return data
+
+    for message in message_list:
+        content = message.get('content', '')
+        if not content.strip():
+            print("Empty content detected. Skipping anonymization.")
+            continue
+
+        results = analyzer.analyze(
+            text=content,
+            entities=["PERSON", "PHONE_NUMBER", "EMAIL_ADDRESS", "US_SSN"],
+            language='en'
+        )
+        anonymized_result = anonymizer.anonymize(
+            text=content,
+            analyzer_results=results
+        )
+        message['content'] = anonymized_result.text
+
+    return data
+
+openai_client = wrap_openai(openai.Client())
+
+# initialize the langsmith @[Client] with the anonymization functions
+langsmith_client = Client(
+  hide_inputs=presidio_anonymize, hide_outputs=presidio_anonymize
+)
+
+# The trace produced will have its metadata present, but the inputs and outputs will be anonymized
+response_with_anonymization = openai_client.chat.completions.create(
+  model="gpt-5.4-mini",
+  messages=[
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "My name is Slim Shady, call me at 313-666-7440 or email me at real.slim.shady@gmail.com"},
+  ],
+  langsmith_extra={"client": langsmith_client},
+)
+
+# The trace produced will not have anonymized inputs and outputs
+response_without_anonymization = openai_client.chat.completions.create(
+  model="gpt-5.4-mini",
+  messages=[
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "My name is Slim Shady, call me at 313-666-7440 or email me at real.slim.shady@gmail.com"},
+  ],
+)
+```
+
+在 LangSmith 中，脱敏运行如下所示：![Anonymized run](/langsmith/images/presidio-anonymized.png)
+
+在 LangSmith 中，未脱敏运行如下所示：![Non-anonymized run](/langsmith/images/presidio-not-anonymized.png)
+
+### Amazon Comprehend
+
+<Info>
+下面的实现提供了一个关于如何对用户与 LLM 之间交换的消息中的敏感信息进行脱敏的一般示例。该实现并非详尽无遗，未涵盖所有情况。在生产环境中使用之前，请务必彻底测试任何实现。
+</Info>
+
+Comprehend 是一种自然语言处理服务，可以检测个人身份信息。下面的实现使用 Comprehend 在将输入和输出发送到 LangSmith 之前对其进行脱敏。如需最新信息，请参阅 Comprehend 的[官方文档](https://docs.aws.amazon.com/comprehend/latest/APIReference/API_DetectPiiEntities.html)。
+
+要使用 Comprehend，请安装 [boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/guide/quickstart.html)：
+
+<CodeGroup>
+```bash pip
+pip install boto3
+```
+
+```bash uv
+uv add boto3
+```
+<CodeGroup>
+
+</CodeGroup>
+
+Also, install OpenAI:
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install openai
+```
+
+```bash uv
+uv add openai
+```
+</CodeGroup>
+
+您需要在 AWS 中设置凭证并使用 AWS CLI 进行身份验证。请按照 [AWS Comprehend 设置说明](https://docs.aws.amazon.com/comprehend/latest/dg/setting-up.html) 进行操作。
+
+```python
+import openai
+import boto3
+from langsmith import Client
+from langsmith.wrappers import wrap_openai
+
+comprehend = boto3.client('comprehend', region_name='us-east-1')
+
+def redact_pii_entities(text, entities):
+    """
+    Redact PII entities in the text based on the detected entities.
+    Args:
+        text (str): The original text containing PII.
+        entities (list): A list of detected PII entities.
+    Returns:
+        str: The text with PII entities redacted.
+    """
+    sorted_entities = sorted(entities, key=lambda x: x['BeginOffset'], reverse=True)
+    redacted_text = text
+    for entity in sorted_entities:
+        begin = entity['BeginOffset']
+        end = entity['EndOffset']
+        entity_type = entity['Type']
+        # Define the redaction placeholder based on entity type
+        placeholder = f"[{entity_type}]"
+        # Replace the PII in the text with the placeholder
+        redacted_text = redacted_text[:begin] + placeholder + redacted_text[end:]
+    return redacted_text
+
+def detect_pii(text):
+    """
+    Detect PII entities in the given text using AWS Comprehend.
+    Args:
+        text (str): The text to analyze.
+    Returns:
+        list: A list of detected PII entities.
+    """
+    try:
+        response = comprehend.detect_pii_entities(
+            Text=text,
+            LanguageCode='en',
+        )
+        entities = response.get('Entities', [])
+        return entities
+    except Exception as e:
+        print(f"Error detecting PII: {e}")
+        return []
+
+def comprehend_anonymize(data):
+    """
+    Anonymize sensitive information sent by the user or returned by the model.
+    Args:
+        data (any): The input data to be anonymized.
+    Returns:
+        any: The anonymized data.
+    """
+    message_list = (
+        data.get('messages') or [data.get('choices', [{}])[0].get('message')]
+    )
+    if not message_list or not all(isinstance(msg, dict) and msg for msg in message_list):
+        return data
+
+    for message in message_list:
+        content = message.get('content', '')
+        if not content.strip():
+            print("Empty content detected. Skipping anonymization.")
+            continue
+
+        entities = detect_pii(content)
+        if entities:
+            anonymized_text = redact_pii_entities(content, entities)
+            message['content'] = anonymized_text
+        else:
+            print("No PII detected. Content remains unchanged.")
+
+    return data
+
+openai_client = wrap_openai(openai.Client())
+
+# initialize the langsmith @[Client] with the anonymization functions
+langsmith_client = Client(
+  hide_inputs=comprehend_anonymize, hide_outputs=comprehend_anonymize
+)
+
+# The trace produced will have its metadata present, but the inputs and outputs will be anonymized
+response_with_anonymization = openai_client.chat.completions.create(
+  model="gpt-5.4-mini",
+  messages=[
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "My name is Slim Shady, call me at 313-666-7440 or email me at real.slim.shady@gmail.com"},
+  ],
+  langsmith_extra={"client": langsmith_client},
+)
+
+# The trace produced will not have anonymized inputs and outputs
+response_without_anonymization = openai_client.chat.completions.create(
+  model="gpt-5.4-mini",
+  messages=[
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "My name is Slim Shady, call me at 313-666-7440 or email me at real.slim.shady@gmail.com"},
+  ],
+)
+```
+
+匿名化运行在 LangSmith 中看起来如下：![Anonymized run](/langsmith/images/aws-comprehend-anonymized.png)
+
+非匿名化运行在 LangSmith 中看起来如下：![Non-anonymized run](/langsmith/images/aws-comprehend-not-anonymized.png)
+
+### 批量处理实现高吞吐掩码
+
+<Info>
+@[`process_buffered_run_ops`] 仅在 [Python SDK](/langsmith/smith-python-sdk) 中可用。
+</Info>
+
+本页前面的方法每次处理一个运行。如果你的掩码逻辑涉及速率限制的 API 或模型推理（例如 Presidio 或 Amazon Comprehend 示例），逐个处理运行会造成瓶颈。@[`process_buffered_run_ops`] 允许你在原始运行字典序列化和发送到 API 之前拦截一批数据，这样你就可以将成本分摊到多个运行中。LangSmith 在后台线程中处理这些运行，不会阻塞你的应用。
+
+LangSmith 将运行保存在内存缓冲区中，并在满足以下任一条件时批量刷新：
+
+- `run_ops_buffer_size` 个运行操作已累积，或
+- 自上次添加运行以来已过去 `run_ops_buffer_timeout_ms` 毫秒（默认：5000 ms）。
+
+你的函数接收一批原始运行字典作为列表，必须返回**相同长度**、**相同顺序**且**运行 ID 保持不变**的列表。违反任一约束将引发 `ValueError`。
+
+<Note>
+`run_ops_buffer_size` 计算的是单个运行*操作*数量，而非唯一运行数。每个被追踪的调用通常会产生两个操作：创建（运行开始时）和更新（运行结束并产生输出时）。请据此设置缓冲区大小。例如，`run_ops_buffer_size=1000` 将缓冲约 500 个被追踪的调用。正因如此，同一运行 ID 可能在单个批次中出现两次：一次带有输入，一次带有输出。
+</Note>
+
+<Warning>
+缓冲区仅在达到大小限制或超时时自动刷新。在程序退出前务必调用 `client.flush()`，以避免丢失缓冲的运行。
+</Warning>
+
+批次中的每个运行字典要么是创建操作（带有 `inputs`，在运行开始时发送），要么是更新操作（带有 `outputs`，在运行结束时发送）。以下是单个被追踪调用的典型数据对：
+
+```json
+# Create op — sent when the run starts
+{
+    "id": "018f1b2c-...",
+    "name": "my_llm_call",
+    "run_type": "llm",
+    "inputs": {"messages": [{"role": "user", "content": "My name is Jane Smith..."}]},
+    "start_time": "2024-01-01T00:00:00.000Z",
+    "trace_id": "018f1b2c-...",
+    "dotted_order": "20240101T000000000000Z018f1b2c-...",
+    "extra": {"metadata": {}, "runtime": {...}},
+    "session_name": "default",
+}
+
+# Update op — sent when the run ends (same id, adds outputs)
+{
+    "id": "018f1b2c-...",
+    "outputs": {"choices": [{"message": {"role": "assistant", "content": "Hello Jane..."}}]},
+    "end_time": "2024-01-01T00:00:01.000Z",
+    "trace_id": "018f1b2c-...",
+    "dotted_order": "20240101T000000000000Z018f1b2c-...",
+}
+```
+
+以下示例使用了 Comprehend 的 `batch_detect_entities` 端点，该端点每次调用最多接受 25 个文本。使用每次运行方法（`hide_inputs`）时，每次运行需要调用一次 API。这里，所有消息文本会先在整个缓冲区中收集，然后以每 25 条为一组发送给 Comprehend，从而在高频调用时显著减少 API 调用次数。
+
+```python
+import boto3
+from langsmith import Client, traceable
+
+comprehend = boto3.client("comprehend", region_name="us-east-1")
+
+def redact_entities(text: str, entities: list) -> str:
+    for entity in sorted(entities, key=lambda e: e["BeginOffset"], reverse=True):
+        placeholder = f"[{entity['Type']}]"
+        text = text[:entity["BeginOffset"]] + placeholder + text[entity["EndOffset"]:]
+    return text
+
+def comprehend_anonymize_batch(runs: list[dict]) -> list[dict]:
+    # Collect all message texts and remember where they came from.
+    # Note: the same run ID may appear twice — once as a create (with inputs)
+    # and once as an update (with outputs).
+    locations = []  # (run_idx, field, msg_idx)
+    texts = []
+    for run_idx, run in enumerate(runs):
+        for field in ("inputs", "outputs"):
+            data = run.get(field)
+            if not isinstance(data, dict):
+                continue
+            for msg_idx, message in enumerate(data.get("messages") or []):
+                content = message.get("content", "")
+                if content.strip():
+                    locations.append((run_idx, field, msg_idx))
+                    texts.append(content)
+
+    # Send all texts to Comprehend in batches of 25 (API limit).
+    # For 1000 ops (~500 runs) with 2 messages each: 40 API calls instead of 1000.
+    redacted_texts = []
+    for i in range(0, len(texts), 25):
+        chunk = texts[i : i + 25]
+        response = comprehend.batch_detect_entities(
+            TextList=chunk, LanguageCode="en"
+        )
+        for text, result in zip(chunk, response["ResultList"]):
+            redacted_texts.append(redact_entities(text, result.get("Entities", [])))
+
+    # Write redacted text back into the run dicts
+    for (run_idx, field, msg_idx), redacted in zip(locations, redacted_texts):
+        runs[run_idx][field]["messages"][msg_idx]["content"] = redacted
+
+    return runs
+
+client = Client(
+    process_buffered_run_ops=comprehend_anonymize_batch,
+    run_ops_buffer_size=1000,        # ~500 traced calls (2 ops each: create + update)
+    run_ops_buffer_timeout_ms=3000,  # or after 3 seconds, whichever comes first
+)
+
+@traceable(client=client)
+def my_llm_call(messages: list) -> dict:
+    # ... your LLM call ...
+    pass
+
+try:
+    my_llm_call([{"role": "user", "content": "My name is Jane Smith, call me at 555-867-5309"}])
+finally:
+    client.flush()  # always flush before exit
+```
+
+`@process_buffered_run_ops` 和 `run_ops_buffer_size` 必须始终一起设置——只提供其中一个会引发 `ValueError`。

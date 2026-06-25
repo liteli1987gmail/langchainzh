@@ -1,0 +1,1144 @@
+---
+title: 配置
+sidebarTitle: 配置
+description: 通过 config.toml、hooks 和 MCP 服务器配置 Deep Agents Code
+---
+
+Deep Agents Code 将配置存储在 `~/.deepagents/` 目录中。主要配置文件包括：
+
+| 文件 | 格式 | 用途 |
+|------|--------|---------|
+| `config.toml` | TOML | 模型默认值、提供商设置、构造函数参数、配置文件覆盖、主题、更新设置 |
+| `.env` | Dotenv | 全局 API 密钥、密钥和其他环境变量 |
+| `hooks.json` | JSON | 外部工具订阅 Deep Agents Code 生命周期事件 |
+| `.mcp.json` | JSON | 全局 MCP 服务器定义 |
+
+<Note>
+    `~/.deepagents/.state/` 下的文件保存每台机器的 Deep Agents Code 状态，由系统自动管理。
+</Note>
+
+---
+
+## 检查配置
+
+`dcode config` 命令组报告当前生效的配置以及每个值的来源，无需启动会话。这对于确认环境变量或 `config.toml` 设置是否被正确读取非常有用，也可用于在 bug 报告中分享经过脱敏处理的快照。
+
+| 命令 | 描述 |
+|---------|-------------|
+| `dcode config show` | 针对当前环境和 `config.toml` 解析所有选项，打印有效值及其来源 |
+| `dcode config list`（别名 `ls`）| 列出所有可用选项及其类型、默认值和可设置位置，不解析具体值 |
+| `dcode config get <key>` | 显示单个选项的有效值和来源，例如 `dcode config get interpreter.memory_limit_mb` |
+| `dcode config path` | 显示磁盘上的配置文件位置（`config.toml`、项目和全局 `.env`、`hooks.json` 及托管状态文件）以及各文件是否存在 |
+
+每个选项按以下顺序解析，取第一个已设置的值：带 `DEEPAGENTS_CODE_` 前缀的环境变量、标准环境变量、`config.toml`，然后是内置默认值。
+
+所有四个命令都支持 `--json` 参数以输出机器可读的格式。
+
+<Warning>
+    提供商凭证和其他密钥仅报告为"已配置/未配置"——`config show` 或 `config get` 绝不会打印它们的实际值，因此输出可以安全地粘贴到 bug 报告中。
+</Warning>
+
+---
+
+## 提供商凭证
+
+Deep Agents Code 需要为您使用的每个模型提供商提供 API 密钥。推荐的方式是通过 [`/auth`](#use-%2Fauth-recommended) 凭证管理器添加。对于非交互式运行，可以通过 [`dcode auth`](#manage-credentials-from-the-shell-dcode-auth) 从 shell 管理相同的存储密钥，或改用[环境变量](#environment-variables-ci-and-headless)。
+
+如果同一个密钥在多个地方都有设置，请参阅[密钥解析顺序](#key-resolution-order)了解哪个生效。
+
+### 使用 `/auth`（推荐）
+
+从任何会话中打开凭证管理器：
+
+```txt
+/auth
+```
+
+管理器会列出您安装中可用的 LLM 提供商，以及非模型服务（如 Tavily 网络搜索），并标记已设置密钥的提供商。选择一个提供商以添加或替换其密钥，或删除已存储的密钥。您在此保存的密钥会在会话之间保持。
+
+<Accordion title="提供商行标签" icon="list-check">
+    每一行显示提供商名称及其密钥来源：
+
+    | 标签 | 含义 |
+    |-------|---------|
+    | `[stored]` | 通过 `/auth` 在此管理器中保存的密钥 |
+    | `[env: VARNAME]` | 密钥来自环境变量 `VARNAME`（已解析的名称，如 `DEEPAGENTS_CODE_OPENAI_API_KEY` 或 `OPENAI_API_KEY`） |
+    | `[missing]` | 未存储密钥且环境变量未设置；选择该行以粘贴密钥 |
+</Accordion>
+
+`/auth` 提示还有一个可选的 **base URL** 字段。留空则使用提供商的默认端点，或设置自定义 URL 以与此密钥一起使用。base URL 会与密钥一起保存。请参阅[端点、密钥和网关](#endpoints-keys-and-gateways)了解端点的解析方式，包括使用网关的情况。
+
+<Warning>
+    存储的 base URL 不是秘密，可能会被记录；与其配对的密钥永远不会记录。
+</Warning>
+
+<Note>
+    密钥仅限于您在此机器上的用户账户 — Deep Agents Code 不会将它们传输到除配置提供商的 API 之外的任何地方。
+</Note>
+
+#### 使用 ChatGPT 登录
+
+在 `/auth` 中选择 `openai_codex` 提供商会启动浏览器登录而不是提示输入 API 密钥，让您可以通过 ChatGPT 订阅使用 OpenAI 模型。如需重新认证或退出登录，请再次选择 `openai_codex`。请参阅[使用 ChatGPT 登录（Codex 模型）](/oss/deepagents/code/providers)了解完整流程。
+
+`/auth` 管理 **LLM 提供商**凭据和 **Tavily 网络搜索密钥**。在此输入的 Tavily 密钥会与您的提供商密钥一起存储，并在下次启动时激活网络搜索 — 请参阅[使用 Tavily 启用网络搜索](#enable-web-search-with-tavily)。其他工具凭据（如 `LANGSMITH_API_KEY`（追踪））则从环境变量中读取 — [在 `~/.deepagents/.env` 或您的 shell 中设置它们](#environment-variables)。
+
+### 从 Shell 管理凭据（`dcode auth`）
+
+`dcode auth` 命令组是 `/auth` 管理器的可脚本化替代方案：它管理相同的已存储凭据而无需启动 TUI，这使其可用于 dotfile 引导、CI/CD，以及通过 SSH 在远程机器上设置密钥。子命令与模态框的动词相对应：
+
+| 命令 | 描述 |
+|---------|-------------|
+| `dcode auth list`（别名 `ls`） | 列出每个已知的提供商及其密钥解析来源 |
+| `dcode auth status <provider>` | 打印一个提供商的解析来源 |
+| `dcode auth set <provider>` | 存储 API 密钥，默认从 stdin 读取 |
+| `dcode auth remove <provider>`（别名 `rm`、`delete`） | 删除已存储的凭据 |
+| `dcode auth path` | 打印凭据存储（`auth.json`）的解析路径 |
+
+`set` 默认从 **stdin** 读取密钥，因此它永远不会进入 shell 历史记录或 `argv`。通过管道传入密钥，或使用 `--from-env VAR` 从进程环境变量复制：
+
+```bash
+# Pipe the key in (stdin)
+echo "$ANTHROPIC_API_KEY" | dcode auth set anthropic
+
+# Copy it from an existing environment variable
+dcode auth set openai --from-env OPENAI_API_KEY
+```
+
+<Note>
+    `set` 拒绝在交互式终端中运行，所以意外调用不会挂起等待输入 — 通过 stdin 管道输入密钥，或使用 `--from-env VAR`。存储的密钥与 `/auth` 使用相同的存储，因此警告（例如关于 `auth.json` 文件权限的警告）会打印到 stderr。
+</Note>
+
+删除存储的密钥或打印存储位置：
+
+```bash
+dcode auth remove anthropic
+dcode auth path
+```
+
+<Note>
+    `dcode auth set` 仅管理 API 密钥。`openai_codex` 提供商使用 ChatGPT 浏览器登录而非 API 密钥，因此请运行 [`/auth` 并选择 `openai_codex`](#sign-in-with-chatgpt) 来登录。`dcode auth remove openai_codex` 确实会让你登出。
+</Note>
+
+### 环境变量（CI 和无头模式）
+
+对于非交互式运行、CI/CD 流水线或任何 TUI 不可用的场景，请在 shell 中导出提供商的 env 变量：
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+
+# Prefix with DEEPAGENTS_CODE_ to scope a key to Deep Agents Code only,
+# leaving a shared key used by other CI steps untouched
+export DEEPAGENTS_CODE_OPENAI_API_KEY="sk-..."
+```
+
+要将密钥保存在文件中，请在 [`.env` 文件](#environment-variables)中定义它们。
+
+### 密钥解析顺序
+
+当提供商的密钥在多个地方设置时，Deep Agents Code 使用以下第一个被设置的密钥：
+
+1. **`DEEPAGENTS_CODE_` 前缀的环境变量** — 例如作为内联 shell 导出的 `DEEPAGENTS_CODE_OPENAI_API_KEY`。[`DEEPAGENTS_CODE_` 前缀](#deepagents_code_-prefix) 是明确的"在 Deep Agents Code 中使用此密钥"覆盖。
+2. **应用存储的密钥** — 在 `/auth` 凭证管理器中输入。
+3. **纯提供商环境变量** — 例如 `OPENAI_API_KEY`，来自您的 shell 或 `.env` 文件。
+
+对于同一提供商，应用存储的密钥优先于纯环境变量密钥，但 `DEEPAGENTS_CODE_` 前缀的密钥优先于应用存储的密钥。前缀是一种在不清除已存储密钥的情况下为单次运行覆盖它的方式：
+
+```bash
+# With a key already stored via /auth, a plain env var does not override it.
+# dcode still uses the app-stored key for this run:
+OPENAI_API_KEY=sk-xxxx dcode -n "..."
+
+# The DEEPAGENTS_CODE_ prefix does override it, for this run only:
+DEEPAGENTS_CODE_OPENAI_API_KEY=sk-xxxx dcode -n "..."
+```
+
+这种分层设计存在的原因是常见情况下，您的机器已经为一个通用提供商导出了一个纯变量用于其他目的——比如其他工具、脚本或 CI 使用的共享 `OPENAI_API_KEY`——您不希望 Deep Agents Code 重用它。存储在应用中的密钥或带有 `DEEPAGENTS_CODE_`-前缀的变量可以让 Deep Agents Code 拥有自己的值，同时保持未加前缀的那个变量不变供其他所有用途使用，这样两者永远不会混淆。
+
+每个提供商的 API 密钥及其端点（`base_url`）都从同一个来源作为配对解析。请参阅[端点、密钥和网关](#endpoints-keys-and-gateways)。
+
+### 使用 Tavily 启用网络搜索
+
+内置的 `web_search` 工具使用 [Tavily](https://tavily.com)。在您提供密钥之前，Deep Agents Code 启动时会显示"网络搜索已禁用"通知。您可以将密钥存储在 [`/auth`](#use-%2Fauth-recommended) 凭证管理器中（Tavily 作为非模型服务显示），或者设置 `TAVILY_API_KEY` 环境变量。
+
+<Tabs>
+    <Tab title="Use /auth (recommended)">
+        从 [tavily.com](https://tavily.com) 获取密钥（它以 `tvly-` 开头；免费层级足以满足大多数 Deep Agents Code 使用场景），然后将其存储在凭证管理器中：
+</Tab>
+</Tabs>
+
+        ```txt
+        /auth
+        ```
+
+从列表中选择 **Tavily** 并粘贴密钥。您也可以通过"Web search disabled"通知直接进入此提示，选择 **Enter API key**。
+    </Tab>
+
+    <Tab title="设置环境变量">
+        <Steps>
+            <Step title="获取密钥">
+                在 [tavily.com](https://tavily.com) 注册并复制密钥（以 `tvly-` 开头）。免费层足以满足大多数 Deep Agents Code 使用场景。
+            </Step>
+
+            <Step title="将其添加到您的环境中">
+                将密钥添加到 `~/.deepagents/.env`，这样每次会话都会自动加载：
+
+</Step>
+
+                ```bash title="~/.deepagents/.env"
+                TAVILY_API_KEY=tvly-...
+                ```
+
+<Step title="Reload or restart">
+                在现有会话中，运行 `/reload` 重新读取 `.env` 文件。在下次启动时，"Web search disabled"通知会消失，代理可以调用 `web_search`。
+            </Step>
+        </Steps>
+    </Tab>
+</Tabs>
+
+---
+
+## 环境变量
+
+除了 shell 导出之外，Deep Agents Code 还从 dotenv 文件读取环境变量，这样可以将 API 密钥保留在 shell 配置文件之外，并避免在多个项目中重复 `.env` 文件。
+
+```bash title="~/.deepagents/.env"
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+```
+
+### 加载顺序和优先级
+
+启动时，Deep Agents Code 会读取最近的项目 `.env` 文件，搜索方式是从你启动的目录开始向上遍历父目录（以找到的第一个 `.env` 为准），然后是 `~/.deepagents/.env` 作为所有项目的全局备用。项目 `.env` 优先于全局 `.env`，且两者都不会覆盖已在 shell 中设置的值。运行 `/reload` 会重新读取两个 `.env` 文件，这样你就可以在不重启的情况下更改配置项，shell 中的值仍会优先。这适用于 Deep Agents Code 读取的每个变量（例如 `TAVILY_API_KEY` 或 `DEEPAGENTS_CODE_*` 设置）。Provider API 密钥有额外的解析规则；请参阅 [Provider credentials](#provider-credentials)。
+
+### `DEEPAGENTS_CODE_` 前缀
+
+所有 Deep Agents Code 专用环境变量都使用 `DEEPAGENTS_CODE_` 前缀（例如 `DEEPAGENTS_CODE_AUTO_UPDATE`、`DEEPAGENTS_CODE_DEBUG`）。请参阅[环境变量参考](#environment-variable-reference)获取完整列表。
+
+该前缀还可用作覆盖机制，用于 Deep Agents Code 读取的任何环境变量，包括第三方凭证。Deep Agents Code 首先检查 `DEEPAGENTS_CODE_{NAME}`，然后回退到 `{NAME}`：
+
+```bash title="~/.deepagents/.env"
+# Give Deep Agents Code its own value, without affecting other tools
+DEEPAGENTS_CODE_OPENAI_API_KEY=sk-cli-only
+
+# Or set it empty so Deep Agents Code ignores a key exported in your shell
+DEEPAGENTS_CODE_ANTHROPIC_API_KEY=
+```
+
+## 配置文件
+
+`~/.deepagents/config.toml` 允许您自定义模型提供者、设置默认值以及向模型构造函数传递额外参数。本节涵盖：
+
+- **默认值**：固定一个[默认模型](#default-and-recent-model)或[代理](#default-and-recent-agent)。
+- **提供者设置**：[`[models.providers.<name>]` 表](#provider-configuration)、[构造函数参数](#model-constructor-params)、[重试](#retries)、[配置文件覆盖](#profile-overrides-advanced)以及[向 `/model` 切换器添加模型](#adding-models-to-the-interactive-switcher)。
+- **自定义端点和提供者**：[自定义基础 URL](#custom-base-url)、[OpenAI- 或 Anthropic 兼容 API](#compatible-apis)以及[任意提供者](#arbitrary-providers)。
+- **端点和网关**：[API 密钥和基础 URL 如何协同解析](#endpoints-keys-and-gateways)，包括通过托管网关。
+
+### 默认模型和最近使用的模型
+
+```toml
+[models]
+default = "ollama:qwen3:4b"             # your intentional long-term preference
+recent = "google_genai:gemini-3.5-flash"   # last /model switch (written automatically)
+```
+
+`[models].default` 始终优先于 `[models].recent`。`/model` 命令仅写入 `[models].recent`，因此您在配置中设置的 default 不会被会话中切换模型的操作覆盖。要移除默认设置，请使用 `/model --default --clear` 或从配置文件中删除 `default` 键。
+
+### 默认模型和最近使用的代理
+
+```toml
+[agents]
+default = "backend-dev"  # your intentional long-term preference (Ctrl+S in /agents picker)
+recent = "frontend-dev"  # last /agents switch (written automatically)
+```
+
+`[agents].default` 始终优先于 `[agents].recent`。在 `/agents` 选择器中用 `Enter` 选择代理会写入 `recent`；在突出显示的行上按 `Ctrl+S` 会将其固定为 `default`。再次在同一行上按 `Ctrl+S` 会清除默认设置。
+
+显式 `-a`/`--agent` 始终覆盖两者，而 `-r`/`--resume` 会绕过两者以恢复线程的原始代理。请参阅[命令参考](/oss/deepagents/code/overview#command-reference)了解相关标志。
+
+### 提供商配置
+
+每个提供商都是 `[models.providers]` 下的一个 TOML 表：
+
+```toml
+[models.providers.<name>]
+display_name = "My Provider"
+api_key_url = "https://provider.example/keys"
+models = ["gpt-4o"]
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+class_path = "my_package.models:MyChatModel"
+enabled = true
+
+[models.providers.<name>.params]
+temperature = 0
+max_tokens = 4096
+
+[models.providers.<name>.params."gpt-4o"]
+temperature = 0.7
+```
+
+<ResponseField name="models" type="string[]" post={["optional"]}>
+    要在 `<name>` 所定义 provider 的交互式 `/model` 选择器中显示的模型名称列表。对于已附带模型配置文件的 provider，在此添加的任何名称都会与内置名称一起显示（适用于刚刚发布但尚未添加到包中的新模型）。对于[自定义 provider](#arbitrary-providers)，此列表是选择器中模型的唯一来源。
+
+    此处列出的模型**绕过**所有已应用的基于配置文件的[过滤条件](/oss/deepagents/code/providers#which-models-appear-in-the-switcher)，始终显示在选择器中。这使其成为展示因配置文件缺少 `tool_calling` 支持或尚不存在的模型的首选方式。
+
+    此键为可选字段。无论模型是否出现在选择器中，您都可以随时直接将任何模型名称传递给 `/model` 或 `--model`；provider 会在请求时验证该名称。
+</ResponseField>
+
+<ResponseField name="api_key_env" type="string" post={["optional"]}>
+    持有 API 密钥的环境变量**名称**（例如 `"OPENAI_API_KEY"`）。Deep Agents Code 在启动时从此环境变量读取凭据，以在创建模型前验证访问权限。
+
+    大多数聊天模型包会自动从默认环境变量读取凭据。请参阅 [Provider 参考](/oss/deepagents/code/providers#provider-reference) 表格，了解每个内置 provider 检查的变量名称。对于不在该表格中的 provider，请将其变量名称设置为 `api_key_env`（参见[自定义 provider](#arbitrary-providers)）。
+</ResponseField>
+
+<ResponseField name="display_name" type="string" post={["optional"]}>
+    在认证 UI 中显示的人类可读的 provider 名称。对于配置键经过机器优化的自定义 provider（例如 `my_gateway`），但其 UI 标签应包含空格或品牌大写时，可使用此字段。
+</ResponseField>
+
+<ResponseField name="api_key_url" type="string" post={["optional"]}>
+    用户创建或管理 API 密钥的 provider 页面 URL。`/auth` 模态框会在 API 密钥输入前链接到此页面。此值是一个 URL，而非凭据。
+</ResponseField>
+
+<ResponseField name="base_url" type="string" post={["optional"]}>
+    如果支持，覆盖 provider 使用的基础 URL。请参阅您的 provider 包的[参考文档](https://reference.langchain.com/python/integrations/)了解更多详情。
+
+    有关将内置 provider 指向兼容的 API 端点，请参见[兼容的 API](#compatible-apis)；有关通过 `class_path` 配置的 provider，请参见[自定义 provider](#arbitrary-providers)。
+</ResponseField>
+
+<ResponseField name="base_url_env" type="string" post={["optional"]}>
+    持有此 provider 基础 URL 的环境变量名称，与 `api_key_env` 并行。当端点来自环境变量而非固定值时（例如因机器或 CI 作业而不同的网关 URL），请使用此字段而非 `base_url`，这样无需编辑 `config.toml` 即可更改，且可参与端点解析和密钥/端点配对（参见[端点、密钥和网关](#endpoints-keys-and-gateways)）。它还将这些功能扩展到[内置集](/oss/deepagents/code/providers#provider-reference)之外的 provider；请参见[自定义 provider](#arbitrary-providers)。
+
+    如果同时设置了这两个字段，静态 `base_url` 优先：
+
+
+</ResponseField>
+
+    ```toml
+    [models.providers.example]
+    base_url = "https://fixed.example/v1"   # used
+    base_url_env = "EXAMPLE_BASE_URL"        # ignored while base_url is set
+    ```
+</ResponseField>
+
+<ResponseField name="params" type="object" post={["optional"]}>
+    转发到模型构造函数的额外关键字参数。扁平键（例如 `temperature = 0`）适用于此提供者的所有模型。带模型键的子表（例如 `[params."gpt-4o"]`）仅覆盖该模型的单个值；合并为浅合并（冲突时模型胜出）。
+
+    不要将凭证（例如 `api_key`）放在 `params` 中。请改用 [`api_key_env`](#provider-configuration) 指向环境变量。
+</ResponseField>
+
+<ResponseField name="profile" type="object" post={["optional"]}>
+    （高级）覆盖模型运行时 [profile](/oss/langchain/models#model-profiles) 中的字段（例如 `max_input_tokens`）。扁平键适用于此提供者的所有模型。带模型键的子表（例如 `[profile."claude-sonnet-4-5"]`）仅覆盖该模型的单个值；合并为浅合并（冲突时模型胜出）。这些覆盖在模型创建后应用，因此会影响上下文限制显示、自动摘要以及任何其他读取 profile 的功能。参见 [Profile overrides](#profile-overrides-advanced) 获取示例和 `--profile-override` 标志。
+</ResponseField>
+
+<ResponseField name="class_path" type="string" post={["optional"]}>
+    用于[任意模型](#arbitrary-providers)提供者。完全限定的 Python 类，格式为 `module.path:ClassName`。设置后，Deep Agents Code 会直接导入并实例化此类作为提供者 `<name>`。该类必须是 `BaseChatModel` 的子类。
+</ResponseField>
+
+<ResponseField name="enabled" type="boolean" default="true" post={["optional"]}>
+    此提供者是否出现在 `/model` 选择器中。设为 `false` 可隐藏从已安装包自动发现的提供者（例如您不想让模型切换器变得杂乱的传递依赖项）。您仍然可以通过 `/model provider:model` 或 `--model` 直接使用已禁用的提供者。
+</ResponseField>
+
+### 模型构造函数参数
+
+[`params` 字段](#provider-configuration) 将额外参数转发到模型构造函数。若要为某个模型提供不同的值，请添加带模型键的子表，这样就不必重复整个提供者配置：
+
+```toml
+[models.providers.ollama]
+models = ["qwen3:4b", "llama3"]
+
+[models.providers.ollama.params]
+temperature = 0
+num_ctx = 8192
+
+[models.providers.ollama.params."qwen3:4b"]
+temperature = 0.5
+num_ctx = 4000
+```
+
+使用此配置：
+
+* `ollama:qwen3:4b` 获得 `{temperature: 0.5, num_ctx: 4000}` — 模型级覆盖生效。
+* `ollama:llama3` 获得 `{temperature: 0, num_ctx: 8192}` — 无覆盖，仅使用提供商级别参数。
+
+合并是浅层的：模型子表中存在的任何键都会替换提供商级别参数中的相同键，而仅存在于提供商级别的键会被保留。
+
+<Tip>
+    若要一次性调整而不想编辑 `config.toml`，可在启动时或在会话中通过 `/model` 使用 `--model-params` 传递一个 JSON 对象。CLI 参数优先于配置文件。请参阅提供商的 [Model parameters](/oss/deepagents/code/providers#model-parameters) 了解语法和提供商特定示例。
+</Tip>
+
+### 重试
+
+使用顶级 `[retries]` 部分配置瞬态模型提供商错误的重试次数。Deep Agents Code 将这些值传递给接受 retry-count 构造函数 kwargs 的提供商集成。如果省略此部分，则应用提供商 SDK 的默认值。
+
+```toml
+[retries]
+max_retries = 2
+
+[retries.fireworks]
+max_retries = 3
+
+[retries.anthropic]
+max_retries = 0
+```
+
+全局 `[retries].max_retries` 值适用于所有支持的提供商。提供商特定的表（如 `[retries.fireworks]`）会覆盖该提供商的全局值。值必须是不小于 `0` 的整数。
+
+大多数支持的提供商将重试次数作为 `max_retries` 接收。某些集成使用不同的构造函数 kwarg。对于任意提供商，或要覆盖已知提供商的注册 kwarg，请在提供商特定的 retries 表中设置 `param`：
+
+```toml
+[retries]
+max_retries = 2
+
+[retries.my_custom]
+param = "retries"
+max_retries = 4
+```
+
+`param` 必须是有效的 Python 标识符字符串，例如 `"max_retries"` 或 `"retries"`。Deep Agents Code 会忽略未设置 `param` 的未知提供程序，因为传递错误的 retry 关键字参数可能会破坏模型创建。
+
+`[retries]` 的优先级低于构造函数参数。完整的优先级顺序为：
+
+1. `--max-retries N`，应用于提供程序的已解析 retry 关键字参数
+2. 带有提供程序 retry 关键字参数的 `--model-params`，例如 `'{"max_retries": N}'` 或 `'{"retries": N}'`
+3. 带有提供程序 retry 关键字参数的 `[models.providers.<provider>.params]`
+4. `[retries.<provider>].max_retries`
+5. `[retries].max_retries`
+6. 提供程序 SDK 默认值
+
+### Profile 覆盖（高级）
+
+覆盖模型运行时 profile 中的字段，以更改 Deep Agents Code 解释模型能力的方式。请参阅 @[`ModelProfile`] 获取可覆盖字段的完整列表。最常见的用例是降低 `max_input_tokens` 以更早触发自动摘要——这对于测试或限制上下文使用很有帮助：
+
+```toml
+# Apply to all models from this provider
+[models.providers.anthropic.profile]
+max_input_tokens = 4096
+```
+
+每个模型的子表以与 `params` 相同的方式工作——冲突时模型级别的值优先：
+
+```toml
+[models.providers.anthropic.profile]
+max_input_tokens = 4096
+
+# This model gets a higher limit
+[models.providers.anthropic.profile."claude-sonnet-4-5"]
+max_input_tokens = 8192
+```
+
+配置文件覆盖项会在模型配置文件创建后被合并进去。任何读取配置文件的特性——状态栏中的上下文限制显示、自动摘要阈值、能力检查——都会看到被覆盖后的值。
+
+<Accordion title="通过 --profile-override 进行 CLI 配置文件覆盖" icon="terminal">
+    如需在运行时覆盖模型配置字段而无需编辑配置文件，请通过 `--profile-override` 传递一个 JSON 对象：
+
+
+</Accordion>
+
+    ```bash
+    dcode --profile-override '{"max_input_tokens": 4096}'
+
+    # Combine with --model
+    dcode --model google_genai:gemini-3.5-flash --profile-override '{"max_input_tokens": 4096}'
+
+    # In non-interactive mode
+    dcode -n "Summarize this repo" --profile-override '{"max_input_tokens": 4096}'
+    ```
+
+这些设置会合并到配置文件 profile 覆盖之上（CLI 优先）。优先级链为：model default < config.toml profile < CLI `--profile-override`。
+
+`--profile-override` 值会在会话中 `/model` 热切换时保持——切换模型时，覆盖会重新应用到新模型上。
+
+### 添加模型到交互式切换器
+
+某些提供商（如 `langchain-ollama`）不捆绑模型 profile 数据（请参阅 [Provider reference](/oss/deepagents/code/providers#provider-reference) 获取完整列表）。在这种情况下，交互式 `/model` 切换器不会为该提供商列出模型。您可以通过在配置文件中为该提供商定义一个 `models` 列表来填补这一空白：
+
+```toml
+[models.providers.ollama]
+models = ["gemma4", "qwen3.6", "granite4.1:3b"]
+```
+
+`/model` 切换器现在将包含一个 Ollama 部分，其中列出了这些模型。
+
+这是完全可选的。您随时可以通过直接指定其完整名称来切换到任何模型：
+
+```txt
+/model ollama:qwen3.6:27b
+```
+
+<Note>
+    当安装了 `langchain-ollama` 且守护进程可达时，Deep Agents Code 会自动发现本地拉取的模型并将其合并到切换器中——无需 `models` 列表。拉取新模型后运行 `/reload` 刷新，或设置 `DEEPAGENTS_CODE_OLLAMA_DISCOVERY=0` 选择退出。
+</Note>
+
+### 自定义基础 URL
+
+某些提供商包接受 `base_url` 来覆盖默认端点。例如，`langchain-ollama` 通过底层 `ollama` 客户端默认使用 `http://localhost:11434`。要指向其他位置，请在配置中设置 `base_url`：
+
+```javascript
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+```toml
+[models.providers.ollama]
+base_url = "http://your-host-here:port"
+```
+
+请参阅您提供商的参考文档以获取兼容性信息和附加注意事项。
+
+### 兼容的 API
+
+对于提供与 OpenAI 或 Anthropic 线兼容的 API 的提供商，您可以通过将 `base_url` 指向提供商的端点来使用现有的 `langchain-openai` 或 `langchain-anthropic` 包：
+
+```toml
+[models.providers.openai]
+base_url = "https://api.example.com/v1"
+api_key_env = "EXAMPLE_API_KEY"
+models = ["my-model"]
+```
+
+```toml
+[models.providers.anthropic]
+base_url = "https://api.example.com"
+api_key_env = "EXAMPLE_API_KEY"
+models = ["my-model"]
+```
+
+<Note>
+    提供商在官方规范基础上添加的任何功能都不会被捕获。如果提供商提供专门的 LangChain 集成包，请优先使用该集成包。
+</Note>
+
+<Warning>
+    OpenAI 提供商默认使用 [Responses API](https://platform.openai.com/docs/api-reference/responses)，大多数 OpenAI 兼容网关并未实现该 API。如果你的提供商仅支持 Chat Completions API，调用可能会失败。请明确禁用 Responses API：
+</Warning>
+
+    ```toml
+    [models.providers.openai.params]
+    use_responses_api = false
+    ```
+</Warning>
+
+### 任意 provider
+
+Deep Agents Code 可以与任何可作为 [LangChain `BaseChatModel`](https://reference.langchain.com/python/langchain_core/language_models/#langchain_core.language_models.BaseChatModel) 的工具调用 LLM 配合使用。[内置 provider](/oss/deepagents/code/providers#provider-reference) 开箱即用；不太常见或内部模型需要更多配置。将 `class_path` 指向其 `BaseChatModel` 子类，Deep Agents Code 会直接导入并实例化该类。
+
+```toml
+[models.providers.my_custom]
+display_name = "My Custom Provider"
+api_key_url = "https://my-provider.example.com/keys"
+class_path = "my_package.models:MyChatModel"
+api_key_env = "MY_API_KEY"
+base_url = "https://my-endpoint.example.com"
+
+[models.providers.my_custom.params]
+temperature = 0
+max_tokens = 4096
+```
+
+`api_key_env` 和 `base_url` 是可选的。`display_name` 和 `api_key_url` 用于自定义 `/auth` 显示的提供商名称和密钥获取链接；如果省略，则回退到提供商配置键和提供商设置文档。要从环境变量读取端点而不是硬编码 `base_url`，请使用 [`base_url_env`](#provider-configuration)；它会以与内置提供商相同的方式解析并与密钥配对（参见[端点、密钥和网关](#endpoints-keys-and-gateways)）。
+
+`class_path` 提供商需要在内部处理自己的身份验证——当你的模型使用自定义身份验证（JWT 令牌、自定义请求头、mTLS 等）而不是标准 API 密钥时，这很有用：
+
+```toml
+[models.providers.xyz]
+class_path = "abc.integrations.deepagents:DeepAgentsXYZChat"
+models = ["abc-xyz-1"]
+
+[models.providers.xyz.params]
+bypass_auth = true
+temperature = 0
+```
+
+使用此配置，通过 `/model xyz:abc-xyz-1` 或 `--model xyz:abc-xyz-1` 切换到模型。
+
+<Note>
+    Deep Agents Code 需要 **工具调用** 支持。如果您的自定义模型支持工具调用但 Deep Agents Code 不知道，请在 provider profile 中声明：
+
+
+</Note>
+
+    ```toml
+    [models.providers.xyz.profile]
+    tool_calling = true
+    max_input_tokens = 128000
+    ```
+
+<Note>
+
+虽然 `max_input_tokens` 是可选参数，但强烈建议将其设置为模型的上下文窗口大小。如果不设置，Deep Agents Code 将无法显示上下文的填充程度，自动摘要会回退到固定触发阈值（约 170,000 个 token），而不是根据模型窗口的一定比例来确定。对于窗口较小的模型，在达到模型硬性限制之前可能无法运行摘要，因此对话越长，请求就越容易开始失败。
+
+</Note>
+
+由于 Deep Agents Code 在启动时会导入 `class_path` 类，因此定义该类的包必须与运行 `dcode` 的环境可互相导入。内置 provider 作为[安装额外组件](/oss/deepagents/code/providers#quickstart)提供，但自定义或内部包不在此列。请使用 `--package` 标志将其安装到 `dcode` 环境中：
+
+```bash
+dcode --install my_package --package
+```
+
+在会话中，运行 `/install my_package --package --force`。两者都会将包与 `dcode` 一起安装。如果包缺失或无法导入，Deep Agents Code 会跳过该 provider，其模型不会出现在 `/model` 中。
+
+当你切换到 `my_custom:my-model-v1`（通过 `/model` 或 `--model`）时，模型名称（`my-model-v1`）会作为 `model` kwarg 传递：
+
+```python
+MyChatModel(model="my-model-v1", base_url="...", api_key="...", temperature=0, max_tokens=4096)
+```
+
+<Warning>
+    `class_path` 执行配置文件中任意 Python 代码。其信任模型与 `pyproject.toml` 构建脚本相同——您掌控自己的机器。
+</Warning>
+
+您的提供商包可以选择在 `<package>.data._profiles` 中提供 `_PROFILES` 字典来定义模型配置，而不是在 `models` 键下定义。详见 LangChain [模型配置](https://github.com/langchain-ai/langchain/tree/master/libs/model-profiles)。
+
+### 端点、密钥和网关
+
+API 密钥必须与发送到的端点匹配：端点必须接受该密钥，否则请求可能会失败。Deep Agents Code 会同时解析密钥和端点，因此覆盖其中一个会同时更新另一个以保持匹配。例如，如果您用您自己的密钥替换了网关提供的密钥，Deep Agents Code 也会丢弃网关端点，这样您的密钥就直接发送到提供商，而不是发送到会拒绝它的网关。
+
+#### `base_url` 如何解析
+
+Deep Agents Code 按以下顺序解析提供商的端点（以先匹配者为准）：
+
+1. 提供商的 **`config.toml` 中的 `base_url`**。
+2. **`DEEPAGENTS_CODE_` 前缀的端点变量**。
+3. 环境中的**普通端点变量**（例如 `OPENAI_BASE_URL`）。
+4. **与 `/auth` 凭证一起保存的端点**。此步骤对没有端点变量的提供商应用保存的端点——例如您添加的提供商未声明 [`base_url_env`](#provider-configuration)。步骤 2-3 没有可读取的变量，因此此处直接使用保存的端点。对于有端点变量的提供商，保存的端点已在步骤 2 或 3 生效（已写入该变量），因此此步骤不改变任何内容。无论哪种方式，在 `/auth` 中输入的端点都会应用。
+5. **提供商 SDK 自己的默认端点**（当上述所有选项都未设置时）。
+
+<Note>
+    解析后的端点作为 `base_url` 构造函数参数传递给模型。
+</Note>
+
+与 API 密钥一样，[`DEEPAGENTS_CODE_` 前缀](#deepagents_code_-prefix) 将端点限定在 Deep Agents Code 范围内，而不影响其他工具。对于任何其他提供商，使用 [`base_url_env`](#provider-configuration) 声明名称，端点的解析和配对方式相同：
+
+```toml
+[models.providers.myprovider]
+api_key_env = "MYPROVIDER_API_KEY"
+base_url_env = "MYPROVIDER_BASE_URL"
+models = ["my-model"]
+```
+
+字面 `base_url` 优先于 `base_url_env`，因此只需设置你需要的那个：
+
+```toml
+[models.providers.myprovider]
+base_url = "https://fixed.example/v1"   # used
+base_url_env = "MYPROVIDER_BASE_URL"    # ignored while base_url is set
+```
+
+#### 覆盖使配对保持在一起
+
+当你使用 `/auth` 存储密钥时，你输入的端点（或提供者的默认值，如果留空）会与密钥一起应用。使用空白基础 URL 存储密钥也会清除你环境中已设置的任何端点（例如，你的 shell 导出的网关 `OPENAI_BASE_URL`），这样你的密钥就会发送到提供者的默认端点，而不是发送到该网关。
+
+```bash title="Scope both the key and the endpoint to Deep Agents Code"
+DEEPAGENTS_CODE_OPENAI_API_KEY=sk-cli-only
+DEEPAGENTS_CODE_OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+#### 托管网关
+
+在配置了模型网关的机器上（例如 LangSmith 网关），网关通常会一起导出网关密钥和匹配的端点变量（`OPENAI_BASE_URL`、`ANTHROPIC_BASE_URL` 或 `GOOGLE_GEMINI_BASE_URL`）。Deep Agents Code 默认使用该密钥对，因此无需配置。
+
+如需使用您自己的密钥，请通过 `/auth` 存储（将 base URL 留空使用提供商默认值，或显式设置），或设置带 `DEEPAGENTS_CODE_` 前缀的密钥和端点。两种方式都会覆盖网关密钥对，而不会留下不匹配的端点。
+
+---
+
+## 技能目录白名单
+
+默认情况下，当 Deep Agents Code 加载技能时会验证解析后的技能文件路径是否保持在标准[技能目录](/oss/deepagents/code/data-locations#skills)内。这可以防止技能目录内的符号链接读取这些根目录之外的任意文件。
+
+如果您在非标准位置存储共享技能资产，并使用来自标准技能目录的符号链接来引用它们，您可以将该位置添加到容器白名单中。这**不会**添加新的技能发现位置：技能仍然只能从标准目录中发现。
+
+<ResponseField name="extra_allowed_dirs" type="string[]" post={["可选"]}>
+    添加到技能容器白名单的路径。支持 `~` 展开。
+
+</ResponseField>
+
+    ```toml
+    [skills]
+    extra_allowed_dirs = [
+        "~/shared-skills",
+        "/opt/team-skills",
+    ]
+    ```
+</ResponseField>
+
+或者，设置 `DEEPAGENTS_CODE_EXTRA_SKILLS_DIRS` 环境变量为以冒号分隔的列表：
+
+```bash
+export DEEPAGENTS_CODE_EXTRA_SKILLS_DIRS="~/shared-skills:/opt/team-skills"
+```
+
+当设置了环境变量时，它会优先于配置文件中的值。更改会在 `/reload` 时生效。
+
+---
+
+## 主题
+
+使用 `/theme` 打开交互式主题选择器。导航列表可以实时预览主题，按 `Enter` 键将您的选择保存到 `config.toml`。
+
+Deep Agents Code 附带多个内置主题。默认主题是 `langchain`，这是一款带有 LangChain 品牌色彩的深色主题。选中的主题保存在 `[ui]` 下：
+
+```toml
+[ui]
+theme = "langchain-dark"
+```
+
+### 用户自定义主题
+
+在 `config.toml` 中的 `[themes.<name>]` 部分下定义自定义主题。每个部分需要 `label`（字符串）。`dark`（布尔值）如果省略则默认为 `false`——设置为 `true` 表示暗色主题。所有颜色字段都是可选的——省略的字段根据 `dark` 标志回退到内置的暗色或亮色调色板。
+
+```toml
+[themes.my-solarized]
+label = "My Solarized"
+dark = true
+primary = "#268BD2"
+warning = "#B58900"
+
+# Theme names with spaces require TOML quoting
+[themes."ocean breeze"]
+label = "Ocean Breeze"
+primary = "#0077B6"
+background = "#CAF0F8"
+```
+
+自定义主题会与内置主题一起显示在 `/theme` 选择器中。
+
+### 覆盖内置主题颜色
+
+若要在不创建新主题的情况下调整内置主题的颜色，请使用 `[themes.<builtin-name>]` 部分。只会读取颜色字段 — `label` 和 `dark` 从内置主题继承：
+
+```toml
+[themes.langchain]
+primary = "#FF5500"
+```
+
+省略的颜色字段保留现有的内置值。
+
+对 `[themes.*]` 部分的更改会在 `/reload` 时生效。
+
+### 将主题映射到终端
+
+如果您在具有不同配色方案的终端之间切换（例如，深色的 iTerm 和浅色的 Apple Terminal），请将每个终端映射到 `[ui.terminal_themes]` 下的主题。Deep Agents Code 会匹配 shell 的 `TERM_PROGRAM`，并自动应用映射的主题：
+
+```toml
+[ui.terminal_themes]
+"Apple_Terminal" = "langchain-light"
+"iTerm.app" = "langchain"
+```
+
+在 `/theme` 选择器中按 `T` 保存当前终端的高亮主题，或运行 `echo $TERM_PROGRAM` 查找终端标识符并手动添加。
+
+<Accordion title="高级：选择器快捷键、解析顺序、终端标识符">
+    #### 选择器快捷键
+
+    在 `/theme` 选择器中：
+
+    - `N` 在显示标签和规范注册表键之间切换——这些键是 `[ui] theme` 和 `[ui.terminal_themes]` 接受的格式。
+    - `T` 将高亮的主题保存到当前 `TERM_PROGRAM` 的 `[ui.terminal_themes]` 中。映射的主题在选择器中会标记为 `(default)`。
+
+    #### 常见的 `TERM_PROGRAM` 值
+
+    键会与环境变量进行逐字匹配——当键包含点或特殊字符时，在 TOML 中需要加引号。
+
+    | 终端 | `TERM_PROGRAM` |
+    | --- | --- |
+    | Apple Terminal | `Apple_Terminal` |
+    | iTerm2 | `iTerm.app` |
+    | WezTerm | `WezTerm` |
+    | VS Code 集成终端 | `vscode` |
+    | Ghostty | `ghostty` |
+
+    #### 解析顺序
+
+    Deep Agents Code 每次启动时使用以下优先级解析主题：
+
+    1. `DEEPAGENTS_CODE_THEME` 环境变量（显式覆盖）。
+    2. 当前 `TERM_PROGRAM` 的 `[ui.terminal_themes]` 映射。
+    3. `[ui] theme` 保存的偏好设置（通过 `/theme` 设置）。
+    4. 内置默认值（`langchain`）。
+</Accordion>
+
+---
+
+## 自动更新
+
+Deep Agents Code 默认自动检查并安装更新。
+
+要选择退出自动更新：
+
+<Tabs>
+    <Tab title="配置文件">
+
+</Tab>
+</Tabs>
+        ```toml
+        [update]
+        auto_update = false
+        ```
+</Tab>
+    <Tab title="环境变量">
+
+</fragment>
+        ```bash
+        export DEEPAGENTS_CODE_AUTO_UPDATE=0
+        ```
+</Tab>
+</Tabs>
+
+环境变量优先于配置文件。
+
+启用时（默认），Deep Agents Code 会在会话开始时检查 PyPI 是否有新版本并自动升级。禁用时，Deep Agents Code 会显示更新提示，并提供相应的安装命令。
+
+完全禁止自动更新检查：
+
+<Tabs>
+    <Tab title="Config file">
+
+</fragment>
+        ```toml
+        [update]
+        check = false
+        ```
+</Tab>
+    <Tab title="环境变量">
+        ```bash
+        export DEEPAGENTS_CODE_NO_UPDATE_CHECK=1
+        ```
+</Tab>
+</Tabs>
+
+禁用更新检查也会阻止启动时的自动更新安装。
+
+您仍然可以随时使用 `/update` 斜杠命令手动检查和安装更新，该命令会按需运行检查并内联报告成功或失败。
+
+升级后，Deep Agents Code 会在下次启动时显示"新增功能"横幅，并附带变更日志链接。
+
+在会话退出时，如果在会话期间检测到新版本，则会显示更新横幅作为提醒。
+
+---
+
+## 卸载
+
+要移除 `dcode` 和 `deepagents-code` 二进制文件以及隔离的工具环境，请运行：
+
+```bash
+uv tool uninstall deepagents-code
+```
+
+卸载命令不会删除用户配置或会话数据。Deep Agents Code 将这些文件存储在 `~/.deepagents/` 下，包括 `config.toml`、`hooks.json`、全局 `.env` 以及 `.state/` 内容（如保存的会话和凭据）。要同时删除这些数据，请运行：
+
+```bash
+rm -rf ~/.deepagents
+```
+
+---
+
+## 托管部署
+
+[安装脚本](https://github.com/langchain-ai/deepagents/blob/main/libs/code/scripts/install.sh) 支持以 root 身份运行，面向 macOS MDM 工具（Kandji、Jamf 等），这些工具在最小 root 环境中执行脚本。
+
+当 `id -u` 为 `0` 时，脚本会：
+
+1. 解析真实控制台用户的 `HOME`（通过 `/dev/console` 或扫描 `/Users` 目录）
+2. 在每个安装步骤后将所有创建的文件 `chown` 回目标用户
+
+非 root 安装不受影响：所有 root 特定代码路径在非 root 运行时都会短路。
+
+### 使用环境变量锁定安装版本
+
+安装脚本会读取环境变量，允许你锁定版本、选择额外组件，以及全量选择 Python 版本。在与管道安装的同一行设置它们：
+
+```bash
+# Pin an exact version for reproducible installs across the fleet
+curl -LsSf https://langch.in/dcode | DEEPAGENTS_CODE_VERSION="0.1.16" bash
+```
+
+<ResponseField name="DEEPAGENTS_CODE_VERSION" type="string" post={["optional"]}>
+    要安装的确切包版本，例如 `0.1.0`（或预发布版本如 `0.1.0rc1`）。与 `DEEPAGENTS_CODE_PRERELEASE` 互斥——同时设置两者会导致错误，因为精确锁定已经选择了单个版本。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_PRERELEASE" type="string" post={["optional"]}>
+    解析最新版本时应用的 uv 预发布策略：`disallow`、`allow`、`if-necessary`、`explicit` 或 `if-necessary-or-explicit`。与 `DEEPAGENTS_CODE_VERSION` 互斥。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_EXTRAS" type="string" post={["optional"]}>
+    要安装的以逗号分隔的 pip extras，例如 `ollama`、`ollama,groq` 或 `daytona`。有关可用的 extras，请参阅 [`pyproject.toml`](https://github.com/langchain-ai/deepagents/blob/main/libs/code/pyproject.toml)。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_PYTHON" type="string" default="3.13" post={["optional"]}>
+    用于安装的 Python 版本。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_SKIP_OPTIONAL" type="string" post={["optional"]}>
+    设为 `1` 以跳过可选工具检查。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_VERBOSE" type="string" post={["optional"]}>
+    设为 `1` 以显示 uv 的原始 stderr（计时行、未过滤的包差异）和默认静音的状态行（可选工具检查、安装后页脚）。调试安装问题时很有用。
+</ResponseField>
+
+<ResponseField name="UV_BIN" type="string" post={["optional"]}>
+    uv 二进制文件的路径。如果未设置，则自动检测。
+</ResponseField>
+
+托管安装默认启用自动更新。要选择退出，请在用户 shell 配置文件中设置 `DEEPAGENTS_CODE_AUTO_UPDATE=0`，或将带有 `[update] auto_update = false` 的 `config.toml` 部署到 `~/.deepagents/config.toml`。要完全禁止自动更新和更新检查，请设置 `DEEPAGENTS_CODE_NO_UPDATE_CHECK=1` 或部署 `[update] check = false`。
+
+要通过托管网关路由每个用户的模型流量（在整个范围内配置网关密钥和基础 URL），请参阅[托管网关](#managed-gateways)。
+
+---
+
+## 环境变量参考
+
+所有 Deep Agents Code 特定的环境变量都使用 `DEEPAGENTS_CODE_` 前缀。请参阅 [`DEEPAGENTS_CODE_` 前缀](#deepagents_code_-prefix) 了解前缀如何作为第三方凭据的覆盖机制。
+
+<ResponseField name="DEEPAGENTS_CODE_AUTO_UPDATE" type="string" post={["optional"]}>
+    切换自动 Deep Agents Code 更新。默认启用；设为 `0`、`false`、`no` 或 `off` 以选择退出。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_DEBUG" type="string" post={["optional"]}>
+    启用详细调试日志记录到文件。接受 `1`、`true`、`yes`、`on`（不区分大小写）作为启用；`0`、`false`、`no`、`off`、空字符串或未设置则禁用。启用后，每个会话的服务器日志文件在关闭时会被保留，其路径会打印到 stderr 以便排查。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_DEBUG_FILE" type="string" default="/tmp/deepagents_debug.log" post={["optional"]}>
+    调试日志文件的路径。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_EXTRA_SKILLS_DIRS" type="string" post={["optional"]}>
+    添加到[技能目录允许列表](#skill-directory-allowlist)的以冒号分隔的路径。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_LANGSMITH_PROJECT" type="string" post={["optional"]}>
+    覆盖 Deep Agents Code 自身代理跟踪的 LangSmith 项目名称。Shell 命令仍使用用户原始的 `LANGSMITH_PROJECT` 运行，因此应用、测试或脚本跟踪可以出现在单独的项目中。请参阅[使用 LangSmith 进行跟踪](/oss/deepagents/code/overview#trace-with-langsmith)。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_LANGSMITH_REPLICA_PROJECTS" type="string" post={["optional"]}>
+    第二个 LangSmith 项目，用于*同时*写入代理跟踪。设置后且跟踪处于活动状态时，每次代理运行都会双写到主项目（来自 `DEEPAGENTS_CODE_LANGSMITH_PROJECT`，或默认为 `deepagents-code`）和此项目。默认关闭。请参阅[双写到第二个项目](/oss/deepagents/code/overview#trace-with-langsmith)。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_NO_UPDATE_CHECK" type="string" post={["optional"]}>
+    设置后禁用自动更新检查。这也会阻止启动时的自动更新安装。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_SHELL_ALLOW_LIST" type="string" post={["optional"]}>
+    允许的以逗号分隔的 shell 命令（或 `recommended` / `all`）。
+</ResponseField>
+
+<ResponseField name="DEEPAGENTS_CODE_USER_ID" type="string" post={["optional"]}>
+    将用户标识符附加到 LangSmith 跟踪元数据。
+</ResponseField>
+
+---
+
+## 外部编辑器
+
+按 `Ctrl+X` 或输入 `/editor` 在外部编辑器中编写提示。Deep Agents Code 先检查 `$VISUAL`，然后检查 `$EDITOR`，最后回退到 `vi`（macOS/Linux）或 `notepad`（Windows）。GUI 编辑器（VS Code、Cursor、Zed、Sublime Text、Windsurf）自动接收 `--wait` 标志，以便 Deep Agents Code 在你关闭文件之前一直阻塞。
+
+```bash
+# Set in your shell profile (~/.zshrc, ~/.bashrc, etc.)
+export VISUAL="code"    # GUI editor (--wait auto-injected)
+export EDITOR="nvim"    # Terminal fallback
+```
+
+---
+
+## 钩子
+
+钩子允许外部程序对 Deep Agents Code 生命周期事件做出反应。在 `~/.deepagents/hooks.json` 中配置命令，当事件触发时，它会将 JSON 数据发送到每个匹配命令的标准输入。
+
+钩子在后台线程中以"触发后遗忘"的方式运行——它们永远不会阻塞 Deep Agents Code，失败会被记录而不会中断您的会话。
+
+### 设置
+
+创建 `~/.deepagents/hooks.json`：
+
+```json
+{
+  "hooks": [
+    {
+      "command": ["bash", "-c", "cat >> ~/deepagents-events.log"],
+      "events": ["session.start", "session.end"]
+    }
+  ]
+}
+```
+
+现在每次会话启动或结束时，Deep Agents Code 都会将事件负载追加到 `~/deepagents-events.log`。
+
+### Hook 配置
+
+配置文件包含一个 `hooks` 数组。每个条目包含：
+
+<ResponseField name="command" type="list[str]" required>
+    要运行的命令和参数。不支持 shell 展开：如需使用，请用 `["bash", "-c", "..."]`。
+</ResponseField>
+
+<ResponseField name="events" type="list[str]" post={["optional"]}>
+    要订阅的事件名称。省略或留空将接收**所有**事件。
+</ResponseField>
+
+```json
+{
+  "hooks": [
+    {
+      "command": ["python3", "my_handler.py"],
+      "events": ["session.start", "task.complete"]
+    },
+    {
+      "command": ["bash", "log_everything.sh"]
+    }
+  ]
+}
+```
+
+上面的第二个 hook 没有 `events` 过滤器，因此它会接收 Deep Agents Code 发出的每个事件。
+
+### Payload 格式
+
+每个 hook 命令在 stdin 上接收一个带有 `"event"` 键的 JSON 对象，外加特定于事件的字段：
+
+```json
+{
+  "event": "session.start",
+  "thread_id": "abc123"
+}
+```
+
+### 事件参考
+
+#### `session.start`
+
+当代理会话开始时触发（交互模式和非交互模式）。
+
+<ResponseField name="thread_id" type="string" required>
+    会话线程标识符。
+</ResponseField>
+
+#### `session.end`
+
+当会话退出时触发。
+
+<ResponseField name="thread_id" type="string" required>
+    会话线程标识符。
+</ResponseField>
+
+#### `user.prompt`
+
+在交互模式下，当用户提交聊天消息时触发。
+
+无其他字段。
+
+#### `input.required`
+
+当代理需要人工输入时触发（人机交互中断）。
+
+无其他字段。
+
+#### `permission.request`
+
+在需要用户授权的工具调用前触发。
+
+<ResponseField name="tool_names" type="list[str]" required>
+    请求授权的工具名称。
+</ResponseField>
+
+#### `tool.error`
+
+当工具调用返回错误时触发。
+
+<ResponseField name="tool_names" type="list[str]" required>
+    出错的工具名称。
+</ResponseField>
+
+#### `task.complete`
+
+当代理完成当前任务时触发（流式循环结束，无后续中断）。
+
+<ResponseField name="thread_id" type="string" required>
+    会话线程标识符。
+</ResponseField>
+
+#### `context.compact`
+
+在 Deep Agents Code 压缩（摘要）对话上下文前触发。
+
+无其他字段。
+
+### 执行模型
+
+- **后台线程**：Hook 子进程通过 `asyncio.to_thread` 在线程中运行，主事件循环永不阻塞。
+- **并发调度**：当多个 hook 匹配同一事件时，它们在线程池中并发运行。
+- **5 秒超时**：每个命令有 5 秒超时限制，超过此时间的命令将被终止。
+- **即发即忘**：每个 hook 的错误都会被捕获并以 debug/warning 级别记录。失败的 hook 不会导致 Deep Agents Code 崩溃或停滞。
+- **延迟加载**：配置文件在首次事件分发时读取一次，之后在会话期间缓存。
+- **无 shell 展开**：命令直接执行（不通过 shell）。如果需要 shell 功能（如管道或变量展开），请使用 `["bash", "-c", "..."]` 包装。
+
+### Hook 示例
+
+<Accordion title="将所有事件记录到文件">
+
+</Accordion>
+```json
+{
+  "hooks": [
+    {
+      "command": ["bash", "-c", "jq -c . >> ~/.deepagents/hook-events.jsonl"],
+      "events": []
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="任务完成时桌面通知 (macOS)">
+```json
+{
+  "hooks": [
+    {
+      "command": [
+        "bash", "-c",
+        "osascript -e 'display notification \"Agent finished\" with title \"Deep Agents\"'"
+      ],
+      "events": ["task.complete"]
+    }
+  ]
+}
+```
+</Accordion>
+
+<Accordion title="Python 处理程序">
+编写一个处理程序脚本，从标准输入读取 JSON 载荷：
+
+```python title="my_handler.py"
+import json
+import sys
+
+payload = json.load(sys.stdin)
+event = payload["event"]
+
+if event == "session.start":
+    print(f"Session started: {payload['thread_id']}", file=sys.stderr)
+elif event == "permission.request":
+    print(f"Approval needed for: {payload['tool_names']}", file=sys.stderr)
+```
+
+```json title="~/.deepagents/hooks.json"
+{
+  "hooks": [
+    {
+      "command": ["python3", "my_handler.py"],
+      "events": ["session.start", "permission.request"]
+    }
+  ]
+}
+```
+</Accordion>
+
+### 安全注意事项
+
+钩子遵循与 Git 钩子或 shell 别名相同的信任模型——任何能够写入 `~/.deepagents/hooks.json` 的用户都可以执行任意命令。这是设计上的决定：
+
+- **无命令注入**：负载数据仅作为 JSON 流向 stdin，从不流向命令行参数。`json.dumps` 处理转义。
+- **默认无 shell**：命令以 `shell=False` 运行，防止 shell 注入。
+- **配置格式错误**：无效的 JSON 或意外的类型会产生日志警告，而非安全问题。
+
+<Warning>
+    仅添加来自可信来源的钩子。钩子具有与您的用户账户相同的权限。
+</Warning>

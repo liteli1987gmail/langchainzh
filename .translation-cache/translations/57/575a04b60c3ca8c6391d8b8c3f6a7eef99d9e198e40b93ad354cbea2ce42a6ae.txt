@@ -1,0 +1,133 @@
+---
+title: "CloudflareWorkersAIEmbeddings 集成"
+description: "使用 LangChain JavaScript 与 CloudflareWorkersAIEmbeddings 嵌入模型进行集成。"
+---
+
+这将帮助您开始使用 LangChain 与 Cloudflare Workers AI [嵌入模型](/oss/integrations/embeddings)。有关 `CloudflareWorkersAIEmbeddings` 功能和配置选项的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-cloudflare/CloudflareWorkersAIEmbeddings)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 本地 | Python 支持 | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: |  :---: | :---: |
+| [`CloudflareWorkersAIEmbeddings`](https://reference.langchain.com/javascript/langchain-cloudflare/CloudflareWorkersAIEmbeddings) | [`@langchain/cloudflare`](https://npmjs.com/@langchain/cloudflare) | ❌ | ❌ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/cloudflare?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/cloudflare?style=flat-square&label=%20&) |
+
+## 设置
+
+要访问 Cloudflare 嵌入模型，您需要创建一个 Cloudflare 账户并安装 `@langchain/cloudflare` 集成包。此集成设计为在 Cloudflare Worker 中运行并接受绑定。
+
+请按照[官方文档](https://developers.cloudflare.com/workers-ai/get-started/workers-wrangler/)设置您的 Worker。
+
+您的 `wrangler.toml` 文件应类似于：
+
+```toml
+name = "langchain-test"
+main = "worker.js"
+compatibility_date = "2024-01-10"
+
+[[vectorize]]
+binding = "VECTORIZE_INDEX"
+index_name = "langchain-test"
+
+[ai]
+binding = "AI"
+```
+
+### 凭据
+
+如果您想自动获取模型调用的追踪功能，您也可以通过取消注释下面的代码来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```bash
+# export LANGSMITH_TRACING="true"
+# export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+LangChain CloudflareWorkersAIEmbeddings 集成位于 `@langchain/cloudflare` 包中：
+
+<CodeGroup>
+```bash npm
+npm install @langchain/cloudflare @langchain/core
+```
+```bash yarn
+yarn add @langchain/cloudflare @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/cloudflare @langchain/core
+```
+</CodeGroup>
+
+## 用法
+
+以下是使用 Workers AI 嵌入的示例 worker，配合 [Cloudflare Vectorize 向量存储](/oss/integrations/vectorstores/cloudflare_vectorize/)。
+
+```typescript
+// @ts-nocheck
+
+import type {
+  VectorizeIndex,
+  Fetcher,
+  Request,
+} from "@cloudflare/workers-types";
+
+import {
+  CloudflareVectorizeStore,
+  CloudflareWorkersAIEmbeddings,
+} from "@langchain/cloudflare";
+
+export interface Env {
+  VECTORIZE_INDEX: VectorizeIndex;
+  AI: Fetcher;
+}
+
+export default {
+  async fetch(request: Request, env: Env) {
+    const { pathname } = new URL(request.url);
+    const embeddings = new CloudflareWorkersAIEmbeddings({
+      binding: env.AI,
+      model: "@cf/baai/bge-small-en-v1.5",
+    });
+    const store = new CloudflareVectorizeStore(embeddings, {
+      index: env.VECTORIZE_INDEX,
+    });
+    if (pathname === "/") {
+      const results = await store.similaritySearch("hello", 5);
+      return Response.json(results);
+    } else if (pathname === "/load") {
+      // Upsertion by id is supported
+      await store.addDocuments(
+        [
+          {
+            pageContent: "hello",
+            metadata: {},
+          },
+          {
+            pageContent: "world",
+            metadata: {},
+          },
+          {
+            pageContent: "hi",
+            metadata: {},
+          },
+        ],
+        { ids: ["id1", "id2", "id3"] }
+      );
+
+      return Response.json({ success: true });
+    } else if (pathname === "/clear") {
+      await store.delete({ ids: ["id1", "id2", "id3"] });
+      return Response.json({ success: true });
+    }
+
+    return Response.json({ error: "Not Found" }, { status: 404 });
+  },
+};
+```
+
+---
+
+## API 参考
+
+有关所有 `CloudflareWorkersAIEmbeddings` 功能和配置的详细文档，请访问 [API 参考](https://reference.langchain.com/javascript/langchain-cloudflare/CloudflareWorkersAIEmbeddings)。

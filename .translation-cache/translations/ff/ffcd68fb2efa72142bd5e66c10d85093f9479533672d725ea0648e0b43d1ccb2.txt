@@ -1,0 +1,251 @@
+---
+title: Fleet Webhook
+sidebarTitle: Webhook
+description: 将智能体发布与外部系统、CI/CD 管道或自定义部署工作流进行集成。
+---
+
+触发后，Webhook 会将智能体的完整配置和文件包发送到指定端点。
+
+<Callout icon="lock" color="#4F46E5" iconType="regular">
+**安全注意事项：**
+
+- Webhook URL 必须使用 HTTPS。
+- 自定义请求头（例如 API 密钥）以加密方式存储。
+- 发布者身份会包含在审计追踪中。
+- Webhook 仅对智能体所有者可见。
+</Callout>
+
+## 添加 Webhook
+
+1. 导航至 [设置 > Fleet Webhook](https://smith.langchain.com/settings/workspaces/agent-builder-webhooks)。
+2. 点击**添加 Webhook**。
+3. 配置：
+   - **名称**：描述性名称（例如"发布智能体"、"部署到生产环境"）。
+   - **URL**：将接收 Webhook 的 HTTPS 端点。
+   - **请求头**（可选）：用于身份验证的自定义请求头（加密存储）。
+   - **表单 Schema**（可选）：定义触发时用户必须填写的自定义输入字段。
+4. 点击**保存**。
+
+## 触发 Webhook
+
+1. 在 Fleet 编辑器中打开您的智能体。
+2. 点击**设置**菜单（齿轮图标）。
+3. 在 **Webhook** 下，点击 Webhook 名称。
+4. 填写表单 Schema 中定义的任何自定义字段。
+5. 点击**运行 Webhook**。
+
+## 编辑 Webhook
+
+1. 导航至 [设置 > Fleet Webhook](https://smith.langchain.com/settings/workspaces/agent-builder-webhooks)。
+1. 对于要编辑的 Webhook，点击**编辑**。
+1. 进行更改并点击**保存**。
+
+## 删除 Webhook
+
+1. 导航至 [设置 > Fleet Webhook](https://smith.langchain.com/settings/workspaces/agent-builder-webhooks)。
+1. 对于要删除的 Webhook，点击**删除**。
+1. 点击**删除**以确认删除。
+
+## Webhook 负载
+
+Webhook 负载是一个包含以下字段的 JSON 对象：
+
+| 字段 | 描述 |
+|-------|-------------|
+| `action` | Webhook 的名称。 |
+| `input` | 自定义表单字段的值（如果没有自定义字段，则为空对象）。 |
+| `publisher` | 触发 Webhook 的用户 ID 和邮箱。 |
+| `agent` | 智能体名称和描述。 |
+| [`tool_auth_requirements`](#tool-auth-requirements) | 智能体使用的每个工具的身份验证要求。 |
+| [`files`](#zip-file-structure) | Base64 编码的 ZIP，包含所有智能体文件。 |
+| [`fields`](#custom-input-fields) | 自定义输入字段。 |
+
+例如：
+
+```json
+{
+  "action": "Webhook Name",
+  "input": {
+    "notes": "User-provided value",
+    "environment": "prod",
+    "dry_run": true
+  },
+  "publisher": {
+    "user_id": "uuid-of-publishing-user",
+    "email": "user@example.com"
+  },
+  "agent": {
+    "name": "My Agent",
+    "description": "Agent description text"
+  },
+  "tool_auth_requirements": [
+    {
+      "tool_name": "tavily_web_search",
+      "auth_type": "api_key",
+      "required_env_vars": ["TAVILY_API_KEY"]
+    },
+    {
+      "tool_name": "google_calendar",
+      "auth_type": "oauth",
+      "auth_provider": "google",
+      "scopes": ["calendar.readonly"]
+    }
+  ],
+  "files": {
+    "type": "zip",
+    "filename": "My_Agent.zip",
+    "content_base64": "<base64-encoded-zip>"
+  },
+  "fields": [
+    {
+      "name": "notes",
+      "label": "Deployment Notes",
+      "type": "textarea"
+    }
+  ]
+}
+```
+
+### 工具身份验证要求
+
+`tool_auth_requirements` 数组描述每个工具所需的身份验证：
+
+| 身份验证类型 | 字段 | 描述 |
+|-----------|--------|-------------|
+| `none` | - | 工具不需要身份验证 |
+| `api_key` | `required_env_vars` | 工具需要环境变量中的 API 密钥 |
+| `oauth` | `auth_provider`, `scopes` | 工具需要具有指定范围的 OAuth 令牌 |
+
+使用此信息在您的部署环境中配置必要的凭据。
+
+### ZIP 文件结构
+
+`files.content_base64` 字段包含具有以下结构的 ZIP 压缩包：
+
+```
+.
+├── AGENTS.md           # Agent system prompt and instructions
+├── config.json         # Agent metadata (name, description, visibility)
+├── tools.json          # Tool configurations and interrupt settings
+├── skills/             # Optional skill definitions
+│   └── skill-name/
+│       └── SKILL.md
+└── subagents/          # Optional subagent configurations
+    └── research_worker/
+        ├── AGENTS.md
+        └── tools.json
+```
+
+`config.json` 文件和 `tools.json` 文件的结构如下：
+
+<Tabs>
+  <Tab title="`config.json`">
+    ```json
+    {
+      "name": "My Agent",
+      "description": "Agent description",
+      "visibility_scope": "tenant",
+      "triggers_paused": false
+    }
+    ```
+</Tab>
+  <Tab title="`tools.json`">
+    ```json
+    {
+      "tools": [
+        {
+          "name": "tavily_web_search",
+          "mcp_server_url": "http://localhost:8084",
+          "mcp_server_name": "Fleet",
+          "display_name": "tavily_web_search"
+        }
+      ],
+      "interrupt_config": {
+        "http://localhost:8084::tavily_web_search::Fleet": false
+      }
+    }
+    ```
+### 自定义输入字段
+
+您可以定义自定义输入字段，以便在触发 Webhook 时收集信息。支持的字段类型如下：
+
+| 类型 | 描述 |
+|------|------|
+| `string` | 单行文本输入（默认）。 |
+| `number` | 数字输入。 |
+| `boolean` | 复选框（true/false）。 |
+| `textarea` | 多行文本输入。 |
+| `json` | JSON 编辑器。 |
+| `select` | 带预定义选项的下拉菜单。 |
+
+例如：
+
+```json
+{
+  "fields": [
+    {
+      "name": "notes",
+      "label": "Deployment Notes",
+      "type": "textarea"
+    },
+    {
+      "name": "environment",
+      "label": "Environment",
+      "type": "select",
+      "options": [
+        { "label": "Development", "value": "dev" },
+        { "label": "Staging", "value": "staging" },
+        { "label": "Production", "value": "prod" }
+      ]
+    },
+    {
+      "name": "dry_run",
+      "label": "Dry Run",
+      "type": "boolean",
+      "default": true
+    }
+  ]
+}
+```
+
+## 示例：Webhook 服务器
+
+以下是一个使用 Python 编写的 webhook 服务器示例：
+
+```python
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json
+import base64
+import zipfile
+import io
+
+class WebhookHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        body = json.loads(self.rfile.read(content_length))
+
+        action = body.get("action")
+        input_data = body.get("input", {})
+        publisher = body.get("publisher", {})
+        agent = body.get("agent", {})
+        tool_auth = body.get("tool_auth_requirements", [])
+        files = body.get("files", {})
+
+        print(f"Webhook: {action}")
+        print(f"Publisher: {publisher.get('email')}")
+        print(f"Agent: {agent.get('name')}")
+        print(f"Custom Input: {input_data}")
+
+        # Extract ZIP contents
+        if files.get("content_base64"):
+            zip_bytes = base64.b64decode(files["content_base64"])
+            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                print(f"Files: {zf.namelist()}")
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "ok"}).encode())
+
+HTTPServer(("", 8000), WebhookHandler).serve_forever()
+```

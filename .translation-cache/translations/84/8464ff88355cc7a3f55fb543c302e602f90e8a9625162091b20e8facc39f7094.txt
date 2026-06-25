@@ -1,0 +1,183 @@
+---
+title: 自托管部署故障排除
+sidebarTitle: 故障排除
+icon: "stethoscope"
+description: 联系支持人员前，针对自托管 LangSmith 部署问题进行故障排除的诊断步骤。
+---
+
+本页面提供诊断步骤，帮助您在联系支持人员前，针对自托管 [LangSmith 部署](/langsmith/deployment) 进行故障排除。请系统地遵循这些步骤，以识别和解决常见的部署问题。
+
+<Callout icon="headset" iconType="solid" color="#9333ea">
+如果您完成这些诊断步骤后仍需要帮助，请参阅本指南末尾的 [支持](#support)，了解联系支持人员前需要收集的信息。
+</Callout>
+
+## 先决条件
+
+在开始诊断步骤之前，请确保您已具备：
+
+- `kubectl` 对 Kubernetes 集群的访问权限。
+- 查看 pods、deployments、services 等的适当权限。
+- 熟悉您的 [Helm chart 配置](/langsmith/kubernetes#configure-your-helm-charts:)。
+
+## 步骤 1. 了解您的部署
+
+验证已部署的内容并了解系统的基线状态。这有助于您识别正常运行的特征，并在问题发生时发现异常。
+
+运行以下命令查看所有已部署的 Kubernetes 资源。
+
+<Note>
+运行本节中的命令时，请确保处于正确的命名空间。或者，使用 `-n` 标志明确指定命名空间。例如：`kubectl get deployments -n langsmith`。
+</Note>
+
+列出所有 deployments：
+
+```bash
+kubectl get deployments
+```
+
+列出所有 Pod：
+
+```bash
+```
+
+```bash
+kubectl get pods
+```
+
+列出所有服务：
+
+```bash
+kubectl get services
+```
+
+列出所有 `lgps` 资源（仅在创建 [Agent Server](/langsmith/agent-server) 后存在）：
+
+```bash
+kubectl get lgps
+```
+
+### 关键部署组件
+
+您的部署包含以下核心组件：
+
+- **`langsmith-frontend`**：用于创建 Agent Server 部署的 LangSmith 前端 UI。此应用向 `langsmith-host-backend` 发出 API 调用。属于[控制平面](/langsmith/control-plane)。
+- **`langsmith-host-backend`**：接收来自 `langsmith-frontend` 的请求并将部署请求持久化到控制平面 Postgres 数据库的 LangSmith Deployment [控制平面](/langsmith/control-plane)。
+- **`langsmith-listener`**：LangSmith Deployment [数据平面](/langsmith/data-plane)的一部分。通过 HTTP API 轮询 `langsmith-host-backend` 以获取要创建、更新或删除的部署。将任务加入队列供 worker 进程处理。
+- **`langsmith-redis`**：作为 `langsmith-listener` 任务队列的 [Redis](/langsmith/data-plane#redis) 实例。监听器将任务入队，worker 从该队列中拉取任务。
+- **`langsmith-operator`**：用于协调 `lgps` 资源底层 Kubernetes 资源的 `lgps` Kubernetes operator。属于数据平面基础设施。
+
+<Note>
+根据您的配置，您的部署中可能存在其他组件。如需了解详情，请参阅 [LangSmith Deployment 组件](/langsmith/components)。
+</Note>
+
+## 第 2 步：启用调试日志记录
+
+排查问题时，通常第一步是启用调试级日志记录，以收集有关系统运行情况的更详细信息。
+
+### 适用于控制平面或数据平面部署
+
+如果您遇到控制平面部署（例如 `langsmith-host-backend`）或数据平面部署（例如 `langsmith-listener`）的问题，请使用 `LOG_LEVEL=DEBUG` 环境变量重新安装 Helm chart。将以下内容添加到您的 `values.yaml` 文件中：
+
+```yaml
+extraEnv:
+  - name: LOG_LEVEL
+    value: DEBUG
+```
+
+### 适用于 Agent Server 部署
+
+如果问题出在单个 Agent Server 部署上：
+
+1. 在 [LangSmith UI](https://smith.langchain.com) 中导航到 **Deployments** 选项卡。
+1. 在部署的视图中，选择 **+ New Revision**。
+1. 添加新的环境变量 `LOG_LEVEL` 并将其设置为 `DEBUG`。
+
+<Note>
+您也可以在 UI 中部署视图的 **Server Logs** 下找到调试日志，点击 **Server Logs** 并在 **Log level: Info** 下拉菜单中选择 **Debug**。
+</Note>
+
+### 广泛性问题
+
+如果不确定问题来自何处，请在所有位置（控制平面、数据平面和所有 Agent Server 部署）启用 `DEBUG` 日志记录。
+
+### 审查应用程序日志
+
+追踪每个 pod 的日志以了解基线行为：
+
+```bash
+kubectl logs -f <pod_name>
+```
+
+然后查找以下日志行：
+
+- **`langsmith-listener`**：`Reconciling projects...`（每 10 秒出现一次）
+- **`langsmith-operator`**：`Starting reconciliation`（定期出现）
+
+在正常运行的部署中，您不应该看到任何错误。所有日志都应显示为正常和常规的。
+
+### 解释调试日志
+
+查找以下问题指标：
+
+- 异常或堆栈跟踪。
+- 错误消息（包含 `"ERROR"` 一词）。
+- 与正常操作不同的异常模式。
+
+根据您发现的错误：
+
+- **配置问题**：如果您怀疑是配置问题，请向运行 [`helm install`](/langsmith/kubernetes) 的人员提出该问题。
+- **用户代码错误**：如果您怀疑是用户代码中的错误（例如 LangGraph OSS 图实现），请向创建了 [`langgraph.json`](/langsmith/application-structure#configuration-file) 文件的 Agent Server 应用程序所有者提出该问题。
+
+## 步骤 3. 描述部署和 Pod
+
+描述 Kubernetes 资源可以揭示可能不会出现在应用程序日志中的错误事件和状态。这些错误通常由配置或基础设施问题引起，而非应用程序代码错误。描述资源还会显示其配置（如环境变量），这有助于调试。
+
+运行以下命令来描述您的资源。
+
+描述一个 Kubernetes 部署：
+
+```bash
+kubectl describe deployment <deployment_name>
+```
+
+描述一个 Kubernetes Pod：
+
+```bash
+kubectl describe pod <pod_name>
+```
+
+描述一个 `lgps` 资源（仅在创建 Agent Server 后相关）：
+
+```bash
+kubectl describe lgps <lgps_name>
+```
+
+### 解释结果
+
+查看输出的 `Events:` 部分，确认一切正常。常见问题包括：
+
+- 存活探针或就绪探针失败
+- 镜像拉取错误
+- 资源限制（CPU、内存）
+- 卷挂载问题
+- 配置错误
+
+确保没有错误事件，且所有事件都表明运行正常。
+
+## 其他资源
+
+更多故障排除信息，请参阅：
+
+- [故障排除](/langsmith/troubleshooting)：包含常见问题解决方案的通用故障排除指南。
+- [自托管概述](/langsmith/self-hosted)：系统架构和组件交互的详细信息。
+
+## 支持
+
+如果您已按照这些诊断步骤操作但仍需帮助，请在联系支持之前收集以下信息：
+
+- [诊断步骤](#step-1-understand-your-deployment) 的输出。
+- 您的 Helm chart 配置。
+- 相关的错误消息和日志。
+- 问题发生时您尝试执行的操作描述。
+
+准备好这些信息将有助于 [支持](https://support.langchain.com) 团队更快地诊断和解决您的问题。

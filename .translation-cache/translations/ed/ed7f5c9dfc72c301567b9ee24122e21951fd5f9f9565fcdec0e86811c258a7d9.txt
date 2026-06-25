@@ -1,0 +1,110 @@
+---
+title: 追踪 PydanticAI 应用
+sidebarTitle: PydanticAI
+---
+
+LangSmith 可以使用内置的 OpenTelemetry 检测功能来捕获 PydanticAI 生成的追踪。本指南展示了如何自动从您的 PydanticAI 智能体捕获追踪并将其发送到 LangSmith 进行监控和分析。
+
+## 安装
+
+安装所需的包：
+
+<CodeGroup>
+
+
+</fragment>
+
+```bash pip
+pip install langsmith pydantic-ai opentelemetry-exporter-otlp
+```
+
+```bash uv
+uv add langsmith pydantic-ai opentelemetry-exporter-otlp
+```
+
+<CodeGroup>
+
+</CodeGroup>
+
+<Info>
+需要 LangSmith Python SDK 版本 `langsmith>=0.4.26` 以获得最佳的 OpenTelemetry 支持。
+</Info>
+
+## 设置
+
+### 1. 配置环境变量
+
+设置您的 [API 密钥](/langsmith/create-account-api-key) 和项目名称：
+
+```bash
+export LANGSMITH_API_KEY=<your_langsmith_api_key>
+export LANGSMITH_PROJECT=<your_project_name>
+export OPENAI_API_KEY=<your_openai_api_key>
+```
+
+### 2. 配置 OpenTelemetry 集成
+
+在您的 PydanticAI 应用程序中，配置 LangSmith OpenTelemetry 集成：
+
+```python
+from langsmith.integrations.otel import configure
+from pydantic_ai import Agent
+
+# Configure LangSmith tracing
+configure(project_name="pydantic-ai-demo")
+
+# Instrument all PydanticAI agents
+Agent.instrument_all()
+```
+
+<Note>
+您无需设置任何 OpenTelemetry 环境变量或手动配置导出器——`configure()` 会自动处理一切。
+</Note>
+
+### 3. 创建并运行您的 PydanticAI 代理
+
+配置完成后，您的 PydanticAI 代理会自动将追踪数据发送到 LangSmith：
+
+```python
+from langsmith.integrations.otel import configure
+from pydantic_ai import Agent
+
+# Configure LangSmith tracing
+configure(project_name="pydantic-ai-demo")
+
+# Instrument all PydanticAI agents
+Agent.instrument_all()
+
+# Create and run an agent
+agent = Agent('openai:gpt-5.5')
+result = agent.run_sync('What is the capital of France?')
+print(result.output)
+#> Paris
+```
+
+## 高级用法
+
+### 自定义元数据和标签
+
+您可以使用 OpenTelemetry span 属性向追踪添加自定义元数据：
+
+```python
+from opentelemetry import trace
+from pydantic_ai import Agent
+from langsmith.integrations.otel import configure
+
+configure(project_name="pydantic-ai-metadata")
+Agent.instrument_all()
+
+tracer = trace.get_tracer(__name__)
+
+agent = Agent('openai:gpt-5.5')
+
+with tracer.start_as_current_span("pydantic_ai_workflow") as span:
+    span.set_attribute("langsmith.metadata.user_id", "user_123")
+    span.set_attribute("langsmith.metadata.workflow_type", "question_answering")
+    span.set_attribute("langsmith.span.tags", "pydantic-ai,production")
+
+    result = agent.run_sync('Explain quantum computing in simple terms')
+    print(result.output)
+```

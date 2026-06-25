@@ -1,0 +1,323 @@
+---
+title: 使用 `HanaSparqlQAChain` 进行问答
+---
+## 设置和安装
+
+要使用此功能，请安装 `langchain-hana` 包：
+
+```python
+pip install langchain_hana
+```
+
+然后，创建与 SAP HANA Cloud 实例的连接。
+
+```python
+import os
+
+from dotenv import load_dotenv
+from hdbcli import dbapi
+
+# Load environment variables if needed
+load_dotenv()
+
+# Establish connection to SAP HANA Cloud
+connection = dbapi.connect(
+    address=os.environ.get("HANA_DB_ADDRESS"),
+    port=os.environ.get("HANA_DB_PORT"),
+    user=os.environ.get("HANA_DB_USER"),
+    password=os.environ.get("HANA_DB_PASSWORD")
+)
+```
+
+`HanaSparqlQAChain` 将以下内容整合在一起：
+
+1. **Schema感知的SPARQL生成**
+2. 针对SAP HANA的**查询执行**
+3. **自然语言答案格式化**
+
+## 初始化
+
+您需要：
+
+* 一个**LLM**用于生成和解释查询
+* 一个**`HanaRdfGraph`**（包含connection、`graph_uri`和ontology）
+
+请按照以下步骤操作[HanaRdfGraph](/oss/integrations/graphs/sap_hana_rdf_graph)以了解更多关于创建`HanaRdfGraph`实例的信息。
+
+导入`HanaSparqlQAChain`
+
+```python
+from langchain_hana import HanaSparqlQAChain
+```
+
+```python
+qa_chain = HanaSparqlQAChain.from_llm(
+    llm=llm, graph=graph, allow_dangerous_requests=True, verbose=True
+)
+```
+
+## 管道概览
+
+1. **SPARQL 生成**
+   * 使用 `SPARQL_GENERATION_SELECT_PROMPT`
+   * 输入：
+     * `schema`（来自 `graph.get_schema` 的 Turtle 格式）
+     * `prompt`（用户的问题）
+2. **查询后处理**
+   * 从 LLM 输出中提取 SPARQL 代码。
+   * 如缺失则注入 `FROM <graph_uri>`
+   * 确保声明所需常用前缀（`rdf:`、`rdfs:`、`owl:`、`xsd:`）
+3. **执行**
+   * 调用 `graph.query(generated_sparql)`
+4. **答案生成**
+   * 使用 `SPARQL_QA_PROMPT`
+   * 输入：
+     * `context`（原始查询结果）
+     * `prompt`（原始问题）
+
+## 提示模板
+
+### "SPARQL 生成"提示
+
+`sparql_generation_prompt` 用于引导 LLM 根据用户问题和提供的模式生成 SPARQL 查询。
+
+### 问答提示
+
+`qa_prompt` 指示 LLM 仅根据数据库结果生成自然语言答案。
+
+默认提示可在此处找到：[`prompts.py`](https://github.com/SAP/langchain-integration-for-sap-hana-cloud/blob/main/langchain_hana/chains/graph_qa/prompts.py)
+
+## 自定义提示
+
+你可以在初始化时覆盖默认值：
+
+```python
+qa_chain = HanaSparqlQAChain.from_llm(
+    llm=llm,
+    graph=graph,
+    allow_dangerous_requests=True,
+    verbose=True,
+    sparql_generation_prompt=YOUR_SPARQL_PROMPT,
+    qa_prompt=YOUR_QA_PROMPT
+)
+```
+
+> - `sparql_generation_prompt` 必须有输入变量：`["schema", "prompt"]`
+> - `qa_prompt` 必须有输入变量：`["context", "prompt"]`
+
+## 示例：通过"电影"知识图谱进行问答
+
+**前置条件**：
+您必须拥有启用了 **triple store** 功能的 SAP HANA Cloud 实例。
+详细说明请参阅：[启用 Triple Store](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/enable-triple-store/)<br />
+加载 `kgdocu_movies` 示例数据。请参阅[知识图谱示例](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/knowledge-graph-example)。
+
+接下来我们将：
+
+1. 实例化 `HanaRdfGraph`，指向我们的"电影"数据图
+2. 使用 LLM 驱动的 `HanaSparqlQAChain` 包装它
+3. 提出自然语言问题并打印链的响应
+
+这演示了 LLM 如何在后台生成 SPARQL，针对 SAP HANA 执行它，并返回人类可读的答案。
+
+首先，创建到 SAP HANA Cloud 实例的连接。
+
+```python
+import os
+
+from dotenv import load_dotenv
+from hdbcli import dbapi
+
+# Load environment variables if needed
+load_dotenv()
+
+# Establish connection to SAP HANA Cloud
+connection = dbapi.connect(
+    address=os.environ.get("HANA_DB_ADDRESS"),
+    port=os.environ.get("HANA_DB_PORT"),
+    user=os.environ.get("HANA_DB_USER"),
+    password=os.environ.get("HANA_DB_PASSWORD")
+)
+```
+
+然后，设置知识图谱实例
+
+```python
+from gen_ai_hub.proxy.langchain.openai import ChatOpenAI
+from langchain_hana import HanaRdfGraph, HanaSparqlQAChain
+
+# from langchain_openai import ChatOpenAI  # or your chosen LLM
+```
+
+```python
+# Set up the Knowledge Graph
+graph_uri = "kgdocu_movies"
+
+graph = HanaRdfGraph(
+    connection=connection,
+    graph_uri=graph_uri,
+    auto_extract_ontology=True
+)
+```
+
+```python
+# a basic graph schema is extracted from the data graph. This schema will guide the LLM to generate a proper SPARQL query.
+schema_graph = graph.get_schema
+print(schema_graph.serialize(format="turtle"))
+```
+
+```output
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<http://kg.demo.sap.com/acted_in> a owl:ObjectProperty ;
+    rdfs:label "acted_in" ;
+    rdfs:domain <http://kg.demo.sap.com/Actor> ;
+    rdfs:range <http://kg.demo.sap.com/Film> .
+
+<http://kg.demo.sap.com/dateOfBirth> a owl:DatatypeProperty ;
+    rdfs:label "dateOfBirth" ;
+    rdfs:domain <http://kg.demo.sap.com/Actor> ;
+    rdfs:range xsd:dateTime .
+
+<http://kg.demo.sap.com/directed> a owl:ObjectProperty ;
+    rdfs:label "directed" ;
+    rdfs:domain <http://kg.demo.sap.com/Director> ;
+    rdfs:range <http://kg.demo.sap.com/Film> .
+
+<http://kg.demo.sap.com/genre> a owl:ObjectProperty ;
+    rdfs:label "genre" ;
+    rdfs:domain <http://kg.demo.sap.com/Film> ;
+    rdfs:range <http://kg.demo.sap.com/Genre> .
+
+<http://kg.demo.sap.com/placeOfBirth> a owl:ObjectProperty ;
+    rdfs:label "placeOfBirth" ;
+    rdfs:domain <http://kg.demo.sap.com/Actor> ;
+    rdfs:range <http://kg.demo.sap.com/Place> .
+
+<http://kg.demo.sap.com/title> a owl:DatatypeProperty ;
+    rdfs:label "title" ;
+    rdfs:domain <http://kg.demo.sap.com/Film> ;
+    rdfs:range xsd:string .
+
+rdfs:label a owl:DatatypeProperty ;
+    rdfs:label "label" ;
+    rdfs:domain <http://kg.demo.sap.com/Actor>,
+        <http://kg.demo.sap.com/Director>,
+        <http://kg.demo.sap.com/Genre>,
+        <http://kg.demo.sap.com/Place> ;
+    rdfs:range xsd:string .
+
+<http://kg.demo.sap.com/Director> a owl:Class ;
+    rdfs:label "Director" .
+
+<http://kg.demo.sap.com/Genre> a owl:Class ;
+    rdfs:label "Genre" .
+
+<http://kg.demo.sap.com/Place> a owl:Class ;
+    rdfs:label "Place" .
+
+<http://kg.demo.sap.com/Actor> a owl:Class ;
+    rdfs:label "Actor" .
+
+<http://kg.demo.sap.com/Film> a owl:Class ;
+    rdfs:label "Film" .
+```
+
+之后，初始化 LLM。
+
+```python
+# Initialize the LLM
+llm = ChatOpenAI(proxy_model_name="gpt-4o", temperature=0)
+```
+
+然后，我们创建一个 SPARQL QA Chain
+
+```python
+# Create a SPARQL QA Chain
+chain = HanaSparqlQAChain.from_llm(
+    llm=llm,
+    verbose=True,
+    allow_dangerous_requests=True,
+    graph=graph,
+)
+```
+
+```python
+# output = chain.invoke("Which movies are in the data?")
+# output = chain.invoke("In which movies did Keanu Reeves and Carrie-Anne Moss play in together")
+# output = chain.invoke("which movie genres are in the data?")
+# output = chain.invoke("which are the two most assigned movie genres?")
+# output = chain.invoke("where were the actors of "Blade Runner" born?")
+# output = chain.invoke("which actors acted together in a movie and were born in the same city?")
+output = chain.invoke("which actors acted in Blade Runner?")
+
+print(output["result"])
+```
+
+```output
+
+
+> Entering new HanaSparqlQAChain chain...
+Generated SPARQL:
+\`\`\`
+PREFIX kg: <http://kg.demo.sap.com/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?actor ?actorLabel
+WHERE {
+    ?movie rdf:type kg:Film .
+    ?movie kg:title ?movieTitle .
+    ?actor kg:acted_in ?movie .
+    ?actor rdfs:label ?actorLabel .
+    FILTER(?movieTitle = "Blade Runner")
+}
+\`\`\`
+Final SPARQL:
+
+PREFIX kg: <http://kg.demo.sap.com/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?actor ?actorLabel
+
+FROM <kgdocu_movies>
+WHERE {
+    ?movie rdf:type kg:Film .
+    ?movie kg:title ?movieTitle .
+    ?actor kg:acted_in ?movie .
+    ?actor rdfs:label ?actorLabel .
+    FILTER(?movieTitle = "Blade Runner")
+}
+
+Full Context:
+actor,actorLabel
+http://www.wikidata.org/entity/Q1353691,Morgan Paull
+http://www.wikidata.org/entity/Q1372770,William Sanderson
+http://www.wikidata.org/entity/Q358990,James Hong
+http://www.wikidata.org/entity/Q498420,M. Emmet Walsh
+http://www.wikidata.org/entity/Q81328,Q81328
+http://www.wikidata.org/entity/Q723780,Brion James
+http://www.wikidata.org/entity/Q207596,Daryl Hannah
+http://www.wikidata.org/entity/Q1691628,Joe Turkel
+http://www.wikidata.org/entity/Q236702,Joanna Cassidy
+http://www.wikidata.org/entity/Q213574,Rutger Hauer
+http://www.wikidata.org/entity/Q3143555,Hy Pyke
+http://www.wikidata.org/entity/Q211415,Edward James Olmos
+http://www.wikidata.org/entity/Q230736,Sean Young
+
+
+> Finished chain.
+The actors who acted in Blade Runner are Morgan Paull, William Sanderson, James Hong, M. Emmet Walsh, Brion James, Daryl Hannah, Joe Turkel, Joanna Cassidy, Rutger Hauer, Hy Pyke, Edward James Olmos, and Sean Young.
+```
+
+## 引擎盖下发生了什么？
+
+1. **SPARQL 生成**
+   链使用 `SPARQL_GENERATION_SELECT_PROMPT` 调用 LLM，传入您的 Turtle 格式本体（`graph.get_schema`）和用户的问题。然后 LLM 生成一个针对您的 schema 定制的有效 `SELECT` 查询。
+2. **预处理与执行**
+   - **提取并清洗**：从 LLM 的响应中提取原始 SPARQL 文本。
+   - **注入图上下文**：如果缺少则添加 `FROM <graph_uri>`，并确保声明了常见前缀（`rdf:`、`rdfs:`、`owl:`、`xsd:`）。
+   - **在 HANA 上运行**：通过 `HanaRdfGraph.query()` 在您的命名图上执行最终查询。
+3. **答案生成**
+   返回的 CSV（或 Turtle）结果再次传入 LLM——这次使用 `SPARQL_QA_PROMPT`。LLM 根据检索到的数据生成简洁、可读的答案，不会产生幻觉。

@@ -1,0 +1,220 @@
+```yaml
+---
+title: "OracleVS 集成"
+description: "使用 LangChain JavaScript 与 OracleVS 向量存储集成。"
+---
+
+<Tip>
+**兼容性**：仅适用于 Node.js。
+</Tip>
+
+Oracle AI Database 支持 AI 工作负载，您可以通过 **含义**（语义）而非仅通过关键字来查询数据。它将 **非结构化内容的语义搜索** 与 **业务数据的关系过滤** 结合在单一系统中，使您无需引入单独的向量数据库即可构建检索工作流（如 RAG），从而避免数据分散在多个平台上。
+
+本指南演示如何使用 `OracleVS`（用于 Oracle AI Vector Search 的 LangChain 向量存储集成）来：
+
+- 将文档和嵌入向量引入 Oracle
+- 运行相似性搜索
+- 创建 HNSW 和 IVF 索引
+- 应用元数据过滤器以进行高级检索
+- 在 Oracle AI Database 26ai 中启用混合搜索（关键字 + 语义）
+- 使用 Oracle Text 运行全文搜索
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 混合搜索 | Python 支持 |
+| :--- | :--- | :---: | :---: |
+| `OracleVS` | [`@oracle/langchain-oracledb`](https://www.npmjs.com/package/@oracle/langchain-oracledb) | ✅ | ✅ |
+
+## 设置
+
+安装 Oracle 客户端绑定和 LangChain Oracle 辅助工具：
+
+<CodeGroup>
+
+</CodeGroup>
+```
+```bash npm
+npm install @oracle/langchain-oracledb @langchain/core
+```
+```bash yarn
+yarn add @oracle/langchain-oracledb @langchain/core
+```
+```bash pnpm
+pnpm add @oracle/langchain-oracledb @langchain/core
+```
+</CodeGroup>
+
+设置将拥有向量表的 Oracle 用户的连接凭据：
+
+```bash
+export ORACLE_USER=testuser
+export ORACLE_PASSWORD=testuser
+export ORACLE_DSN="localhost:1521/free"
+```
+
+## 创建向量存储
+
+以下示例假设您已经创建了包含向量和元数据列的表，并使用 [`OracleEmbeddings`](/oss/integrations/embeddings/oracleai) 生成了嵌入。
+
+:::js
+```typescript
+import oracledb from "oracledb";
+import { OracleEmbeddings, OracleVS } from "@oracle/langchain-oracledb";
+import { Document } from "@langchain/core/documents";
+
+const connection = await oracledb.getConnection({
+  user: process.env.ORACLE_USER,
+  password: process.env.ORACLE_PASSWORD,
+  connectionString: process.env.ORACLE_DSN,
+});
+
+const embeddings = new OracleEmbeddings(connection, {
+  provider: "database",
+  model: "DEMO_MODEL",
+});
+
+const vectorStore = new OracleVS(embeddings, {
+  client: connection,
+  tableName: "DEMO_VECTORS",
+  query: "Find documents about Oracle RAG patterns.",
+  distanceStrategy: "DOT",
+});
+await vectorStore.initialize();
+
+const docs: Document[] = [
+  {
+    pageContent: "LangChain works great with Oracle Database.",
+    metadata: {
+      doc_id: "doc-1",
+      title: "RAG overview",
+      status: "release",
+      tags: ["AI", "rag"],
+      category: "books",
+      price: 18,
+    },
+  },
+];
+
+await vectorStore.addDocuments(docs);
+
+// Close connections or pools in application shutdown hooks to avoid leaks.
+// await connection.close();
+```
+:::
+
+如果您的应用程序已经管理了 Oracle 数据库连接池，请直接将连接池传递给 `OracleVS`。存储会按需获取和释放连接。
+
+:::js
+```typescript
+const pool = await oracledb.createPool({
+  user: process.env.ORACLE_USER,
+  password: process.env.ORACLE_PASSWORD,
+  connectString: process.env.ORACLE_DSN,
+  poolIncrement: 1,
+  poolMax: 4,
+  poolMin: 0,
+  poolPingInterval: 60,
+});
+
+const vectorStoreFromPool = new OracleVS(embeddings, {
+  client: pool,
+  tableName: "DEMO_VECTORS",
+  query: "Find documents about Oracle RAG patterns.",
+  distanceStrategy: "DOT",
+});
+await vectorStoreFromPool.initialize();
+
+// Release resources during shutdown.
+// await pool.close(0);
+```
+## 过滤搜索结果
+
+您可以将丰富的元数据过滤器作为第三个参数传递给 `similaritySearch`、`similaritySearchWithScore` 或 `similaritySearchVectorWithScore`。过滤器对 Oracle VS 为每个文档维护的 JSON `metadata` 列进行操作。
+
+支持的比较运算符包括 `$eq`（默认）、`$ne`、`$lt`、`$lte`、`$gt`、`$gte`、`$in`、`$nin`、`$between` 和 `$exists`。使用 `$and` 和 `$or` 组合子句可以构建更具表现力的谓词。
+
+:::js
+```typescript
+const results = await vectorStore.similaritySearch("oracle rag", 3, {
+  $and: [
+    { status: "release" },
+    { tags: { $in: ["AI"] } },
+    { price: { $between: [10, 25] } },
+  ],
+});
+
+// Or request scores alongside documents.
+const scored = await vectorStore.similaritySearchWithScore(
+  "oracle rag",
+  3,
+  { status: "release" },
+);
+
+console.log(results[0]?.pageContent);
+console.log(scored[0]?.[1]); // similarity score
+```
+:::
+
+也支持嵌套的逻辑子句。例如：
+
+```typescript
+const complexFilter = {
+  $or: [
+    { status: "draft" },
+    {
+      $and: [
+        { category: "books" },
+        { price: { $lte: 20 } },
+      ],
+    },
+  ],
+};
+```
+
+## 使用向量索引加速搜索
+
+Oracle Database 可以在 `embedding` 列上创建向量索引，从而加速相似性查询。`@oracle/langchain-oracledb` 辅助工具提供了 `createIndex` 实用程序，可配置 HNSW（默认）或 IVF 索引。
+
+### HNSW 索引（默认）
+
+当您需要一种在召回率和延迟之间取得平衡的基于图的索引时，请使用 HNSW。省略 `idxType` 以使用默认配置，或覆盖 `neighbors`、`efConstruction` 和 `accuracy` 等参数。
+
+```typescript
+import { createIndex } from "@oracle/langchain-oracledb";
+
+// Reuse the vectorStore and connection from the setup section,
+// or create one with OracleVS.fromDocuments / initialize().
+await createIndex(connection, vectorStore, {
+  idxName: "demo_hnsw_idx",
+  neighbors: 48,
+  efConstruction: 400,
+  accuracy: 95,
+  parallel: 16,
+});
+```
+
+### IVF 索引
+
+通过传入 `idxType: "IVF"` 以及要创建的相邻分区数量来切换到 IVF。IVF 将向量划分为多个聚类，适用于需要粗粒度量化且内存使用可预测的场景。
+
+```typescript
+import { createIndex } from "@oracle/langchain-oracledb";
+
+await createIndex(connection, vectorStore, {
+  idxName: "demo_ivf_idx",
+  idxType: "IVF",
+  neighborPart: 64,
+  accuracy: 90,
+  parallel: 8,
+});
+```
+
+在加载数据后（或 `initialize` 后）运行一次 `createIndex`，然后在后续搜索中重复使用该索引。如需重建或更换策略，可通过标准 SQL（`DROP INDEX ...`）删除现有索引，然后使用新参数重新运行 `createIndex`。
+
+## 下一步
+
+- 使用 [`OracleDocLoader`](/oss/integrations/document_loaders/file_loaders/oracleai) 加载内容
+- 使用 [`OracleEmbeddings`](/oss/integrations/embeddings/oracleai) 生成嵌入
+- 使用 [`OracleSummary`](/oss/integrations/tools/oracleai) 对文档进行摘要

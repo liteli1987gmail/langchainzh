@@ -1,0 +1,79 @@
+---
+title: "AstraDB 集成"
+description: "使用 LangChain Python 与 AstraDB 文档加载器集成。"
+---
+
+> [DataStax Astra DB](https://docs.datastax.com/en/astra-db-serverless/index.html) 是建立在 `Apache Cassandra®` 基础之上的 AI 就绪型数据库，可通过易于使用的 JSON API 便捷访问。
+
+## 概述
+
+Astra DB 文档加载器返回从 Astra DB 集合中读取的 LangChain @[`Document`] 对象列表。
+
+加载器接受以下参数：
+
+* `api_endpoint`：Astra DB API 端点。格式类似 `https://01234567-89ab-cdef-0123-456789abcdef-us-east1.apps.astra.datastax.com`
+* `token`：Astra DB 令牌。格式类似 `AstraCS:aBcD0123...`
+* `collection_name`：AstraDB 集合名称
+* `namespace`：（可选）AstraDB 命名空间（在 Astra DB 中称为 _keyspace_）
+* `filter_criteria`：（可选）find 查询中使用的过滤器
+* `projection`：（可选）find 查询中使用的投影
+* `limit`：（可选）要检索的最大文档数
+* `extraction_function`：（可选）用于将 AstraDB 文档转换为 LangChain `page_content` 字符串的函数。默认为 `json.dumps`
+
+加载器为其读取的文档设置以下元数据：
+
+```python
+metadata={
+    "namespace": "...",
+    "api_endpoint": "...",
+    "collection": "..."
+}
+```
+
+## 设置
+
+```python
+!pip install "langchain-astradb>=0.6,<0.7"
+```
+
+## 使用文档加载器加载文档
+
+```python
+from langchain_astradb import AstraDBLoader
+```
+
+[**API 参考文档：** `AstraDBLoader`](https://reference.langchain.com/python/langchain-astradb/document_loaders/AstraDBLoader)
+
+```python
+from getpass import getpass
+
+ASTRA_DB_API_ENDPOINT = input("ASTRA_DB_API_ENDPOINT = ")
+ASTRA_DB_APPLICATION_TOKEN = getpass("ASTRA_DB_APPLICATION_TOKEN = ")
+```
+
+```text
+ASTRA_DB_API_ENDPOINT =  https://01234567-89ab-cdef-0123-456789abcdef-us-east1.apps.astra.datastax.com
+ASTRA_DB_APPLICATION_TOKEN =  ········
+```
+
+```python
+loader = AstraDBLoader(
+    api_endpoint=ASTRA_DB_API_ENDPOINT,
+    token=ASTRA_DB_APPLICATION_TOKEN,
+    collection_name="movie_reviews",
+    projection={"title": 1, "reviewtext": 1},
+    limit=10,
+)
+```
+
+```python
+docs = loader.load()
+```
+
+```python
+docs[0]
+```
+
+```text
+Document(metadata={'namespace': 'default_keyspace', 'api_endpoint': 'https://01234567-89ab-cdef-0123-456789abcdef-us-east1.apps.astra.datastax.com', 'collection': 'movie_reviews'}, page_content='{"_id": "659bdffa16cbc4586b11a423", "title": "Dangerous Men", "reviewtext": "\\"Dangerous Men,\\" the picture\'s production notes inform, took 26 years to reach the big screen. After having seen it, I wonder: What was the rush?"}')
+```

@@ -1,0 +1,119 @@
+---
+title: 追踪 Pi 编码智能体会话
+sidebarTitle: Pi
+description: 将 Pi 编码智能体调用追踪到 LangSmith，以观察对话轮次、调试工具调用、跟踪令牌使用情况以及检查单个 LLM 调用。
+---
+
+本指南展示了如何使用 `@langchain/langsmith-pi-extension` 扩展将 [Pi 编码智能体](https://pi.dev) 会话追踪到 LangSmith。
+
+配置完成后，每个 Pi 会话都会向 LangSmith 发送追踪记录。每条追踪记录包含用户消息、助手回复、工具调用以及单个 LLM 调用，这使您可以完全了解 Pi 编码智能体运行的情况。
+
+## 前提条件
+
+在设置追踪之前，请确保您已具备：
+
+- 已安装 [**Pi**](https://pi.dev)。
+- 一个 [**LangSmith API 密钥**](/langsmith/create-account-api-key)。
+
+## 安装
+
+通过 Pi 安装扩展：
+
+```sh
+pi install npm:@langchain/langsmith-pi-extension
+```
+
+## 快速开始
+
+追踪功能默认处于禁用状态。设置以下环境变量以启用追踪功能并连接到您的 LangSmith 账户：
+
+```sh
+export TRACE_TO_LANGSMITH=true
+export LANGSMITH_PI_API_KEY="<your-langsmith-api-key>"
+```
+
+[运行 Pi](https://pi.dev/docs/latest/quickstart) 如常。当会话启动时，扩展会报告 LangSmith 追踪是否已启用。您也可以随时在 Pi 中检查当前的追踪状态：
+
+```text
+/langsmith-tracing
+```
+
+默认情况下，追踪会被写入 `pi-coding-agent` LangSmith 项目。
+
+## 配置
+
+配置可以来自环境变量或 JSON 配置文件。值按以下顺序合并，后面的源优先级更高：
+
+1. 默认值
+1. `~/.pi/langsmith.json`（全局配置）
+1. `<current-working-directory>/.pi/langsmith.json`（项目配置）
+1. 环境变量
+
+### 环境变量
+
+| 变量 | 描述 |
+|---|---|
+| `TRACE_TO_LANGSMITH` | 设置为 `true`、`1`、`yes` 或 `on` 时启用追踪。设置为 `false`、`0`、`no` 或 `off` 时禁用追踪。 |
+| `LANGSMITH_PI_API_KEY` | LangSmith API 密钥。回退到 `LANGSMITH_API_KEY`。 |
+| `LANGSMITH_PI_ENDPOINT` | 用于自托管或自定义部署的 LangSmith API URL。回退到 `LANGSMITH_ENDPOINT`。 |
+| `LANGSMITH_PI_PROJECT` | LangSmith 项目名称。回退到 `LANGSMITH_PROJECT`。默认为 `pi-coding-agent`。 |
+| `LANGSMITH_PI_METADATA` | 添加到根运行元数据的 JSON 对象。回退到 `LANGSMITH_METADATA`。 |
+| `LANGSMITH_PI_RUNS_ENDPOINTS` | 副本运行目标的 JSON 数组。回退到 `LANGSMITH_RUNS_ENDPOINTS`。 |
+
+示例：
+
+```sh
+export TRACE_TO_LANGSMITH=true
+export LANGSMITH_PI_API_KEY="<your-langsmith-api-key>"
+export LANGSMITH_PI_PROJECT="pi-coding-agent-dev"
+export LANGSMITH_PI_METADATA='{"team":"infra","environment":"local"}'
+```
+
+### 配置文件
+
+创建 `~/.pi/langsmith.json` 用于全局设置，或在项目目录中创建 `.pi/langsmith.json` 用于本地覆盖设置：
+
+```json
+{
+  "enabled": true,
+  "api_key": "<your-langsmith-api-key>",
+  "api_url": "https://api.smith.langchain.com",
+  "project": "pi-coding-agent",
+  "metadata": { "environment": "local" }
+}
+```
+
+配置文件字段：
+
+| 字段 | 必需 | 默认值 | 描述 |
+|---|---|---|---|
+| `enabled` | 是 | `false` | 设置为 `true` 以从配置文件启用追踪。 |
+| `api_key` | 否* | — | LangSmith API 密钥。除非通过环境变量或副本提供，否则必需。 |
+| `api_url` | 否 | LangSmith SDK 默认值 | LangSmith API URL，通常为 `https://api.smith.langchain.com`。 |
+| `project` | 否 | `pi-coding-agent` | LangSmith 项目名称。 |
+| `metadata` | 否 | — | 合并到根追踪元数据的对象。 |
+| `replicas` | 否 | — | 用于复制追踪的其他 LangSmith 目标地址数组。 |
+
+## 副本
+
+使用 `replicas` 可以同时向多个 LangSmith 目标地址发送追踪。这对于将追踪转发到个人工作区和共享团队项目，或在 [cloud](/langsmith/cloud) 的同时使用 [self-hosted LangSmith](/langsmith/self-hosted) 实例都非常有用。
+
+```json
+{
+  "enabled": true,
+  "api_key": "<primary-api-key>",
+  "project": "pi-coding-agent",
+  "replicas": [
+    {
+      "api_key": "<replica-api-key>",
+      "api_url": "https://replica-langsmith.example.com",
+      "project": "pi-coding-agent-replica",
+      "updates": {
+        "tags": ["replica"]
+      }
+    }
+  ]
+}
+```
+
+每个副本条目都可以包含一个 `updates` 对象，用于覆盖复制的运行中的元数据或标签。

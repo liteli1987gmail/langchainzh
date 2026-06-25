@@ -1,0 +1,123 @@
+---
+title: 改进使用人类反馈的 LLM-as-judge 评估器
+sidebarTitle: 改进使用人类反馈的 LLM-as-judge 评估器
+---
+
+<Check>
+在阅读此页面之前，建议您先阅读以下内容：
+
+* [评估概念](/langsmith/evaluation-concepts#evaluators)
+* [创建 LLM-as-a-judge 评估器](/langsmith/llm-as-judge)
+</Check>
+
+可靠的 [_LLM-as-a-judge 评估器_](/langsmith/evaluation-concepts#llm-as-judge) 对于为您的 AI 应用程序做出明智决策至关重要（例如，提示、模型、架构变更）。正确定义评估器提示可能很困难，但它直接影响您评估的可信度。
+
+本指南介绍如何使用人类反馈来对齐您的 LLM-as-a-judge 评估器，以提高评估器的质量并帮助您构建可靠的 AI 应用程序。
+
+## 工作原理
+
+LangSmith 的 **Align Evaluator（对齐评估器）** 功能有一系列步骤，可帮助您使用人类专家反馈来对齐 LLM-as-a-judge 评估器。您可以使用此功能来对齐在数据集上运行的[离线评估](/langsmith/evaluation-concepts#offline-evaluations)或[在线评估](/langsmith/evaluation-concepts#online-evaluations)的评估器。在这两种情况下，步骤类似：
+
+1. **选择包含应用程序输出的实验或运行**。
+2. 将选定的实验或运行添加到 **标注队列** 中，以便人类专家为数据添加标签。
+3. **使用标注示例测试您的 LLM-as-a-judge 评估器提示**。检查评估器结果与标注数据不对齐的情况。这表明您的评估器提示需要改进的方面。
+4. **完善并重复** 以提高评估器对齐度。更新您的 LLM-as-a-judge 评估器提示并再次测试。
+
+## 前置条件
+
+在开始本指南的[离线评估](#offline-evaluations)或[在线评估](#online-evaluations)之前，您需要满足以下条件：
+
+### 离线评估
+
+- 一个包含至少一个[实验](/langsmith/evaluation-concepts#experiment)的[数据集](/langsmith/evaluation-concepts#datasets)。
+- 您需要通过 [SDK](/langsmith/manage-datasets-programmatically#create-a-dataset) 或 [UI](/langsmith/manage-datasets-in-application#create-a-dataset-and-add-examples) 上传或创建数据集，并通过 [SDK](/langsmith/evaluate-llm-application#run-the-evaluation) 或 [Playground](/langsmith/run-evaluation-from-playground) 运行实验。
+
+### 在线评估
+
+- 一个已向 LangSmith 发送跟踪的应用。
+- 使用其中一个[跟踪集成](/langsmith/observability-concepts)进行配置以开始。
+
+## 入门
+
+您可以在数据集和跟踪项目中进入新评估器和现有评估器的对齐流程。
+
+|                                              | 数据集评估器                                                                                                                                                                               | 跟踪项目评估器                                                                                                                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **从头创建对齐评估器** | 1. **Datasets & Experiments** 并选择您的数据集<br></br>2. 点击 **+ Evaluator** > **Create from labeled data**<br></br>3. 输入描述性反馈键名称（例如 `correctness`、`hallucination`） | 1. **Projects** 并选择您的项目<br></br>2. 点击 **+ New** > **Evaluator** > **Create from labeled data**<br></br>3. 输入描述性反馈键名称（例如 `correctness`、`hallucination`） |
+| **对齐现有评估器**              | 1. **Datasets & Experiments** > 选择您的数据集 > **Evaluators** 选项卡<br></br>2. 在 **Align Evaluator with experiment data** 框中，点击 **Select Experiments**                              | 1. **Projects** > 选择您的项目 > **Evaluators** 选项卡<br></br>2. 在 **Align Evaluator with experiment data** 框中，点击 **Select Experiments**                                         |
+
+## 1. 选择实验或运行
+
+选择一个或多个实验（或运行）以发送进行人工标注。这会将运行添加到[标注队列](/langsmith/annotation-queues)中。
+
+![Add to evaluator queue](/langsmith/images/add-to-evaluator-queue.gif)
+
+要将任何新的实验/运行添加到现有标注队列中，请前往 **Evaluators** 选项卡，选择您正在对齐的评估器，然后点击 **Add to Queue**。
+
+<Check>
+数据集应该代表您期望在生产中看到的输入和输出。
+
+虽然您不需要覆盖每一种可能的场景，但重要的是要包含跨越整个预期用例范围的示例。例如，如果您正在构建一个回答有关棒球、篮球和橄榄球问题的体育机器人，您的数据集应该至少包含每种运动的一个标注示例。
+</Check>
+
+## 2. 标注示例
+
+通过添加反馈分数在标注队列中标注示例。标注完示例后，点击 **Add to Reference Dataset**。
+
+<Check>
+如果您在实验中有很多示例，则不需要标注每个示例即可开始。我们建议从至少 20 个示例开始，您可以随时稍后添加更多。我们建议您标注的示例是多样化的（0 和 1 标签平衡），以确保您构建一个全面的评估器提示。
+</Check>
+
+## 3. 使用标注示例测试您的评估器提示
+
+一旦您有了标注示例，下一步就是在评估器提示上进行迭代，以尽可能模仿标注数据。此迭代在 **Evaluator Playground（评估器 Playground）** 中完成。
+
+要进入评估器 Playground：点击评估器队列右上角的 **View evaluator** 按钮。这将带您进入您正在对齐的评估器的详情页面。点击 **Evaluator Playground** 按钮访问 Playground。
+
+![Evaluator Playground](/langsmith/images/evaluator-pg.gif)
+
+在评估器 Playground 中，您可以创建或编辑您的评估器提示，并点击 **Start Alignment** 对您在步骤 2 中创建的标注示例集运行它。运行评估器后，您将看到其生成的分数与您的人类标签的比较情况。对齐分数是评估器的判断与人类专家判断一致的示例百分比。
+
+## 4. 重复以提高评估器对齐度
+
+通过更新提示并再次测试来进行迭代，以提高评估器对齐度。
+
+<Check>
+评估器提示的更新**默认不会保存**。我们建议定期保存您的评估器提示，尤其是在您看到对齐分数提高之后。
+
+评估器 Playground 将显示您评估器提示最近保存版本的对齐分数，以便您在迭代提示时进行比较。
+</Check>
+
+提高评估器的对齐分数并非精确科学，但有一些策略有助于提高对齐分数。
+
+### 提高评估器对齐度的技巧
+
+**1. 调查不对齐的示例**
+
+深入研究不对齐的示例并尝试将它们归类为常见的失败模式，是提高评估器对齐度的良好第一步。
+
+一旦您确定了常见的失败模式，请将说明添加到您的评估器提示中，以便 LLM 了解它们。例如，如果您注意到它不理解特定的首字母缩略词，您可以解释"MFA 代表多因素身份验证"。或者，如果您发现它在评估器上下文中对好/坏的含义感到困惑，您可以告诉它"好的回复总是包含至少 3 个可预订的酒店"。
+
+**2. 检查 LLM 分数背后的推理**
+
+要理解 LLM 为什么以某种方式对示例评分，您可以为 LLM-as-a-judge 评估器启用推理。推理有助于理解 LLM 的思维过程，还可以帮助您识别常见的失败模式，以便将其纳入评估器提示中。
+
+要在评估器 Playground 中查看推理，请将鼠标悬停在 LLM 分数上。
+
+![Enable reasoning](/langsmith/images/enable-reasoning.gif)
+
+这将在评估器 Playground 中显示 LLM 评分背后的推理。
+
+**3. 添加更多标注示例并验证性能**
+
+为避免对标注示例过度拟合，添加更多标注示例并测试性能非常重要，尤其是如果您从少量示例开始的话。
+
+## 视频指南
+<iframe
+  className="w-full aspect-video rounded-xl"
+  src="https://www.youtube.com/embed/-9o94oj4x0A?si=wfv9cN3L4DalMD2e"
+  title="YouTube video player"
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowFullScreen
+></iframe>

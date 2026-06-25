@@ -1,0 +1,471 @@
+---
+title: "ChatOpenRouter 集成"
+sidebarTitle: "Chat"
+description: "使用 LangChain JavaScript 与 ChatOpenRouter 聊天模型集成。"
+---
+
+这将帮助您开始使用 OpenRouter [聊天模型](/oss/langchain/models)。OpenRouter 是一个统一 API，通过单一端点提供对多个提供商模型（OpenAI、Anthropic、Google、Meta 等）的访问。
+
+<Tip>
+    **API 参考**
+
+    有关所有功能和配置选项的详细文档，请参阅 [ChatOpenRouter API 参考](https://reference.langchain.com/javascript/langchain-openrouter/ChatOpenRouter)。
+</Tip>
+
+如需查看可用模型的完整列表，请访问 [OpenRouter 模型页面](https://openrouter.ai/models)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [PY 支持](https://python.langchain.com/docs/integrations/chat/openrouter) | 下载量 | 版本 |
+| :--- | :--- | :---: |  :---: | :---: | :---: |
+| [`ChatOpenRouter`](https://reference.langchain.com/javascript/langchain-openrouter/ChatOpenRouter) | [`@langchain/openrouter`](https://www.npmjs.com/package/@langchain/openrouter) | ✅ | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/openrouter?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/openrouter?style=flat-square&label=%20&) |
+
+### 模型功能
+
+| [工具调用](/oss/langchain/tools) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | 视频输入 | [Token 级流式输出](/oss/langchain/streaming/) | [Token 使用量](/oss/langchain/models#token-usage) | [对数概率](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: |  :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+## 设置
+
+要通过 OpenRouter 访问模型，您需要创建一个 [OpenRouter 账户](https://openrouter.ai/)，获取 API 密钥，并安装 `@langchain/openrouter` 集成包。
+
+### 凭据
+
+访问 [OpenRouter 密钥页面](https://openrouter.ai/settings/keys) 注册并生成 API 密钥。完成此操作后，设置 `OPENROUTER_API_KEY` 环境变量：
+
+```bash
+export OPENROUTER_API_KEY="your-api-key"
+```
+
+要启用模型调用的自动追踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```bash
+# export LANGSMITH_TRACING="true"
+# export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+LangChain OpenRouter 集成位于 `@langchain/openrouter` 包中：
+
+<CodeGroup>
+```bash npm
+npm install @langchain/openrouter @langchain/core
+```
+```bash yarn
+yarn add @langchain/openrouter @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/openrouter @langchain/core
+```
+</CodeGroup>
+
+## 实例化
+
+现在您可以实例化模型：
+
+```typescript
+import { ChatOpenRouter } from "@langchain/openrouter";
+
+const model = new ChatOpenRouter({
+  model: "anthropic/claude-sonnet-4.5",
+  temperature: 0,
+  maxTokens: 1024,
+  // other params...
+});
+```
+
+---
+
+## 调用
+
+```typescript
+const aiMsg = await model.invoke([
+  {
+    role: "system",
+    content:
+      "You are a helpful assistant that translates English to French. Translate the user sentence.",
+  },
+  {
+    role: "user",
+    content: "I love programming.",
+  },
+]);
+console.log(aiMsg.content);
+```
+
+```text
+J'adore la programmation.
+```
+
+---
+
+## 流式处理
+
+```typescript
+const stream = await model.stream("Write a short poem about the sea.");
+for await (const chunk of stream) {
+  process.stdout.write(typeof chunk.content === "string" ? chunk.content : "");
+}
+```
+
+---
+
+## 工具调用
+
+OpenRouter 使用与 OpenAI 兼容的工具调用格式。你可以描述工具及其参数，并让模型返回一个包含要调用的工具及其输入参数的 JSON 对象。
+
+### 绑定工具
+
+通过 `ChatOpenRouter.bindTools`，你可以传入 Zod schema、LangChain 工具或原始函数定义作为模型的工具。这些在底层会被转换为 OpenAI 工具 schema，并在每次模型调用时传递。
+
+```typescript
+import { ChatOpenRouter } from "@langchain/openrouter";
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+
+const getWeather = tool(async ({ location }) => `Sunny in ${location}`, {
+  name: "get_weather",
+  description: "Get the current weather in a given location",
+  schema: z.object({
+    location: z
+      .string()
+      .describe("The city and state, e.g. San Francisco, CA"),
+  }),
+});
+
+const modelWithTools = new ChatOpenRouter({
+  model: "openai/gpt-4o",
+}).bindTools([getWeather]);
+
+const aiMsg = await modelWithTools.invoke(
+  "What is the weather like in San Francisco?"
+);
+console.log(aiMsg.tool_calls);
+```
+
+```text
+[
+  {
+    name: 'get_weather',
+    args: { location: 'San Francisco, CA' },
+    id: 'call_abc123',
+    type: 'tool_call'
+  }
+]
+```
+
+### 严格模式
+
+传递 `strict: true` 以确保模型输出与工具定义中提供的 JSON Schema 完全匹配：
+
+```typescript
+const modelWithStrictTools = new ChatOpenRouter({
+  model: "openai/gpt-4o",
+}).bindTools([getWeather], { strict: true });
+```
+
+更多关于绑定工具和工具调用输出的信息，请参阅[工具调用](/oss/langchain/tools)文档。
+
+---
+
+## 结构化输出
+
+`ChatOpenRouter` 支持通过 `.withStructuredOutput()` 方法进行结构化输出。提取策略会根据模型能力自动选择：
+
+- **`jsonSchema`**——原生 JSON Schema 响应格式（当模型支持时使用）
+- **`functionCalling`**——将架构作为工具调用包装（默认后备方案）
+- **`jsonMode`**——请求模型以 JSON 格式响应，不受严格架构约束
+
+<Note>
+    当多模型路由处于活跃状态时（`models` 列表或 `route: "fallback"`），该方法始终回退到 `functionCalling`，因为在实际请求时无法确定实际后端模型的能力。
+</Note>
+
+```typescript
+import { ChatOpenRouter } from "@langchain/openrouter";
+import { z } from "zod";
+
+const model = new ChatOpenRouter({ model: "openai/gpt-5.5" });
+
+const movieSchema = z.object({
+  title: z.string().describe("The title of the movie"),
+  year: z.number().describe("The year the movie was released"),
+  director: z.string().describe("The director of the movie"),
+  rating: z.number().describe("The movie's rating out of 10"),
+});
+
+const structuredModel = model.withStructuredOutput(movieSchema, {
+  name: "movie",
+  method: "jsonSchema", // [!code highlight]
+});
+const response = await structuredModel.invoke(
+  "Provide details about the movie Inception"
+);
+console.log(response);
+```
+
+```text
+{
+  title: 'Inception',
+  year: 2010,
+  director: 'Christopher Nolan',
+  rating: 8.8
+}
+```
+
+您可以配合 `jsonSchema` 和 `functionCalling` 方法传递 `strict: true`，以强制精确的架构遵循：
+
+```typescript
+const strictModel = model.withStructuredOutput(movieSchema, {
+  name: "movie",
+  method: "jsonSchema",
+  strict: true,
+});
+```
+
+---
+
+## 多模态输入
+
+OpenRouter 支持接收[多模态输入](/oss/langchain/messages#multimodal)的模型。请参阅 [OpenRouter 模型页面](https://openrouter.ai/models) 了解支持的模态类型，具体取决于您选择的模型。
+
+<Note>
+    并非所有模型都支持所有模态。请参阅 [OpenRouter 模型页面](https://openrouter.ai/models) 了解特定模型的兼容性。
+</Note>
+
+### 图片输入
+
+使用列表内容格式提供图片输入以及文本。
+
+<CodeGroup>
+
+</CodeGroup>
+```typescript URL
+import { ChatOpenRouter } from "@langchain/openrouter";
+import { HumanMessage } from "@langchain/core/messages";
+
+const model = new ChatOpenRouter({ model: "openai/gpt-4o" });
+
+const message = new HumanMessage({
+  content: [
+    { type: "text", text: "Describe this image." },
+    {
+      type: "image_url",
+      image_url: {
+        url: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+      },
+    },
+  ],
+});
+const response = await model.invoke([message]);
+```
+
+```typescript Base64 encoded
+import { ChatOpenRouter } from "@langchain/openrouter";
+import { HumanMessage } from "@langchain/core/messages";
+import * as fs from "node:fs";
+
+const model = new ChatOpenRouter({ model: "openai/gpt-4o" });
+
+const imageData = fs.readFileSync("/path/to/image.jpg").toString("base64");
+
+const message = new HumanMessage({
+  content: [
+    { type: "text", text: "Describe this image." },
+    {
+      type: "image_url", // [!code highlight]
+      image_url: { // [!code highlight]
+        url: `data:image/jpeg;base64,${imageData}`, // [!code highlight]
+      }, // [!code highlight]
+    },
+  ],
+});
+const response = await model.invoke([message]);
+```
+</CodeGroup>
+
+---
+
+## Token 使用量元数据
+
+调用完成后，token 使用量信息可在响应的 `usage_metadata` 属性中获取：
+
+```typescript
+const aiMsg = await model.invoke("Tell me a joke.");
+console.log(aiMsg.usage_metadata);
+```
+
+```text
+{
+  input_tokens: 12,
+  output_tokens: 25,
+  total_tokens: 37
+}
+```
+
+当底层提供商的响应包含详细的 token 使用明细时，它们会自动显示：
+
+- `output_token_details.reasoning`——用于内部思维链推理的 token
+- `input_token_details.cache_read`——来自提示词缓存的输入 token
+
+流式传输时，从最后一个块中汇总 token 使用情况：
+
+```typescript
+import { AIMessageChunk } from "@langchain/core/messages";
+import { concat } from "@langchain/core/utils/stream";
+
+const stream = await model.stream("Tell me a joke.");
+let finalMsg: AIMessageChunk | undefined;
+for await (const chunk of stream) {
+  finalMsg = finalMsg ? concat(finalMsg, chunk) : chunk;
+}
+console.log(finalMsg?.usage_metadata);
+```
+
+---
+
+## 提供商路由
+
+OpenRouter 上的许多模型由多个提供商提供服务。`provider` 参数让你能够控制哪些提供商处理你的请求，以及它们如何被选择。
+
+### 排序和筛选提供商
+
+使用 `order` 设置首选提供商序列。OpenRouter 按顺序尝试每个提供商，如果某个提供商不可用，则回退到下一个：
+
+```typescript
+const model = new ChatOpenRouter({
+  model: "anthropic/claude-sonnet-4.5",
+  provider: {
+    order: ["Anthropic", "Google"],
+    allow_fallbacks: true,
+  },
+});
+```
+
+要仅将请求限制到特定提供商，请使用 `only`。要排除某些提供商，请使用 `ignore`：
+
+```typescript
+const onlyModel = new ChatOpenRouter({
+  model: "openai/gpt-4o",
+  provider: { only: ["OpenAI", "Azure"] },
+});
+
+const ignoreModel = new ChatOpenRouter({
+  model: "meta-llama/llama-4-maverick",
+  provider: { ignore: ["DeepInfra"] },
+});
+```
+
+### 按成本、速度或延迟排序
+
+默认情况下，OpenRouter 在提供商之间进行负载均衡，优先选择较低成本。使用 `sort` 更改优先级：
+
+```typescript
+const fastModel = new ChatOpenRouter({
+  model: "openai/gpt-4o",
+  provider: { sort: "throughput" },
+});
+
+const lowLatencyModel = new ChatOpenRouter({
+  model: "openai/gpt-4o",
+  provider: { sort: "latency" },
+});
+```
+
+### 数据收集政策
+
+如果您的用例要求提供商不要存储或训练您的数据，请将 `data_collection` 设置为 `"deny"`：
+
+```typescript
+const model = new ChatOpenRouter({
+  model: "anthropic/claude-sonnet-4.5",
+  provider: { data_collection: "deny" },
+});
+```
+
+### 按量化筛选
+
+对于开源模型，可以将路由限制为特定的精度级别：
+
+```typescript
+const model = new ChatOpenRouter({
+  model: "meta-llama/llama-4-maverick",
+  provider: { quantizations: ["fp16", "bf16"] },
+});
+```
+
+### 组合选项
+
+Provider 选项可以组合在一起：
+
+```typescript
+const model = new ChatOpenRouter({
+  model: "openai/gpt-4o",
+  provider: {
+    order: ["OpenAI", "Azure"],
+    allow_fallbacks: false,
+    require_parameters: true,
+    data_collection: "deny",
+  },
+});
+```
+
+请参阅 [OpenRouter 提供商路由文档](https://openrouter.ai/docs/guides/routing/provider-selection) 以获取完整的选项列表。
+
+---
+
+## 多模型路由
+
+OpenRouter 支持跨多个模型路由请求。传递一个 `models` 数组以及一个可选的 `route` 策略：
+
+```typescript
+const model = new ChatOpenRouter({
+  model: "openai/gpt-4o",
+  models: ["openai/gpt-4o", "anthropic/claude-sonnet-4.5"],
+  route: "fallback",
+});
+```
+
+---
+
+## 插件
+
+OpenRouter 支持[插件](https://openrouter.ai/docs/features/plugins)，可扩展模型功能。通过 `plugins` 参数传递插件配置：
+
+```typescript
+const model = new ChatOpenRouter({
+  model: "openai/gpt-4o",
+  plugins: [
+    { id: "web", max_results: 5 },
+  ],
+});
+```
+
+## 可用插件
+
+可用插件包括 `web`（网络搜索）、`file-parser`（PDF 解析）、`moderation`（审核）、`auto-router`（自动路由）和 `response-healing`（响应修复）。
+
+---
+
+## 应用归属
+
+OpenRouter 支持通过 HTTP 标头进行应用归属设置。通过构造函数参数进行配置：
+
+```typescript
+const model = new ChatOpenRouter({
+  model: "anthropic/claude-sonnet-4.5",
+  siteUrl: "https://myapp.com",
+  siteName: "My App",
+});
+```
+
+---
+
+## API 参考
+
+有关 `ChatOpenRouter` 所有功能和配置的详细文档，请访问 [ChatOpenRouter API 参考](https://reference.langchain.com/javascript/langchain-openrouter/ChatOpenRouter)。
+
+有关 OpenRouter 平台、模型和功能的更多信息，请参阅 [OpenRouter 文档](https://openrouter.ai/docs)。

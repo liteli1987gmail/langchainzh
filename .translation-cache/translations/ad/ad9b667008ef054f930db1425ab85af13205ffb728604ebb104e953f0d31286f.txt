@@ -1,0 +1,701 @@
+---
+title: 子代理
+---
+
+在 **子代理** 架构中，一个中央主 [agent](/oss/langchain/agents)（通常称为 **supervisor**）通过将它们作为 [tools](/oss/langchain/tools) 调用来协调子代理。主代理决定调用哪个子代理、提供什么输入以及如何组合结果。子代理是无状态的——它们不记得过去的交互，所有对话记忆由主代理维护。这提供了 [context](/oss/langchain/context-engineering) 隔离：每次子代理调用都在干净的上下文窗口中运行，防止主对话中的上下文膨胀。
+
+有关内置子代理支持，请参阅 [Deep Agents](/oss/deepagents/subagents)。
+
+```mermaid
+graph LR
+    A[User] --> B[Main Agent]
+    B --> C[Subagent A]
+    B --> D[Subagent B]
+    B --> E[Subagent C]
+    C --> B
+    D --> B
+    E --> B
+    B --> F[User response]
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+
+    class A,F trigger
+    class B,C,D,E process
+```
+
+## 主要特点
+
+* 集中控制：所有路由都通过主代理
+* 无直接用户交互：子代理将结果返回给主代理，而不是用户（不过你可以在子代理中使用[中断](/oss/langgraph/interrupts#pause-using-interrupt)来允许用户交互）
+* 通过工具调用子代理：子代理通过工具调用
+* 并行执行：主代理可以在单次交互中调用多个子代理
+
+<Note>
+**Supervisor vs. Router**：Supervisor 代理（此模式）与[路由](/oss/langchain/multi-agent/router)不同。Supervisor 是一个完整的代理，它维护对话上下文并动态决定在多轮交互中调用哪些子代理。路由通常是一个单一的分类步骤，用于将请求分发给代理，但不维护持续的对话状态。
+</Note>
+
+## 使用场景
+
+当你有多个不同的领域（例如日历、电子邮件、CRM、数据库），子代理不需要直接与用户对话，或者你想要集中式工作流控制时，使用子代理模式。对于更简单的场景（只有几个[工具](/oss/langchain/tools)），使用[单一代理](/oss/langchain/agents)。
+
+<Tip>
+**需要在子代理中进行用户交互？** 虽然子代理通常将结果返回给主代理而不是直接与用户对话，但你可以在子代理中使用[中断](/oss/langgraph/interrupts#pause-using-interrupt)来暂停执行并收集用户输入。当子代理需要澄清或在继续之前获得批准时，这很有用。主代理仍然是编排者，但子代理可以在任务中途从用户那里收集信息。
+</Tip>
+
+## 基本实现
+
+核心机制是将子代理包装为一个主代理可以调用的工具：
+
+:::python
+```python
+from langchain.tools import tool
+from langchain.agents import create_agent
+
+# Create a subagent
+subagent = create_agent(model="google_genai:gemini-3.5-flash", tools=[...])
+
+# Wrap it as a tool
+@tool("research", description="Research a topic and return findings")
+def call_research_agent(query: str):
+    result = subagent.invoke({"messages": [{"role": "user", "content": query}]})
+    return result["messages"][-1].content
+
+# Main agent with subagent as a tool
+main_agent = create_agent(model="google_genai:gemini-3.5-flash", tools=[call_research_agent])
+```
+:::
+:::js
+```typescript
+import { createAgent, tool } from "langchain";
+import { z } from "zod";
+
+// Create a subagent
+const subagent = createAgent({ model: "google_genai:gemini-3.5-flash", tools: [...] });
+
+// Wrap it as a tool
+const callResearchAgent = tool(
+  async ({ query }) => {
+    const result = await subagent.invoke({
+      messages: [{ role: "user", content: query }]
+    });
+    return result.messages.at(-1)?.content;
+  },
+  {
+    name: "research",
+    description: "Research a topic and return findings",
+    schema: z.object({ query: z.string() })
+  }
+);
+
+// Main agent with subagent as a tool
+const mainAgent = createAgent({ model: "google_genai:gemini-3.5-flash", tools: [callResearchAgent] });
+```
+<Card
+    title="教程：使用子代理构建个人助手"
+    icon="sitemap"
+    href="/oss/langchain/multi-agent/subagents-personal-assistant"
+    arrow cta="了解更多"
+>
+    了解如何使用子代理模式构建个人助手，其中一个中央主代理（监督者）协调专门的 worker 代理。
+</Card>
+
+## 设计决策
+
+实现子代理模式时，您需要做出几个关键的设计选择。此表格总结了各个选项——每个选项都将在下面的章节中详细讨论。
+
+| 决策 | 选项 |
+|------|------|
+| [**同步 vs. 异步**](#sync-vs-async) | 同步（阻塞）vs. 异步（后台） |
+| [**工具模式**](#tool-patterns) | 每个代理一个工具 vs. 单分派工具 |
+| [**子代理规范**](#subagent-specs) | 系统提示词 vs. 枚举约束 vs. 基于工具的发现（仅限单分派工具） |
+| [**子代理输入**](#subagent-inputs) | 仅查询 vs. 完整上下文 |
+| [**子代理输出**](#subagent-outputs) | 子代理结果 vs. 完整对话历史 |
+
+## 同步 vs. 异步
+
+子代理执行可以是 **同步**（阻塞）或 **异步**（后台）。您的选择取决于主代理是否需要结果才能继续。
+
+| 模式 | 主代理行为 | 适用场景 | 权衡 |
+|------|-----------|----------|------|
+| **同步** | 等待子代理完成 | 主代理需要结果才能继续 | 简单，但会阻塞对话 |
+| **异步** | 在子代理后台运行时继续执行 | 独立任务，用户不应等待 | 响应更快，但更复杂 |
+
+<Tip>
+不要与 Python 的 `async`/`await` 混淆。这里"async"表示主代理启动后台任务（通常在单独的进程或服务中）并继续执行而不阻塞。
+</Tip>
+
+### 同步（默认）
+
+默认情况下，子代理调用是 **同步的**：主代理在继续之前等待每个子代理完成。当主代理的下一个操作依赖于子代理的结果时，使用同步。
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Main Agent
+    participant Research Subagent
+
+    User->>Main Agent: "What's the weather in Tokyo?"
+    Main Agent->>Research Subagent: research("Tokyo weather")
+    Note over Main Agent: Waiting for result...
+    Research Subagent-->>Main Agent: "Currently 72°F, sunny"
+    Main Agent-->>User: "It's 72°F and sunny in Tokyo"
+```
+
+**何时使用同步：**
+- 主代理需要子代理的结果来形成其响应
+- 任务有顺序依赖（例如，获取数据 → 分析 → 响应）
+- 子代理失败应阻止主代理的响应
+
+**权衡：**
+- 实现简单——只需调用并等待
+- 在所有子代理完成之前，用户看不到任何响应
+- 长时间运行的任务会使对话冻结
+
+### 异步
+
+当子代理的工作是独立的时使用**异步执行**——主代理不需要结果来继续与用户对话。主代理启动一个后台作业并保持响应能力。
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Main Agent
+    participant Job System
+    participant Contract Reviewer
+
+    User->>Main Agent: "Review this M&A contract"
+    Main Agent->>Job System: run_agent("legal_reviewer", task)
+    Job System->>Contract Reviewer: Start agent
+    Job System-->>Main Agent: job_id: "job_123"
+    Main Agent-->>User: "Started review (job_123)"
+
+    Note over Contract Reviewer: Reviewing 150+ pages...
+
+    User->>Main Agent: "What's the status?"
+    Main Agent->>Job System: check_status(job_id)
+    Job System-->>Main Agent: "running"
+    Main Agent-->>User: "Still reviewing contract..."
+
+    Note over Contract Reviewer: Review completes
+
+    User->>Main Agent: "Is it done yet?"
+    Main Agent->>Job System: check_status(job_id)
+    Job System-->>Main Agent: "completed"
+    Main Agent->>Job System: get_result(job_id)
+    Job System-->>Main Agent: Contract analysis
+    Main Agent-->>User: "Review complete: [findings]"
+```
+
+**何时使用异步：**
+- Subagent 工作独立于主对话流程
+- 用户应能在工作进行时继续聊天
+- 您希望并行运行多个独立任务
+
+**三工具模式：**
+1. **启动任务**：启动后台任务，返回任务 ID
+2. **检查状态**：返回当前状态（pending、running、completed、failed）
+3. **获取结果**：检索已完成的结果
+
+**处理任务完成：** 当任务完成时，您的应用程序需要通知用户。一种方法是显示一个通知，点击后会发送类似"Check job_123 and summarize the results."的 `HumanMessage`。
+
+## 工具模式
+
+将 Subagent 作为工具暴露有两种主要方式：
+
+| 模式 | 适用场景 | 权衡 |
+|---------|----------|-----------|
+| [**每个代理一个工具**](#tool-per-agent) | 精细控制每个 Subagent 的输入/输出 | 设置更复杂，但定制化程度更高 |
+| [**单一调度工具**](#single-dispatch-tool) | 多个代理、分布式团队、约定优于配置 | 组合更简单，但每个代理的定制化程度较低 |
+
+### 每个代理一个工具
+
+```mermaid
+graph LR
+    A[User] --> B[Main Agent]
+    B --> C[Subagent A]
+    B --> D[Subagent B]
+    B --> E[Subagent C]
+    C --> B
+    D --> B
+    E --> B
+    B --> F[User response]
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+
+    class A,F trigger
+    class B,C,D,E process
+```
+
+核心理念是将子代理包装为供主代理调用的工具：
+
+:::python
+```python
+from langchain.tools import tool
+from langchain.agents import create_agent
+
+# Create a sub-agent
+subagent = create_agent(model="...", tools=[...])  # [!code highlight]
+
+# Wrap it as a tool  # [!code highlight]
+@tool("subagent_name", description="subagent_description")  # [!code highlight]
+def call_subagent(query: str):  # [!code highlight]
+    result = subagent.invoke({"messages": [{"role": "user", "content": query}]})
+    return result["messages"][-1].content
+
+# Main agent with subagent as a tool  # [!code highlight]
+main_agent = create_agent(model="...", tools=[call_subagent])  # [!code highlight]
+```
+:::
+:::js
+```typescript
+import { createAgent, tool } from "langchain";
+import * as z from "zod";
+
+// Create a sub-agent
+const subagent = createAgent({...});  // [!code highlight]
+
+// Wrap it as a tool  // [!code highlight]
+const callSubagent = tool(  // [!code highlight]
+  async ({ query }) => {  // [!code highlight]
+    const result = await subagent.invoke({
+      messages: [{ role: "user", content: query }]
+    });
+    return result.messages.at(-1)?.text;
+  },
+  {
+    name: "subagent_name",
+    description: "subagent_description",
+    schema: z.object({
+      query: z.string().describe("The query to send to subagent")
+    })
+  }
+);
+
+// Main agent with subagent as a tool  // [!code highlight]
+const mainAgent = createAgent({ model, tools: [callSubagent] });  // [!code highlight]
+```
+:::
+
+主代理在判定任务与子代理描述相匹配时调用子代理工具，接收结果后继续进行编排。详见[上下文工程](#context-engineering)以获取细粒度控制。
+
+### 单次调度工具
+
+另一种方法使用单个参数化工具体来调用临时子代理以处理独立任务。与每个子代理作为单独工具的[每个代理一个工具](#tool-per-agent)方法不同，这种方法采用基于约定的方法，使用单个 `task` 工具：任务描述作为人类消息传递给子代理，子代理的最终消息作为工具结果返回。
+
+适用于团队分布式开发、需要隔离复杂任务到独立上下文窗口、希望以可扩展方式添加新代理而无需修改协调器，或偏好约定优于定制的场景。这种方法以上下文工程的灵活性换取代理组合的简单性和强大的上下文隔离。
+
+```mermaid
+graph LR
+    A[User] --> B[Main Agent]
+    B --> C{task<br/>agent_name, description}
+    C -->|research| D[Research Agent]
+    C -->|writer| E[Writer Agent]
+    C -->|reviewer| F[Reviewer Agent]
+    D --> C
+    E --> C
+    F --> C
+    C --> B
+    B --> G[User response]
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef decision fill:#FDF3FF,stroke:#7E65AE,stroke-width:2px,color:#504B5F
+
+    class A,G trigger
+    class B,D,E,F process
+    class C decision
+```
+
+**主要特点：**
+
+* 单任务工具：一个参数化工具，可通过名称调用任何已注册的子代理
+* 约定式调用：通过名称选择代理，将任务作为人类消息传递，最终消息作为工具结果返回
+* 团队分布：不同团队可以独立开发和部署代理
+* 代理发现：子代理可通过系统提示发现（列出可用代理），或通过[渐进式披露](/oss/langchain/multi-agent/skills-sql-assistant)（通过工具按需加载代理信息）
+
+<Tip>
+这种方法的一个有趣之处在于，子代理可能拥有与主代理完全相同的能力。在这种情况下，调用子代理的**真正目的是实现上下文隔离**——允许复杂的多步骤任务在隔离的上下文窗口中运行，而不会膨胀主代理的对话历史。子代理自主完成工作，仅返回简洁的摘要，保持主线程专注且高效。
+</Tip>
+
+<Accordion title="代理注册表与任务调度器">
+
+:::python
+```python
+from langchain.tools import tool
+from langchain.agents import create_agent
+
+# Sub-agents developed by different teams
+research_agent = create_agent(
+    model="gpt-5.5",
+    prompt="You are a research specialist..."
+)
+
+writer_agent = create_agent(
+    model="gpt-5.5",
+    prompt="You are a writing specialist..."
+)
+
+# Registry of available sub-agents
+SUBAGENTS = {
+    "research": research_agent,
+    "writer": writer_agent,
+}
+
+@tool
+def task(
+    agent_name: str,
+    description: str
+) -> str:
+    """Launch an ephemeral subagent for a task.
+
+    Available agents:
+    - research: Research and fact-finding
+    - writer: Content creation and editing
+    """
+    agent = SUBAGENTS[agent_name]
+    result = agent.invoke({
+        "messages": [
+            {"role": "user", "content": description}
+        ]
+    })
+    return result["messages"][-1].content
+
+# Main coordinator agent
+main_agent = create_agent(
+    model="gpt-5.5",
+    tools=[task],
+    system_prompt=(
+        "You coordinate specialized sub-agents. "
+        "Available: research (fact-finding), "
+        "writer (content creation). "
+        "Use the task tool to delegate work."
+    ),
+)
+```
+:::
+:::js
+```typescript
+import { tool, createAgent } from "langchain";
+import * as z from "zod";
+
+// Sub-agents developed by different teams
+const researchAgent = createAgent({
+  model: "gpt-5.5",
+  prompt: "You are a research specialist...",
+});
+
+const writerAgent = createAgent({
+  model: "gpt-5.5",
+  prompt: "You are a writing specialist...",
+});
+
+// Registry of available sub-agents
+const SUBAGENTS = {
+  research: researchAgent,
+  writer: writerAgent,
+};
+
+const task = tool(
+  async ({ agentName, description }) => {
+    const agent = SUBAGENTS[agentName];
+    const result = await agent.invoke({
+      messages: [
+        { role: "user", content: description }
+      ],
+    });
+    return result.messages.at(-1)?.content;
+  },
+  {
+    name: "task",
+    description: `Launch an ephemeral subagent.
+
+Available agents:
+- research: Research and fact-finding
+- writer: Content creation and editing`,
+    schema: z.object({
+      agentName: z
+        .string()
+        .describe("Name of agent to invoke"),
+      description: z
+        .string()
+        .describe("Task description"),
+    }),
+  }
+);
+
+// Main coordinator agent
+const mainAgent = createAgent({
+  model: "gpt-5.5",
+  tools: [task],
+  prompt: (
+    "You coordinate specialized sub-agents. " +
+    "Available: research (fact-finding), " +
+    "writer (content creation). " +
+    "Use the task tool to delegate work."
+  ),
+});
+```
+## 上下文工程
+
+控制主代理与其子代理之间上下文的流动方式：
+
+| 类别 | 目的 | 影响 |
+|----------|---------|---------|
+| [**子代理规格**](#subagent-specs) | 确保子代理在应该被调用时被调用 | 主代理路由决策 |
+| [**子代理输入**](#subagent-inputs) | 确保子代理能够使用优化后的上下文良好执行 | 子代理性能 |
+| [**子代理输出**](#subagent-outputs) | 确保监督者能够根据子代理结果采取行动 | 主代理性能 |
+
+另请参阅我们关于代理[上下文工程](/oss/langchain/context-engineering)的综合指南。
+
+### 子代理规格
+
+与子代理关联的**名称**和**描述**是主代理了解应该调用哪些子代理的主要方式。这些是提示词调整手段——请谨慎选择。
+
+* **名称**：主代理如何引用子代理。保持清晰且以动作为导向（例如，`research_agent`、`code_reviewer`）。
+* **描述**：主代理对子代理能力的了解。具体说明它处理哪些任务以及何时使用。
+
+对于[单分派工具](#single-dispatch-tool)设计，你还必须向主代理提供有关其可调用的子代理的信息。
+你可以根据代理数量和注册表是静态还是动态，以不同方式提供此信息：
+
+| 方法 | 适用场景 | 权衡 |
+|--------|----------|----------|
+| **系统提示枚举** | 小型静态代理列表（< 10 个代理） | 简单，但代理变更时需要更新提示词 |
+| **枚举约束** | 小型静态代理列表（< 10 个代理） | 类型安全且明确，但代理变更时需要代码更改 |
+| **基于工具的发现** | 大型或动态代理注册表 | 灵活且可扩展，但会增加复杂性 |
+
+#### 系统提示枚举
+
+直接在主代理的系统提示中列出可用代理。主代理将代理列表及其描述作为其指令的一部分。
+
+**使用场景：**
+- 你有少量固定代理（< 10 个）
+- 代理注册表很少更改
+- 你希望实现最简单的方案
+
+**示例：**
+```python
+main_agent = create_agent(
+    model="...",
+    tools=[task],
+    system_prompt=(
+        "You coordinate specialized sub-agents. "
+        "Available agents:\n"
+        "- research: Research and fact-finding\n"
+        "- writer: Content creation and editing\n"
+        "- reviewer: Code and document review\n"
+        "Use the task tool to delegate work."
+    ),
+)
+```
+
+#### 在分发工具上使用枚举约束
+
+向您的分发工具中的 `agent_name` 参数添加枚举约束。这提供了类型安全性，并在工具 schema 中明确列出了可用的代理。
+
+**适用场景：**
+- 您有少量固定的代理集合（< 10）
+- 您需要类型安全性并希望代理名称明确可见
+- 您更倾向于基于 schema 的验证而非基于提示词的指导
+
+**示例：**
+
+```typescript
+agent_name: z.enum([...])
+```
+```python
+from enum import Enum
+
+class AgentName(str, Enum):
+    RESEARCH = "research"
+    WRITER = "writer"
+    REVIEWER = "reviewer"
+
+@tool
+def task(
+    agent_name: AgentName,  # Enum constraint
+    description: str
+) -> str:
+    """Launch an ephemeral subagent for a task."""
+    # ...
+```
+
+#### 工具发现
+
+提供一个单独的工具（例如 `list_agents` 或 `search_agents`），主代理可以调用该工具按需发现可用代理。这实现了渐进式披露并支持动态注册表。
+
+**何时使用：**
+- 你有很多代理（> 10 个）或不断增长的注册表
+- 代理注册表频繁变化或是动态的
+- 你想减少提示大小和令牌使用量
+- 不同团队独立管理不同的代理
+
+**示例：**
+```python
+@tool
+def list_agents(query: str = "") -> str:
+    """List available subagents, optionally filtered by query."""
+    agents = search_agent_registry(query)
+    return format_agent_list(agents)
+
+@tool
+def task(agent_name: str, description: str) -> str:
+    """Launch an ephemeral subagent for a task."""
+    # ...
+
+main_agent = create_agent(
+    model="...",
+    tools=[task, list_agents],
+    system_prompt="Use list_agents to discover available subagents, then use task to invoke them."
+)
+```
+
+### 子代理输入
+
+自定义子代理接收的上下文以执行其任务。通过从代理状态中提取——完整消息历史、之前的结果或任务元数据——来添加在静态提示中不实用的输入。
+
+:::python
+```python Subagent inputs example expandable
+from langchain.agents import AgentState
+from langchain.tools import tool, ToolRuntime
+
+class CustomState(AgentState):
+    example_state_key: str
+
+@tool(
+    "subagent1_name",
+    description="subagent1_description"
+)
+def call_subagent1(query: str, runtime: ToolRuntime[None, CustomState]):
+    # Apply any logic needed to transform the messages into a suitable input
+    subagent_input = some_logic(query, runtime.state["messages"])
+    result = subagent1.invoke({
+        "messages": subagent_input,
+        # You could also pass other state keys here as needed.
+        # Make sure to define these in both the main and subagent's
+        # state schemas.
+        "example_state_key": runtime.state["example_state_key"]
+    })
+    return result["messages"][-1].content
+```
+:::
+:::js
+```typescript Subagent inputs example expandable
+import { createAgent, tool, AgentState, ToolMessage } from "langchain";
+import { Command } from "@langchain/langgraph";
+import * as z from "zod";
+
+// Example of passing the full conversation history to the sub agent via the state.
+const callSubagent1 = tool(
+  async ({query}) => {
+    const state = getCurrentTaskInput<AgentState>();
+    // Apply any logic needed to transform the messages into a suitable input
+    const subAgentInput = someLogic(query, state.messages);
+    const result = await subagent1.invoke({
+      messages: subAgentInput,
+      // You could also pass other state keys here as needed.
+      // Make sure to define these in both the main and subagent's
+      // state schemas.
+      exampleStateKey: state.exampleStateKey
+    });
+    return result.messages.at(-1)?.content;
+  },
+  {
+    name: "subagent1_name",
+    description: "subagent1_description",
+  }
+);
+```
+:::
+
+### 子代理输出
+
+自定义主代理接收到的内容，以便其做出正确的决策。两种策略：
+
+1. **提示子代理**：明确指定应返回的内容。一个常见的失败模式是子代理执行了工具调用或推理，但在其最终消息中未包含结果——提醒它主管只能看到最终输出。
+2. **以代码格式返回**：在返回之前调整或丰富响应。例如，除了最终文本外，还使用 [`Command`](/oss/langgraph/graph-api#command) 传回特定的状态键。
+
+:::python
+```python Subagent outputs example expandable
+from typing import Annotated
+from langchain.agents import AgentState
+from langchain.tools import InjectedToolCallId
+from langgraph.types import Command
+
+
+@tool(
+    "subagent1_name",
+    description="subagent1_description"
+)
+def call_subagent1(
+    query: str,
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    result = subagent1.invoke({
+        "messages": [{"role": "user", "content": query}]
+    })
+    return Command(update={
+        # Pass back additional state from the subagent
+        "example_state_key": result["example_state_key"],
+        "messages": [
+            ToolMessage(
+                content=result["messages"][-1].content,
+                tool_call_id=tool_call_id
+            )
+        ]
+    })
+```
+:::
+:::js
+```typescript Subagent outputs example expandable
+import { tool, ToolMessage } from "langchain";
+import { Command } from "@langchain/langgraph";
+import * as z from "zod";
+
+const callSubagent1 = tool(
+  async ({ query }, config) => {
+    const result = await subagent1.invoke({
+      messages: [{ role: "user", content: query }]
+    });
+
+    // Return a Command to update multiple state keys
+    return new Command({
+      update: {
+        // Pass back additional state from the subagent
+        exampleStateKey: result.exampleStateKey,
+        messages: [
+          new ToolMessage({
+            content: result.messages.at(-1)?.text,
+            tool_call_id: config.toolCall?.id!
+          })
+        ]
+      }
+    });
+  },
+  {
+    name: "subagent1_name",
+    description: "subagent1_description",
+    schema: z.object({
+      query: z.string().describe("The query to send to subagent1")
+    })
+  }
+);
+```
+:::
+
+## 检查点与状态检查
+
+默认情况下，子代理使用**继承检查点模式**——每次调用都以全新状态开始，支持[中断](/oss/langgraph/interrupts#pause-using-interrupt)，并可安全并行运行。如果你需要子代理在多次调用之间保持其自身的持久化对话历史，请使用 `checkpointer=True`（继续模式）编译它。请参阅[子图持久化](/oss/langgraph/use-subgraphs#subgraph-persistence)获取各模式的完整对比。
+
+由于子代理在工具函数内部被调用，LangGraph 无法[静态发现](/oss/langgraph/use-subgraphs#view-subgraph-state)它们。这意味着使用 [`get_state` 配合 `subgraphs`](/oss/langgraph/use-subgraphs#view-subgraph-state) 不会返回子代理状态。如果你需要读取嵌套图状态（例如在[中断](/oss/langgraph/interrupts#pause-using-interrupt)期间），请改为在自定义图的[节点函数](/oss/langgraph/use-subgraphs#call-a-subgraph-inside-a-node)中调用子代理。请参阅[子图持久化](/oss/langgraph/use-subgraphs#subgraph-persistence)了解各模式如何影响状态可见性。
+
+:::python
+<Card
+    title="从 langgraph-supervisor 迁移"
+    icon="arrow-right"
+    href="/oss/migrate/langgraph-supervisor"
+    arrow cta="查看指南"
+>
+    langgraph-supervisor 包已不再积极维护。了解如何从 create_supervisor 迁移到子代理模式，包括通过外部 API 回调实现中断和恢复流程。
+</Card>
+:::

@@ -1,0 +1,143 @@
+---
+title: LangGraph v1 迁移指南
+sidebarTitle: LangGraph v1
+---
+
+本指南概述了 LangGraph v1 中的变化以及如何从之前的版本迁移。要查看新增功能的高级概述，请参阅[发布说明](/oss/releases/langgraph-v1)。
+
+要升级，
+
+<CodeGroup>
+```bash npm
+npm install @langchain/langgraph@latest @langchain/core@latest
+```
+```bash pnpm
+pnpm add @langchain/langgraph@latest @langchain/core@latest
+```
+```bash yarn
+yarn add @langchain/langgraph@latest @langchain/core@latest
+```
+```bash bun
+bun add @langchain/langgraph@latest @langchain/core@latest
+```
+</CodeGroup>
+
+## 变更摘要
+
+| 区域 | 变更内容 |
+|------|----------|
+| React 预建代理 | `createReactAgent` 已弃用；请使用 LangChain `createAgent` |
+| 中断 | 支持通过 `interrupts` 配置进行类型化中断 |
+| `toLangGraphEventStream` 已移除 | 使用 `graph.stream` 配合所需的 `encoding` 格式 |
+| `useStream` | 支持自定义传输层 |
+
+---
+
+## 弃用：`createReactAgent` → `createAgent`
+
+LangGraph v1 弃用了 `createReactAgent` 预建代理。请使用 LangChain 的 `createAgent`，它基于 LangGraph 运行并添加了灵活的中间件系统。
+
+详情请参阅 LangChain v1 文档：
+
+- [发布说明](/oss/releases/langchain-v1#createagent)
+- [迁移指南](/oss/migrate/langchain-v1#createagent)
+
+<CodeGroup>
+```typescript v1 (new)
+import { createAgent } from "langchain";
+
+const agent = createAgent({
+  model,
+  tools,
+  systemPrompt: "You are a helpful assistant.", // [!code highlight]
+});
+```
+```typescript v0 (old)
+import { createReactAgent } from "@langchain/langgraph/prebuilts";
+
+const agent = createReactAgent({
+  model,
+  tools,
+  prompt: "You are a helpful assistant.", // [!code highlight]
+});
+```
+</CodeGroup>
+
+---
+
+## 类型化中断
+
+您现在可以在图构建时定义中断类型，以严格类型化传递给中断和从中断接收的值。
+
+<CodeGroup>
+```typescript v1 (new)
+import { StateGraph, interrupt } from "@langchain/langgraph";
+import * as z from "zod";
+
+const State = z.object({ foo: z.string() });
+
+const graphConfig = {
+  interrupts: {
+    approve: interrupt<{ reason: string }, { messages: string[] }>(),
+  },
+}
+
+const graph = new StateGraph(State, graphConfig)
+  .addNode("node", async (state, runtime) => {
+    const value = runtime.interrupt.approve({ reason: "review" }); // [!code highlight]
+    return { foo: value };
+  })
+  .compile();
+```
+```typescript v0 (old)
+import { StateGraph } from "@langchain/langgraph";
+
+const graph = new StateGraph(State)
+  .addNode("node", async (state, runtime) => {
+    const value = runtime.interrupt.approve({ reason: "review" }); // [!code highlight]
+    return state;
+  })
+  .compile();
+```
+</CodeGroup>
+
+请参阅[中断](/oss/langgraph/interrupts)了解更多。
+
+---
+
+## 事件流编码
+
+低级别的 `toLangGraphEventStream` 辅助函数已被移除。流式响应由 SDK 处理；在使用低级客户端时，通过传递给 `graph.stream` 的 `encoding` 选项选择传输格式。
+
+<CodeGroup>
+```typescript v1 (new)
+const stream = await graph.stream(input, {
+  encoding: "text/event-stream",
+  streamMode: ["values", "messages"],
+});
+
+return new Response(stream, {
+  headers: { "Content-Type": "text/event-stream" }, // [!code highlight]
+});
+```
+```typescript v0 (old)
+return toLangGraphEventStreamResponse({
+  stream: graph.streamEvents(input, {
+    version: "v2",
+    streamMode: ["values", "messages"],
+  }),
+});
+```
+</CodeGroup>
+
+---
+
+## 重大变更
+
+### 放弃 Node 18 支持
+
+所有 LangGraph 包现在需要 **Node.js 22 或更高版本**。Node.js 18 于 2025 年 3 月达到[生命周期终止](https://nodejs.org/en/about/releases/)状态。
+
+### 新的构建输出
+
+所有 langgraph 包的构建现在采用基于打包器的方法，而不是使用原始的 TypeScript 输出。如果您之前从 `dist/` 目录导入文件（不推荐这样做），则需要更新导入以使用新的模块系统。

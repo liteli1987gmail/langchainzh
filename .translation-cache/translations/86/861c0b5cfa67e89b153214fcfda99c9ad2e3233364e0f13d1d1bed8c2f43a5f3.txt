@@ -1,0 +1,171 @@
+---
+title: 应用结构
+---
+
+A LangGraph application consists of one or more graphs, a configuration file (`langgraph.json`), a file that specifies dependencies, and an optional `.env` file that specifies environment variables.
+
+This guide shows a typical structure of an application and shows you how to provide the required configuration to deploy an application with [LangSmith Deployment](/langsmith/deployment).
+
+<Info>
+LangSmith Deployment is a managed hosting platform for deploying and scaling LangGraph agents. It handles the infrastructure, scaling, and operational concerns so you can deploy your stateful, long-running agents directly from your repository. Learn more in the [Deployment documentation](/langsmith/deployment).
+</Info>
+
+## Key concepts
+
+To deploy using the LangSmith, the following information should be provided:
+
+1. A [LangGraph configuration file](#configuration-file-concepts) (`langgraph.json`) that specifies the dependencies, graphs, and environment variables to use for the application.
+2. The [graphs](#graphs) that implement the logic of the application.
+3. A file that specifies [dependencies](#dependencies) required to run the application.
+4. [Environment variables](#environment-variables) that are required for the application to run.
+
+## File structure
+
+Below are examples of directory structures for applications:
+
+:::python
+<Tabs>
+    <Tab title="Python (requirements.txt)">
+    ```plaintext
+    my-app/
+    ├── my_agent # all project code lies within here
+    │   ├── utils # utilities for your graph
+    │   │   ├── __init__.py
+    │   │   ├── tools.py # tools for your graph
+    │   │   ├── nodes.py # node functions for your graph
+    │   │   └── state.py # state definition of your graph
+    │   ├── __init__.py
+    │   └── agent.py # code for constructing your graph
+    ├── .env # environment variables
+    ├── requirements.txt # package dependencies
+    └── langgraph.json # configuration file for LangGraph
+    ```
+</Tab>
+<Tab title="Python (pyproject.toml)">
+
+</fragment>
+    ```plaintext
+    my-app/
+    ├── my_agent # all project code lies within here
+    │   ├── utils # utilities for your graph
+    │   │   ├── __init__.py
+    │   │   ├── tools.py # tools for your graph
+    │   │   ├── nodes.py # node functions for your graph
+    │   │   └── state.py # state definition of your graph
+    │   ├── __init__.py
+    │   └── agent.py # code for constructing your graph
+    ├── .env # environment variables
+    ├── langgraph.json  # configuration file for LangGraph
+    └── pyproject.toml # dependencies for your project
+    ```
+</Tab>
+</Tabs>
+:::
+
+:::js
+
+</fragment>
+```plaintext
+my-app/
+├── src # all project code lies within here
+│   ├── utils # optional utilities for your graph
+│   │   ├── tools.ts # tools for your graph
+│   │   ├── nodes.ts # node functions for your graph
+│   │   └── state.ts # state definition of your graph
+│   └── agent.ts # code for constructing your graph
+├── package.json # package dependencies
+├── .env # environment variables
+└── langgraph.json # configuration file for LangGraph
+```
+:::
+
+<Note>
+LangGraph 应用程序的目录结构可能因编程语言和使用的包管理器而异。
+</Note>
+
+<a id="configuration-file-concepts"></a>
+## 配置文件
+
+`langgraph.json` 文件是一个 JSON 文件，用于指定部署 LangGraph 应用程序所需的依赖项、图、环境变量和其他设置。
+
+有关 JSON 文件中所有支持的键的详细信息，请参阅 [LangGraph 配置文件参考](/langsmith/cli#configuration-file)。
+
+<Tip>
+[LangGraph CLI](/langsmith/cli) 默认使用当前目录中的配置文件 `langgraph.json`。
+</Tip>
+
+### 示例
+
+:::python
+* 依赖项包括一个自定义本地包和 `langchain_openai` 包。
+* 将从文件 `./your_package/your_file.py` 中的变量 `variable` 加载单个图。
+* 环境变量从 `.env` 文件加载。
+
+::
+
+```json
+{
+  "dependencies": ["langchain_openai", "./your_package"],
+  "graphs": {
+    "my_agent": "./your_package/your_file.py:agent"
+  },
+  "env": "./.env"
+}
+```
+:::
+
+:::js
+* 依赖项将从本地目录中的依赖文件（例如 `package.json`）加载。
+* 将从文件 `./your_package/your_file.js` 加载单个图，使用函数 `agent`。
+* 环境变量 `OPENAI_API_KEY` 被内联设置。
+
+
+</fragment>
+
+```json
+{
+  "dependencies": ["."],
+  "graphs": {
+    "my_agent": "./your_package/your_file.js:agent"
+  },
+  "env": {
+    "OPENAI_API_KEY": "secret-key"
+  }
+}
+```
+:::
+
+## 依赖项
+
+:::python
+LangGraph 应用程序可能依赖其他 Python 包。
+:::
+
+:::js
+LangGraph 应用程序可能依赖其他 TypeScript/JavaScript 库。
+:::
+
+通常需要指定以下信息才能正确设置依赖项：
+
+:::python
+1. 目录中指定依赖项的文件（例如 `requirements.txt`、`pyproject.toml` 或 `package.json`）。
+:::
+
+:::js
+1. 目录中指定依赖项的文件（例如 `package.json`）。
+:::
+
+1. [LangGraph 配置文件](#configuration-file-concepts) 中的 `dependencies` 键，用于指定运行 LangGraph 应用程序所需的依赖项。
+2. 任何额外的二进制文件或系统库可以使用 [LangGraph 配置文件](#configuration-file-concepts) 中的 `dockerfile_lines` 键来指定。
+
+## 图
+
+使用 [LangGraph 配置文件](#configuration-file-concepts) 中的 `graphs` 键来指定哪些图将在部署的 LangGraph 应用程序中可用。
+
+您可以在配置文件中指定一个或多个图。每个图由一个名称（应该是唯一的）和一个路径标识，该路径指向：(1) 已编译的图，或 (2) 定义图的函数。
+
+## 环境变量
+
+如果您在本地使用部署的 LangGraph 应用程序，您可以在 [LangGraph 配置文件](#configuration-file-concepts) 的 `env` 键中配置环境变量。
+
+对于生产部署，您通常会希望在部署环境中配置环境变量。

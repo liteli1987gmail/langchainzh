@@ -1,0 +1,333 @@
+---
+title: 使用 `HanaSparqlQAChain` 进行问答
+---
+
+## 设置与安装
+
+要使用此功能，请安装 `@sap/hana-langchain` 包及其对等依赖项：
+
+```bash
+npm install @sap/hana-langchain @langchain/core@latest @langchain/classic@latest langchain@latest
+```
+
+创建与您的 SAP HANA Cloud 实例的连接
+
+```typescript
+import * as dotenv from 'dotenv';
+// Load environment variables if needed
+dotenv.config();
+
+import hanaClient from "@sap/hana-client";
+
+const connectionParams = {
+  host: process.env.HANA_DB_ADDRESS,
+  port: process.env.HANA_DB_PORT,
+  user: process.env.HANA_DB_USER,
+  password: process.env.HANA_DB_PASSWORD,
+};
+const client = hanaClient.createConnection(connectionParams);
+
+// connect to hanaDB
+await new Promise<void>((resolve, reject) => {
+  client.connect((err: Error) => {
+    // Use arrow function here
+    if (err) {
+      reject(err);
+    } else {
+      console.log("Connected to SAP HANA successfully.");
+      resolve();
+    }
+  });
+});
+```
+
+`HanaSparqlQAChain` 将以下内容整合在一起：
+
+1. **支持模式的 SPARQL 生成**
+2. **针对 SAP HANA 的查询执行**
+3. **自然语言答案格式化**
+
+## 初始化
+
+* 一个 **LLM** 用于生成和解释查询
+* 一个 **`HanaRdfGraph`**（包含连接、`graph_uri` 和本体）
+
+请按照此处 [HanaRdfGraph](/oss/integrations/graphs/sap_hana_rdf_graph) 的步骤操作，详细了解如何创建 `HanaRdfGraph` 实例。
+
+导入 `HanaSparqlQAChain`
+
+```typescript
+import { HanaSparqlQAChain } from "@sap/hana-langchain";
+const qaChain = HanaSparqlQAChain.fromLLM({ llm, graph, allowDangerousRequests: true, verbose: true });
+```
+
+## 流水线概述
+
+1. SPARQL 生成
+   - 使用 SPARQL 生成提示词
+   - 输入：`schema`（来自 `graph.getSchema()` 的 Turtle 格式）、`prompt`（用户问题）
+2. 查询后处理
+   - 从模型输出中提取 SPARQL
+   - 如果缺失则注入 `FROM <graph_uri>`
+   - 确保常用前缀（`rdf:`、`rdfs:`、`owl:`、`xsd:`）
+3. 执行
+   - `graph.query(generatedSparql)`
+4. 答案生成
+   - 使用问答提示词，输入：`context`（结果）、`prompt`（原始问题）
+
+## 提示词模板
+
+### "SPARQL 生成"提示词
+
+`sparqlGenerationPrompt` 用于指导 LLM 根据用户问题和提供的架构生成 SPARQL 查询。
+
+### 问答提示词
+
+`qaPrompt` 指示 LLM 仅根据数据库结果生成自然语言答案。
+默认提示词可在此处找到：[`prompts.ts`](https://github.com/SAP/langchainjs-integration-for-sap-hana-cloud/blob/main/src/chains/graph_qa/prompts.ts)
+
+## 自定义提示词
+
+您可以在初始化时覆盖默认值：
+
+```typescript
+const qaChain = HanaSparqlQAChain.fromLLM({
+  llm,
+  graph,
+  allowDangerousRequests: true,
+  verbose: true,
+  sparqlGenerationPrompt: YOUR_SPARQL_PROMPT,
+  qaPrompt: YOUR_QA_PROMPT,
+});
+```
+
+> - `sparql_generation_prompt` 必须有输入变量：`["schema", "prompt"]`
+> - `qa_prompt` 必须有输入变量：`["context", "prompt"]`
+
+## 示例：针对"电影"知识图谱的问答
+
+**前提条件**：
+您必须拥有启用了 **triple store** 功能的 SAP HANA Cloud 实例。
+有关详细说明，请参阅：[启用 Triple Store](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/enable-triple-store/)<br />
+加载 `kgdocu_movies` 示例数据。请参阅[知识图谱示例](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/knowledge-graph-example)。
+
+下面我们将：
+
+1. 实例化指向"movies"数据图的 `HanaRdfGraph`
+2. 使用 LLM 驱动的 `HanaSparqlQAChain` 包装它
+3. 提出自然语言问题并打印出链的响应
+
+这展示了 LLM 如何在后台生成 SPARQL，针对 SAP HANA 执行，并返回人类可读的答案。
+
+首先，创建到 SAP HANA Cloud 实例的连接。
+
+```typescript
+import * as dotenv from 'dotenv';
+// Load environment variables if needed
+dotenv.config();
+
+import hanaClient from "@sap/hana-client";
+
+const connectionParams = {
+  host: process.env.HANA_DB_ADDRESS,
+  port: process.env.HANA_DB_PORT,
+  user: process.env.HANA_DB_USER,
+  password: process.env.HANA_DB_PASSWORD,
+};
+const client = hanaClient.createConnection(connectionParams);
+
+// connect to hanaDB
+await new Promise<void>((resolve, reject) => {
+  client.connect((err: Error) => {
+    // Use arrow function here
+    if (err) {
+      reject(err);
+    } else {
+      console.log("Connected to SAP HANA successfully.");
+      resolve();
+    }
+  });
+});
+```
+
+然后，设置知识图谱实例
+
+```typescript
+import { HanaRdfGraph, HanaRdfGraphOptions } from "@sap/hana-langchain";
+
+const graphOptions: HanaRdfGraphOptions = {
+  connection: client,
+  graphUri: "kgdocu_movies",
+  autoExtractOntology: true,
+};
+
+// create a Graph instance from a source URI
+const graph = new HanaRdfGraph(graphOptions);
+
+// need to initialize once an instance is created.
+await graph.initialize(graphOptions);
+```
+
+```typescript
+// Serialise the graph schema (optional)
+// Internally, the schema is stored as an N3 Store instance,
+// We use the N3 Writer to serialise it to Turtle format for display.
+const schemaStore = graph.getSchema();
+const writer = new Writer({
+  prefixes: {
+    rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+    owl: "http://www.w3.org/2002/07/owl#",
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+  },
+});
+schemaStore.forEach((quad) => {
+  writer.addQuad(quad);
+});
+writer.end((error, result) => {
+  if (error) {
+    console.error("Error serialising schema:", error);
+  } else {
+    console.log("Graph Schema in Turtle format:\n", result);
+  }
+});
+```
+
+```text
+Graph Schema in Turtle format:
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+@prefix owl: <http://www.w3.org/2002/07/owl#>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+
+<http://kg.demo.sap.com/Place> a owl:Class;
+    rdfs:label "Place".
+rdfs:label a owl:DatatypeProperty;
+    rdfs:label "label";
+    rdfs:domain <http://kg.demo.sap.com/Place>, <http://kg.demo.sap.com/Actor>, <http://kg.demo.sap.com/Director>, <http://kg.demo.sap.com/Genre>;
+    rdfs:range xsd:string.
+<http://kg.demo.sap.com/Actor> a owl:Class;
+    rdfs:label "Actor".
+<http://kg.demo.sap.com/Film> a owl:Class;
+    rdfs:label "Film".
+<http://kg.demo.sap.com/Director> a owl:Class;
+    rdfs:label "Director".
+<http://kg.demo.sap.com/Genre> a owl:Class;
+    rdfs:label "Genre".
+<http://kg.demo.sap.com/dateOfBirth> a owl:DatatypeProperty;
+    rdfs:label "dateOfBirth";
+    rdfs:domain <http://kg.demo.sap.com/Actor>;
+    rdfs:range xsd:dateTime.
+<http://kg.demo.sap.com/placeOfBirth> a owl:ObjectProperty;
+    rdfs:label "placeOfBirth";
+    rdfs:domain <http://kg.demo.sap.com/Actor>;
+    rdfs:range <http://kg.demo.sap.com/Place>.
+<http://kg.demo.sap.com/title> a owl:DatatypeProperty;
+    rdfs:label "title";
+    rdfs:domain <http://kg.demo.sap.com/Film>;
+    rdfs:range xsd:string.
+<http://kg.demo.sap.com/directed> a owl:ObjectProperty;
+    rdfs:label "directed";
+    rdfs:domain <http://kg.demo.sap.com/Director>;
+    rdfs:range <http://kg.demo.sap.com/Film>.
+<http://kg.demo.sap.com/acted_in> a owl:ObjectProperty;
+    rdfs:label "acted_in";
+    rdfs:domain <http://kg.demo.sap.com/Actor>;
+    rdfs:range <http://kg.demo.sap.com/Film>.
+<http://kg.demo.sap.com/genre> a owl:ObjectProperty;
+    rdfs:label "genre";
+    rdfs:domain <http://kg.demo.sap.com/Film>;
+    rdfs:range <http://kg.demo.sap.com/Genre>.
+```
+
+之后，初始化 LLM。
+
+```typescript
+import { ChatOpenAI } from "@langchain/openai"; // or your chosen LLM
+const llm = new ChatOpenAI({ model: "gpt-4o" });
+```
+
+然后，我们创建 SPARQL QA Chain
+
+```typescript
+import { HanaSparqlQAChain, HanaSparqlQAChainOptions } from "@sap/hana-langchain";
+
+const chainOptions: HanaSparqlQAChainOptions = {
+  llm,
+  allowDangerousRequests: true,
+  graph,
+  debug: true,
+};
+
+const query = "which actors acted in Blade Runner?";
+// const query = "Which movies are in the data?"
+// const query = "In which movies did Keanu Reeves and Carrie-Anne Moss play in together"
+// const query = "which movie genres are in the data?"
+// const query = "which are the two most assigned movie genres?"
+// const query = "where were the actors of 'Blade Runner' born?"
+// const query = "which actors acted together in a movie and were born in the same city?"
+
+const response = await chain.invoke({ query });
+console.log(response["result"]);
+```
+
+```text
+Generated SPARQL:
+\`\`\`sparql
+PREFIX kg: <http://kg.demo.sap.com/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?actor ?actorLabel
+WHERE {
+    ?movie rdf:type kg:Film .
+    ?movie kg:title "Blade Runner" .
+    ?actor kg:acted_in ?movie .
+    ?actor rdfs:label ?actorLabel .
+}
+\`\`\`
+Final SPARQL:
+
+
+PREFIX kg: <http://kg.demo.sap.com/>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?actor ?actorLabel
+
+      FROM <kgdocu_movies>
+      WHERE {
+    ?movie rdf:type kg:Film .
+    ?movie kg:title "Blade Runner" .
+    ?actor kg:acted_in ?movie .
+    ?actor rdfs:label ?actorLabel .
+}
+
+
+Full Context:
+actor,actorLabel
+http://www.wikidata.org/entity/Q1353691,Morgan Paull
+http://www.wikidata.org/entity/Q1372770,William Sanderson
+http://www.wikidata.org/entity/Q358990,James Hong
+http://www.wikidata.org/entity/Q723780,Brion James
+http://www.wikidata.org/entity/Q81328,Q81328
+http://www.wikidata.org/entity/Q498420,M. Emmet Walsh
+http://www.wikidata.org/entity/Q1691628,Joe Turkel
+http://www.wikidata.org/entity/Q207596,Daryl Hannah
+http://www.wikidata.org/entity/Q236702,Joanna Cassidy
+http://www.wikidata.org/entity/Q213574,Rutger Hauer
+http://www.wikidata.org/entity/Q3143555,Hy Pyke
+http://www.wikidata.org/entity/Q230736,Sean Young
+http://www.wikidata.org/entity/Q211415,Edward James Olmos
+
+The actors who acted in Blade Runner include Morgan Paull, William Sanderson, James Hong, Brion James, M. Emmet Walsh, Joe Turkel, Daryl Hannah, Joanna Cassidy, Rutger Hauer, Hy Pyke, Sean Young, and Edward James Olmos.
+```
+
+## 底层发生了什么？
+
+1. **SPARQL 生成**
+   该链使用您的 Turtle 格式本体（`graph.getSchema()`）和用户的问题，通过 `SPARQL_GENERATION_SELECT_PROMPT` 调用 LLM。然后 LLM 会根据您的架构发出有效的 `SELECT` 查询。
+2. **预处理与执行**
+   * **提取与清洗**：从 LLM 的响应中提取原始 SPARQL 文本。
+   * **注入图上下文**：如果缺少则添加 `FROM <graph_uri>`，并确保声明常用前缀（`rdf:`、`rdfs:`、`owl:`、`xsd:`）。
+   * **在 HANA 上运行**：通过 `HanaRdfGraph.query()` 在您的命名图上执行最终确定的查询。
+3. **答案组织**
+   返回的 CSV（或 Turtle）结果再次输入到 LLM——这次使用 `SPARQL_QA_PROMPT`。LLM 会严格根据检索到的数据生成简洁、易读的答案，不会产生幻觉。

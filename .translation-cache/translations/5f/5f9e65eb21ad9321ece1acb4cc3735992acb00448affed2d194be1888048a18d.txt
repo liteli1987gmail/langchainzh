@@ -1,0 +1,940 @@
+---
+title: "向量存储集成"
+sidebarTitle: "向量存储"
+description: "使用 LangChain Python 与向量存储集成。"
+---
+
+import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
+
+## 概述
+
+向量存储[嵌入](/oss/integrations/embeddings)数据并执行相似性搜索。
+
+```mermaid
+flowchart LR
+
+    subgraph "📥 Indexing phase (store)"
+        A[📄 Documents] --> B[🔢 Embedding model]
+        B --> C[🔘 Embedding vectors]
+        C --> D[(Vector store)]
+    end
+
+    subgraph "📤 Query phase (retrieval)"
+        E[❓ Query text] --> F[🔢 Embedding model]
+        F --> G[🔘 Query vector]
+        G --> H[🔍 Similarity search]
+        H --> D
+        D --> I[📄 Top-k results]
+    end
+
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    class A,B,C,D,E,F,G,H,I process
+```
+
+### 接口
+
+LangChain 为向量存储提供了统一的接口，允许你：
+
+- `add_documents` - 向存储中添加文档。
+- `delete` - 根据 ID 删除存储的文档。
+- `similarity_search` - 查询语义相似的文档。
+
+这种抽象让你能够在不改变应用逻辑的情况下切换不同的实现。
+
+### 初始化
+
+要初始化向量存储，需要为其提供一个嵌入模型：
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+vector_store = InMemoryVectorStore(embedding=SomeEmbeddingModel())
+```
+
+### 添加文档
+
+添加 @[`Document`] 对象（包含 `page_content` 和可选的元数据），如下所示：
+
+```python
+vector_store.add_documents(documents=[doc1, doc2], ids=["id1", "id2"])
+```
+
+### 删除文档
+
+通过指定 ID 删除：
+
+```python
+vector_store.delete(ids=["id1"])
+```
+
+### 相似性搜索
+
+使用 `similarity_search` 发起语义查询，该方法返回最相近的嵌入文档：
+
+```python
+similar_docs = vector_store.similarity_search("your query here")
+```
+
+许多向量存储支持以下参数：
+
+* `k` — 返回结果的数量
+* `filter` — 基于元数据进行条件过滤
+
+### 相似度度量与索引
+
+嵌入相似度可以使用以下方式计算：
+
+* **余弦相似度**
+* **欧氏距离**
+* **点积**
+
+高效搜索通常采用 HNSW（Hierarchical Navigable Small World，分层可导航小世界）等索引方法，但具体细节取决于向量存储。
+
+### 元数据过滤
+
+通过元数据进行过滤（例如，来源、日期）可以优化搜索结果：
+
+```python
+vector_store.similarity_search(
+  "query",
+  k=3,
+  filter={"source": "tweets"}
+)
+```
+
+<important>
+对基于元数据过滤的支持因实现而异。
+请查阅所选向量存储的文档了解详情。
+</important>
+
+
+## 热门集成
+
+**选择嵌入模型：**
+
+<AccordionGroup>
+<Accordion title="OpenAI">
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install -qU langchain-openai
+```
+
+```bash uv
+uv add langchain-openai
+```
+</CodeGroup>
+```python
+import getpass
+import os
+
+if not os.environ.get("OPENAI_API_KEY"):
+  os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter API key for OpenAI: ")
+
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+```
+</Accordion>
+<Accordion title="Azure">
+
+</fragment>
+```bash
+pip install -qU langchain-azure-ai
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("AZURE_OPENAI_API_KEY"):
+  os.environ["AZURE_OPENAI_API_KEY"] = getpass.getpass("Enter API key for Azure: ")
+
+from langchain_openai import AzureOpenAIEmbeddings
+
+embeddings = AzureOpenAIEmbeddings(
+    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    azure_deployment=os.environ["AZURE_OPENAI_DEPLOYMENT_NAME"],
+    openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
+)
+```
+</Accordion>
+<Accordion title="Google Gemini">
+```bash
+pip install -qU langchain-google-genai
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("GOOGLE_API_KEY"):
+  os.environ["GOOGLE_API_KEY"] = getpass.getpass("Enter API key for Google Gemini: ")
+
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+```
+</Accordion>
+<Accordion title="Google Vertex">
+
+</Accordion>
+```bash
+pip install -qU langchain-google-vertexai
+```
+```python
+from langchain_google_vertexai import VertexAIEmbeddings
+
+embeddings = VertexAIEmbeddings(model="text-embedding-005")
+```
+</Accordion>
+<Accordion title="AWS">
+```bash
+pip install -qU langchain-aws
+```
+```python
+from langchain_aws import BedrockEmbeddings
+
+embeddings = BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0")
+```
+</Accordion>
+<Accordion title="HuggingFace">
+```bash
+pip install -qU langchain-huggingface
+```
+```python
+from langchain_huggingface import HuggingFaceEmbeddings
+
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+```
+</Accordion>
+<Accordion title="Ollama">
+```bash
+pip install -qU langchain-ollama
+```
+```python
+from langchain_ollama import OllamaEmbeddings
+
+embeddings = OllamaEmbeddings(model="llama3")
+```
+</Accordion>
+<Accordion title="Cohere">
+
+</Accordion>
+```bash
+pip install -qU langchain-cohere
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("COHERE_API_KEY"):
+  os.environ["COHERE_API_KEY"] = getpass.getpass("Enter API key for Cohere: ")
+
+from langchain_cohere import CohereEmbeddings
+
+embeddings = CohereEmbeddings(model="embed-english-v3.0")
+```
+</Accordion>
+<Accordion title="Mistral AI">
+```bash
+pip install -qU langchain-mistralai
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("MISTRALAI_API_KEY"):
+  os.environ["MISTRALAI_API_KEY"] = getpass.getpass("Enter API key for MistralAI: ")
+
+from langchain_mistralai import MistralAIEmbeddings
+
+embeddings = MistralAIEmbeddings(model="mistral-embed")
+```
+</Accordion>
+<Accordion title="Nomic">
+
+</Accordion>
+```bash
+pip install -qU langchain-nomic
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("NOMIC_API_KEY"):
+  os.environ["NOMIC_API_KEY"] = getpass.getpass("Enter API key for Nomic: ")
+
+from langchain_nomic import NomicEmbeddings
+
+embeddings = NomicEmbeddings(model="nomic-embed-text-v1.5")
+```
+</Accordion>
+<Accordion title="NVIDIA">
+
+</Accordion>
+```bash
+pip install -qU langchain-nvidia-ai-endpoints
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("NVIDIA_API_KEY"):
+  os.environ["NVIDIA_API_KEY"] = getpass.getpass("Enter API key for NVIDIA: ")
+
+from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
+
+embeddings = NVIDIAEmbeddings(model="NV-Embed-QA")
+```
+</Accordion>
+<Accordion title="Voyage AI">
+
+</fragment>
+```bash
+pip install -qU langchain-voyageai
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("VOYAGE_API_KEY"):
+  os.environ["VOYAGE_API_KEY"] = getpass.getpass("Enter API key for Voyage AI: ")
+
+from langchain-voyageai import VoyageAIEmbeddings
+
+embeddings = VoyageAIEmbeddings(model="voyage-3")
+```
+</Accordion>
+<Accordion title="IBM watsonx">
+
+</Accordion>
+```bash
+pip install -qU langchain-ibm
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("WATSONX_APIKEY"):
+  os.environ["WATSONX_APIKEY"] = getpass.getpass("Enter API key for IBM watsonx: ")
+
+from langchain_ibm import WatsonxEmbeddings
+
+embeddings = WatsonxEmbeddings(
+    model_id="ibm/slate-125m-english-rtrvr",
+    url="https://us-south.ml.cloud.ibm.com",
+    project_id="<WATSONX PROJECT_ID>",
+)
+```
+</Accordion>
+<Accordion title="假的">
+```bash
+pip install -qU langchain-core
+```
+```python
+from langchain_core.embeddings import DeterministicFakeEmbedding
+
+embeddings = DeterministicFakeEmbedding(size=4096)
+```
+</Accordion>
+<Accordion title="xAI">
+
+</Accordion>
+```bash
+pip install -qU langchain-xai
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("XAI_API_KEY"):
+  os.environ["XAI_API_KEY"] = getpass.getpass("Enter API key for xAI: ")
+
+from langchain.chat_models import init_chat_model
+
+model = init_chat_model("grok-2", model_provider="xai")
+```
+</Accordion>
+<Accordion title="Perplexity">
+</fragment>
+```bash
+pip install -qU langchain-perplexity
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("PPLX_API_KEY"):
+  os.environ["PPLX_API_KEY"] = getpass.getpass("Enter API key for Perplexity: ")
+
+from langchain.chat_models import init_chat_model
+
+model = init_chat_model("llama-3.1-sonar-small-128k-online", model_provider="perplexity")
+```
+</Accordion>
+<Accordion title="DeepSeek">
+
+</Accordion>
+```bash
+pip install -qU langchain-deepseek
+```
+```python
+import getpass
+import os
+
+if not os.environ.get("DEEPSEEK_API_KEY"):
+  os.environ["DEEPSEEK_API_KEY"] = getpass.getpass("Enter API key for DeepSeek: ")
+
+from langchain.chat_models import init_chat_model
+
+model = init_chat_model("deepseek-chat", model_provider="deepseek")
+```
+</Accordion>
+</AccordionGroup>
+
+**选择向量存储：**
+
+<AccordionGroup>
+<Accordion title="In-memory">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-core
+```
+
+```bash uv
+uv add langchain-core
+```
+</CodeGroup>
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+
+vector_store = InMemoryVectorStore(embeddings)
+```
+</Accordion>
+
+<Accordion title="Amazon OpenSearch">
+
+
+</fragment>
+
+```bash pip
+pip install -qU boto3
+```
+
+```python
+from opensearchpy import RequestsHttpConnection
+
+service = "es"  # must set the service as 'es'
+region = "us-east-2"
+credentials = boto3.Session(
+    aws_access_key_id="xxxxxx", aws_secret_access_key="xxxxx"
+).get_credentials()
+awsauth = AWS4Auth("xxxxx", "xxxxxx", region, service, session_token=credentials.token)
+
+vector_store = OpenSearchVectorSearch.from_documents(
+    docs,
+    embeddings,
+    opensearch_url="host url",
+    http_auth=awsauth,
+    timeout=300,
+    use_ssl=True,
+    verify_certs=True,
+    connection_class=RequestsHttpConnection,
+    index_name="test-index",
+)
+```
+
+</Accordion>
+<Accordion title="Astra DB">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-astradb
+```
+
+```bash uv
+uv add langchain-astradb
+```
+</CodeGroup>
+```python
+from langchain_astradb import AstraDBVectorStore
+
+vector_store = AstraDBVectorStore(
+    embedding=embeddings,
+    api_endpoint=ASTRA_DB_API_ENDPOINT,
+    collection_name="astra_vector_langchain",
+    token=ASTRA_DB_APPLICATION_TOKEN,
+    namespace=ASTRA_DB_NAMESPACE,
+)
+```
+</Accordion>
+<Accordion title="Azure Cosmos DB NoSQL">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-azure-cosmosdb azure-cosmos
+```
+
+```bash uv
+uv add langchain-azure-cosmosdb azure-cosmos
+```
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python
+from langchain_azure_cosmosdb import AzureCosmosDBNoSqlVectorSearch
+
+vector_search = AzureCosmosDBNoSqlVectorSearch.from_documents(
+    documents=docs,
+    embedding=openai_embeddings,
+    cosmos_client=cosmos_client,
+    database_name=database_name,
+    container_name=container_name,
+    vector_embedding_policy=vector_embedding_policy,
+    full_text_policy=full_text_policy,
+    indexing_policy=indexing_policy,
+    cosmos_container_properties=cosmos_container_properties,
+    cosmos_database_properties={},
+    full_text_search_enabled=True,
+)
+```
+</Accordion>
+<Accordion title="Azure Cosmos DB Mongo vCore">
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install -qU langchain-azure-ai pymongo
+```
+
+```bash uv
+uv add pymongo
+```
+</CodeGroup>
+
+</fragment>
+
+```python
+from langchain_azure_ai.vectorstores.azure_cosmos_db_mongo_vcore import (
+    AzureCosmosDBMongoVCoreVectorSearch,
+)
+
+vectorstore = AzureCosmosDBMongoVCoreVectorSearch.from_documents(
+    docs,
+    openai_embeddings,
+    collection=collection,
+    index_name=INDEX_NAME,
+)
+```
+</Accordion>
+<Accordion title="Chroma">
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install -qU langchain-chroma
+```
+
+```bash uv
+uv add langchain-chroma
+```
+</CodeGroup>
+```python
+from langchain_chroma import Chroma
+
+vector_store = Chroma(
+    collection_name="example_collection",
+    embedding_function=embeddings,
+    persist_directory="./chroma_langchain_db",  # Where to save data locally, remove if not necessary
+)
+```
+</Accordion>
+<Accordion title="CockroachDB">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-cockroachdb
+```
+
+```bash uv
+uv add langchain-cockroachdb
+```
+</CodeGroup>
+
+</fragment>
+```python
+from langchain_cockroachdb import AsyncCockroachDBVectorStore, CockroachDBEngine
+
+CONNECTION_STRING = "cockroachdb://user:pass@host:26257/db?sslmode=verify-full"
+
+engine = CockroachDBEngine.from_connection_string(CONNECTION_STRING)
+await engine.ainit_vectorstore_table(
+    table_name="vectors",
+    vector_dimension=1536,
+)
+
+vector_store = AsyncCockroachDBVectorStore(
+    engine=engine,
+    embeddings=embeddings,
+    collection_name="vectors",
+)
+```
+</Accordion>
+<Accordion title="Elasticsearch">
+
+安装软件包并使用 [start-local](https://github.com/elastic/start-local) 脚本本地启动 Elasticsearch：
+
+</fragment>
+
+```bash
+pip install -qU langchain-elasticsearch
+curl -fsSL https://elastic.co/start-local | sh
+```
+
+这将创建一个 `elastic-start-local` 文件夹。启动 Elasticsearch：
+
+```bash
+cd elastic-start-local
+./start.sh
+```
+
+Elasticsearch 将在以下地址可用：`http://localhost:9200`。`elastic` 用户的密码和 API 密钥存储在 `elastic-start-local` 文件夹中的 `.env` 文件中。
+
+```python
+from langchain_elasticsearch import ElasticsearchStore
+
+vector_store = ElasticsearchStore(
+    index_name="langchain-demo",
+    embedding=embeddings,
+    es_url="http://localhost:9200",
+)
+```
+
+</Accordion>
+<Accordion title="Milvus">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-milvus
+```
+
+```bash uv
+uv add langchain-milvus
+```
+</CodeGroup>
+```python
+from langchain_milvus import Milvus
+
+URI = "./milvus_example.db"
+
+vector_store = Milvus(
+    embedding_function=embeddings,
+    connection_args={"uri": URI},
+    index_params={"index_type": "FLAT", "metric_type": "L2"},
+)
+```
+</Accordion>
+<Accordion title="MongoDB">
+```bash
+pip install -qU langchain-mongodb
+```
+```python
+from langchain_mongodb import MongoDBAtlasVectorSearch
+
+vector_store = MongoDBAtlasVectorSearch(
+    embedding=embeddings,
+    collection=MONGODB_COLLECTION,
+    index_name=ATLAS_VECTOR_SEARCH_INDEX_NAME,
+    relevance_score_fn="cosine",
+)
+```
+</Accordion>
+<Accordion title="PGVector">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-postgres
+```
+
+```bash uv
+uv add langchain-postgres
+```
+</CodeGroup>
+```python
+from langchain_postgres import PGVector
+
+vector_store = PGVector(
+    embeddings=embeddings,
+    collection_name="my_docs",
+    connection="postgresql+psycopg://..."
+)
+```
+</Accordion>
+<Accordion title="PGVectorStore">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-postgres
+```
+
+```bash uv
+uv add langchain-postgres
+```
+</CodeGroup>
+```python
+from langchain_postgres import PGEngine, PGVectorStore
+
+pg_engine = PGEngine.from_connection_string(
+    url="postgresql+psycopg://..."
+)
+
+vector_store = PGVectorStore.create_sync(
+    engine=pg_engine,
+    table_name='test_table',
+    embedding_service=embedding
+)
+```
+</Accordion>
+<Accordion title="Pinecone">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-pinecone
+```
+
+```bash uv
+uv add langchain-pinecone
+```
+</CodeGroup>
+```python
+from langchain_pinecone import PineconeVectorStore
+from pinecone import Pinecone
+
+pc = Pinecone(api_key=...)
+index = pc.Index(index_name)
+
+vector_store = PineconeVectorStore(embedding=embeddings, index=index)
+```
+</Accordion>
+<Accordion title="Qdrant">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-qdrant
+```
+
+```bash uv
+uv add langchain-qdrant
+```
+</CodeGroup>
+
+</fragment>
+```python
+from qdrant_client.models import Distance, VectorParams
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
+
+client = QdrantClient(":memory:")
+
+vector_size = len(embeddings.embed_query("sample text"))
+
+if not client.collection_exists("test"):
+    client.create_collection(
+        collection_name="test",
+        vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
+    )
+vector_store = QdrantVectorStore(
+    client=client,
+    collection_name="test",
+    embedding=embeddings,
+)
+```
+</Accordion>
+<Accordion title="Redis">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-redis
+```
+
+```bash uv
+uv add langchain-redis
+```
+</CodeGroup>
+```python
+import os
+from langchain_redis import RedisConfig, RedisVectorStore
+
+config = RedisConfig(
+    index_name="my_vectors",
+    redis_url=os.getenv("REDIS_URL", "redis://localhost:6379"),
+    distance_metric="COSINE"
+)
+
+vector_store = RedisVectorStore(embeddings=embeddings, config=config)
+```
+</Accordion>
+<Accordion title="Oracle AI 数据库">
+
+<CodeGroup>
+
+</CodeGroup>
+</Accordion>
+```bash pip
+pip install -qU langchain-oracledb
+```
+
+```bash uv
+uv add langchain-oracledb
+```
+
+<LangchainCommunityUnmaintained />
+
+</CodeGroup>
+```python
+import oracledb
+from langchain_oracledb.vectorstores import OracleVS
+from langchain_oracledb.vectorstores.oraclevs import create_index
+from langchain_community.vectorstores.utils import DistanceStrategy
+
+username = "<username>"
+password = "<password>"
+dsn = "<hostname>:<port>/<service_name>"
+
+connection = oracledb.connect(user=username, password=password, dsn=dsn)
+
+vector_store = OracleVS(
+    client=connection,
+    embedding_function=embedding_model,
+    table_name="VECTOR_SEARCH_DEMO",
+    distance_strategy=DistanceStrategy.EUCLIDEAN_DISTANCE
+)
+```
+</Accordion>
+<Accordion title="turbopuffer">
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-turbopuffer
+```
+
+```bash uv
+uv add langchain-turbopuffer
+```
+</CodeGroup>
+```python
+from langchain_turbopuffer import TurbopufferVectorStore
+from turbopuffer import Turbopuffer
+
+tpuf = Turbopuffer(region="gcp-us-central1")
+ns = tpuf.namespace("langchain-test")
+
+vector_store = TurbopufferVectorStore(embedding=embeddings, namespace=ns)
+```
+</Accordion>
+
+<Accordion title="Valkey">
+
+<CodeGroup>
+```bash pip
+pip install -qU "langchain-aws[valkey]"
+```
+
+```bash uv
+uv add langchain-aws --extra valkey
+```
+</CodeGroup>
+```python
+from langchain_aws.vectorstores import ValkeyVectorStore
+
+vector_store = ValkeyVectorStore(
+    embedding=embeddings,
+    valkey_url="valkey://localhost:6379",
+    index_name="my_index"
+)
+```
+</Accordion>
+</AccordionGroup>
+
+| 向量存储 | 按 ID 删除 | 过滤 | 按向量搜索 | 带分数搜索 | 异步 | 通过标准测试 | 多租户 | 添加文档中的 ID |
+|--------|-----------|------|-----------|-----------|------|-------------|--------|----------------|
+| [`AstraDBVectorStore`](/oss/integrations/vectorstores/astradb) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [`AzureCosmosDBNoSqlVectorStore`](/oss/integrations/vectorstores/azure_cosmos_db_no_sql) | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| [`AzureCosmosDBMongoVCoreVectorStore`](/oss/integrations/vectorstores/azure_cosmos_db_mongo_vcore) | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| [`AsyncCockroachDBVectorStore`](/oss/integrations/vectorstores/cockroachdb) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [`CouchbaseSearchVectorStore`](/oss/integrations/vectorstores/couchbase) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
+| [`DatabricksVectorSearch`](/oss/integrations/vectorstores/databricks_vector_search) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| [`ElasticsearchStore`](/oss/integrations/vectorstores/elasticsearch) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| [`InMemoryVectorStore`](https://reference.langchain.com/python/langchain-core/vectorstores/in_memory/InMemoryVectorStore) | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ |
+| [`LambdaDB`](/oss/integrations/vectorstores/lambdadb) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
+| [`Milvus`](/oss/integrations/vectorstores/milvus) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [`Moorcheh`](/oss/integrations/vectorstores/moorcheh) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [`MongoDBAtlasVectorSearch`](/oss/integrations/vectorstores/mongodb_atlas) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| [`openGauss`](/oss/integrations/vectorstores/opengauss) | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ |
+| [`PineconeVectorStore`](/oss/integrations/vectorstores/pinecone) | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ |
+| [`QdrantVectorStore`](/oss/integrations/vectorstores/qdrant) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
+| [`RedisVectorStore`](/oss/integrations/vectorstores/redis) | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| [`Weaviate`](/oss/integrations/vectorstores/weaviate) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
+| [`SQLServer`](/oss/integrations/vectorstores/sqlserver) | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| [`ValkeyVectorStore`](/oss/integrations/vectorstores/valkey) | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| [`ZeusDB`](/oss/integrations/vectorstores/zeusdb) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
+| [`Oracle AI Database`](/oss/integrations/vectorstores/oracle) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
+
+## 所有向量存储
+
+<Columns cols={3}>
+<Card title="Activeloop Deep Lake" icon="link" href="/oss/integrations/vectorstores/activeloop_deeplake" arrow="true" cta="查看指南"/>
+<Card title="Alibaba Cloud MySQL" icon="link" href="/oss/integrations/vectorstores/alibabacloud_mysql" arrow="true" cta="查看指南"/>
+<Card title="Astra DB Vector Store" icon="link" href="/oss/integrations/vectorstores/astradb" arrow="true" cta="查看指南"/>
+<Card title="Azure Cosmos DB Mongo vCore" icon="link" href="/oss/integrations/vectorstores/azure_cosmos_db_mongo_vcore" arrow="true" cta="查看指南"/>
+<Card title="Azure Cosmos DB No SQL" icon="link" href="/oss/integrations/vectorstores/azure_cosmos_db_no_sql" arrow="true" cta="查看指南"/>
+<Card title="Azure Database for PostgreSQL - Flexible Server" icon="link" href="/oss/integrations/vectorstores/azure_db_for_postgresql" arrow="true" cta="查看指南"/>
+<Card title="CockroachDB" icon="link" href="/oss/integrations/vectorstores/cockroachdb" arrow="true" cta="查看指南"/>
+<Card title="Couchbase" icon="link" href="/oss/integrations/vectorstores/couchbase" arrow="true" cta="查看指南"/>
+<Card title="Databricks" icon="link" href="/oss/integrations/vectorstores/databricks_vector_search" arrow="true" cta="查看指南"/>
+<Card title="IBM Db2" icon="link" href="/oss/integrations/vectorstores/db2" arrow="true" cta="查看指南"/>
+<Card title="Amazon Document DB" icon="link" href="/oss/integrations/vectorstores/documentdb" arrow="true" cta="查看指南"/>
+<Card title="Elasticsearch" icon="link" href="/oss/integrations/vectorstores/elasticsearch" arrow="true" cta="查看指南"/>
+<Card title="Gel" icon="link" href="/oss/integrations/vectorstores/gel" arrow="true" cta="查看指南"/>
+<Card title="Google AlloyDB" icon="link" href="/oss/integrations/vectorstores/google_alloydb" arrow="true" cta="查看指南"/>
+<Card title="Google BigQuery Vector Search" icon="link" href="/oss/integrations/vectorstores/google_bigquery_vector_search" arrow="true" cta="查看指南"/>
+<Card title="Google Cloud SQL for MySQL" icon="link" href="/oss/integrations/vectorstores/google_cloud_sql_mysql" arrow="true" cta="查看指南"/>
+<Card title="Google Cloud SQL for PostgreSQL" icon="link" href="/oss/integrations/vectorstores/google_cloud_sql_pg" arrow="true" cta="查看指南"/>
+<Card title="Firestore" icon="link" href="/oss/integrations/vectorstores/google_firestore" arrow="true" cta="查看指南"/>
+<Card title="Google Memorystore for Redis" icon="link" href="/oss/integrations/vectorstores/google_memorystore_redis" arrow="true" cta="查看指南"/>
+<Card title="Google Spanner" icon="link" href="/oss/integrations/vectorstores/google_spanner" arrow="true" cta="查看指南"/>
+<Card title="Google Bigtable" icon="link" href="/oss/integrations/vectorstores/google_bigtable" arrow="true" cta="查看指南"/>
+<Card title="Google Vertex AI Feature Store" icon="link" href="/oss/integrations/vectorstores/google_vertex_ai_feature_store" arrow="true" cta="查看指南"/>
+<Card title="Google Vertex AI Vector Search" icon="link" href="/oss/integrations/vectorstores/google_vertex_ai_vector_search" arrow="true" cta="查看指南"/>
+<Card title="Kinetica" icon="link" href="/oss/integrations/vectorstores/kinetica" arrow="true" cta="查看指南"/>
+<Card title="LambdaDB" icon="link" href="/oss/integrations/vectorstores/lambdadb" arrow="true" cta="查看指南"/>
+<Card title="Lindorm" icon="link" href="/oss/integrations/vectorstores/lindorm" arrow="true" cta="查看指南"/>
+<Card title="Amazon MemoryDB" icon="link" href="/oss/integrations/vectorstores/memorydb" arrow="true" cta="查看指南"/>
+<Card title="Milvus" icon="link" href="/oss/integrations/vectorstores/milvus" arrow="true" cta="查看指南"/>
+<Card title="Moorcheh" icon="link" href="/oss/integrations/vectorstores/moorcheh" arrow="true" cta="查看指南"/>
+<Card title="MongoDB Atlas" icon="link" href="/oss/integrations/vectorstores/mongodb_atlas" arrow="true" cta="查看指南"/>
+<Card title="Oceanbase" icon="link" href="/oss/integrations/vectorstores/oceanbase" arrow="true" cta="查看指南"/>
+<Card title="openGauss" icon="link" href="/oss/integrations/vectorstores/opengauss" arrow="true" cta="查看指南"/>
+<Card title="Oracle AI Database" icon="link" href="/oss/integrations/vectorstores/oracle" arrow="true" cta="查看指南"/>
+<Card title="PGVectorStore" icon="link" href="/oss/integrations/vectorstores/pgvectorstore" arrow="true" cta="查看指南"/>
+<Card title="Pinecone" icon="link" href="/oss/integrations/vectorstores/pinecone" arrow="true" cta="查看指南"/>
+<Card title="Pinecone (sparse)" icon="link" href="/oss/integrations/vectorstores/pinecone_sparse" arrow="true" cta="查看指南"/>
+<Card title="Qdrant" icon="link" href="/oss/integrations/vectorstores/qdrant" arrow="true" cta="查看指南"/>
+<Card title="Redis" icon="link" href="/oss/integrations/vectorstores/redis" arrow="true" cta="查看指南"/>
+<Card title="SAP HANA Cloud Vector Engine" icon="link" href="/oss/integrations/vectorstores/sap_hanavector" arrow="true" cta="查看指南"/>
+<Card title="SQLServer" icon="link" href="/oss/integrations/vectorstores/sqlserver" arrow="true" cta="查看指南"/>
+<Card title="SurrealDB" icon="link" href="/oss/integrations/vectorstores/surrealdb" arrow="true" cta="查看指南"/>
+<Card title="Teradata VectorStore" icon="link" href="/oss/integrations/vectorstores/teradata" arrow="true" cta="查看指南"/>
+<Card title="Valkey" icon="link" href="/oss/integrations/vectorstores/valkey" arrow="true" cta="查看指南"/>
+<Card title="VDMS" icon="link" href="/oss/integrations/vectorstores/vdms" arrow="true" cta="查看指南"/>
+<Card title="veDB for MySQL" icon="link" href="/oss/integrations/vectorstores/vedb_for_mysql" arrow="true" cta="查看指南"/>
+<Card title="Volcengine RDS for MySQL" icon="link" href="/oss/integrations/vectorstores/volcengine_mysql" arrow="true" cta="查看指南"/>
+<Card title="Weaviate" icon="link" href="/oss/integrations/vectorstores/weaviate" arrow="true" cta="查看指南"/>
+<Card title="YDB" icon="link" href="/oss/integrations/vectorstores/ydb" arrow="true" cta="查看指南"/>
+<Card title="ZeusDB" icon="link" href="/oss/integrations/vectorstores/zeusdb" arrow="true" cta="查看指南"/>
+</Columns>

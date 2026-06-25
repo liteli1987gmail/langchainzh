@@ -1,0 +1,94 @@
+
+#### 2. 部署到 LangSmith
+
+<Steps>
+<Step title="导航到 LangSmith 部署">
+    登录到 [LangSmith](https://smith.langchain.com)。在左侧边栏中，选择 **部署 (Deployments)**。
+</Step>
+<Step title="创建新部署">
+    点击 **+ 新建部署** 按钮。将打开一个窗格，您可以在此填写必填字段。
+</Step>
+<Step title="关联仓库">
+    如果您是首次使用或添加尚未连接过的私有仓库，请点击 **添加新账户** 按钮，然后按照说明连接您的 GitHub 账户。
+</Step>
+<Step title="部署仓库">
+    选择您的应用程序仓库。点击 **提交 (Submit)** 开始部署。完成此操作可能需要约 15 分钟。您可以在 **部署详情 (Deployment details)** 视图中查看状态。
+</Step>
+</Steps>
+
+#### 3. 在 Studio 中测试您的应用程序
+
+应用程序部署完成后：
+
+1. 选择您刚创建的部署以查看更多详情。
+2. 点击右上角的 **Studio** 按钮。Studio 将打开并显示您的图。
+
+#### 4. 获取部署的 API URL
+
+1. 在 LangGraph 的 **部署详情 (Deployment details)** 视图中，点击 **API URL** 将其复制到剪贴板。
+2. 点击 `URL` 将其复制到剪贴板。
+
+#### 5. 测试 API
+
+您现在可以测试 API：
+
+<Tabs>
+<Tab title="JavaScript">
+1. 安装 LangGraph JS：
+
+</Tab>
+</Tabs>
+```shell
+npm install @langchain/langgraph-sdk
+```
+2. 向代理发送消息：
+```ts
+const { Client } = await import("@langchain/langgraph-sdk");
+
+const client = new Client({ apiUrl: "your-deployment-url", apiKey: "your-langsmith-api-key" });
+
+const streamResponse = client.runs.stream(
+    null,    // Threadless run
+    "agent", // Name of agent. Defined in langgraph.json.
+    {
+        input: {
+            "messages": [
+                { "role": "user", "content": "What is LangGraph?"}
+            ]
+        },
+        streamMode: "messages",
+    }
+);
+
+for await (const chunk of streamResponse) {
+    console.log(`Receiving new event of type: ${chunk.event}...`);
+    console.log(JSON.stringify(chunk.data));
+    console.log("\n\n");
+}
+```
+</Tab>
+<Tab title="REST 接口">
+```bash
+curl -s --request POST \
+    --url <DEPLOYMENT_URL>/runs/stream \
+    --header 'Content-Type: application/json' \
+    --header "X-Api-Key: <LANGSMITH API KEY> \
+    --data "{
+        \"assistant_id\": \"agent\", `# Name of agent. Defined in langgraph.json.`
+        \"input\": {
+            \"messages\": [
+                {
+                    \"role\": \"human\",
+                    \"content\": \"What is LangGraph?\"
+                }
+            ]
+        },
+        \"stream_mode\": \"updates\"
+    }"
+```
+</Tab>
+</Tabs>
+
+<Tip>
+LangSmith 提供额外的托管选项，包括自托管和混合部署。欲了解更多详情，请参阅[平台设置概览](/langsmith/platform-setup)。
+</Tip>

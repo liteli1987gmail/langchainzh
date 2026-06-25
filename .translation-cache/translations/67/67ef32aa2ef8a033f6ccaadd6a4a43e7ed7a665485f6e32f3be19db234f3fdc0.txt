@@ -1,0 +1,461 @@
+---
+title: "PGVectorStore 集成"
+description: "使用 LangChain JavaScript 与 PGVectorStore 集成。"
+---
+
+<Tip>
+**兼容性**：仅在 Node.js 上可用。
+</Tip>
+
+为了在通用 PostgreSQL 数据库中启用向量搜索，LangChain.js 支持使用 [`pgvector`](https://github.com/pgvector/pgvector) Postgres 扩展。
+
+本指南提供了开始使用 PGVector [向量存储](/oss/integrations/vectorstores) 的快速概览。所有 `PGVectorStore` 功能和配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-pgvector/PGVectorStore)。
+
+## PGVectorStore vs PGVector：选择哪一个？
+
+LangChain 有两个 Postgres 向量存储集成。以下是选择方法：
+
+| 功能 | PGVector（旧版） | PGVectorStore（现代版） |
+|---|---|---|
+| 包 | `langchain-community` | `langchain-postgres`（Python）/ `@langchain/pgvector`（JS） |
+| 维护 | 社区维护 | 官方合作伙伴包 |
+| 连接 | 简单连接字符串 | `PGEngine`（更好的连接池） |
+| 搜索类型 | 标准向量搜索 | 混合搜索（向量 + BM25） |
+| 异步支持 | 有限 | 完全原生异步 |
+| Schema | 固定表结构 | 可自定义列和 Schema |
+
+**在以下情况下使用 `PGVectorStore`（现代版——推荐）：**
+- 启动任何新项目时
+- 需要混合搜索（向量 + 关键词组合）
+- 希望获得更好的连接池性能
+- 构建异步应用程序（例如 FastAPI、异步 Node.js）
+
+**仅在以下情况下使用 `PGVector`（旧版）：**
+- 维护已使用它的现有代码库
+- 遵循尚未更新的旧教程
+
+<Note>
+对于所有新项目，我们建议使用 `langchain-postgres`（Python）或 `@langchain/community`（JavaScript）中的 `PGVectorStore`。
+</Note>
+
+---
+
+## 概览
+
+### 集成详情
+
+| 类 | 包 | [Python 支持](https://python.langchain.com/docs/integrations/vectorstores/pgvector/) | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: | :---: |
+| [`PGVectorStore`](https://reference.langchain.com/javascript/langchain-pgvector/PGVectorStore) | [`@langchain/pgvector`](https://www.npmjs.com/package/@langchain/pgvector) | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/pgvector?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/pgvector?style=flat-square&label=%20&) |
+
+## 设置
+
+要使用 PGVector 向量存储，请设置一个启用了 [`pgvector`](https://github.com/pgvector/pgvector) 扩展的 Postgres 实例，然后安装 `@langchain/pgvector`、[`pg`](https://www.npmjs.com/package/pg) 驱动和 `@langchain/core`。
+
+本指南使用 [OpenAI 嵌入模型](/oss/integrations/embeddings/openai) 作为示例。您也可以使用[其他支持的嵌入模型](/oss/integrations/embeddings)。
+
+<CodeGroup>
+```bash npm
+npm install @langchain/pgvector @langchain/openai @langchain/core pg
+```
+```bash yarn
+yarn add @langchain/pgvector @langchain/openai @langchain/core pg
+```
+```bash pnpm
+pnpm add @langchain/pgvector @langchain/openai @langchain/core pg
+```
+</CodeGroup>
+
+### 设置实例
+
+连接 Postgres 的方式有多种，具体取决于您如何设置实例。以下是使用 `pgvector` 团队提供的预构建 Docker 镜像进行本地设置的一个示例。
+
+创建一个名为 docker-compose.yml 的文件，内容如下：
+
+```yaml
+# Run this command to start the database:
+# docker compose up
+services:
+  db:
+    hostname: 127.0.0.1
+    image: pgvector/pgvector:pg16
+    ports:
+      - 5432:5432
+    restart: always
+    environment:
+      - POSTGRES_DB=api
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=ChangeMe
+```
+
+然后在同一目录下，运行 `docker compose up` 来启动容器。
+
+你可以在 [官方仓库](https://github.com/pgvector/pgvector/) 中找到更多关于如何设置 pgvector 的信息。
+
+### 凭据
+
+要连接到你的 Postgres 实例，你需要相应的凭据。关于支持选项的完整列表，请参阅 [`node-postgres` 文档](https://node-postgres.com/apis/client)。
+
+如果你在本指南中使用 OpenAI 嵌入，你还需要设置你的 OpenAI 密钥：
+
+```typescript
+process.env.OPENAI_API_KEY = "YOUR_API_KEY";
+```
+
+如果您想自动追踪模型调用，也可以通过取消注释下方内容来设置您的 [LangSmith](/langsmith/observability) API key：
+
+```typescript
+// process.env.LANGSMITH_TRACING="true"
+// process.env.LANGSMITH_API_KEY="your-api-key"
+```
+
+## 实例化
+
+要实例化向量存储，请调用 `.initialize()` 静态方法。这将自动检查传入 `config` 中 `tableName` 指定的表是否存在。如果不存在，则会使用所需的列创建该表。
+
+<Warning>
+**安全**：用户生成的数据（如用户名）不应被用作表名和列名的输入。
+**这可能导致 SQL 注入！**
+</Warning>
+
+```typescript
+import { PGVectorStore } from "@langchain/pgvector";
+import type { DistanceStrategy } from "@langchain/pgvector";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import type { PoolConfig } from "pg";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-small",
+});
+
+// Sample config
+const config = {
+  postgresConnectionOptions: {
+    type: "postgres",
+    host: "127.0.0.1",
+    port: 5433,
+    user: "myuser",
+    password: "ChangeMe",
+    database: "api",
+  } as PoolConfig,
+  tableName: "testlangchainjs",
+  columns: {
+    idColumnName: "id",
+    vectorColumnName: "vector",
+    contentColumnName: "content",
+    metadataColumnName: "metadata",
+  },
+  // supported distance strategies: cosine (default), innerProduct, or euclidean
+  distanceStrategy: "cosine" as DistanceStrategy,
+};
+
+const vectorStore = await PGVectorStore.initialize(
+  embeddings,
+  config
+);
+```
+
+## 管理向量存储
+
+### 向向量存储添加内容
+
+```typescript
+import type { Document } from "@langchain/core/documents";
+
+const document1: Document = {
+  pageContent: "The powerhouse of the cell is the mitochondria",
+  metadata: { source: "https://example.com" }
+};
+
+const document2: Document = {
+  pageContent: "Buildings are made out of brick",
+  metadata: { source: "https://example.com" }
+};
+
+const document3: Document = {
+  pageContent: "Mitochondria are made out of lipids",
+  metadata: { source: "https://example.com" }
+};
+
+const document4: Document = {
+  pageContent: "The 2024 Olympics are in Paris",
+  metadata: { source: "https://example.com" }
+}
+
+const documents = [document1, document2, document3, document4];
+
+const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
+
+await vectorStore.addDocuments(documents, { ids: ids });
+```
+
+### 删除向量存储中的项目
+
+```typescript
+const id4 = ids[ids.length - 1];
+
+await vectorStore.delete({ ids: [id4] });
+```
+
+## 查询向量存储
+
+一旦创建了向量存储并添加了相关文档，您很可能希望在链或代理运行期间对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以按如下方式进行：
+
+```typescript
+const filter = { source: "https://example.com" };
+
+const similaritySearchResults = await vectorStore.similaritySearch("biology", 2, filter);
+
+for (const doc of similaritySearchResults) {
+  console.log(`* ${doc.pageContent} [${JSON.stringify(doc.metadata, null)}]`);
+}
+```
+
+```text
+* The powerhouse of the cell is the mitochondria [{"source":"https://example.com"}]
+* Mitochondria are made out of lipids [{"source":"https://example.com"}]
+```
+
+上述过滤器语法支持精确匹配，但同时也支持以下方式：
+
+#### 使用 `in` 操作符
+
+```json
+{
+  "field": {
+    "in": ["value1", "value2"],
+  }
+}
+```
+
+#### 使用 `notIn` 运算符
+
+```json
+{
+  "field": {
+    "notIn": ["value1", "value2"],
+  }
+}
+```
+
+#### 使用 `arrayContains` 运算符
+
+```json
+{
+  "field": {
+    "arrayContains": ["value1", "value2"],
+  }
+}
+```
+
+如果你想执行相似性搜索并接收相应的分数，可以运行：
+
+```typescript
+const similaritySearchWithScoreResults = await vectorStore.similaritySearchWithScore("biology", 2, filter)
+
+for (const [doc, score] of similaritySearchWithScoreResults) {
+  console.log(`* [SIM=${score.toFixed(3)}] ${doc.pageContent} [${JSON.stringify(doc.metadata)}]`);
+}
+```
+
+```text
+* [SIM=0.835] The powerhouse of the cell is the mitochondria [{"source":"https://example.com"}]
+* [SIM=0.852] Mitochondria are made out of lipids [{"source":"https://example.com"}]
+```
+
+### 通过转换为检索器来查询
+
+您还可以将向量存储转换为[检索器](/oss/langchain/retrieval)，以便于在链中更方便地使用。
+
+```typescript
+const retriever = vectorStore.asRetriever({
+  // Optional filter
+  filter: filter,
+  k: 2,
+});
+await retriever.invoke("biology");
+```
+
+```javascript
+[
+  Document {
+    pageContent: 'The powerhouse of the cell is the mitochondria',
+    metadata: { source: 'https://example.com' },
+    id: undefined
+  },
+  Document {
+    pageContent: 'Mitochondria are made out of lipids',
+    metadata: { source: 'https://example.com' },
+    id: undefined
+  }
+]
+```
+
+### 用于检索增强生成的用法
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下章节：
+
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [Agentic RAG](/oss/langgraph/agentic-rag)
+- [检索文档](/oss/langchain/retrieval)
+
+## 高级用法：重用连接
+
+您可以通过创建连接池来重用连接，然后直接通过构造函数创建新的 `PGVectorStore` 实例。
+
+请注意，您至少需要调用一次 `.initialize()` 来正确设置数据库表，然后再使用构造函数。
+
+```typescript
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { PGVectorStore } from "@langchain/pgvector";
+import pg from "pg";
+
+const reusablePool = new pg.Pool({
+  host: "127.0.0.1",
+  port: 5433,
+  user: "myuser",
+  password: "ChangeMe",
+  database: "api",
+});
+
+const originalConfig = {
+  pool: reusablePool,
+  tableName: "testlangchainjs",
+  collectionName: "sample",
+  collectionTableName: "collections",
+  columns: {
+    idColumnName: "id",
+    vectorColumnName: "vector",
+    contentColumnName: "content",
+    metadataColumnName: "metadata",
+  },
+};
+
+// Set up the DB.
+// Can skip this step if you've already initialized the DB.
+// await PGVectorStore.initialize(new OpenAIEmbeddings(), originalConfig);
+const pgvectorStore = new PGVectorStore(new OpenAIEmbeddings(), originalConfig);
+
+await pgvectorStore.addDocuments([
+  { pageContent: "what's this", metadata: { a: 2 } },
+  { pageContent: "Cat drinks milk", metadata: { a: 1 } },
+]);
+
+const results = await pgvectorStore.similaritySearch("water", 1);
+
+console.log(results);
+
+/*
+  [ Document { pageContent: 'Cat drinks milk', metadata: { a: 1 } } ]
+*/
+
+const pgvectorStore2 = new PGVectorStore(new OpenAIEmbeddings(), {
+  pool: reusablePool,
+  tableName: "testlangchainjs",
+  collectionTableName: "collections",
+  collectionName: "some_other_collection",
+  columns: {
+    idColumnName: "id",
+    vectorColumnName: "vector",
+    contentColumnName: "content",
+    metadataColumnName: "metadata",
+  },
+});
+
+const results2 = await pgvectorStore2.similaritySearch("water", 1);
+
+console.log(results2);
+
+/*
+  []
+*/
+
+await reusablePool.end();
+```
+
+## 创建 HNSW 索引
+
+默认情况下，扩展执行顺序扫描搜索，召回率为 100%。您可以考虑创建 HNSW 索引以进行近似最近邻 (ANN) 搜索，从而加快 `similaritySearchVectorWithScore` 的执行时间。若要在向量列上创建 HNSW 索引，请使用 `createHnswIndex()` 方法。
+
+该方法参数包括：
+
+- `dimensions`：定义向量数据类型中的维度数量，最多 2000 个。例如，对于 OpenAI 的 text-embedding-ada-002 和 Amazon 的 amazon.titan-embed-text-v1 模型，请使用 1536。
+
+- `m?`：每层的最大连接数（默认为 16）。较小的值可以缩短索引构建时间，而较大的值可以加快搜索查询速度。
+
+- `efConstruction?`：用于构建图的动态候选列表大小（默认为 64）。较大的值可能会以索引构建时间为代价提高索引质量。
+
+- `distanceFunction?`：要使用的距离函数名称，会根据 distanceStrategy 自动选择。
+
+更多信息，请参阅 [Pgvector GitHub 仓库](https://github.com/pgvector/pgvector?tab=readme-ov-file#hnsw) 以及 [Malkov Yu A. 和 Yashunin D. A. 2020 年发表的 HNSW 论文：使用分层可导航小世界图进行高效稳健的近似最近邻搜索](https://arxiv.org/pdf/1603.09320)
+
+```typescript
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { PGVectorStore } from "@langchain/pgvector";
+import type { DistanceStrategy } from "@langchain/pgvector";
+import type { PoolConfig } from "pg";
+
+
+const hnswConfig = {
+  postgresConnectionOptions: {
+    type: "postgres",
+    host: "127.0.0.1",
+    port: 5433,
+    user: "myuser",
+    password: "ChangeMe",
+    database: "api",
+  } as PoolConfig,
+  tableName: "testlangchainjs",
+  columns: {
+    idColumnName: "id",
+    vectorColumnName: "vector",
+    contentColumnName: "content",
+    metadataColumnName: "metadata",
+  },
+  // supported distance strategies: cosine (default), innerProduct, or euclidean
+  distanceStrategy: "cosine" as DistanceStrategy,
+};
+
+const hnswPgVectorStore = await PGVectorStore.initialize(
+  new OpenAIEmbeddings(),
+  hnswConfig
+);
+
+// create the index
+await hnswPgVectorStore.createHnswIndex({
+  dimensions: 1536,
+  efConstruction: 64,
+  m: 16,
+});
+
+await hnswPgVectorStore.addDocuments([
+  { pageContent: "what's this", metadata: { a: 2, b: ["tag1", "tag2"] } },
+  { pageContent: "Cat drinks milk", metadata: { a: 1, b: ["tag2"] } },
+]);
+
+const model = new OpenAIEmbeddings();
+const query = await model.embedQuery("water");
+const hnswResults = await hnswPgVectorStore.similaritySearchVectorWithScore(query, 1);
+
+console.log(hnswResults);
+
+await hnswPgVectorStore.end();
+```
+
+## 关闭连接
+
+确保在完成后关闭连接，以避免过多的资源消耗：
+
+```typescript
+await vectorStore.end();
+```
+
+---
+
+## API 参考
+
+有关所有 `PGVectorStore` 功能配置的详细文档，请前往 [API 参考](https://reference.langchain.com/javascript/langchain-pgvector/PGVectorStore)。

@@ -1,0 +1,104 @@
+---
+title: "ChatAIMLAPI 集成"
+description: "使用 LangChain Python 与 ChatAIMLAPI 聊天模型集成。"
+---
+
+本指南帮助你开始使用 AI/ML API [聊天模型](/oss/langchain/models)。
+
+[AI/ML API](https://aimlapi.com/app/?utm_source=langchain&utm_medium=github&utm_campaign=integration) 提供对数百种托管基础模型的高可用性和高吞吐量统一访问。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| `ChatAIMLAPI` | `langchain-aimlapi` | beta | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-aimlapi?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-aimlapi?style=flat-square&label=%20) |
+
+### 模型特性
+
+| [工具调用](/oss/langchain/tools) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | 视频输入 | [令牌级流式传输](/oss/langchain/streaming/) | 原生异步 | [令牌使用](/oss/langchain/models#token-usage) | [对数概率](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+## 设置
+
+要访问 AI/ML API 模型，你需要创建一个账户、获取 API 密钥，并安装 `langchain-aimlapi` 集成包。
+
+### 凭据
+
+前往 [aimlapi.com](https://aimlapi.com/app/?utm_source=langchain&utm_medium=github&utm_campaign=integration) 注册并生成 API 密钥。完成后，设置 `AIMLAPI_API_KEY` 环境变量：
+
+```python
+import getpass
+import os
+
+if not os.getenv("AIMLAPI_API_KEY"):
+    os.environ["AIMLAPI_API_KEY"] = getpass.getpass("Enter your AI/ML API key: ")
+```
+
+要启用模型的自动化追踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+LangChain AI/ML API 集成位于 `langchain-aimlapi` 包中：
+
+```python
+pip install -qU langchain-aimlapi
+```
+
+## 实例化
+
+现在我们可以实例化模型对象并生成聊天补全：
+
+```python
+from langchain_aimlapi import ChatAIMLAPI
+
+llm = ChatAIMLAPI(
+    model="meta-llama/Llama-3-70b-chat-hf",
+    temperature=0.7,
+    max_tokens=512,
+    timeout=30,
+    max_retries=3,
+)
+```
+
+## 调用
+
+```python
+messages = [
+    ("system", "You are a helpful assistant that translates English to French."),
+    ("human", "I love programming."),
+]
+ai_msg = llm.invoke(messages)
+ai_msg
+```
+
+```text
+AIMessage(content="J'adore la programmation.", response_metadata={'token_usage': {'completion_tokens': 9, 'prompt_tokens': 23, 'total_tokens': 32}, 'model_name': 'meta-llama/Llama-3-70b-chat-hf'}, id='run-...')
+```
+
+```python
+print(ai_msg.content)
+```
+
+```text
+J'adore la programmation.
+```
+
+## 流式调用
+
+您还可以逐令牌流式传输响应：
+
+```python
+stream = llm.stream_events("List top 5 programming languages in 2025 with reasons.", version="v3")
+for token in stream.text:
+    print(token, end="", flush=True)
+```
+
+---

@@ -1,0 +1,401 @@
+---
+title: 沙箱快照
+sidebarTitle: 快照
+description: 为沙箱构建和捕获可复用的文件系统镜像。
+---
+
+**快照**是由 Docker 镜像支撑的可复用文件系统包。当您想从自定义文件系统镜像启动沙箱时，可以构建或捕获快照。
+
+您也可以从正在运行的沙箱中捕获快照——安装软件包、写入数据文件或配置状态，然后将结果快照化并作为新的起点复用。
+
+![Sandboxes snapshots page](/images/langsmith/sandboxes/sb-snapshots.png)
+
+## 从 Docker 镜像构建快照
+
+通过指向任意 Docker 镜像来构建快照。调用会阻塞直到快照就绪（默认超时为 60 秒；大型镜像请调高该值）。
+
+<CodeGroup>
+
+</fragment>
+
+```python Python
+from langsmith.sandbox import SandboxClient
+
+client = SandboxClient()
+
+snapshot = client.create_snapshot(
+    "python",
+    docker_image="python:3.12-slim",
+    fs_capacity_bytes=1 * 1024**3,  # 1 GiB
+)
+
+print(snapshot.id)
+```
+
+```ts TypeScript
+import { SandboxClient } from "langsmith/sandbox";
+
+const client = new SandboxClient();
+
+const snapshot = await client.createSnapshot(
+  "python",
+  "python:3.12-slim",
+  1_073_741_824, // 1 GiB
+);
+
+console.log(snapshot.id);
+```
+
+</CodeGroup>
+
+### 私有注册表
+
+传递注册表凭证（或预先注册的 `registry_id` / `registryId`），用于从私有注册表中拉取镜像。
+
+<CodeGroup>
+
+```python Python
+import os
+
+snapshot = client.create_snapshot(
+    "internal-python",
+    docker_image="registry.example.com/internal/python:3.12",
+    fs_capacity_bytes=2 * 1024**3,
+    registry_url="https://registry.example.com",
+    registry_username="me",
+    registry_password=os.environ["REGISTRY_PASSWORD"],
+    timeout=600,
+)
+```
+
+```ts TypeScript
+const snapshot = await client.createSnapshot(
+  "internal-python",
+  "registry.example.com/internal/python:3.12",
+  2_147_483_648,
+  {
+    registryUrl: "https://registry.example.com",
+    registryUsername: "me",
+    registryPassword: process.env.REGISTRY_PASSWORD,
+    timeout: 600,
+  },
+);
+```
+
+<CodeGroup>
+
+## 从 Dockerfile 构建快照
+
+当您有一个本地 `Dockerfile` 但不想先将其镜像发布到 registry 时，可以直接从 `Dockerfile` 及其构建上下文构建快照。LangSmith 会启动一个临时构建器沙箱，上传上下文，在其中使用 [BuildKit](https://docs.docker.com/build/buildkit/) 运行构建，并将生成的镜像捕获为快照。构建完成后，构建器沙箱会自动拆除。
+
+该调用会阻塞直到快照准备就绪（默认超时为 60 秒；对于大型或慢速构建，请增大该值）。`fs_capacity_bytes` 必须足够大，以容纳构建上下文、中间层和最终镜像。
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langsmith.sandbox import SandboxClient
+
+client = SandboxClient()
+
+snapshot = client.create_snapshot_from_dockerfile(
+    "my-app",
+    dockerfile="Dockerfile",
+    fs_capacity_bytes=2 * 1024**3,  # 2 GiB
+    context=".",  # build context directory (default: current directory)
+)
+
+print(snapshot.id)
+```
+
+```ts TypeScript
+import { SandboxClient } from "langsmith/sandbox";
+
+const client = new SandboxClient();
+
+const snapshot = await client.createSnapshotFromDockerfile(
+  "my-app",
+  "Dockerfile",
+  2_147_483_648, // 2 GiB
+  { context: "." },
+);
+
+console.log(snapshot.id);
+```
+
+</CodeGroup>
+
+<Note>
+`dockerfile` 相对于 `context` 进行解析，除非你传入绝对路径，且它必须位于 context 目录内。`.git` 目录会自动从上传的 context 中排除。
+</Note>
+
+### 构建参数和目标阶段
+
+传递 `build_args` / `buildArgs` 来设置 Docker `ARG` 值，传递 `target` 以停止在多阶段构建的特定阶段。
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+snapshot = client.create_snapshot_from_dockerfile(
+    "my-app",
+    dockerfile="Dockerfile",
+    fs_capacity_bytes=2 * 1024**3,
+    build_args={"PYTHON_VERSION": "3.12", "ENV": "prod"},
+    target="runtime",
+)
+```
+
+```ts TypeScript
+const snapshot = await client.createSnapshotFromDockerfile(
+  "my-app",
+  "Dockerfile",
+  2_147_483_648,
+  {
+    buildArgs: { PYTHON_VERSION: "3.12", ENV: "prod" },
+    target: "runtime",
+  },
+);
+```
+
+</CodeGroup>
+
+### 流式构建日志
+
+传递一个回调函数给 `on_build_log` / `onBuildLog`，以接收构建运行时的 stdout 和 stderr，这在显示进度或调试构建失败时非常有用。
+
+<CodeGroup>
+
+```python Python
+snapshot = client.create_snapshot_from_dockerfile(
+    "my-app",
+    dockerfile="Dockerfile",
+    fs_capacity_bytes=2 * 1024**3,
+    on_build_log=lambda line: print(line, end=""),
+)
+```
+
+```ts TypeScript
+const snapshot = await client.createSnapshotFromDockerfile(
+  "my-app",
+  "Dockerfile",
+  2_147_483_648,
+  { onBuildLog: (line) => process.stdout.write(line) },
+);
+```
+
+<CodeGroup>
+
+### 加速冷构建
+
+`vcpus` / `vCpus` 和 `mem_bytes` / `memBytes` 用于调整临时构建器沙箱的大小。构建在内部运行 BuildKit 和原生快照器的层副本，它们默认会争夺单个核心的资源，因此为构建器额外分配一个 vCPU 可以大幅缩短冷构建的墙钟时间。
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+snapshot = client.create_snapshot_from_dockerfile(
+    "my-app",
+    dockerfile="Dockerfile",
+    fs_capacity_bytes=2 * 1024**3,
+    vcpus=2,
+    mem_bytes=4 * 1024**3,  # 4 GiB
+    timeout=600,
+)
+```
+
+```ts TypeScript
+const snapshot = await client.createSnapshotFromDockerfile(
+  "my-app",
+  "Dockerfile",
+  2_147_483_648,
+  {
+    vCpus: 2,
+    memBytes: 4_294_967_296, // 4 GiB
+    timeout: 600,
+  },
+);
+```
+
+</CodeGroup>
+
+<Tip>
+同步 `SandboxClient` 和 `AsyncSandboxClient` 都以相同的参数公开此方法——在异步客户端上为 `await client.create_snapshot_from_dockerfile(...)` 。
+</Tip>
+
+## 从运行中的沙箱捕获快照
+
+从现有快照启动沙箱，安装软件包或准备数据，然后将结果捕获为新快照。返回的快照的 `source_sandbox_id` 被设置为它所捕获的沙箱，可用作后续任何 `create_sandbox` 调用的 `snapshot_id` 。
+
+<CodeGroup>
+
+```python Python
+sb = client.create_sandbox(snapshot_id=base_snapshot_id, name="setup-box")
+sb.run("pip install numpy pandas scikit-learn", timeout=180)
+sb.write("/opt/config.yaml", "model: gpt-5\n")
+
+# Capture the current filesystem as a new snapshot
+snapshot = sb.capture_snapshot("ml-ready")
+print(snapshot.id, snapshot.source_sandbox_id)
+
+sb.delete()
+
+# Boot fresh sandboxes pre-loaded with those dependencies
+with client.sandbox(snapshot_id=snapshot.id) as sb:
+    sb.run("python -c 'import numpy; print(numpy.__version__)'")
+    assert sb.read("/opt/config.yaml") == b"model: gpt-5\n"
+```
+
+```ts TypeScript
+const running = await client.createSandbox(baseSnapshotId, { name: "setup-box" });
+await running.run("pip install numpy pandas scikit-learn", { timeout: 180 });
+await running.write("/opt/config.yaml", "model: gpt-5\n");
+
+const snapshot = await running.captureSnapshot("ml-ready");
+console.log(snapshot.id, snapshot.source_sandbox_id);
+
+await running.delete();
+
+const sandbox = await client.createSandbox(snapshot.id);
+try {
+  await sandbox.run("python -c 'import numpy; print(numpy.__version__)'");
+  const cfg = await sandbox.read("/opt/config.yaml");
+  console.log(new TextDecoder().decode(cfg));
+} finally {
+  await sandbox.delete();
+}
+```
+
+</CodeGroup>
+
+<Note>
+Capture 仅保留**持久文件系统**。已安装的包（在 `/usr/local`、`/root`、`/opt`、主目录等下）以及你写入这些位置的文件都会被保留。运行中的进程、打开的套接字、内存中的状态以及 `/tmp` 下的任何内容（tmpfs）都**不会**保留 — 请启动新沙盒并重新启动你需要的进程。
+</Note>
+
+<Tip>
+你可以通过名称（而非 ID）从快照启动沙盒 — 当你知道你捕获时使用的人类可读标签时会很有用：
+
+<CodeGroup>
+
+
+</Tip>
+
+```python Python
+sb = client.create_sandbox(snapshot_name="ml-ready")
+```
+
+```ts TypeScript
+const sb = await client.createSandbox({ snapshotName: "ml-ready" });
+```
+
+</CodeGroup>
+
+最多传递一个 `snapshot_id` / `snapshot_name`（或在 TypeScript 中为 `snapshotId` / `snapshotName`）。同时省略两者以使用默认运行时。
+</Tip>
+
+### 调整捕获时机
+
+`capture_snapshot` 会阻塞，直到新快照就绪。如果您的文件系统很大或存储后端较慢，请增加 `timeout` 参数的值（默认 60 秒）。
+
+<CodeGroup>
+
+```python Python
+snapshot = sb.capture_snapshot("ml-ready-v2", timeout=600)
+```
+
+```ts TypeScript
+const snapshot = await sb.captureSnapshot("ml-ready-v2", { timeout: 600 });
+```
+
+<CodeGroup>
+
+## 列出、获取和删除快照
+
+<CodeGroup>
+
+```python Python
+# List all snapshots in the workspace
+snapshots = client.list_snapshots()
+for s in snapshots:
+    print(s.id, s.name, s.status)
+
+# Fetch a single snapshot by ID
+snapshot = client.get_snapshot("550e8400-e29b-41d4-a716-446655440000")
+
+# Delete a snapshot (fails if any sandbox still references it)
+client.delete_snapshot(snapshot.id)
+```
+
+```ts TypeScript
+const snapshots = await client.listSnapshots();
+for (const s of snapshots) {
+  console.log(s.id, s.name, s.status);
+}
+
+const snapshot = await client.getSnapshot("550e8400-e29b-41d4-a716-446655440000");
+
+await client.deleteSnapshot(snapshot.id);
+```
+
+<CodeGroup>
+
+<Note>
+`list_snapshots` / `listSnapshots` 在服务器端进行分页（默认页面大小为 50，最大为 500），并接受可选过滤器：`name_contains` / `nameContains`（对名称不区分大小写的子字符串匹配）、`limit`（1–500）和 `offset`（≥ 0）。通过递增 `offset` 来翻页获取结果。
+
+<CodeGroup>
+
+```python Python
+page = client.list_snapshots(name_contains="ml", limit=100)
+```
+
+```ts TypeScript
+const page = await client.listSnapshots({ nameContains: "ml", limit: 100 });
+```
+
+</CodeGroup>
+
+</Note>
+
+## 停止和启动沙箱
+
+沙箱可以停止和重新启动，而不会丢失文件系统状态。您在上一次运行期间写入的文件在沙箱恢复时仍然存在。
+
+<CodeGroup>
+
+```python Python
+sb = client.create_sandbox(snapshot_id=snapshot.id, name="my-vm")
+sb.run("echo 'hello' > /tmp/state.txt")
+
+# Stop the sandbox — preserves files on disk
+sb.stop()
+
+# Later: start it again (blocks until ready, default timeout=120s)
+sb.start()
+
+result = sb.run("cat /tmp/state.txt")
+assert result.stdout.strip() == "hello"
+```
+
+```ts TypeScript
+const sb = await client.createSandbox(snapshot.id, { name: "my-vm" });
+await sb.run("echo 'hello' > /tmp/state.txt");
+
+await sb.stop();
+
+await sb.start();
+
+const result = await sb.run("cat /tmp/state.txt");
+console.log(result.stdout.trim()); // "hello"
+```
+
+您也可以通过客户端直接按名称停止和启动（Python 中为 `client.stop_sandbox(name)` / `client.start_sandbox(name)`，TypeScript 中为 `client.stopSandbox(name)` / `client.startSandbox(name)`）。
+
+## 下一步
+
+- [使用 SDK 从快照创建沙箱](/langsmith/sandbox-sdk)
+- [使用服务 URL 公开 HTTP 服务](/langsmith/sandbox-service-urls)
+- [通过 Auth 代理注入凭据](/langsmith/sandbox-auth-proxy)

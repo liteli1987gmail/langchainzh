@@ -1,0 +1,151 @@
+---
+title: 追踪 OpenCode 会话
+sidebarTitle: OpenCode
+description: 在 LangSmith 中捕获 OpenCode 会话、助手轮次、工具调用和子代理活动。
+---
+
+`@langchain/langsmith-opencode` 插件将 [OpenCode](https://opencode.ai/) 会话追踪发送到 LangSmith。使用它来检查代理轮次、模型元数据、代币使用量、工具调用、工具错误、附件以及您 OpenCode 工作流中的子代理活动。
+
+## 前提条件
+
+在设置追踪之前，请确保您已具备：
+
+- 已安装并配置 [OpenCode](https://opencode.ai/)。
+- 一个 [LangSmith API 密钥](/langsmith/create-account-api-key)。
+- 有权在 `opencode.json` 或 `~/.config/opencode/opencode.json` 中配置 OpenCode `plugin` 键。
+
+## 安装并启用插件
+
+将插件添加到您的 OpenCode 配置文件中。您可以在本地 `opencode.json` 或全局 `~/.config/opencode/opencode.json` 中进行配置：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@langchain/langsmith-opencode"]
+}
+```
+
+启用追踪功能并在启动 OpenCode 之前提供您的 LangSmith API 密钥：
+
+```bash
+export TRACE_TO_LANGSMITH="true"
+export LANGSMITH_API_KEY="<your-langsmith-api-key>"
+export LANGSMITH_PROJECT="opencode"
+```
+
+按常规方式运行 OpenCode。该插件会将已完成的用户对话发送至配置的 LangSmith 项目。
+
+## 配置追踪
+
+默认情况下追踪功能处于关闭状态。设置 `TRACE_TO_LANGSMITH=true` 后，该插件会将追踪数据发送至 LangSmith。您也可以使用 LangSmith 配置文件来启用追踪功能。
+
+### 环境变量
+
+该插件首先读取 OpenCode 专用变量，在可用时会回退至通用的 LangSmith SDK 变量。
+
+| 变量 | 必填 | 默认值 | 描述 |
+| --- | --- | --- | --- |
+| `TRACE_TO_LANGSMITH` | 是 | `false` | 设置为 `"true"` 以启用追踪。 |
+| `LANGSMITH_OPENCODE_API_KEY` | 条件性 | - | LangSmith API 密钥。回退至 `LANGSMITH_API_KEY`。除非每个副本都提供自己的 API 密钥，否则为必填。 |
+| `LANGSMITH_OPENCODE_ENDPOINT` | 否 | LangSmith SDK 默认值 | LangSmith API URL。回退至 `LANGSMITH_ENDPOINT`。 |
+| `LANGSMITH_OPENCODE_PROJECT` | 否 | `opencode` | LangSmith 项目名称。回退至 `LANGSMITH_PROJECT`。 |
+| `LANGSMITH_OPENCODE_METADATA` | 否 | - | 合并到根追踪元数据中的 JSON 对象。 |
+| `LANGSMITH_OPENCODE_RUNS_ENDPOINTS` | 否 | - | 副本目标的 JSON 数组。 |
+
+例如：
+
+```bash
+export TRACE_TO_LANGSMITH="true"
+export LANGSMITH_API_KEY="<your-langsmith-api-key>"
+export LANGSMITH_PROJECT="opencode"
+export LANGSMITH_OPENCODE_METADATA='{"team":"agents","environment":"dev"}'
+```
+
+### 配置文件
+
+使用 `.opencode/langsmith.json` 设置项目级配置或 `~/.config/opencode/langsmith.json` 用于全局默认配置。
+
+```json
+{
+  "enabled": true,
+  "api_key": "<your-langsmith-api-key>",
+  "api_url": "https://api.smith.langchain.com",
+  "project": "opencode",
+  "metadata": {
+    "team": "agents",
+    "environment": "dev"
+  }
+}
+```
+
+| 字段 | 必填 | 默认值 | 描述 |
+| --- | --- | --- | --- |
+| `enabled` | 是 | `false` | 设置为 `true` 以从配置文件启用追踪。 |
+| `api_key` | 条件性 | - | LangSmith API 密钥。除非通过环境变量或副本提供，否则为必填项。 |
+| `api_url` | 否 | LangSmith SDK 默认值 | LangSmith API URL，通常为 `https://api.smith.langchain.com`。 |
+| `project` | 否 | `opencode` | LangSmith 项目名称。 |
+| `metadata` | 否 | - | 合并到根追踪元数据中的对象。 |
+| `replicas` | 否 | - | 用于复制追踪的其他 LangSmith 目标。 |
+
+请勿将包含 API 密钥的配置文件纳入版本控制。
+
+## 追踪到多个目标
+
+在 `langsmith.json` 或 `LANGSMITH_OPENCODE_RUNS_ENDPOINTS` 中设置 `replicas`，可将相同的追踪数据发送到其他 LangSmith 工作区或项目。
+
+```json
+{
+  "enabled": true,
+  "api_key": "<your-langsmith-api-key>",
+  "project": "opencode",
+  "replicas": [
+    {
+      "api_url": "https://api.smith.langchain.com",
+      "api_key": "<your-replica-langsmith-api-key>",
+      "project": "opencode-replica",
+      "updates": {
+        "metadata": {
+          "replica": true
+        }
+      }
+    }
+  ]
+}
+```
+
+Replica 对象支持 snake_case 和 LangSmith SDK 风格的 camelCase 字段名。在配置文件中推荐使用 snake_case。
+
+| 字段 | 说明 |
+| --- | --- |
+| `api_url` / `apiUrl` | Replica 目标地址的 LangSmith API URL。 |
+| `api_key` / `apiKey` | 目标工作区的 API 密钥。 |
+| `project` / `projectName` | 目标工作区中的项目名称。 |
+| `updates` | 可选的运行字段，用于覆盖复制运行中的内容，例如额外的元数据。 |
+
+## 追踪内容
+
+该插件监听 OpenCode 的聊天和事件钩子，聚合每个已完成的用户轮次，并将其作为运行树提交到 LangSmith。
+
+- `opencode.session` 根运行，对应已完成的用户轮次。
+- `opencode.assistant.turn` 子运行，对应助手和模型的响应。
+- 嵌套的工具运行，对应工具调用，包括输入、输出、错误、计时信息以及可用的附件。
+- 子代理会话，嵌套在父工具调用下。
+- 模型名称、提供商、调用参数、令牌使用量以及线程或会话 ID 元数据。
+- 与助手轮次相关的用户消息、助手消息、推理块、文件部分和系统提示。
+
+追踪完成基于 OpenCode 的 `step-finish` 事件。当 OpenCode 服务器关闭时，插件也会刷新待处理的追踪批次。
+
+## 在 LangSmith 中查看追踪
+
+打开已配置的 LangSmith 项目，查找名为 `opencode.session` 的根运行。每条追踪以用户轮次作为根输入，助手响应、工具调用和子代理追踪作为子运行。该插件将 OpenCode 会话 ID 存储为 `thread_id` 元数据，因此您可以在 LangSmith 中筛选或分组相关的 OpenCode 轮次。
+
+## 故障排除
+
+如果追踪未出现在 LangSmith 中：
+
+- 确认追踪已启用，配置中设置 `TRACE_TO_LANGSMITH=true` 或 `"enabled": true`。
+- 确认 LangSmith API 密钥已设置在与 OpenCode 使用的相同 shell、项目配置或全局配置中。
+- 确认插件包已安装在 OpenCode 可以解析的位置。
+- 检查选定的 LangSmith 项目。如果没有配置项目，追踪将发送到 `opencode`。
+- 修改 `opencode.json`、`langsmith.json` 或环境变量后重启 OpenCode。
+- 确保用户轮次已完成。插件不会发送未完成的轮次。

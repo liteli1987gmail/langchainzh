@@ -1,0 +1,243 @@
+---
+title: 自托管独立服务器
+sidebarTitle: 独立服务器
+icon: "server"
+description: 使用 Docker、Docker Compose 或 Kubernetes 部署独立 Agent 服务器，无需 LangSmith 控制平面。
+---
+
+本指南展示如何直接部署独立 [Agent 服务器](/langsmith/agent-server)，无需 [控制平面](/langsmith/control-plane)。您可以独立部署服务器，同时仍可向 LangSmith（[自托管](/langsmith/self-hosted) 或 [云端](/langsmith/cloud)）发送追踪数据，以实现[可观测性](/langsmith/observability)和[评估](/langsmith/evaluation)。独立服务器已可用于生产，是运行智能体最轻量的选项。
+
+## 概述
+
+您需要管理一个简化的 <Tooltip tip="Agent 服务器和智能体执行时的运行时环境。">数据平面</Tooltip>，其中包含 Agent 服务器及其所需的支撑服务（PostgreSQL、Redis 等）：
+
+| 组件 | 职责 | 运行位置 | 管理方 |
+|-----------|------------------|---------------|----------------|
+| **控制平面** | 不适用 | 不适用 | 不适用 |
+| **数据平面** | <ul><li>Agent 服务器</li><li>Postgres、Redis 等</li></ul> | 您的基础设施 | 您自己 |
+
+此选项让您完全控制扩展、部署和 CI/CD 流程，同时仍可选择与 LangSmith 集成以进行追踪和评估。
+
+<Warning>
+请勿在无服务器环境中运行独立服务器。缩容至零可能导致任务丢失，而扩容可能无法可靠运行。
+</Warning>
+
+<img
+    className="block dark:hidden"
+    src="/langsmith/images/standalone-server-light.png"
+    alt="独立服务器架构"
+/>
+
+<img
+    className="hidden dark:block"
+    src="/langsmith/images/standalone-server-dark.png"
+    alt="独立服务器架构"
+/>
+
+### 工作流程
+
+1. 使用 `langgraph-cli` 或 [Studio](/langsmith/studio) 在本地定义和测试您的图。
+2. 将您的智能体打包为 Docker 镜像。
+3. 将 Agent 服务器部署到您选择的计算平台（Kubernetes、Docker、VM）。
+4. 可选：配置 LangSmith API 密钥和端点，以便服务器将追踪数据和评估结果报告回 LangSmith（自托管或 SaaS）。
+
+### 支持的计算平台
+
+- **Kubernetes**：使用 LangSmith Helm chart 在 Kubernetes 集群中运行 Agent 服务器。这是生产级部署的推荐选项。
+- **Docker**：在任何支持 Docker 的计算平台上运行（本地开发机器、VM、ECS 等）。最适合开发或小规模工作负载。
+
+## 前置条件
+
+1. 使用 [LangGraph CLI](/langsmith/cli) [在本地测试您的应用程序](/langsmith/local-dev-testing)。
+2. 使用 [LangGraph CLI](/langsmith/cli) 构建 Docker 镜像（即 `langgraph build`）。
+3. 数据平面部署需要以下环境变量。
+  1. `REDIS_URI`：Redis 实例的连接详情。Redis 将用作发布-订阅代理，以支持后台运行的实时流式输出。`REDIS_URI` 的值必须是有效的 [Redis 连接 URI](https://redis-py.readthedocs.io/en/stable/connections.html#redis.Redis.from_url)。
+        <Note>
+        **共享 Redis 实例**
+        多个自托管部署可以共享同一个 Redis 实例。例如，对于 `Deployment A`，`REDIS_URI` 可以设置为 `redis://<hostname_1>:<port>/1`，对于 `Deployment B`，`REDIS_URI` 可以设置为 `redis://<hostname_1>:<port>/2`。
+
+        `1` 和 `2` 是同一实例中的不同数据库编号，但 `<hostname_1>` 是共享的。**不同的部署不能使用相同的数据库编号**。
+        </Note>
+  2. `DATABASE_URI`：Postgres 连接详情。Postgres 将用于存储助手、线程、运行记录，持久化线程状态和长期记忆，以及管理具有"恰好一次"语义的后台任务队列状态。`DATABASE_URI` 的值必须是有效的 [Postgres 连接 URI](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING-URIS)。
+        <Note>
+        **共享 Postgres 实例**
+        多个自托管部署可以共享同一个 Postgres 实例。例如，对于 `Deployment A`，`DATABASE_URI` 可以设置为 `postgres://<user>:<password>@/<database_name_1>?host=<hostname_1>`，对于 `Deployment B`，`DATABASE_URI` 可以设置为 `postgres://<user>:<password>@/<database_name_2>?host=<hostname_1>`。
+
+        `<database_name_1>` 和 `database_name_2` 是同一实例中的不同数据库，但 `<hostname_1>` 是共享的。**不同的部署不能使用相同的数据库**。
+        </Note>
+        <Tip>
+        您可以选择将检查点数据存储在 MongoDB 而不是 PostgreSQL 中。PostgreSQL 仍需用于所有其他服务器数据。详情请参阅[配置检查点后端](/langsmith/configure-checkpointer)。
+        </Tip>
+  3. `LANGSMITH_API_KEY`：LangSmith API 密钥。
+  4. `LANGGRAPH_CLOUD_LICENSE_KEY`：LangSmith 许可证密钥。这将在服务器启动时使用一次进行身份验证。
+  5. `LANGSMITH_ENDPOINT`：要将追踪数据发送到[自托管 LangSmith](/langsmith/self-hosted) 实例，请将 `LANGSMITH_ENDPOINT` 设置为自托管 LangSmith 实例的主机名。
+4. 从您的网络出站访问 `https://beacon.langchain.com`。如果不是在隔离模式下运行，这是许可证验证和使用报告所必需的。更多详情请参阅[出站流量文档](/langsmith/self-host-egress)。
+
+<a id="helm"></a>
+## Kubernetes
+
+使用此 [Helm chart](https://github.com/langchain-ai/helm/blob/main/charts/langgraph-cloud/README.md) 将 Agent 服务器部署到 Kubernetes 集群。这是生产独立服务器部署的推荐配置。
+
+Helm chart（v0.2.6+）支持 MongoDB 检查点，可使用捆绑实例（开发/测试）或外部部署（生产）。在您的 values 文件中设置 `mongo.enabled: true`。完整的配置详情请参阅[配置检查点后端](/langsmith/configure-checkpointer#deploy-by-environment)。
+
+## Docker
+
+此 `docker` 示例仅用于本地开发和测试。
+
+运行以下 `docker` 命令：
+
+```shell
+docker run \
+    --env-file .env \
+    -p 8123:8000 \
+    -e REDIS_URI="foo" \
+    -e DATABASE_URI="bar" \
+    -e LANGSMITH_API_KEY="baz" \
+    my-image
+```
+
+<Note>
+* 你需要将 `my-image` 替换为你从前置步骤（来自 `langgraph build`）构建的镜像名称
+
+并为 `REDIS_URI`、`DATABASE_URI` 和 `LANGSMITH_API_KEY` 提供适当的值。
+
+* 如果你的应用程序需要其他环境变量，你可以用类似的方式传递它们。
+</Note>
+
+## Docker Compose
+
+此 Docker Compose 示例适用于本地开发和测试。
+
+使用以下 Docker Compose 文件：
+
+```yml
+volumes:
+    langgraph-data:
+        driver: local
+services:
+    langgraph-redis:
+        image: redis:6
+        healthcheck:
+            test: redis-cli ping
+            interval: 5s
+            timeout: 1s
+            retries: 5
+    langgraph-postgres:
+        image: postgres:16
+        ports:
+            - "5432:5432"
+        environment:
+            POSTGRES_DB: postgres
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+        volumes:
+            - langgraph-data:/var/lib/postgresql/data
+        healthcheck:
+            test: pg_isready -U postgres
+            start_period: 10s
+            timeout: 1s
+            retries: 5
+            interval: 5s
+    langgraph-api:
+        image: ${IMAGE_NAME}
+        ports:
+            - "8123:8000"
+        depends_on:
+            langgraph-redis:
+                condition: service_healthy
+            langgraph-postgres:
+                condition: service_healthy
+        env_file:
+            - .env
+        environment:
+            REDIS_URI: redis://langgraph-redis:6379
+            LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+            DATABASE_URI: postgres://postgres:postgres@langgraph-postgres:5432/postgres?sslmode=disable
+```
+
+在同一文件夹中使用此文件运行 `docker compose up`。
+
+<Accordion title="使用 MongoDB 检查点">
+要将检查点存储在 MongoDB 而不是 PostgreSQL 中，请添加 MongoDB 服务并配置检查点后端。在 `langgraph.json` 中将后端设置为 `"mongo"`，或使用 `LS_DEFAULT_CHECKPOINTER_BACKEND` 环境变量。PostgreSQL 仍需用于所有其他服务器数据。
+
+
+</Accordion>
+
+```yml
+volumes:
+    langgraph-data:
+        driver: local
+    langgraph-mongo-data:
+        driver: local
+services:
+    langgraph-redis:
+        image: redis:6
+        healthcheck:
+            test: redis-cli ping
+            interval: 5s
+            timeout: 1s
+            retries: 5
+    langgraph-postgres:
+        image: postgres:16
+        ports:
+            - "5432:5432"
+        environment:
+            POSTGRES_DB: postgres
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+        volumes:
+            - langgraph-data:/var/lib/postgresql/data
+        healthcheck:
+            test: pg_isready -U postgres
+            start_period: 10s
+            timeout: 1s
+            retries: 5
+            interval: 5s
+    langgraph-mongo:
+        image: mongo:7
+        command: ["mongod", "--replSet", "rs0"]
+        ports:
+            - "27017:27017"
+        volumes:
+            - langgraph-mongo-data:/data/db
+        healthcheck:
+            test: mongosh --eval "try { rs.status().ok } catch(e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'langgraph-mongo:27017'}]}).ok }" --quiet
+            interval: 5s
+            timeout: 10s
+            retries: 10
+            start_period: 10s
+    langgraph-api:
+        image: ${IMAGE_NAME}
+        ports:
+            - "8123:8000"
+        depends_on:
+            langgraph-redis:
+                condition: service_healthy
+            langgraph-postgres:
+                condition: service_healthy
+            langgraph-mongo:
+                condition: service_healthy
+        env_file:
+            - .env
+        environment:
+            REDIS_URI: redis://langgraph-redis:6379
+            LANGSMITH_API_KEY: ${LANGSMITH_API_KEY}
+            DATABASE_URI: postgres://postgres:postgres@langgraph-postgres:5432/postgres?sslmode=disable
+            LS_DEFAULT_CHECKPOINTER_BACKEND: mongo
+            LS_MONGODB_URI: mongodb://langgraph-mongo:27017/langgraph?replicaSet=rs0
+```
+
+请参阅[配置检查点后端](/langsmith/configure-checkpointer)了解更多 MongoDB 配置选项。
+</Accordion>
+
+这将在端口 `8123` 上启动一个代理服务器（如有需要，请在 `langgraph-api` 中修改端口映射）。测试应用程序是否正常运行：
+
+```shell
+curl --request GET --url 0.0.0.0:8123/ok
+```
+
+假设一切运行正常，你应该会看到类似以下响应：
+
+```shell
+{"ok":true}
+```

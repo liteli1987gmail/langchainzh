@@ -1,0 +1,352 @@
+---
+title: 使用 LangSmith 部署和评估实现 CI/CD 管道
+sidebarTitle: 实现 CI/CD 管道
+---
+
+import SaasRegionUrls from '/snippets/langsmith/saas-region-urls.mdx';
+
+本指南演示了如何为部署在 LangSmith Deployment 中的 AI 智能体应用实现一套完整的 CI/CD 流水线。在本示例中，您将使用开源框架 [LangGraph](/oss/langgraph/overview) 来编排和构建智能体，使用 [LangSmith](/langsmith/observability) 实现可观测性和评估。该流水线基于 [cicd-pipeline-example 仓库](https://github.com/langchain-ai/cicd-pipeline-example) 构建。
+
+## 概述
+
+CI/CD 流水线提供以下功能：
+
+- <Icon icon="circle-check" /> **自动化测试**：单元测试、集成测试和端到端测试。
+- <Icon icon="chart-line" /> **离线评估**：使用 [AgentEvals](/oss/langchain/test/evals)、[OpenEvals](/langsmith/openevals#setup) 和 [LangSmith](/langsmith/observability) 进行性能评估。
+- <Icon icon="rocket" /> **预览和生产部署**：使用 Control Plane API 实现自动化预发布环境部署和质量门控的生产发布。
+- <Icon icon="eye" /> **监控**：持续评估和告警。
+
+## 流水线架构
+
+CI/CD 流水线由多个关键组件组成，这些组件协同工作以确保代码质量和可靠部署：
+
+```mermaid
+graph TD
+    A1[Code or Graph Change] --> B1[Trigger CI Pipeline]
+    A2[Prompt Commit in PromptHub] --> B1
+    A3[Online Evaluation Alert] --> B1
+    A4[PR Opened] --> B1
+
+    subgraph "Testing"
+        B1 --> C1[Run Unit Tests]
+        B1 --> C2[Run Integration Tests]
+        B1 --> C3[Run End to End Tests]
+        B1 --> C4[Run Offline Evaluations]
+
+        C4 --> D1[Evaluate with OpenEvals or AgentEvals]
+        C4 --> D2[Assertions: Hard and Soft]
+
+        C1 --> E1[Run LangGraph Dev Server Test]
+        C2 --> E1
+        C3 --> E1
+        D1 --> E1
+        D2 --> E1
+    end
+
+    E1 --> F1[Push to Staging Deployment - Deploy to LangSmith as Development Type]
+
+    F1 --> G1[Run Online Evaluations on Live Data]
+    G1 --> H1[Attach Scores to Traces]
+
+    H1 --> I1[If Quality Below Threshold]
+    I1 --> J1[Send to Annotation Queue]
+    I1 --> J2[Trigger Alert via Webhook]
+    I1 --> J3[Push Trace to Golden Dataset]
+
+    F1 --> K1[Promote to Production if All Pass - Deploy to LangSmith Production]
+
+    J2 --> L1[Slack or PagerDuty Notification]
+
+    subgraph Manual Review
+        J1 --> M1[Human Labeling]
+        M1 --> J3
+    end
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef decision fill:#FDF3FF,stroke:#7E65AE,stroke-width:2px,color:#504B5F
+    classDef output fill:#EBD0F0,stroke:#885270,stroke-width:2px,color:#441E33
+    classDef alert fill:#F8E8E6,stroke:#B27D75,stroke-width:2px,color:#634643
+    classDef neutral fill:#F2FAFF,stroke:#40668D,stroke-width:2px,color:#2F4B68
+
+    class A1,A2,A3,A4 trigger
+    class B1,C1,C2,C3,C4,D1,D2,E1 process
+    class H1,I1 decision
+    class F1,G1,K1 output
+    class J2,L1 alert
+    class J1,J3,M1 neutral
+```
+
+### 触发源
+
+你可以通过多种方式触发此流水线，无论是在开发过程中还是应用程序已经上线。流水线可以通过以下方式触发：
+
+- <Icon icon="git-branch" /> **代码变更**：推送到 main/development 分支，你可以修改 LangGraph 架构、尝试不同的模型、更新代理逻辑或进行任何代码改进。
+- <Icon icon="edit" /> **PromptHub 更新**：对存储在 LangSmith PromptHub 中的提示模板进行更改——每当有新的提示提交时，系统会触发 Webhook 来运行流水线。
+- <Icon icon="alert-triangle" /> **在线评估告警**：来自实时部署的性能下降通知
+- <Icon icon="webhook" /> **LangSmith 追踪 Webhook**：基于追踪分析和性能指标的自动触发。
+- <Icon icon="player-play" /> **手动触发**：手动启动流水线以进行测试或紧急部署。
+
+### 测试层级
+
+与传统的软件相比，测试 AI 代理应用程序还需要评估响应质量，因此对工作流的每个部分进行测试非常重要。该流水线实现了多个测试层级：
+
+1. <Icon icon="puzzle" /> **单元测试**：单个节点和工具函数的测试。
+2. <Icon icon="link" /> **集成测试**：组件交互测试。
+3. <Icon icon="route" /> **端到端测试**：完整图执行测试。
+4. <Icon icon="brain" /> **离线评估**：使用真实场景进行性能评估，包括端到端评估、单步评估、代理轨迹分析和多轮对话模拟。
+5. <Icon icon="server" /> **LangGraph 开发服务器测试**：使用 [langgraph-cli](/langsmith/cli) 工具（在 GitHub Action 内部）启动本地服务器来运行 LangGraph 代理。它会轮询 `/ok` 服务器 API 端点直到可用，超过 30 秒后会抛出错误。
+
+## GitHub Actions 工作流
+
+CI/CD 流水线使用 GitHub Actions 结合 [Control Plane API](/langsmith/api-ref-control-plane) 和 [LangSmith API](/langsmith/smith-api-ref) 来自动化部署。一个辅助脚本管理 API 交互和部署：https://github.com/langchain-ai/cicd-pipeline-example/blob/main/.github/scripts/langgraph_api.py。
+
+工作流包括：
+
+- **新代理部署**：当打开新的 PR 且测试通过时，会使用 [Control Plane API](/langsmith/api-ref-control-plane) 在 LangSmith Deployment 中创建一个新的预览部署。这允许你在升级到生产环境之前在暂存环境中测试代理。
+
+- **代理部署修订**：当发现具有相同 ID 的现有部署时，或当 PR 合并到 main 时，会发生修订。在合并到 main 的情况下，预览部署会被删除并创建生产部署。这确保了对代理的任何更新都能正确部署并集成到生产基础设施中。
+
+    ![代理部署修订工作流](./images/cicd-new-lgp-revision.png)
+
+- **测试与评估工作流**：除了传统的测试阶段（单元测试、集成测试、端到端测试等）之外，流水线还包括[离线评估](/langsmith/evaluation-concepts#offline-evaluations)和[代理开发服务器测试](/langsmith/local-dev-testing)，因为你需要测试代理的质量。这些评估使用真实世界的场景和数据对代理性能提供全面评估。
+
+    ![测试与结果工作流](./images/cicd-test-with-results.png)
+
+    <AccordionGroup>
+    <Accordion title="最终响应评估" icon="circle-check">
+        根据预期结果评估代理的最终输出。这是最常见的评估类型，检查代理的最终响应是否符合质量标准并正确回答了用户的问题。
+    </Accordion>
+
+    <Accordion title="单步评估" icon="player-skip-forward">
+        测试 LangGraph 工作流中的单个步骤或节点。这允许你隔离验证代理逻辑的特定组件，确保在测试完整流水线之前每个步骤都能正确运行。
+    </Accordion>
+
+    <Accordion title="代理轨迹评估" icon="route">
+        分析代理在图中经过的完整路径，包括所有中间步骤和决策点。这有助于识别代理工作流中的瓶颈、不必要的步骤或次优路由。它还评估代理是否在正确的顺序或正确的时间调用了正确的工具。
+    </Accordion>
+
+    <Accordion title="多轮对话评估" icon="messages">
+        测试代理在多次交互中保持上下文的对话流程。这对于处理后续问题、澄清或与用户进行扩展对话的代理至关重要。
+    </Accordion>
+    </AccordionGroup>
+
+    有关具体测试方法，请参阅 [LangGraph 测试文档](/oss/langgraph/test)；有关离线评估的全面概述，请参阅[评估方法指南](/langsmith/evaluation-approaches)。
+
+### 前置条件
+
+在设置 CI/CD 流水线之前，请确保你已具备：
+
+- <Icon icon="robot" /> 一个 AI 代理应用程序（在本例中使用 [LangGraph](/oss/langgraph/overview) 构建）
+- <Icon icon="user" /> 一个 [LangSmith 账户](https://smith.langchain.com)
+- <Icon icon="key" /> 一个 [LangSmith API 密钥](/langsmith/create-account-api-key)，用于部署代理和检索实验结果
+- <Icon icon="settings" /> 在仓库密钥中配置的项目特定环境变量（例如，LLM 模型 API 密钥、向量存储凭据、数据库连接）
+
+<Note>
+虽然本示例使用 GitHub，但 CI/CD 流水线也适用于其他 Git 托管平台，包括 GitLab、Bitbucket 等。
+</Note>
+
+## 部署选项
+
+LangSmith 支持多种部署方法，具体取决于你的 [LangSmith 实例的托管方式](/langsmith/platform-setup)：
+
+- <Icon icon="cloud" /> **云端 LangSmith**：直接与 GitHub 集成。
+- <Icon icon="server" /> **自托管/混合部署**：基于容器镜像仓库的部署。
+
+部署流程从修改代理实现开始。至少，你必须在项目中包含 [`langgraph.json`](/langsmith/application-structure) 和依赖文件（`requirements.txt` 或 `pyproject.toml`）。使用 `langgraph dev` CLI 工具检查错误——修复任何错误；否则，部署到 LangSmith Deployment 时将会成功。
+
+```mermaid actions={false}
+graph TD
+    A[Agent Implementation] --> B[langgraph.json + dependencies]
+    B --> C[Test Locally with langgraph dev]
+    C --> D{Errors?}
+    D -->|Yes| E[Fix Issues]
+    E --> C
+    D -->|No| F[Choose LangSmith Instance]
+
+    F --> G[Cloud LangSmith]
+    F --> H[Self-Hosted/Hybrid LangSmith]
+
+    subgraph "Cloud LangSmith"
+        G --> I[Method 1: Connect GitHub Repo in UI]
+        G --> J[Method 2: Control Plane API with GitHub Repo]
+        I --> K[Deploy via LangSmith UI]
+        J --> L[Deploy via Control Plane API]
+    end
+
+    subgraph "Self-Hosted/Hybrid LangSmith"
+        H --> S[Build Docker Image langgraph build]
+        S --> T[Push to Container Registry]
+        T --> U{Deploy via?}
+        U -->|UI| V[Specify Image URI in UI]
+        U -->|API| W[Use Control Plane API]
+        V --> X[Deploy via LangSmith UI]
+        W --> Y[Deploy via Control Plane API]
+    end
+
+    K --> AA[Agent Ready for Use]
+    L --> AA
+    X --> AA
+    Y --> AA
+
+    AA --> BB{Connect via?}
+    BB -->|LangGraph SDK| CC[Use LangGraph SDK]
+    BB -->|RemoteGraph| DD[Use RemoteGraph]
+    BB -->|REST API| EE[Use REST API]
+    BB -->|LangGraph Studio UI| FF[Use LangGraph Studio UI]
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef decision fill:#FDF3FF,stroke:#7E65AE,stroke-width:2px,color:#504B5F
+    classDef output fill:#EBD0F0,stroke:#885270,stroke-width:2px,color:#441E33
+
+    class A trigger
+    class B,C process
+    class D,U,BB decision
+    class E process
+    class F decision
+    class G,H process
+    class I,J,S,T process
+    class K,L,V,W process
+    class X,Y,AA output
+    class CC,DD,EE,FF output
+```
+
+### 手动部署的前提条件
+
+在部署您的 agent 之前，请确保您具备以下条件：
+
+1. <Icon icon="sitemap" /> **LangGraph 图**：您的 agent 实现（例如 `./agents/simple_text2sql.py:agent`）。
+2. <Icon icon="box" /> **依赖项**：`requirements.txt` 或 `pyproject.toml`，包含所有必需的包。
+3. <Icon icon="settings" /> **配置**：`langgraph.json` 文件，用于指定：
+   - agent 图的路径
+   - 依赖项位置
+   - 环境变量
+   - Python 版本
+
+`langgraph.json` 示例：
+```json
+{
+    "graphs": {
+        "simple_text2sql": "./agents/simple_text2sql.py:agent"
+    },
+    "env": ".env",
+    "python_version": "3.11",
+    "dependencies": ["."],
+    "image_distro": "wolfi"
+}
+```
+
+### 本地开发和测试
+
+![Studio CLI 界面](./images/cicd-studio-cli.png)
+
+首先，使用 [Studio](/langsmith/studio) 在本地测试您的代理：
+
+```bash
+# Start local development server with Studio
+langgraph dev
+```
+
+这将：
+- 启动一个使用 Studio 的本地服务器。
+- 允许您可视化和交互您的图。
+- 在部署前验证您的代理是否正常工作。
+
+<Note>
+如果您的代理在本地运行没有任何错误，则意味着部署到 LangSmith 可能会成功。这种本地测试有助于在尝试部署之前发现配置问题、依赖问题以及代理逻辑错误。
+</Note>
+
+有关更多详细信息，请参阅 [LangGraph CLI 文档](/langsmith/cli#dev)。
+
+### 方法 1：LangSmith 部署界面
+
+使用 LangSmith 部署界面部署您的代理：
+
+1. 转到您的 [LangSmith 仪表板](https://smith.langchain.com)。
+2. 导航到 **部署** 部分。
+3. 点击右上角的 **+ 新建部署** 按钮。
+4. 从下拉菜单中选择包含您的 LangGraph 代理的 GitHub 仓库。
+
+**支持的部署：**
+- <Icon icon="cloud" /> **云端 LangSmith**：使用下拉菜单直接与 GitHub 集成
+- <Icon icon="server" /> **自托管/混合 LangSmith**：在镜像路径字段中指定您的镜像 URI（例如 `docker.io/username/my-agent:latest`）
+
+<Info>
+**优势：**
+- 简单的基于 UI 的部署
+- 与 GitHub 仓库直接集成（云端）
+- 无需手动管理 Docker 镜像（云端）
+</Info>
+
+### 方法 2：控制平面 API
+
+使用控制平面 API 进行部署，不同的部署类型有不同的方法：
+
+**对于云端 LangSmith：**
+- 使用控制平面 API 通过指向 GitHub 仓库来创建部署
+- 云端部署无需构建 Docker 镜像
+
+**对于自托管/混合 LangSmith：**
+```bash
+# Build Docker image
+langgraph build -t my-agent:latest
+
+# Push to your container registry
+docker push my-agent:latest
+```
+
+您可以推送到任何您的部署环境可以访问的容器镜像仓库（Docker Hub、AWS ECR、Azure ACR、Google GCR 等）。
+
+**支持的部署方式：**
+- <Icon icon="cloud" /> **云端 LangSmith**：使用 Control Plane API 从您的 GitHub 仓库创建部署
+- <Icon icon="server" /> **自托管/混合 LangSmith**：使用 Control Plane API 从您的容器镜像仓库创建部署
+
+有关更多详细信息，请参阅 [LangGraph CLI 构建文档](/langsmith/cli#build)。
+
+### 连接到已部署的 Agent
+
+- <Icon icon="code" /> **[LangGraph SDK](https://langchain-ai.github.io/langgraph/cloud/reference/sdk/python_sdk_ref/#langgraph-sdk-python)**：使用 LangGraph SDK 进行编程集成。
+- <Icon icon="sitemap" /> **[RemoteGraph](/langsmith/use-remote-graph)**：使用 RemoteGraph 进行远程图连接（在其他图中使用您的图）。
+- <Icon icon="globe" /> **[REST API](/langsmith/server-api-ref)**：使用基于 HTTP 的方式与已部署的 agent 进行交互。
+- <Icon icon="device-desktop" /> **[Studio](/langsmith/studio)**：访问可视化界面进行测试和调试。
+
+### 环境配置
+
+#### 数据库和缓存配置
+
+默认情况下，LangSmith Deployment 会为您创建 PostgreSQL 和 Redis 实例。如需使用外部服务，请在新的部署或修订版中设置以下环境变量：
+
+```bash
+# Set environment variables for external services
+export POSTGRES_URI_CUSTOM="postgresql://user:pass@host:5432/db"
+export REDIS_URI_CUSTOM="redis://host:6379/0"
+```
+
+请参阅[环境变量文档](/langlang/env-var-self-hosted)了解更多信息。
+
+## 故障排除
+
+### 错误的 API 端点
+
+如果您遇到连接问题，请验证您正在为 LangSmith 实例使用正确的端点格式。有两个不同的 API，具有不同的端点：
+
+#### LangSmith API（追踪、数据摄取等）
+
+对于 LangSmith API 操作（追踪、评估、数据集）：
+
+<SaasRegionUrls prefix="api.smith" />
+
+对于自托管 LangSmith 实例，请使用 `http(s)://<langsmith-url>/api`，其中 `<langsmith-url>` 是您的自托管实例 URL。
+
+<Note>
+如果您在 `LANGSMITH_ENDPOINT` 环境变量中设置端点，需要在末尾添加 `/v1`（例如，`https://api.smith.langchain.com/v1` 或如果是自托管，则为 `http(s)://<langsmith-url>/api/v1`）。
+</Note>
+
+#### LangSmith 部署 API（部署）
+
+对于 LangSmith 部署操作（部署、修订）：
+
+<SaasRegionUrls prefix="api.host" />
+
+对于自托管 LangSmith 实例，请使用 `http(s)://<langsmith-url>/api-host`，其中 `<langsmith-url>` 是您的自托管实例 URL。

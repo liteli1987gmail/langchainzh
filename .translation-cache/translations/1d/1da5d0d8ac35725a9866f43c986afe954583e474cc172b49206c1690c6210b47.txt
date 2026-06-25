@@ -1,0 +1,228 @@
+---
+title: 路由器
+---
+
+在**路由器**架构中，路由步骤对输入进行分类，并将其导向专门的 [agents](/oss/langchain/agents)。当您有明确的**垂直领域**（各自需要独立代理的独立知识领域）时，这很有用。
+
+```mermaid
+graph LR
+    A([Query]) --> B[Router]
+    B --> C[Agent A]
+    B --> D[Agent B]
+    B --> E[Agent C]
+    C --> F[Synthesize]
+    D --> F
+    E --> F
+    F --> G([Combined answer])
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+
+    class A,G trigger
+    class B,C,D,E,F process
+```
+
+## 关键特征
+
+* 路由器分解查询
+* 零个或多个专业代理并行调用
+* 结果被合成为连贯的响应
+
+## 何时使用
+
+当您有独立的垂直领域（需要各自代理的独立知识领域）、需要并行查询多个来源并希望将结果合成为组合响应时使用路由器模式。
+
+## 基本实现
+
+路由器对查询进行分类并将其定向到适当的代理。使用 [`Command`](/oss/langgraph/graph-api#command) 进行单代理路由，或使用 [`Send`](/oss/langgraph/graph-api#send) 并行扇出到多个代理。
+
+<Tabs>
+<Tab title="单代理">
+
+使用 `Command` 路由到单个专业代理：
+
+:::python
+```python
+from langgraph.types import Command
+
+def classify_query(query: str) -> str:
+    """Use LLM to classify query and determine the appropriate agent."""
+    # Classification logic here
+    ...
+
+def route_query(state: State) -> Command:
+    """Route to the appropriate agent based on query classification."""
+    active_agent = classify_query(state["query"])
+
+    # Route to the selected agent
+    return Command(goto=active_agent)
+```
+:::
+:::js
+```typescript
+import { z } from "zod";
+import { Command } from "@langchain/langgraph";
+
+const ClassificationResult = z.object({
+  query: z.string(),
+  agent: z.string(),
+});
+
+function classifyQuery(query: string): z.infer<typeof ClassificationResult> {
+  // Use LLM to classify query and determine the appropriate agent
+  // Classification logic here
+  ...
+}
+
+function routeQuery(state: z.infer<typeof ClassificationResult>) {
+  const classification = classifyQuery(state.query);
+
+  // Route to the selected agent
+  return new Command({ goto: classification.agent });
+}
+```
+:::
+</Tab>
+<Tab title="多个代理（并行）">
+
+使用 `Send` 将请求并行分发给多个专业代理：
+
+:::python
+```python
+from typing import TypedDict
+from langgraph.types import Send
+
+class ClassificationResult(TypedDict):
+    query: str
+    agent: str
+
+def classify_query(query: str) -> list[ClassificationResult]:
+    """Use LLM to classify query and determine which agents to invoke."""
+    # Classification logic here
+    ...
+
+def route_query(state: State):
+    """Route to relevant agents based on query classification."""
+    classifications = classify_query(state["query"])
+
+    # Fan out to selected agents in parallel
+    return [
+        Send(c["agent"], {"query": c["query"]})
+        for c in classifications
+    ]
+```
+:::
+:::js
+```typescript
+import { z } from "zod";
+import { Command } from "@langchain/langgraph";
+
+const ClassificationResult = z.object({
+  query: z.string(),
+  agent: z.string(),
+});
+
+function classifyQuery(query: string): z.infer<typeof ClassificationResult>[] {
+  // Use LLM to classify query and determine the appropriate agent
+  // Classification logic here
+  ...
+}
+
+function routeQuery(state: typeof State.State) {
+  const classifications = classifyQuery(state.query);
+
+  // Fan out to selected agents in parallel
+  return classifications.map(
+    (c) => new Send(c.agent, { query: c.query })
+  );
+}
+```
+:::
+
+</Tab>
+</Tabs>
+
+完整的实现示例，请参阅下面的教程。
+
+<Card title="教程：构建具有路由功能的多源知识库" icon="book" href="/oss/langchain/multi-agent/router-knowledge-base">
+构建一个路由器，并行查询 GitHub、Notion 和 Slack，然后将结果合成为一个连贯的答案。涵盖状态定义、专业化代理、使用 `Send` 进行并行执行以及结果合成。
+</Card>
+
+## 无状态 vs. 有状态
+
+两种方法：
+* [**无状态路由器**](#stateless) 独立处理每个请求
+* [**有状态路由器**](#stateful) 在请求之间维护对话历史
+
+## 无状态
+
+每个请求独立路由——调用之间无记忆。关于多轮对话，请参阅[有状态路由器](#stateful)。
+
+<Tip>
+**路由器 vs. 子代理**：两种模式都可以将工作分派给多个代理，但它们的路由决策方式不同：
+
+- **路由器**：一个专门的路由步骤（通常是一个 LLM 调用或基于规则的逻辑）对输入进行分类并分派给代理。路由器本身通常不维护对话历史或执行多轮编排——它是一个预处理步骤。
+- **子代理**：一个主监督代理动态决定在持续对话中调用哪些[子代理](/oss/langchain/multi-agent/subagents)。主代理维护上下文，可以跨轮次调用多个子代理，并编排复杂的多步骤工作流。
+
+当你有明确的输入分类且需要确定性或轻量级分类时，使用**路由器**。当你需要灵活的、对话感知的编排，且 LLM 根据不断变化的上下文决定下一步做什么时，使用**监督器**。
+</Tip>
+
+
+## 有状态
+
+对于多轮对话，需要在调用之间维护上下文。
+
+### 工具包装器
+
+最简单的方法：将无状态路由器包装为一个工具，对话代理可以调用该工具。对话代理处理记忆和上下文；路由器保持无状态。这避免了跨多个并行代理管理对话历史的复杂性。
+
+:::python
+
+</fragment>
+```python
+@tool
+def search_docs(query: str) -> str:
+    """Search across multiple documentation sources."""
+    result = workflow.invoke({"query": query})  # [!code highlight]
+    return result["final_answer"]
+
+# Conversational agent uses the router as a tool
+conversational_agent = create_agent(
+    model,
+    tools=[search_docs],
+    prompt="You are a helpful assistant. Use search_docs to answer questions."
+)
+```
+:::
+:::js
+```typescript
+const searchDocs = tool(
+  async ({ query }) => {
+    const result = await workflow.invoke({ query }); // [!code highlight]
+    return result.finalAnswer;
+  },
+  {
+    name: "search_docs",
+    description: "Search across multiple documentation sources",
+    schema: z.object({
+      query: z.string().describe("The search query"),
+    }),
+  }
+);
+
+// Conversational agent uses the router as a tool
+const conversationalAgent = createAgent({
+  model,
+  tools: [searchDocs],
+  systemPrompt: "You are a helpful assistant. Use search_docs to answer questions.",
+});
+```
+:::
+
+### 完整持久化
+
+如果需要路由器本身维护状态，请使用[持久化](/oss/langchain/short-term-memory)来存储消息历史。路由到某个 agent 时，从状态中获取之前的消息并有选择地将其包含在 agent 的上下文中——这是[上下文工程](/oss/langchain/context-engineering)的一个杠杆。
+
+<Warning>
+**有状态的路由器需要自定义历史记录管理。** 如果路由器在多个轮次之间切换 agent，当 agent 具有不同的语气或提示词时，对话可能不会让最终用户感到流畅。使用并行调用时，你需要在路由器级别维护历史记录（输入和综合输出），并在路由逻辑中利用此历史记录。请考虑使用[交接模式](/oss/langchain/multi-agent/handoffs)或[子代理模式](/oss/langchain/multi-agent/subagents)——两者都为多轮对话提供了更清晰的语义。
+</Warning>

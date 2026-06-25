@@ -1,0 +1,113 @@
+---
+title: "Log10 集成"
+description: "使用 LangChain Python 与 Log10 集成。"
+---
+
+import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
+
+<LangchainCommunityUnmaintained />
+
+本页面介绍如何在 LangChain 中使用 [Log10](https://log10.io)。
+
+## 什么是 Log10？
+
+Log10 是一个[开源](https://github.com/log10-io/log10)的无代理 LLM 数据管理和应用开发平台，可让您记录、调试和标记您的 LangChain 调用。
+
+## 快速开始
+
+1. 在 [log10.io](https://log10.io) 创建免费账户
+2. 分别从"设置"和"组织"选项卡中添加您的 `LOG10_TOKEN` 和 `LOG10_ORG_ID` 作为环境变量。
+3. 同时添加 `LOG10_URL=https://log10.io` 以及您常用的 LLM API 密钥：例如 `OPENAI_API_KEY` 或 `ANTHROPIC_API_KEY` 到您的环境中
+
+## 如何为 LangChain 启用 Log10 数据管理
+
+与 log10 的集成是一个简单的单行 `log10_callback` 集成，如下所示：
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.messages import HumanMessage
+
+from log10.langchain import Log10Callback
+from log10.llm import Log10Config
+
+log10_callback = Log10Callback(log10_config=Log10Config())
+
+messages = [
+    HumanMessage(content="You are a ping pong machine"),
+    HumanMessage(content="Ping?"),
+]
+
+llm = ChatOpenAI(model="gpt-3.5-turbo", callbacks=[log10_callback])
+```
+
+[Log10 + LangChain + Logs 文档](https://github.com/log10-io/log10/blob/main/logging.md#langchain-logger)
+
+[更多详情 + 截图](https://log10.io/docs/observability/logs) 包括自托管日志的说明
+
+## 如何在 Log10 中使用标签
+
+<LangchainCommunityUnmaintained />
+
+```python
+from langchain_openai import OpenAI
+from langchain_community.chat_models import ChatAnthropic
+from langchain_openai import ChatOpenAI
+from langchain.messages import HumanMessage
+
+from log10.langchain import Log10Callback
+from log10.llm import Log10Config
+
+log10_callback = Log10Callback(log10_config=Log10Config())
+
+messages = [
+    HumanMessage(content="You are a ping pong machine"),
+    HumanMessage(content="Ping?"),
+]
+
+llm = ChatOpenAI(model="gpt-3.5-turbo", callbacks=[log10_callback], temperature=0.5, tags=["test"])
+completion = llm.predict_messages(messages, tags=["foobar"])
+print(completion)
+
+llm = ChatAnthropic(model="claude-2", callbacks=[log10_callback], temperature=0.7, tags=["baz"])
+llm.predict_messages(messages)
+print(completion)
+
+llm = OpenAI(model_name="gpt-3.5-turbo-instruct", callbacks=[log10_callback], temperature=0.5)
+completion = llm.predict("You are a ping pong machine.\nPing?\n")
+print(completion)
+```
+
+您还可以混合使用直接 OpenAI 调用和 LangChain LLM 调用：
+
+```python
+import os
+from log10.load import log10, log10_session
+import openai
+from langchain_openai import OpenAI
+
+log10(openai)
+
+with log10_session(tags=["foo", "bar"]):
+    # Log a direct OpenAI call
+    response = openai.Completion.create(
+        model="text-ada-001",
+        prompt="Where is the Eiffel Tower?",
+        temperature=0,
+        max_tokens=1024,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0,
+    )
+    print(response)
+
+    # Log a call via LangChain
+    llm = OpenAI(model_name="text-ada-001", temperature=0.5)
+    response = llm.predict("You are a ping pong machine.\nPing?\n")
+    print(response)
+```
+
+## 如何调试 LangChain 调用
+
+[调试示例](https://log10.io/docs/observability/prompt_chain_debugging)
+
+[更多 LangChain 示例](https://github.com/log10-io/log10/tree/main/examples#langchain)

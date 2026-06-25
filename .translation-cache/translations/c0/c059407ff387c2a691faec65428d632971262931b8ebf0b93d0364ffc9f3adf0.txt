@@ -1,0 +1,381 @@
+---
+title: "Chroma 集成"
+description: "使用 LangChain Python 与 Chroma 向量存储集成。"
+---
+
+本笔记本介绍如何开始使用 `Chroma` 向量存储。
+
+>[Chroma](https://docs.trychroma.com/getting-started) 是一个专注于开发者效率和幸福感的 AI 原生开源向量数据库。Chroma 采用 Apache 2.0 许可证授权。查看 `Chroma` 的完整文档请访问[此页面](https://docs.trychroma.com/reference/py-collection)，查看 LangChain 集成的 API 参考请访问[此页面](https://reference.langchain.com/python/langchain-chroma/vectorstores/Chroma)。
+
+<Info>
+**Chroma Cloud**
+
+Chroma Cloud 提供无服务器向量和全文搜索功能。它极速、性价比高、可扩展且易于使用。创建一个数据库，只需不到 30 秒即可试用，附带 $5 的免费额度。
+
+[开始使用 Chroma Cloud](https://trychroma.com/signup)
+</Info>
+
+## 设置
+
+要访问 `Chroma` 向量存储，您需要安装 `langchain-chroma` 集成包。
+
+```python
+pip install -qU "langchain-chroma>=0.1.2"
+```
+
+### 凭证
+
+您可以在不提供任何凭证的情况下使用 `Chroma` 向量存储，只需安装上述包即可！
+
+如果您是 [Chroma Cloud](https://trychroma.com/signup) 用户，请设置您的 `CHROMA_TENANT`、`CHROMA_DATABASE` 和 `CHROMA_API_KEY` 环境变量。
+
+安装 `chromadb` 包时，您还可以访问 Chroma CLI，它可以为您设置这些。首先，通过 CLI [登录](https://docs.trychroma.com/docs/cli/login)，然后使用 [`connect` 命令](https://docs.trychroma.com/docs/cli/db)：
+
+```bash
+chroma db connect [db_name] --env-file
+```
+
+如果您想获得顶级的模型调用自动追踪功能，请设置您的 [LangSmith](/langsmith/observability) API 密钥并启用追踪：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+## 初始化
+
+### 基本初始化
+
+以下示例展示了设置 Chroma 嵌入函数，然后配置本地持久化来存储向量数据。
+
+<EmbeddingTabs/>
+
+```python
+# | output: false
+# | echo: false
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+```
+
+#### 本地运行（内存模式）
+
+您只需通过实例化一个带有集合名称和嵌入提供程序的 `Chroma` 实例，即可在内存中运行 Chroma 服务器：
+
+```python
+from langchain_chroma import Chroma
+
+vector_store = Chroma(
+    collection_name="example_collection",
+    embedding_function=embeddings,
+)
+```
+
+如果您不需要数据持久化，在使用 LangChain 构建 AI 应用程序时进行实验，这是一个很好的选择。
+
+#### 本地运行（带数据持久化）
+
+您可以提供 `persist_directory` 参数来保存您的数据，以便在程序多次运行时使用：
+
+```python
+from langchain_chroma import Chroma
+
+vector_store = Chroma(
+    collection_name="example_collection",
+    embedding_function=embeddings,
+    persist_directory="./chroma_langchain_db",
+)
+```
+
+#### 连接到 Chroma 服务器
+
+如果您在本地运行 Chroma 服务器，或者您自己[部署](https://docs.trychroma.com/guides/deploy/client-server-mode)了一个，您可以通过提供 `host` 参数来连接它。
+
+例如，您可以使用 `chroma run` 在本地启动一个 Chroma 服务器，然后使用 `host='localhost'` 连接它：
+
+```python
+from langchain_chroma import Chroma
+
+vector_store = Chroma(
+    collection_name="example_collection",
+    embedding_function=embeddings,
+    host="localhost",
+)
+```
+
+对于其他部署，您可以使用 `port`、`ssl` 和 `headers` 参数来自定义您的连接。
+
+#### Chroma Cloud
+
+Chroma Cloud 用户也可以使用 LangChain 进行构建。请为您的 `Chroma` 实例提供您的 Chroma Cloud API 密钥、租户和数据库名称：
+
+```python
+from langchain_chroma import Chroma
+
+vector_store = Chroma(
+    collection_name="example_collection",
+    embedding_function=embeddings,
+    chroma_cloud_api_key=os.getenv("CHROMA_API_KEY"),
+    tenant=os.getenv("CHROMA_TENANT"),
+    database=os.getenv("CHROMA_DATABASE"),
+)
+```
+
+### 从客户端初始化
+
+你也可以从一个 `Chroma` 客户端进行初始化，如果你想更方便地访问底层数据库，这尤其有用。
+
+#### 本地运行（内存模式）
+
+```python
+import chromadb
+
+client = chromadb.Client()
+```
+
+#### 本地运行（带数据持久化）
+
+```python
+import chromadb
+
+client = chromadb.PersistentClient(path="./chroma_langchain_db")
+```
+
+#### 连接到 Chroma 服务器
+
+例如，如果您正在本地运行 Chroma 服务器（使用 `chroma run`）：
+
+```python
+import chromadb
+
+client = chromadb.HttpClient(host="localhost", port=8000, ssl=False)
+```
+
+#### Chroma 云
+
+在设置好您的 `CHROMA_API_KEY`、`CHROMA_TENANT` 和 `CHROMA_DATABASE` 后，您可以直接实例化：
+
+```python
+index = Chroma(
+    persistence_directory="./my_vector_store",
+    embedding_function=embeddings,
+)
+```
+
+```python
+import chromadb
+
+client = chromadb.CloudClient()
+```
+
+#### 访问您的 chroma DB
+
+```python
+collection = client.get_or_create_collection("collection_name")
+collection.add(ids=["1", "2", "3"], documents=["a", "b", "c"])
+```
+
+#### 创建 chroma 向量存储
+
+```python
+vector_store_from_client = Chroma(
+    client=client,
+    collection_name="collection_name",
+    embedding_function=embeddings,
+)
+```
+
+## 管理向量存储
+
+创建向量存储后，我们可以通过添加和删除不同的项目来与其进行交互。
+
+### 向向量存储添加项目
+
+我们可以使用 `add_documents` 函数向向量存储添加项目。
+
+```python
+from uuid import uuid4
+
+from langchain_core.documents import Document
+
+document_1 = Document(
+    page_content="I had chocolate chip pancakes and scrambled eggs for breakfast this morning.",
+    metadata={"source": "tweet"},
+    id=1,
+)
+
+document_2 = Document(
+    page_content="The weather forecast for tomorrow is cloudy and overcast, with a high of 62 degrees.",
+    metadata={"source": "news"},
+    id=2,
+)
+
+document_3 = Document(
+    page_content="Building an exciting new project with LangChain - come check it out!",
+    metadata={"source": "tweet"},
+    id=3,
+)
+
+document_4 = Document(
+    page_content="Robbers broke into the city bank and stole $1 million in cash.",
+    metadata={"source": "news"},
+    id=4,
+)
+
+document_5 = Document(
+    page_content="Wow! That was an amazing movie. I can't wait to see it again.",
+    metadata={"source": "tweet"},
+    id=5,
+)
+
+document_6 = Document(
+    page_content="Is the new iPhone worth the price? Read this review to find out.",
+    metadata={"source": "website"},
+    id=6,
+)
+
+document_7 = Document(
+    page_content="The top 10 soccer players in the world right now.",
+    metadata={"source": "website"},
+    id=7,
+)
+
+document_8 = Document(
+    page_content="LangGraph is the best framework for building stateful, agentic applications!",
+    metadata={"source": "tweet"},
+    id=8,
+)
+
+document_9 = Document(
+    page_content="The stock market is down 500 points today due to fears of a recession.",
+    metadata={"source": "news"},
+    id=9,
+)
+
+document_10 = Document(
+    page_content="I have a bad feeling I am going to get deleted :(",
+    metadata={"source": "tweet"},
+    id=10,
+)
+
+documents = [
+    document_1,
+    document_2,
+    document_3,
+    document_4,
+    document_5,
+    document_6,
+    document_7,
+    document_8,
+    document_9,
+    document_10,
+]
+uuids = [str(uuid4()) for _ in range(len(documents))]
+
+vector_store.add_documents(documents=documents, ids=uuids)
+```
+
+### 更新向量存储中的项目
+
+现在我们已向向量存储添加了文档，可以通过使用 `update_documents` 函数来更新现有文档。
+
+```python
+updated_document_1 = Document(
+    page_content="I had chocolate chip pancakes and fried eggs for breakfast this morning.",
+    metadata={"source": "tweet"},
+    id=1,
+)
+
+updated_document_2 = Document(
+    page_content="The weather forecast for tomorrow is sunny and warm, with a high of 82 degrees.",
+    metadata={"source": "news"},
+    id=2,
+)
+
+vector_store.update_document(document_id=uuids[0], document=updated_document_1)
+# You can also update multiple documents at once
+vector_store.update_documents(
+    ids=uuids[:2], documents=[updated_document_1, updated_document_2]
+)
+```
+
+### 从向量存储中删除项目
+
+我们还可以按如下方式从向量存储中删除项目：
+
+```python
+vector_store.delete(ids=uuids[-1])
+```
+
+## 查询向量存储
+
+一旦您创建了向量存储并添加了相关文档，您很可能希望在运行链或代理时对其进行查询。
+
+### 直接查询
+
+#### 相似性搜索
+
+执行简单的相似性搜索可以按如下方式进行：
+
+```python
+results = vector_store.similarity_search(
+    "LangChain provides abstractions to make working with LLMs easy",
+    k=2,
+    filter={"source": "tweet"},
+)
+for res in results:
+    print(f"* {res.page_content} [{res.metadata}]")
+```
+
+#### 带分数的相似性搜索
+
+如果您想执行相似性搜索并获取相应的分数，可以运行：
+
+```python
+results = vector_store.similarity_search_with_score(
+    "Will it be hot tomorrow?", k=1, filter={"source": "news"}
+)
+for res, score in results:
+    print(f"* [SIM={score:3f}] {res.page_content} [{res.metadata}]")
+```
+
+#### 按向量搜索
+
+您也可以按向量搜索：
+
+```python
+results = vector_store.similarity_search_by_vector(
+    embedding=embeddings.embed_query("I love green eggs and ham!"), k=1
+)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+#### 其他搜索方法
+
+本笔记本未涵盖多种其他搜索方法，例如 MMR 搜索。 有关 `Chroma` 可用的完整搜索功能列表，请参阅 @[API 参考][ChromaVectorStore]。
+
+### 通过转换为检索器进行查询
+
+您还可以将向量存储转换为检索器，以便在链中更轻松地使用。 有关您可以传递的不同搜索类型和 kwargs 的更多信息，请访问 [Chroma API 参考](https://reference.langchain.com/python/langchain-chroma/vectorstores/Chroma#langchain_chroma.vectorstores.Chroma.as_retriever)。
+
+```python
+retriever = vector_store.as_retriever(
+    search_type="mmr", search_kwargs={"k": 1, "fetch_k": 5}
+)
+retriever.invoke("Stealing from the bank is a crime", filter={"source": "news"})
+```
+
+## 用于检索增强生成的用法
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下章节：
+
+- [检索文档](/oss/langchain/retrieval)
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [代理式 RAG](/oss/langgraph/agentic-rag)
+
+---
+
+## API 参考
+
+有关所有 `Chroma` 向量存储功能和配置的详细文档，请前往 @[API 参考][ChromaVectorStore]。

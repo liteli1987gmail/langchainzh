@@ -1,0 +1,919 @@
+---
+title: 技能
+description: 了解如何使用技能扩展深度代理的功能
+---
+
+import SkillsUsageTabsPy from '/snippets/skills-usage-tabs-py.mdx';
+import SkillsUsageTabsJs from '/snippets/skills-usage-tabs-js.mdx';
+import SkillsSandboxPy from '/snippets/code-samples/skills-sandbox-py.mdx';
+import SkillsSandboxJs from '/snippets/code-samples/skills-sandbox-js.mdx';
+import BackendReadonlySkillsPy from '/snippets/code-samples/backend-readonly-skills-py.mdx';
+import BackendReadonlySkillsJs from '/snippets/code-samples/backend-readonly-skills-js.mdx';
+
+将领域专业知识（如工作流、最佳实践、脚本、参考文档和模板）打包成可复用的目录。代理在启动时获取内容摘要，仅在相关时发现并读取包含的文件。
+
+技能帮助您避免上下文膨胀，仅在启动时加载摘要，在任务需要时读取完整指令。您可以在代理和项目之间共享技能，并在单个代理中组合多个技能，使每个技能覆盖不同的能力。
+
+:::js
+<Note>
+技能需要 `deepagents>=1.7.0`。
+</Note>
+:::
+
+<Tip>
+有关可立即使用的技能（可提升代理在 LangChain 生态系统任务中的性能），请参阅 [LangChain Skills](https://github.com/langchain-ai/langchain-skills) 仓库。
+</Tip>
+
+## 使用方法
+
+<Steps>
+<Step title="创建顶级技能目录">
+
+创建一个目录来存放项目的所有技能，例如后端根目录下的 `skills/`。
+
+</Step>
+<Step title="在技能目录内为您的技能创建子目录">
+
+每个技能都是一个包含 `SKILL.md` 文件的目录：该 markdown 文件包含 YAML [frontmatter](#frontmatter-fields)（`name` 和 `description`），后面跟着代理在技能被激活时遵循的指令。技能目录还可以选择性地包含支持文件，如脚本、参考文档和模板。
+
+<Tree>
+  <Tree.Folder name="skills" defaultOpen>
+    <Tree.Folder name="langgraph-docs" defaultOpen>
+      <Tree.File name="SKILL.md" />
+      <Tree.Folder name="scripts">
+        <Tree.File name="fetch_docs.py" />
+      </Tree.Folder>
+      <Tree.Folder name="references">
+        <Tree.File name="api-patterns.md" />
+        <Tree.File name="style-guide.md" />
+      </Tree.Folder>
+      <Tree.Folder name="assets">
+        <Tree.File name="report-template.md" />
+        <Tree.File name="schema.json" />
+      </Tree.Folder>
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
+
+Deep agent 技能遵循 [Agent Skills 规范](https://agentskills.io/specification)。
+
+</Step>
+<Step title="添加包含 YAML frontmatter 和指令的 `SKILL.md` 文件。">
+
+`SKILL.md` 以 YAML [frontmatter](#frontmatter-fields) 开头，后面跟着 markdown 指令：
+
+````md
+---
+name: langgraph-docs
+description: Use this skill for requests related to LangGraph in order to fetch relevant documentation to provide accurate, up-to-date guidance.
+---
+
+# langgraph-docs
+
+## Overview
+
+This skill explains how to access LangGraph documentation to help answer questions and guide implementation.
+
+## Instructions
+
+### 1. Fetch the documentation index
+
+Use the fetch_url tool to read the following URL:
+https://docs.langchain.com/llms.txt
+
+This provides a structured list of all available documentation with descriptions.
+
+### 2. Select relevant documentation
+
+Based on the question, identify 2-4 most relevant documentation URLs from the index. Prioritize:
+
+- Specific how-to guides for implementation questions
+- Core concept pages for understanding questions
+- Tutorials for end-to-end examples
+- Reference docs for API details
+
+### 3. Fetch and synthesize
+
+Use the fetch_url tool to read the selected documentation URLs, then answer the user's question. Give a direct answer first, include the minimum necessary context, and link to the source pages rather than quoting long passages.
+````
+
+<Note>
+    在你的 `SKILL.md` 中引用任何[支持资源](#add-supporting-resources)，并附上每个文件内容的描述以及使用时机。代理通过技能说明中的引用来发现这些文件。
+</Note>
+
+</Step>
+<Step title="创建代理时传递技能路径">
+
+在 `skills` 参数中传递顶级技能目录的路径：
+
+:::python
+```python
+from deepagents import create_deep_agent
+from deepagents.backends.filesystem import FilesystemBackend
+
+backend = FilesystemBackend(root_dir="./my-project")
+
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-6",
+    backend=backend,
+    skills=["./my-project/skills/"],
+)
+```
+:::
+
+:::js
+```typescript
+import { createDeepAgent, FilesystemBackend } from "deepagents";
+
+const backend = new FilesystemBackend({ rootDir: process.cwd() });
+
+const agent = await createDeepAgent({
+  model: "anthropic:claude-sonnet-4-6",
+  backend,
+  skills: ["/skills/"],
+});
+```
+:::
+
+此示例使用 `FilesystemBackend` 从磁盘加载技能。有关其他存储选项（包括从远程源加载技能），请参阅[后端和远程技能加载](#backends-and-remote-skill-loading)。
+
+<ParamField body="skills" type="list[str]" optional>
+    技能源路径列表。
+
+    路径必须使用正斜杠指定，且相对于后端的根目录。
+
+    - 如果省略，则不加载任何技能。
+    - 使用 `StateBackend`（默认）时，请使用 `invoke(files={...})` 提供技能文件。使用 `deepagents.backends.utils` 中的 `create_file_data()` 格式化文件内容；不支持原始字符串。
+    - 使用 `FilesystemBackend` 时，技能从磁盘加载，相对于后端的 `root_dir`。
+
+    后续源会覆盖同名技能（后者优先）。
+
+    <Note>
+    当多个技能源包含同名技能时，`skills` 数组中列出的较后来源的技能优先（后者优先）。这允许您叠加来自不同来源的技能，例如被项目特定版本覆盖的基础技能。
+    </Note>
+
+</ParamField>
+
+</Step>
+<Step title="调用代理">
+
+使用 `invoke()` 向代理发送任务。在启动时，代理会将每个技能的 [`name`](#frontmatter-fields) 和 [`description`](#frontmatter-fields)（从 [frontmatter](#frontmatter-fields) 中获取）加载到系统提示中。当您的任务与某个技能的描述匹配时，代理会读取该技能的 `SKILL.md` 并遵循其指令。
+
+:::python
+```python
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "What is LangGraph?"}]},
+    config={"configurable": {"thread_id": "1"}},
+)
+```
+:::
+
+:::js
+```typescript
+const result = await agent.invoke(
+  { messages: [{ role: "user", content: "What is LangGraph?" }] },
+  { configurable: { thread_id: "1" } },
+);
+```
+:::
+
+</Step>
+</Steps>
+
+## 技能如何工作
+
+随着智能体承担更复杂的任务，它们需要的上下文也会随之增长。将所有指令加载到系统提示中会浪费令牌在当前任务无关的信息上，而在不同会话中手动提供相同的指导无法规模化。
+
+<Info>
+技能使用**渐进式披露**：智能体分层加载技能信息，而不是一次性全部加载。在启动时，它只能看到每个技能的名称和描述。当某个技能被调用时，它会读取完整的 `SKILL.md` 指令。辅助文件随后加载，但仅在指令需要时才会被读取。
+</Info>
+
+技能分三个层级加载。每个层级仅在任务需要时添加更多细节：
+
+| 层级 | 加载内容 | 时机 |
+| --- | -------- | ---- |
+| **1. 元数据** | `SKILL.md` [frontmatter](#frontmatter-fields) 中的 [`name`](#frontmatter-fields) 和 [`description`](#frontmatter-fields) | 智能体启动时，针对每个已配置的技能 |
+| **2. 指令** | 完整的 `SKILL.md` 主体内容 | 当技能被调用时 |
+| **3. 资源** | `scripts/`、`references/` 和 `assets/` 下的[辅助文件](#add-supporting-resources) | 调用后按需加载，当指令引用它们时 |
+
+下图展示了在特定时刻智能体上下文中出现的内容。在启动时，每个技能的第一层元数据都在系统提示中。当某个技能被调用时，第二层指令加入上下文。第三层文件保留在后端，直到智能体在调用后读取它们。
+
+<div className="skills-composition-diagram">
+
+![How skill components map into agent context at startup and activation](/oss/images/deepagents/skills-composition.svg)
+
+</div>
+
+当智能体处理任务时，它会分层加载技能信息：
+
+<div className="skills-composition-diagram">
+
+![How skills load in layers from metadata to instructions to resources](/oss/images/deepagents/skills-progressive-disclosure.svg)
+
+</div>
+
+在 Deep Agents 中，@[`SkillsMiddleware`]（传递 `skills` 时[默认中间件栈](/oss/deepagents/customization#default-stack-main-agent)的一部分）处理前两个层级，第三个层级由 LLM 处理：
+
+1. **发现**（第一层）：在智能体启动时，中间件扫描已配置的技能路径，解析每个 `SKILL.md` [frontmatter](#frontmatter-fields)，并将 [`name`](#frontmatter-fields) 和 [`description`](#frontmatter-fields) 字段注入系统提示。
+2. **读取**（第二层）：当智能体调用某个技能时，它通过 `read_file` 读取完整的 `SKILL.md` 内容。
+3. **执行**（第三层）：调用后，智能体遵循技能的指令，并仅在指令需要时读取辅助文件（脚本、参考资料、资产）。
+
+## 何时使用技能
+
+如果你发现自己向智能体反复提供类似的指令，尤其是包含多个步骤的详细指令时，请考虑将这些指令编码化供智能体使用。这样，当将来你想要完成类似的任务时，智能体已经知道该怎么做了。
+
+<Tip>
+    你也可以让智能体为你们一起完成的任务编写一个技能。
+</Tip>
+
+技能特别有助于编码化以下内容：
+
+- **多步骤工作流**：跨越多个步骤的工作流，类似于食谱。
+- **领域特定知识**：指导智能体如何在该工作流中使用工具。例如，包含从哪里获取信息的信息，包括该技能可能可以访问的其他参考资料或脚本。
+- **包含可执行代码的指令**：将过程与智能体可以运行的脚本或模块打包在一起，这样它遵循经过测试的逻辑，而不是每次都从指令重新生成。参见[使用技能执行代码](#execute-code-with-skills)。
+- **指南**：向智能体提供关于护栏的辅助指令以遵守。例如，遵循特定的格式或样式指南，或指定将测试作为工作流的一部分始终运行。
+
+## 编写有效的技能
+
+[Agent Skills 规范](https://agentskills.io/specification) 包含了关于构建技能以实现可靠发现和激活的指导。以下建议在此基础上为 Deep Agents 提供实用的模式。
+
+**保持 [frontmatter](#frontmatter-fields) 简洁**，且 `SKILL.md` 主体内容在 5,000 个令牌以下。每个技能的前置数据都在[发现](#how-skills-work)阶段添加到系统提示中，而完整主体内容仅在激活时才被读取。保持两个层级都很小意味着你可以在不挤占上下文窗口的情况下加载许多技能。
+
+**写出具体的描述。** 在[发现](#how-skills-work)阶段，[`description`](#frontmatter-fields) 字段是智能体对每个技能看到的唯一信息。一个好的描述告诉智能体该技能做什么以及何时激活它，包含智能体可以匹配的具体关键词：
+
+```yaml
+# Good: specific about what and when
+description: >-
+  Extract text and tables from PDF files, fill PDF forms, and merge
+  multiple PDFs. Use when working with PDF documents or when the user
+  mentions PDFs, forms, or document extraction.
+
+# Poor: too vague for reliable matching
+description: Helps with PDFs.
+```
+
+当你在相关领域拥有多个技能时，要清晰地区分它们的描述。重叠的描述会导致智能体激活错误的技能或在选项之间犹豫不决。如果两个技能服务于相似的目的，请将它们合并为一个。
+
+**保持指令简洁。** Agent Skills 规范建议将 `SKILL.md` 保持在 500 行以内。当指令变长时，将详细的参考资料移至[支持资源文件](#add-supporting-resources)，然后从主 `SKILL.md` 中引用它们：
+
+<Tree>
+  <Tree.Folder name="skills" defaultOpen>
+    <Tree.Folder name="data-pipeline" defaultOpen>
+      <Tree.File name="SKILL.md" />
+      <Tree.Folder name="references" defaultOpen>
+        <Tree.File name="schema-reference.md" />
+        <Tree.File name="error-codes.md" />
+      </Tree.Folder>
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
+
+智能体仅在指令调用时加载参考文件，使每一层渐进式披露都保持适当的大小。保持文件引用相对于 `SKILL.md` 一级深，避免使用深层嵌套的引用链，因为那会迫使智能体多次读取才能获取所需信息。
+
+**为智能体构建指令。** 将 `SKILL.md` 的正文写成智能体可以遵循的清晰指令：
+
+- **分步骤程序**，用于多步骤工作流
+- **决策标准**，用于选择不同的方法
+- **预期输入和输出示例**，让智能体知道成功的标准是什么
+- **边界情况**，智能体应该处理或标记给用户的情况
+
+**管理技能数量。** 少而精的技能比多个重叠的技能效果更好。随着描述相似的技能数量增加，智能体选择正确技能的能力会下降。如果你发现有许多相关技能，请考虑：
+
+- 将相关能力合并为一个技能，每个子任务单独成节
+- 使用参考文件来保持主 `SKILL.md` 简洁，同时覆盖多个子任务
+
+<Tip>
+    使用 [`skills-ref` 验证工具](https://github.com/agentskills/agentskills/tree/main/skills-ref) 检查你的 `SKILL.md` [前置元数据](#frontmatter-fields) 是否遵循 Agent Skills 规范的命名和格式约定。
+</Tip>
+
+## 添加支持资源
+
+除了 `SKILL.md` 之外，技能目录可以包含任何额外的文件或目录。[Agent Skills 规范](https://agentskills.io/specification) 为常见资源类型定义了三个可选目录。Deep Agents 在发现或激活时不会加载这些文件。智能体仅在你的 `SKILL.md` 指令指示时才会读取或执行它们。
+
+### `scripts/`
+
+`scripts/` 目录包含智能体可以运行的可执行代码，例如 API 客户端、数据转换或验证检查。脚本应该：
+
+- 自包含或明确记录依赖项
+- 包含有用的错误消息
+- 优雅地处理边界情况
+
+支持的编程语言取决于你的智能体设置。常见选项包括 Python、Bash 和 JavaScript 或 TypeScript。要执行脚本而不仅仅是读取它们，请参见[使用技能执行代码](#execute-code-with-skills)。当智能体需要 shell 时，请使用[沙盒脚本](#sandbox-scripts)。
+
+### `references/`
+
+`references/` 目录包含智能体按需读取的补充文档。对于 `SKILL.md` 来说太详细但仍是任务特定的材料使用它，例如：
+
+- `REFERENCE.md` 用于详细技术参考
+- `FORMS.md` 用于表单模板或结构化数据格式
+- 领域特定指南（`finance.md`、`legal.md` 等）
+
+保持单个参考文件专注于特定主题。智能体仅在需要时加载它们，所以较小的文件占用的上下文更少。
+
+### `assets/`
+
+`assets/` 目录包含智能体使用但不需要作为指令读取的静态资源，例如：
+
+- 文档或配置模板
+- 图片（图表、示例）
+- 数据文件（查找表、模式）
+
+在 `SKILL.md` 中描述智能体何时应该打开或复制每个资源。
+
+### 从 `SKILL.md` 引用文件
+
+当你引用支持文件时，使用相对于技能根目录的路径：
+
+````md
+For API details, see the [reference guide](references/api-patterns.md).
+
+To extract tables from a PDF, run:
+scripts/extract.py
+````
+
+对于每个引用的文件，说明其内容以及代理何时应该使用它。保持引用从 `SKILL.md` 向下延伸一层深度。避免深层嵌套的引用链，迫使代理通过多次读取才能获取所需信息。
+
+## 后端和远程技能加载
+
+Deep Agents 支持不同的后端，具体取决于您如何存储和管理技能文件：
+
+- `StateBackend`：将文件存储在当前线程的 LangGraph 代理状态中。
+- `StoreBackend`：将文件存储在 LangGraph 存储中，实现持久化的跨线程存储。
+- `FilesystemBackend`：从磁盘读取和写入技能文件，文件位于可配置的 `root_dir` 下。
+
+:::python
+<SkillsUsageTabsPy />
+:::
+
+:::js
+<SkillsUsageTabsJs />
+:::
+
+## 运行时加载技能
+
+当您拥有大量技能集合，但只有部分技能与特定运行相关时，可以根据运行时上下文（如用户角色、租户或请求类型）选择要加载的技能。主要有两种方法：
+
+### 动态技能列表
+
+最简单的方法是在创建代理之前构造 `skills` 数组。根据您拥有的运行时上下文选择要包含的技能路径：
+
+:::python
+```python
+from deepagents import create_deep_agent
+
+SKILLS_BY_ROLE = {
+    "engineering": ["/skills/code-review/", "/skills/testing/", "/skills/deployment/"],
+    "data": ["/skills/sql-analysis/", "/skills/visualization/", "/skills/data-pipeline/"],
+    "support": ["/skills/ticket-triage/", "/skills/runbook/"],
+}
+
+def create_agent_for_user(user_role: str):
+    return create_deep_agent(
+        model="anthropic:claude-sonnet-4-6",
+        skills=SKILLS_BY_ROLE.get(user_role, []),
+    )
+```
+:::
+
+:::js
+```typescript
+import { createDeepAgent } from "deepagents";
+
+const SKILLS_BY_ROLE: Record<string, string[]> = {
+  engineering: ["/skills/code-review/", "/skills/testing/", "/skills/deployment/"],
+  data: ["/skills/sql-analysis/", "/skills/visualization/", "/skills/data-pipeline/"],
+  support: ["/skills/ticket-triage/", "/skills/runbook/"],
+};
+
+function createAgentForUser(userRole: string) {
+  return createDeepAgent({
+    model: "anthropic:claude-sonnet-4-6",
+    skills: SKILLS_BY_ROLE[userRole] ?? [],
+  });
+}
+```
+:::
+
+这在技能存储在磁盘或共享后端，而你只需要控制智能体能看到哪些技能时效果很好。技能本身不会被复制——你维护一份副本，通过向每次运行传递不同的路径来控制。
+
+<Note>
+    SDK 只加载你通过 `skills` 传递的源。它不会自动扫描 CLI 目录（如 `~/.deepagents/...` 或 `~/.agents/...`）。
+
+    有关 CLI 存储约定，请参阅[应用数据](/oss/deepagents/code/data-locations)。
+
+    <Accordion
+        title="在 SDK 中模拟 CLI 源顺序"
+    >
+        如果你想在 SDK 代码中实现 CLI 风格的层级，请按从低到高的优先级顺序显式传递所有所需的源：
+
+
+</Accordion>
+
+</Note>
+
+:::
+
+        ```text
+        [
+        "<user-home>/.deepagents/{agent}/skills/",
+        "<user-home>/.agents/skills/",
+        "<project-root>/.deepagents/skills/",
+        "<project-root>/.agents/skills/",
+        ]
+        ```
+
+然后在创建代理时，将该有序列表作为 `skills` 传递。
+    </Accordion>
+</Note>
+
+### 命名空间技能
+
+对于多租户应用程序，其中每个用户的技能集都是独立管理的，请使用命名空间工厂将 `/skills/` 路由到 @[StoreBackend]。在每个命名空间中只填充该用户应该访问的技能，中间件在运行时解析到正确的集合：
+
+:::python
+```python
+from deepagents import create_deep_agent
+from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
+
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-6",
+    skills=["/skills/"],
+    backend=CompositeBackend(
+        default=StateBackend(),
+        routes={
+            "/skills/": StoreBackend(
+                namespace=lambda rt: (
+                    rt.server_info.assistant_id,
+                    rt.server_info.user.identity,
+                ),
+            ),
+        },
+    ),
+)
+```
+:::
+
+:::js
+```typescript
+import {
+  createDeepAgent,
+  CompositeBackend,
+  StateBackend,
+  StoreBackend,
+} from "deepagents";
+
+const agent = await createDeepAgent({
+  model: "anthropic:claude-sonnet-4-6",
+  skills: ["/skills/"],
+  backend: new CompositeBackend({
+    default: new StateBackend(),
+    routes: {
+      "/skills/": new StoreBackend({
+        namespace: (ctx) => [
+          ctx.assistantId ?? "default",
+          ctx.config?.configurable?.user_id ?? "anonymous",
+        ],
+      }),
+    },
+  }),
+});
+```
+此模式在不同的用户或租户需要完全独立的技能库且可以单独更新时非常有用。关于处理技能访问、共享和工作区级可视化的托管解决方案，请参阅 [Fleet skills](/langsmith/fleet/skills)。
+
+## 子代理的技能
+
+使用 [subagents](/oss/deepagents/subagents) 时，您可以配置每种类型可以访问的技能：
+
+- **通用子代理**：向 `create_deep_agent` 传递 `skills` 时，会自动继承主代理的技能。无需额外配置。
+- **自定义子代理**：不会继承主代理的技能。在每个子代理定义中添加 `skills` 参数，指定该子代理的技能源路径。
+
+技能状态是完全隔离的：主代理的技能对子代理不可见，子代理的技能对主代理也不可见。
+
+:::python
+```python
+from deepagents import create_deep_agent
+
+research_subagent = {
+    "name": "researcher",
+    "description": "Research assistant with specialized skills",
+    "system_prompt": "You are a researcher.",
+    "tools": [web_search],
+    "skills": ["/skills/research/", "/skills/web-search/"],  # Subagent-specific skills
+}
+
+agent = create_deep_agent(
+    model="google_genai:gemini-3.5-flash",
+    skills=["/skills/main/"],  # Main agent and GP subagent get these
+    subagents=[research_subagent],  # Researcher gets only its own skills
+)
+```
+:::
+
+:::js
+```typescript
+const researchSubagent = {
+  name: "researcher",
+  description: "Research assistant with specialized skills",
+  systemPrompt: "You are a researcher.",
+  tools: [webSearch],
+  skills: ["/skills/research/", "/skills/web-search/"],  // Subagent-specific skills
+};
+
+const agent = await createDeepAgent({
+  model: "google_genai:gemini-3.5-flash",
+  skills: ["/skills/main/"],  // Main agent and GP subagent get these
+  subagents: [researchSubagent],  // Researcher gets only its own skills
+});
+```
+:::
+
+有关子代理配置和技能继承的更多信息，请参阅[子代理](/oss/deepagents/subagents)。
+
+## 技能权限
+
+生产部署通常需要控制三件事：每个用户可以查看哪些技能、代理是否可以修改技能文件，以及写入是否需要人工审批。您可以通过 `skills` 参数和[后端路由](#backends-and-remote-skill-loading)控制可见性，通过[文件系统权限](/oss/deepagents/permissions)控制访问权限，通过 [`interrupt_on`](/oss/deepagents/human-in-the-loop) 或带有 `mode="interrupt"` 的权限规则控制审批。
+
+### 在用户之间共享技能
+
+要让每个用户都能访问相同的精选库，请将 `/skills/` 路由到共享的 @[StoreBackend]，并通过应用程序代码或管理工作流来填充数据。使用组织范围的命名空间，使该组织中的所有代理都能解析到同一个存储：
+
+- 按组织 ID 命名空间以实现工作区范围的技能（请参阅[强制只读技能](#enforce-read-only-skills)）。
+- 当每个用户需要独立的库时，按用户 ID 命名空间（[命名空间技能](#namespaced-skills)）。
+
+使用类似 `/company-policies/SKILL.md` 的键和包含 `content` 与 `encoding` 字段的值来填充存储。在从存储读取记录之前，`/skills/` 路由前缀会被剥离。
+
+有关处理技能访问、共享和工作区级别可见性的托管解决方案，请参阅[批量技能](/langsmith/fleet/skills)。
+
+您还可以组合共享库和个人库：将 `/skills/shared/` 路由到组织范围的 `StoreBackend`，将 `/skills/personal/` 路由到用户范围的后端，并在 `skills` 中传递两个路径。请参阅[允许代理编辑个人技能](#allow-agents-to-edit-personal-skills)。
+
+### 根据用户上下文限制技能
+
+并非每个用户都应该看到每个技能。根据角色、租户或其他请求上下文控制哪些技能在运行时加载。有两种主要方法：
+
+- **[动态技能列表](#dynamic-skill-lists)** — 在创建代理之前构建 `skills` 数组。为不同的角色或请求类型传递不同的路径列表。适用于技能位于共享后端且按路径过滤的情况。
+- **[命名空间技能](#namespaced-skills)** — 将 `/skills/` 路由到带有以用户或租户 ID 为键的命名空间工厂的 `StoreBackend`。用每个身份应该访问的技能填充各自的命名空间。
+
+这些模式可以与下面的读写控制结合使用。例如，您可以给管理员比工程师更大的技能集，同时保持两个库只读。
+
+### 强制只读技能
+
+要在不让代理修改的情况下共享技能，请将 `/skills/` 路由到共享存储，并使用[文件系统权限](/oss/deepagents/permissions)拒绝 `/skills/**` 下的写入操作。代理可以发现和读取技能；只有您的应用程序代码或管理工作流才能更新存储。
+
+将此用于企业知识库、已批准的工具说明或共享技能包，在这些场景中代理应该受益于集中管理的上下文，但不应该重写真相来源。
+
+### 需要技能写入审批
+
+如果代理可能写入技能文件，但您希望人工先介入，请使用 [`interrupt_on`](/oss/deepagents/human-in-the-loop) 或带有 `mode="interrupt"` 的权限规则。两者都会在 `write_file` 或 `edit_file` 运行前暂停，并使用相同的恢复流程。
+
+:::python
+
+<BackendReadonlySkillsPy />
+
+:::
+
+:::js
+
+<BackendReadonlySkillsJs />
+
+:::
+```python
+from deepagents import FilesystemPermission, create_deep_agent
+from langgraph.checkpoint.memory import MemorySaver
+
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-6",
+    skills=["/skills/personal/"],
+    permissions=[
+        FilesystemPermission(
+            operations=["write"],
+            paths=["/skills/**"],
+            mode="interrupt",
+        ),
+    ],
+    checkpointer=MemorySaver(),  # Required to pause and resume
+)
+```
+:::
+
+:::js
+```typescript
+import { MemorySaver } from "@langchain/langgraph";
+import { createDeepAgent } from "deepagents";
+
+const agent = await createDeepAgent({
+  model: "anthropic:claude-sonnet-4-6",
+  skills: ["/skills/personal/"],
+  permissions: [
+    {
+      operations: ["write"],
+      paths: ["/skills/**"],
+      mode: "interrupt",
+    },
+  ],
+  checkpointer: new MemorySaver(), // Required to pause and resume
+});
+```
+:::
+
+或者，配置 `interrupt_on={"write_file": True, "edit_file": True}` 以要求对所有文件系统写入操作进行审批，而不仅仅是技能路径。请参阅 [人在回路](/oss/deepagents/human-in-the-loop) 了解如何处理和恢复中断。
+
+:::python
+<Note>
+    Filesystem permission interrupts require `deepagents>=0.6.8`.
+</Note>
+:::
+
+### 允许智能体编辑个人技能
+
+默认情况下，如果后端允许且没有权限规则阻止该路径，智能体可以写入技能文件。要让智能体创建或优化技能而不影响共享库：
+
+1. 将 `/skills/personal/` 等可写路径路由到用户范围的 `StoreBackend`。
+2. 在 `skills` 中传递该路径（以及任何共享路径）。
+3. 不要为可写路径添加 `deny` 规则。如果混合使用共享路径和个人路径，请将更具体的规则放在更广泛的拒绝规则之前（[规则顺序](/oss/deepagents/permissions#rule-ordering)）。
+
+:::python
+```python
+from deepagents import FilesystemPermission, create_deep_agent
+from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
+
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-6",
+    backend=CompositeBackend(
+        default=StateBackend(),
+        routes={
+            "/skills/shared/": StoreBackend(
+                namespace=lambda rt: ("curated-skills", rt.context.org_id),
+            ),
+            "/skills/personal/": StoreBackend(
+                namespace=lambda rt: (
+                    "user-skills",
+                    rt.server_info.user.identity,
+                ),
+            ),
+        },
+    ),
+    skills=["/skills/shared/", "/skills/personal/"],
+    permissions=[
+        FilesystemPermission(
+            operations=["write"],
+            paths=["/skills/shared/**"],
+            mode="deny",
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import {
+  createDeepAgent,
+  CompositeBackend,
+  StateBackend,
+  StoreBackend,
+} from "deepagents";
+
+const agent = await createDeepAgent({
+  model: "anthropic:claude-sonnet-4-6",
+  backend: new CompositeBackend({
+    default: new StateBackend(),
+    routes: {
+      "/skills/shared/": new StoreBackend({
+        namespace: (rt) => ["curated-skills", rt.context.orgId],
+      }),
+      "/skills/personal/": new StoreBackend({
+        namespace: (ctx) => [
+          "user-skills",
+          ctx.config?.configurable?.user_id ?? "anonymous",
+        ],
+      }),
+    },
+  }),
+  skills: ["/skills/shared/", "/skills/personal/"],
+  permissions: [
+    {
+      operations: ["write"],
+      paths: ["/skills/shared/**"],
+      mode: "deny",
+    },
+  ],
+});
+```
+:::
+
+代理使用 `write_file` 和 `edit_file` 在可写路径下创建或更新 `SKILL.md` 及支持文件。若要捕获不符合技能格式的通用知识，可将单独的路径（如 `/memories/`）路由到另一个可写后端。详见 [Backends](/oss/deepagents/backends) 了解路由和存储设置。
+
+## 使用技能执行代码
+
+如果没有代码执行，技能是被动的：代理读取指令并使用其可用工具遵循执行。代码执行将技能转变为主动能力。技能可以附带一个经过测试的脚本，用于调用 API、转换数据、验证输出或运行管道——代理会确定性执行这些操作，而不是每次都从指令重新生成逻辑。这对于需要精确行为的工作流（数据转换、API 集成、合规检查）或依赖代理无法通过工具调用使用的库的场景特别有价值。
+
+技能通过[沙盒脚本](#sandbox-scripts)执行代码：代理在需要安装依赖、运行测试、调用 CLI 或与操作系统文件系统交互时运行捆绑脚本。
+
+### 沙盒脚本
+
+技能可以包含与 `SKILL.md` 文件同目录的脚本。在 `SKILL.md` 中引用脚本，以便代理知道它们的存在和执行时机：
+
+:::python
+<Tree>
+  <Tree.Folder name="skills" defaultOpen>
+    <Tree.Folder name="arxiv-search" defaultOpen>
+      <Tree.File name="SKILL.md" />
+      <Tree.Folder name="scripts" defaultOpen>
+        <Tree.File name="search.py" />
+      </Tree.Folder>
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
+:::
+
+:::js
+<Tree>
+  <Tree.Folder name="skills" defaultOpen>
+    <Tree.Folder name="arxiv-search" defaultOpen>
+      <Tree.File name="SKILL.md" />
+      <Tree.Folder name="scripts" defaultOpen>
+        <Tree.File name="search.ts" />
+      </Tree.Folder>
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
+:::
+
+:::python
+````md
+---
+name: arxiv-search
+description: Search the arXiv preprint repository for research papers. Use when the user asks about academic papers, recent research, or scientific literature.
+---
+
+# arxiv-search
+
+Search arXiv for papers matching the user's query.
+
+## Instructions
+
+1. Run `scripts/search.py` with the user's query as an argument.
+2. Parse the results and present them with title, authors, abstract summary, and link.
+3. If the user asks for more detail on a specific paper, fetch the full abstract.
+````
+:::
+
+:::js
+````md
+---
+name: arxiv-search
+description: Search the arXiv preprint repository for research papers. Use when the user asks about academic papers, recent research, or scientific literature.
+---
+
+# arxiv-search
+
+Search arXiv for papers matching the user's query.
+
+## Instructions
+
+1. Run `scripts/search.ts` with the user's query as an argument.
+2. Parse the results and present them with title, authors, abstract summary, and link.
+3. If the user asks for more detail on a specific paper, fetch the full abstract.
+````
+:::
+
+代理可以从任何后端_读取_脚本，但要_执行_它们，代理需要访问 shell，只有[沙箱后端](/oss/deepagents/sandboxes)提供这种访问。
+
+[沙箱后端](/oss/deepagents/sandboxes)在隔离的容器中运行。存储在沙箱外部的技能文件在其中不可用，这意味着代理无法执行技能脚本或访问技能资源，除非先将其传输进去。使用[自定义中间件](/oss/langchain/middleware/custom)来处理此传输：
+
+- **`before_agent`**：从后端读取技能文件并上传到沙箱中，以便代理从一开始就可以执行脚本。
+- **`after_agent`**：从沙箱下载任何更新或新创建的技能文件并将其写回后端，以便更改在多次运行之间保持一致。
+
+:::python
+
+<SkillsSandboxPy />
+
+:::
+
+:::js
+<SkillsSandboxJs />
+:::
+
+有关在执行前同时初始化技能和记忆并在执行后同步两者的完整示例，请参阅[使用自定义中间件同步技能和记忆](/oss/deepagents/going-to-production#example-syncing-skills-and-memories-with-custom-middleware)。
+
+## 故障排除
+
+使用 [LangSmith](https://smith.langchain.com) 追踪来调试技能发现、`SKILL.md` 上的 `read_file` 调用以及支持资源访问。按照[追踪快速入门](/langsmith/observability-quickstart)进行设置。我们还建议您设置 [LangSmith Engine](/langsmith/engine)，它可以监控您的追踪、检测问题并提出修复建议。
+
+### 技能未激活
+
+**问题**：代理处理任务时未读取技能的 `SKILL.md`。
+
+**解决方案**：
+
+1. **使描述更加具体。** 代理仅根据[发现](#how-skills-work)时的[`描述`](#frontmatter-fields)字段选择技能。包括技能的作用、使用时机以及代理可以匹配的关键词：
+
+   ```yaml
+   # Good
+   description: >-
+     Search the arXiv preprint repository for research papers. Use when the
+     user asks about academic papers, recent research, or scientific literature.
+
+   # Poor
+   description: Helps with research.
+   ```
+
+2. **减少技能之间的重叠。** 如果多个技能的描述相似，智能体可能会跳过正确的技能或选错技能。请区分描述或[整合相关技能](#write-effective-skills)。
+
+3. **确认技能在 `skills` 数组中。** 技能仅从您在创建智能体时传递的路径或子智能体特定的 `skills` 参数加载。
+
+### 启动时缺失技能
+
+**问题**：智能体未在其系统提示中列出技能，或对 `SKILL.md` 的 `read_file` 失败。
+
+**解决方案**：
+
+1. **检查技能路径。** 路径必须使用正斜杠，并相对于后端根目录。使用 `FilesystemBackend` 时，路径相对于 `root_dir`。使用 `StateBackend` 时，在 `invoke(files={...})` 中使用 `create_file_data()` 传入技能文件。
+
+2. **验证 `SKILL.md` [frontmatter](#frontmatter-fields)。** [`name`](#frontmatter-fields) 必须与父目录名称匹配，并遵循 [Agent Skills 规范](https://agentskills.io/specification)。使用 [`skills-ref` 验证工具](https://github.com/agentskills/agentskills/tree/main/skills-ref) 检查格式。
+
+3. **检查文件大小。** Deep Agents 在发现阶段会跳过超过 10 MB 的 `SKILL.md` 文件。
+
+4. **检查分层来源。** 当同一技能名称出现在多个来源时，[后一个来源优先](#usage)。来自较晚路径的较旧或空技能可能会覆盖您期望的技能。
+
+### 找不到支持文件
+
+**问题**：智能体读取了 `SKILL.md` 但无法访问脚本、引用或资源。
+
+**解决方案**：
+
+1. **从 `SKILL.md` 引用文件。** 智能体不会自动发现支持文件。说明每个文件包含的内容及使用时机。使用从技能根目录开始的[相对路径](#reference-files-from-skill-md)。
+
+2. **保持路径在技能目录内。** 文件路径相对于后端解析。确认支持文件存在于您说明中引用的路径。
+
+3. **将技能同步到沙箱。** 如果您使用[沙箱后端](/oss/deepagents/sandboxes)，容器外的技能文件在复制进去之前不可用。请参见 [沙箱脚本](#sandbox-scripts) 和[使用自定义中间件同步技能和记忆](/oss/deepagents/going-to-production#example-syncing-skills-and-memories-with-custom-middleware)。
+
+### 脚本运行失败
+
+**问题**：智能体读取了脚本但无法运行。
+
+**解决方案**：智能体可以从任何后端读取脚本，但运行它们需要[沙箱后端](/oss/deepagents/sandboxes)。请参见[使用技能执行代码](#execute-code-with-skills)。
+
+### 子智能体无法访问技能
+
+**问题**：自定义子智能体看不到主智能体使用的技能。
+
+**解决方案**：自定义子智能体不会继承主智能体的技能。请在每个[子智能体定义](#skills-for-subagents)中添加 `skills` 参数，指定该子智能体的技能源路径。通用子智能体会自动继承 `create_deep_agent` 中的技能。
+
+## 参考
+
+### 技能、记忆和工具
+
+技能、[记忆](/oss/deepagents/memory)（`AGENTS.md` 文件）和工具都为智能体提供上下文或能力。下表总结何时使用每种：
+
+| | 技能 | 记忆 | 工具 |
+|---|--------|--------|-------|
+| **用途** | 通过渐进式披露发现按需使用的能力 | 在启动时加载的持久上下文 | 智能体可调用的编程操作 |
+| **加载方式** | 仅在智能体确定相关性时读取 | 在智能体启动时加载 | 每轮对话都可用 |
+| **格式** | 命名目录中的 `SKILL.md` | `AGENTS.md` 文件 | 绑定到智能体的函数 |
+| **分层方式** | 用户级，然后项目级（后者覆盖） | 用户级，然后项目级（合并） | 在创建智能体时定义 |
+| **使用场景** | 说明是特定于任务的且可能较大 | 上下文始终相关（项目约定、偏好） | 智能体需要编程操作，或无法访问文件系统 |
+
+这些是指导原则，而非硬性界限。在实践中，技能和记忆处于一个光谱上。智能体可以在工作时更新自己的技能，捕获新流程并随时间完善说明。这样，技能可以作为一种渐进式披露记忆的形式：智能体在工作中构建并按需检索的上下文，而不是在每个提示时加载。
+
+### Frontmatter 字段
+
+[Agent Skills 规范](https://agentskills.io/specification) 定义了以下 frontmatter 字段：
+
+| 字段 | 必需 | 描述 |
+|-------|----------|-------------|
+| `name` | 是 | 小写字母数字和连字符，1-64 个字符。必须与父目录名称匹配。 |
+| `description` | 是 | 技能的功能及使用场景。最多 1,024 个字符。 |
+| `license` | 否 | 许可证名称或对捆绑许可证文件的引用。 |
+| `compatibility` | 否 | 环境要求（系统包、网络访问）。最多 500 个字符。 |
+| `metadata` | 否 | 用于附加属性的任意键值对。 |
+| `allowed-tools` | 否 | 技能可使用的预批准工具空格分隔列表。实验性功能。 |
+
+````md expandable
+---
+name: langgraph-docs
+description: Use this skill for requests related to LangGraph in order to fetch relevant documentation to provide accurate, up-to-date guidance.
+license: MIT
+compatibility: Requires internet access for fetching documentation URLs
+metadata:
+  author: langchain
+  version: "1.0"
+allowed-tools: fetch_url
+---
+
+# langgraph-docs
+
+Instructions for the agent go here. See [Usage](#usage) for a complete example of skill instructions.
+````
+
+<Warning>
+    有关详细的约束条件和验证规则，请参阅完整的 [Agent Skills 规范](https://agentskills.io/specification)。在 Deep Agents 中，`SKILL.md` 文件必须小于 10 MB。超过此限制的文件将在技能加载过程中被跳过。
+</Warning>
+
+:::python
+更多示例技能，请参阅 [Deep Agents 示例技能](https://github.com/langchain-ai/deepagents/tree/main/libs/cli/examples/skills)。
+:::
+
+:::js
+更多示例技能，请参阅 [Deep Agents 示例技能](https://github.com/langchain-ai/deepagentsjs/tree/main/examples/skills)。
+:::

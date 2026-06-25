@@ -1,0 +1,724 @@
+---
+title: 构建内容构建智能体
+sidebarTitle: 内容构建器
+description: 构建具有品牌记忆、技能、子智能体和图像生成能力的内容写作智能体
+---
+
+import ContentBuilderToolsPy from '/snippets/code-samples/content-builder-tools-py.mdx';
+import ContentBuilderCreateAgentPy from '/snippets/code-samples/content-builder-create-agent-py.mdx';
+import ContentBuilderEntryPointPy from '/snippets/code-samples/content-builder-entry-point-py.mdx';
+import ContentBuilderToolsJs from '/snippets/code-samples/content-builder-tools-js.mdx';
+import ContentBuilderCreateAgentJs from '/snippets/code-samples/content-builder-create-agent-js.mdx';
+import ContentBuilderEntryPointJs from '/snippets/code-samples/content-builder-entry-point-js.mdx';
+
+## 概述
+
+本指南演示如何使用 [Deep Agents](/oss/deepagents) 从零开始构建内容写作代理。
+
+你构建的代理将：
+
+1. 从 `AGENTS.md` 和技能文件夹加载语音和工作流规则
+1. 使用 `web_search` 将网络研究委托给专门的子代理
+1. 根据加载的技能起草博客或社交内容
+1. 使用 Gemini 生成封面或社交图片，并将文件保存到项目目录下
+
+本教程中的代码连接了图像生成工具和文件系统后端，使代理能够读取和写入项目目录下的帖子、研究笔记和图片。完整的可运行项目，请参阅 [content-builder-agent](https://github.com/langchain-ai/deepagents/tree/main/examples/content-builder-agent) 示例。
+
+### 关键概念
+
+本教程涵盖：
+
+- [长期记忆](/oss/deepagents/memory) 用于待办事项
+- [技能](/oss/deepagents/skills) 用于待办事项
+- [子代理](/oss/deepagents/subagents) 用于待办事项
+- [文件系统后端](/oss/deepagents/backends) 用于文件读取和写入
+- 自定义[工具](/oss/langchain/tools) 用于搜索和图像生成
+
+## 前置条件
+
+API 密钥：
+
+- Anthropic (Claude) 或其他提供商 API 密钥
+- Google (Gemini) 用于使用 `gemini-2.5-flash-image` 进行图像生成
+- [Tavily](https://www.tavily.com/) 用于网络搜索（免费套餐）
+- [LangSmith](https://smith.langchain.com) 用于追踪（可选）
+
+:::python
+Python 3.11 或更高版本。
+:::
+
+:::js
+Node.js 18 或更高版本。
+:::
+
+## 设置
+
+:::python
+<Steps>
+<Step title="创建项目目录">
+
+```bash
+mkdir content-builder-agent
+cd content-builder-agent
+```
+
+</Step>
+<Step title="安装依赖项">
+
+<CodeGroup>
+```bash pip wrap
+pip install deepagents google-genai pillow pyyaml rich tavily-python langchain
+```
+
+```bash uv wrap
+uv init
+uv add deepagents google-genai pillow pyyaml rich tavily-python langchain
+uv sync
+```
+</CodeGroup>
+
+将 `deepagents` 固定到您自己的项目中支持的版本范围（例如 `>=0.3.5,<0.4.0`），以匹配上游示例。
+
+</Step>
+<Step title="设置 API 密钥">
+
+```bash
+export ANTHROPIC_API_KEY="your_anthropic_api_key"
+export GOOGLE_API_KEY="your_google_api_key"
+export TAVILY_API_KEY="your_tavily_api_key"           # Optional
+export LANGSMITH_API_KEY="your_langsmith_api_key"     # Optional
+```
+
+<Step>
+</Steps>
+:::
+
+:::js
+<Steps>
+<Step title="创建项目目录">
+
+
+</fragment>
+
+```bash
+mkdir content-builder-agent
+cd content-builder-agent
+```
+
+</Step>
+<Step title="安装依赖项">
+
+<CodeGroup>
+```bash npm wrap
+npm install deepagents @langchain/core @langchain/anthropic @google/generative-ai tavily zod tsx
+```
+
+```bash yarn wrap
+yarn add deepagents @langchain/core @langchain/anthropic @google/generative-ai tavily zod tsx
+```
+</CodeGroup>
+
+添加 `tsx` 来运行 `content_writer.ts`。`--input-type=module` 标志仅适用于 `--eval`、`--print` 或 stdin，不适用于脚本文件路径。
+
+安装 `@langchain/anthropic`，以便 LangChain 可以加载 `createDeepAgent` 使用的默认 Claude 模型。
+
+</Step>
+<Step title="设置 API 密钥">
+
+```bash
+export ANTHROPIC_API_KEY="your_anthropic_api_key"
+export GOOGLE_API_KEY="your_google_api_key"
+export TAVILY_API_KEY="your_tavily_api_key"           # Optional
+export LANGSMITH_API_KEY="your_langsmith_api_key"     # Optional
+```
+
+</Step>
+</Steps>
+:::
+
+## 添加配置文件
+
+该示例将行为保持在三种文件中：memory、skills 和 subagent 定义。
+
+<Steps>
+<Step title="添加 AGENTS.md">
+
+在项目根目录创建 `AGENTS.md`。
+
+当你稍后创建 agent 并将此文件指定为 [memory](/oss/deepagents/memory) 参数的一部分时，它会被加载到系统提示中，以便品牌声音和研究期望适用于每次运行。
+
+</Steps>
+
+```markdown expandable wrap
+# Content Writer Agent
+
+You are a content writer for a technology company. Your job is to create engaging, informative content that educates readers about AI, software development, and emerging technologies.
+
+## Brand Voice
+
+- **Professional but approachable**: Write like a knowledgeable colleague, not a textbook
+- **Clear and direct**: Avoid jargon unless necessary; explain technical concepts simply
+- **Confident but not arrogant**: Share expertise without being condescending
+- **Engaging**: Use concrete examples, analogies, and stories to illustrate points
+
+## Writing Standards
+
+1. **Use active voice**: "The agent processes requests" not "Requests are processed by the agent"
+2. **Lead with value**: Start with what matters to the reader, not background
+3. **One idea per paragraph**: Keep paragraphs focused and scannable
+4. **Concrete over abstract**: Use specific examples, numbers, and case studies
+5. **End with action**: Every piece should leave the reader knowing what to do next
+
+## Content Pillars
+
+Our content focuses on:
+- AI agents and automation
+- Developer tools and productivity
+- Software architecture and best practices
+- Emerging technologies and trends
+
+## Formatting Guidelines
+
+- Use headers (H2, H3) to break up long content
+- Include code examples where relevant (with syntax highlighting)
+- Add bullet points for lists of 3+ items
+- Keep sentences under 25 words when possible
+- Include a clear call-to-action at the end
+
+## Research Requirements
+
+Before writing on any topic:
+1. Use the `researcher` subagent for in-depth topic research
+2. Gather at least 3 credible sources
+3. Identify the key points readers need to understand
+4. Find concrete examples or case studies to illustrate concepts
+```
+
+要使此代理遵守您自己的语气、核心原则和格式规则，请更新 `AGENTS.md` 中的文本。
+
+</Step>
+:::python
+<Step title="Add subagents.yaml">
+
+创建一个名为 `subagents.yaml` 的文件。
+然后添加以下 txt，其中描述了一个 `researcher` 子代理，它配备了 Tavily 支持的 `web_search` 工具、Haiku 模型 ID，以及将结果保存到您从主代理委托时指定的路径的指令：
+
+```yaml expandable wrap
+# Subagent definitions
+# These are loaded by content_writer.py and wired up with tools
+
+researcher:
+  description: >
+    ALWAYS use this first to research any topic before writing content.
+    Searches the web for current information, statistics, and sources.
+    When delegating, tell it the topic AND the file path to save results
+    (e.g., 'Research renewable energy and save to research/renewable-energy.md').
+  model: anthropic:claude-haiku-4-5-20251001
+  system_prompt: |
+    You are a research assistant. You have access to web_search and write_file tools.
+
+    ## Your Tools
+    - web_search(query, max_results=5, topic="general") - Search the web
+    - write_file(file_path, content) - Save your findings
+
+    ## Your Process
+    1. Use web_search to find information on the topic
+    2. Make 2-3 targeted searches with specific queries
+    3. Gather key statistics, quotes, and examples
+    4. Save findings to the file path specified in your task
+
+    ## Important
+    - The user will tell you WHERE to save the file - use that exact path
+    - Always include source URLs in your findings
+    - Keep findings concise but informative
+  tools:
+    - web_search
+```
+
+该文件稍后在创建深度代理时将作为参数传递。
+
+</Step>
+:::
+
+<Step title="添加技能">
+
+创建一个 `skills/` 目录。每个技能都是一个文件夹，其中包含一个 `SKILL.md` 文件，该文件具有 YAML frontmatter（`name`、`description`）以及技能说明。
+
+创建 `skills/blog-post/SKILL.md` 并将以下文本复制到其中，其中包含有关创建长篇文章、优化内容以适应 SEO 以及生成封面图片的信息。
+
+````md expandable wrap
+---
+name: blog-post
+description: Writes and structures long-form blog posts, creates tutorial outlines, and optimizes content for SEO with cover image generation. Use when the user asks to write a blog post, article, how-to guide, tutorial, technical writeup, thought leadership piece, or long-form content.
+---
+
+# Blog Post Writing Skill
+
+## Research First (Required)
+
+**Before writing any blog post, you MUST delegate research:**
+
+1. Use the `task` tool with `subagent_type: "researcher"`
+2. In the description, specify BOTH the topic AND where to save:
+
+```
+```
+task(
+    subagent_type="researcher",
+    description="研究 [TOPIC]。将发现保存到 research/[slug].md"
+)
+```
+```
+
+Example:
+```
+task(
+    subagent_type="researcher",
+    description="研究2025年AI代理的现状。将研究结果保存到research/ai-agents-2025.md"
+)
+```
+
+3. After research completes, read the findings file before writing
+
+## Output Structure (Required)
+
+**Every blog post MUST have both a post AND a cover image:**
+
+```
+blogs/
+└── <slug>/
+    ├── post.md        # 博客文章内容
+    └── hero.png       # 必填：生成的封面图片
+```
+
+Example: A post about "AI Agents in 2025" → `blogs/ai-agents-2025/`
+
+**You MUST complete both steps:**
+1. Write the post to `blogs/<slug>/post.md`
+2. Generate a cover image using `generate_image` and save to `blogs/<slug>/hero.png`
+
+**A blog post is NOT complete without its cover image.**
+
+## Blog Post Structure
+
+Every blog post should follow this structure:
+
+### 1. Hook (Opening)
+- Start with a compelling question, statistic, or statement
+- Make the reader want to continue
+- Keep it to 2-3 sentences
+
+### 2. Context (The Problem)
+- Explain why this topic matters
+- Describe the problem or opportunity
+- Connect to the reader's experience
+
+### 3. Main Content (The Solution)
+- Break into 3-5 main sections with H2 headers
+- Each section covers one key point
+- Include code examples, diagrams, or screenshots where helpful
+- Use bullet points for lists
+
+### 4. Practical Application
+- Show how to apply the concepts
+- Include step-by-step instructions if applicable
+- Provide code snippets or templates
+
+### 5. Conclusion & CTA
+- Summarize key takeaways (3 bullets max)
+- End with a clear call-to-action
+- Link to related resources
+
+## Cover Image Generation
+
+After writing the post, generate a cover image using the `generate_cover` tool:
+
+```
+<fragment>
+generate_cover(prompt="图片的详细描述...", slug="your-blog-slug")
+
+</fragment>
+```
+
+The tool saves the image to `blogs/<slug>/hero.png`.
+
+### Writing Effective Image Prompts
+
+Structure your prompt with these elements:
+
+1. **Subject**: What is the main focus? Be specific and concrete.
+2. **Style**: Art direction (minimalist, isometric, flat design, 3D render, watercolor, etc.)
+3. **Composition**: How elements are arranged (centered, rule of thirds, symmetrical)
+4. **Color palette**: Specific colors or mood (warm earth tones, cool blues and purples, high contrast)
+5. **Lighting/Atmosphere**: Soft diffused light, dramatic shadows, golden hour, neon glow
+6. **Technical details**: Aspect ratio considerations, negative space for text overlay
+
+### Example Prompts
+
+**For a technical blog post:**
+```
+等距立体3D插画，展示相互连接的发光立方体，代表AI智能体，每个立方体都有精细的电路纹理。立方体之间由发光的数据流连接。深海军蓝背景（#0a192f），搭配电光蓝（#64ffda）和柔和紫色（#c792ea）作为点缀。简洁的极简风格，顶部留有大量负空间用于标题。专业的科技美学。
+```
+
+**For a tutorial/how-to:**
+```
+简洁扁平插画，描绘双手在键盘上打字，抽象代码符号向上飘浮，逐渐转变为灯泡和齿轮。温暖的渐变背景，从柔和珊瑚色过渡到浅桃色。友好亲切的风格。居中构图，留有文字叠加的空间。
+```
+
+**For thought leadership:**
+```
+抽象可视化，展现人类轮廓剪影融入几何神经网络图案。分割构图 - 左侧为有机水彩纹理过渡到右侧简洁的矢量线条。柔和的鼠尾草绿和温暖的陶土色调。沉思的、前瞻性的氛围。
+```
+
+## SEO Considerations
+
+- Include the main keyword in the title and first paragraph
+- Use the keyword naturally 3-5 times throughout
+- Keep the title under 60 characters
+- Write a meta description (150-160 characters)
+
+## Quality Checklist
+
+Before finishing:
+- [ ] Post saved to `blogs/<slug>/post.md`
+- [ ] Hero image generated at `blogs/<slug>/hero.png`
+- [ ] Hook grabs attention in first 2 sentences
+- [ ] Each section has a clear purpose
+- [ ] Conclusion summarizes key points
+- [ ] CTA tells reader what to do next
+````
+
+接下来，创建 `skills/social-media/SKILL.md` 并将以下文本复制到其中，其中包含有关起草社交媒体帖子和生成配套图片的信息：
+
+````md expandable wrap
+---
+name: social-media
+description: Drafts engaging social media posts, writes hooks, suggests hashtags, creates thread structures, and generates companion images. Use when the user asks to write a LinkedIn post, tweet, Twitter/X thread, social media caption, social post, or repurpose content for social platforms.
+---
+
+# Social Media Content Skill
+
+## Research First (Required)
+
+**Before writing any social media content, you MUST delegate research:**
+
+1. Use the `task` tool with `subagent_type: "researcher"`
+2. In the description, specify BOTH the topic AND where to save:
+
+```
+task(
+    subagent_type="researcher",
+    description="研究 [TOPIC]。将发现保存到 research/[slug].md"
+)
+```
+
+Example:
+```
+task(
+    subagent_type="researcher",
+    description="研究2025年可再生能源趋势。将研究结果保存至 research/renewable-energy.md"
+)
+```
+
+3. After research completes, read the findings file before writing
+
+## Output Structure (Required)
+
+**Every social media post MUST have both content AND an image:**
+
+**LinkedIn posts:**
+```
+linkedin/
+└── <slug>/
+    ├── post.md        # 帖子内容
+    └── image.png      # 必需：生成的视觉图
+
+</fragment>
+```
+
+**Twitter/X threads:**
+```
+tweets/
+└── <slug>/
+    ├── thread.md      # 线程内容
+    └── image.png      # 必需：生成的视觉图像
+```
+
+Example: A LinkedIn post about "prompt engineering" → `linkedin/prompt-engineering/`
+
+**You MUST complete both steps:**
+1. Write the content to the appropriate path
+2. Generate an image using `generate_image` and save alongside the post
+
+**A social media post is NOT complete without its image.**
+
+## Platform Guidelines
+
+### LinkedIn
+
+**Format:**
+- 1,300 character limit (show more after ~210 chars)
+- First line is crucial - make it hook
+- Use line breaks for readability
+- 3-5 hashtags at the end
+
+**Tone:**
+- Professional but personal
+- Share insights and learnings
+- Ask questions to drive engagement
+- Use "I" and share experiences
+
+**Structure:**
+```
+[钩子 - 1 句引人注目的话]
+
+[空行]
+
+[背景 - 为什么这很重要]
+
+[空行]
+
+[核心观点 - 2-3 个短段落]
+
+[空行]
+
+[行动号召或问题]
+
+#hashtag1 #hashtag2 #hashtag3
+```
+
+### Twitter/X
+
+**Format:**
+- 280 character limit per tweet
+- Threads for longer content (use 1/🧵 format)
+- No more than 2 hashtags per tweet
+
+**Thread Structure:**
+```
+<fragment>
+1/🧵 [钩子 - 主要观点]
+
+2/ [支撑点 1]
+
+3/ [支撑点 2]
+
+4/ [示例或证据]
+
+5/ [结论 + 行动号召]
+
+</fragment>
+```
+
+## Image Generation
+
+Every social media post needs an eye-catching image. Use the `generate_social_image` tool:
+
+```
+```
+generate_social_image(prompt="一个详细的描述...", platform="linkedin", slug="your-post-slug")
+```
+```
+
+The tool saves the image to `<platform>/<slug>/image.png`.
+
+### Social Image Best Practices
+
+Social images need to work at small sizes in crowded feeds:
+- **Bold, simple compositions** - one clear focal point
+- **High contrast** - stands out when scrolling
+- **No text in image** - too small to read, platforms add their own
+- **Square or 4:5 ratio** - works across platforms
+
+### Writing Effective Prompts
+
+Include these elements:
+
+1. **Single focal point**: One clear subject, not a busy scene
+2. **Bold style**: Vibrant colors, strong shapes, high contrast
+3. **Simple background**: Solid color, gradient, or subtle texture
+4. **Mood/energy**: Match the post tone (inspiring, urgent, thoughtful)
+
+### Example Prompts
+
+**For an insight/tip post:**
+```
+单个发光灯泡漂浮在深紫色渐变背景上，灯泡由相互连接的金色几何线条构成，柔和的光线向外散发。极简、醒目、高对比度。正方形构图。
+```
+
+**For announcements/news:**
+```
+由彩色几何形状组成的抽象火箭飞船，向上发射，尾部带有粒子轨迹。明亮的珊瑚色和青色配色，干净的白色背景。充满活力、喜庆的氛围。大胆的扁平插画风格。
+```
+
+**For thought-provoking content:**
+```
+两个重叠的半透明圆形，一蓝一橙，在中心形成发光的交集。
+
+代表协作或思想的交汇。
+
+深炭灰色背景，柔和空灵的光晕。
+
+极简而沉思的。
+```
+
+## Content Types
+
+### Announcement Posts
+- Lead with the news
+- Explain the impact
+- Include link or next step
+
+### Insight Posts
+- Share one specific learning
+- Explain the context briefly
+- Make it actionable
+
+### Question Posts
+- Ask a genuine question
+- Provide your take first
+- Keep it focused on one topic
+
+## Quality Checklist
+
+Before finishing:
+- [ ] Post saved to `linkedin/<slug>/post.md` or `tweets/<slug>/thread.md`
+- [ ] Image generated alongside the post
+- [ ] First line hooks attention
+- [ ] Content fits platform limits
+- [ ] Tone matches platform norms
+- [ ] Has clear CTA or question
+- [ ] Hashtags are relevant (not generic)
+````
+
+它们指示 agent 首先调用 `researcher` 子代理，在 `blogs/`、`linkedin/` 或 `tweets/` 下编写 markdown，并调用 `generate_cover` 或 `generate_social_image` 生成图片。
+
+当您稍后创建 agent 并指定 skills 文件夹时，这些 skill 文件夹中 `SKILLS.md` 文件的 frontmatter 会被加载到系统提示词中，这样当任务与某个 skill 描述匹配时，agent 就能使用该 skill。
+
+</Step>
+</Steps>
+
+## 构建脚本
+
+:::python
+在项目根目录创建 `content_writer.py`。以下各节按顺序属于同一个文件。
+:::
+
+:::js
+在项目根目录创建 `content_writer.ts`。以下各节按顺序属于同一个文件。
+:::
+
+<Steps>
+<Step title="添加工具">
+
+:::python
+researcher 子代理使用 Tavily 搜索。博客和社交工作流使用 Gemini 图片生成。
+稍后创建 agent 时，`load_subagents` 函数会读取 `subagents.yaml` 并将这些工具名称解析为这些装饰函数。
+
+<ContentBuilderToolsPy />
+:::
+
+:::js
+researcher 使用 Tavily 搜索。博客和社交工作流使用 Google Generative AI SDK 进行图片生成。
+
+<ContentBuilderToolsJs />
+:::
+
+</Step>
+<Step title="创建 agent">
+
+:::python
+使用 @[create_deep_agent] 创建深度 agent 时，传入 memory 路径、skills 目录、图片工具、从 YAML 加载的子代理，以及一个以示例目录为根的 [FilesystemBackend](/oss/deepagents/backends)，这样 `./AGENTS.md` 和 `./skills/` 等路径才能正确解析。
+
+<ContentBuilderCreateAgentPy />
+:::
+
+:::js
+使用 @[createDeepAgent] 创建深度 agent 时，传入 memory 路径、skills 目录、图片工具、内联子代理定义，以及一个以示例目录为根的 [FilesystemBackend](/oss/deepagents/backends)，这样 `./AGENTS.md` 和 `./skills/` 等路径才能正确解析。
+
+<ContentBuilderCreateAgentJs />
+:::
+
+</Step>
+<Step title="添加入口点">
+
+:::python
+调用 agent 并传入用户消息以验证 agent 是否正常工作：
+
+<ContentBuilderEntryPointPy />
+:::
+
+:::js
+<ContentBuilderEntryPointJs />
+:::
+
+</Step>
+</Steps>
+
+## 运行 agent
+
+<Warning>
+文件系统后端可以在 `root_dir` 下读取、写入和删除文件。请仅在专用目录中运行，并在发布前审查生成的内容。
+</Warning>
+
+:::python
+从项目目录，您可以不带参数调用 agent，或将提示词作为参数传入：
+
+<CodeGroup>
+```bash Default wrap
+python content_writer.py
+```
+
+```bash With prompt wrap
+python content_writer.py Write a blog post about prompt engineering
+```
+</CodeGroup>
+:::
+
+:::js
+从项目目录：
+
+```bash
+npx tsx content_writer.ts
+```
+
+将提示作为额外参数传递：
+
+```bash
+npx tsx content_writer.ts Write a blog post about prompt engineering
+```
+:::
+
+设置 `LANGSMITH_API_KEY` 后，您可以在 [LangSmith](/langsmith/observability) 中检查运行记录。
+
+## 输出
+
+:::js
+成功时，代理会在项目根目录（示例目录）下写入产物，例如：
+:::
+
+:::python
+成功时，生成的产物会被写入系统临时目录（在 macOS 和 Linux 上，通常在 `/tmp/` 下），而不是放在项目文件旁边。
+:::
+
+```text
+blogs/
+└── prompt-engineering/
+    ├── post.md
+    └── hero.png
+research/
+└── prompt-engineering.md
+```
+
+路径遵循 `SKILL.md` 中的技能指令。
+
+## 完整代码
+
+在 GitHub 上浏览完整的 [content-builder-agent 示例](https://github.com/langchain-ai/deepagents/tree/main/examples/content-builder-agent)，包括基于 Rich 的流式 UI。
+
+## 下一步
+
+- 编辑 `AGENTS.md` 以更改品牌声音和研究需求
+- 在 `skills/<name>/SKILL.md` 下添加新内容类型的技能
+- 在 `subagents.yaml` 中添加子代理，并在 `load_subagents` 中注册工具
+- 阅读[子代理](/oss/deepagents/subagents)、[技能](/oss/deepagents/skills)和[自定义](/oss/deepagents/customization)以获取更深入的配置

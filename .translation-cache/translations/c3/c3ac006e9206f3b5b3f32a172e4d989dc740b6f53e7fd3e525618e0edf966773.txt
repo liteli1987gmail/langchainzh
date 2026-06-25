@@ -1,0 +1,808 @@
+---
+title: 部署其他框架
+sidebarTitle: 部署其他框架
+description: 将使用 Claude Agent SDK、Strands、CrewAI、AutoGen 和其他框架构建的代理部署到 LangSmith Deployment。
+---
+
+LangSmith Deployment 可运行任何框架。对于不是基于 Deep Agents、LangChain 或 LangGraph 构建的代理，可以使用 [`deployments-wrap-sdk`](https://pypi.org/project/deployments-wrap-sdk/) 包（Google ADK）或 [LangGraph Functional API](/oss/langgraph/functional-api)（Claude Agent SDK、Strands、CrewAI、AutoGen 和其他库）进行部署。
+
+<Tip>
+对于新项目，请考虑 [Deep Agents](/oss/deepagents/overview)，这是一个用于规划、使用工具、委派给子代理以及长时间工作的开源框架。Deep Agents 可直接部署到 LangSmith Deployment，并提供 [托管 Deep Agents](/langsmith/deploy-managed-deep-agent) 作为完全托管的运行时。
+</Tip>
+
+## 支持的框架
+
+以下框架在本指南中有端到端示例。每个示例从 `agent.py` 导出一个 [Agent Server](/langsmith/agent-server) 可服务的 LangGraph 兼容图：
+
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-3">
+    <a href="#general-deployment-pattern" className="flex items-center justify-center gap-1.5 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 no-underline ">
+        <img className="block dark:hidden w-5 h-5" src="/images/providers/light/claude.svg" alt="" noZoom />
+        <img className="hidden dark:block w-5 h-5" src="/images/providers/dark/claude.svg" alt="" noZoom />
+        <span className="font-semibold">Claude Agent SDK</span>
+    </a>
+
+    <a href="#general-deployment-pattern" className="flex items-center justify-center gap-1.5 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 no-underline ">
+        <img className="block dark:hidden w-5 h-5" src="/images/providers/light/bedrock.svg" alt="" noZoom />
+        <img className="hidden dark:block w-5 h-5" src="/images/providers/dark/bedrock.svg" alt="" noZoom />
+        <span className="font-semibold">Strands Agents</span>
+    </a>
+
+    <a href="#general-deployment-pattern" className="flex items-center justify-center gap-1.5 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 no-underline ">
+        <img className="block dark:hidden w-5 h-5" src="/images/providers/light/crewai.svg" alt="" noZoom />
+        <img className="hidden dark:block w-5 h-5" src="/images/providers/dark/crewai.svg" alt="" noZoom />
+        <span className="font-semibold">CrewAI</span>
+    </a>
+
+    <a href="#general-deployment-pattern" className="flex items-center justify-center gap-1.5 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 no-underline ">
+        <img className="block dark:hidden w-5 h-5" src="/images/providers/light/autogen.svg" alt="" noZoom />
+        <img className="hidden dark:block w-5 h-5" src="/images/providers/dark/autogen.svg" alt="" noZoom />
+        <span className="font-semibold">AutoGen</span>
+    </a>
+</div>
+
+<Note>
+没有看到您的框架？Functional API 接受任何可调用对象，因此您可以将以下示例中显示的相同模式应用于任何代理库。用 `@task` 和 `@entrypoint` 包装您的代理入口点，然后部署。
+</Note>
+
+## Functional API 的工作原理
+
+当 Agent Server 收到针对 Functional API 包装代理的运行时：
+
+1. 平台使用运行输入和同一线程上先前轮次的任何保存状态（作为 `previous` 参数传递）调用您的 `@entrypoint` 装饰的 `agent` 函数。
+2. 入口点调用您的 `@task` 装饰的函数，该函数委托给框架代理（Claude Agent SDK、Strands、CrewAI、AutoGen 或其他库）。
+3. 入口点返回 `entrypoint.final(value=..., save=...)`。`value` 是本轮的响应；`save` 是用作下一轮 `previous` 的检查点状态。
+4. Agent Server 持久化检查点、在支持时流式传输部分输出，并在配置了跟踪时记录跟踪。
+
+此模式保留了您的框架的执行语义，同时为您提供标准 Agent Server 功能：持久运行、多线程持久化、流式传输端点和 LangSmith 可观测性。
+
+## 先决条件
+
+无论使用何种框架，您需要：
+
+* Python 3.10+（适用于 Functional API 框架）（Strands Agents 支持 Python 3.9+）
+* 一个 [LangSmith API 密钥](/langsmith/create-account-api-key)
+
+## 通用部署模式
+
+每个框架遵循相同的步骤。在每个步骤内选择您的技术栈，将代码片段组合到一个模块中（例如 `agent.py`），并将 `@entrypoint` 装饰的函数导出为名为 `agent` 的模块级变量。[端到端示例](#end-to-end-example) 部分展示了您可以复制的完整文件。
+
+<Steps>
+<Step title="安装依赖">
+
+安装您的框架所需的 Python 包以及 LangGraph 和 LangSmith。
+
+<Tabs>
+<Tab title="Claude Agent SDK">
+
+对于 [Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk/overview)：
+
+```bash
+pip install "langsmith[claude-agent-sdk]" langgraph "langgraph-cli[inmem]"
+```
+
+在您的环境变量中设置 `ANTHROPIC_API_KEY`。有关 Anthropic API 密钥，请参阅 [Claude 控制台](https://claude.ai/login)。
+
+</Tab>
+<Tab title="Strands Agents 代理">
+
+有关 [Strands Agents 代理](https://strandsagents.com/latest/documentation/docs/)：
+
+```bash
+pip install strands-agents strands-agents-tools langgraph "langsmith[strands-agents]" "langgraph-cli[inmem]"
+```
+
+如果使用 Amazon Bedrock 作为模型提供商，请配置 AWS 凭证。
+
+</Tab>
+<Tab title="CrewAI">
+
+对于 [CrewAI](https://docs.crewai.com/)：
+
+```bash
+pip install crewai langgraph langsmith opentelemetry-instrumentation-crewai opentelemetry-instrumentation-openai "langgraph-cli[inmem]"
+```
+
+在您的环境变量中设置 LLM 提供商凭据（例如，如果您使用 OpenAI 后端模型，则设置 `OPENAI_API_KEY`）。
+
+</Tab>
+<Tab title="AutoGen">
+
+对于 [AutoGen](https://microsoft.github.io/autogen/)：
+
+```bash
+pip install autogen-agentchat autogen-ext langgraph langsmith opentelemetry-instrumentation-openai "langgraph-cli[inmem]"
+```
+
+在您的环境中设置 `OPENAI_API_KEY`（或您的模型提供商凭证）。
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="定义您的代理">
+
+使用您选择的框架构建您的代理，就像在 LangSmith 之外使用一样。
+
+<Tabs>
+<Tab title="Claude Agent SDK">
+
+```python
+from claude_agent_sdk import ClaudeAgentOptions
+
+options = ClaudeAgentOptions(
+    model="claude-sonnet-4-6",
+    system_prompt="You are a helpful assistant.",
+)
+```
+
+</Tab>
+<Tab title="Strands Agents">
+
+</Tab>
+
+```python
+from strands import Agent
+
+strands_agent = Agent(
+    system_prompt="You are a helpful assistant.",
+    model="us.anthropic.claude-sonnet-4-20250514-v1:0",
+)
+```
+
+</Tab>
+<Tab title="CrewAI">
+
+
+</Tab>
+
+```python
+from crewai import Agent as CrewAgent, Crew, Task
+
+researcher = CrewAgent(role="Researcher", goal="Research a topic", backstory="Expert researcher.")
+crew = Crew(
+    agents=[researcher],
+    tasks=[Task(description="{topic}", agent=researcher, expected_output="A short report.")],
+)
+```
+
+</Tab>
+<Tab title="AutoGen">
+
+```python
+from autogen_agentchat.agents import AssistantAgent
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+
+assistant = AssistantAgent(
+    name="assistant",
+    model_client=OpenAIChatCompletionClient(model="gpt-4o"),
+)
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="使用 Functional API 包装">
+
+通过使用 `@entrypoint` 装饰的名为 `agent` 的函数来暴露你的代理。在内部，使用 `@task` 作为调用框架的工作单元。使用 `entrypoint.final()` 返回响应，并在同一线程上的多次交互中保持对话历史。
+
+<Tabs>
+<Tab title="Claude Agent SDK">
+
+</fragment>
+
+```python
+import operator
+
+from claude_agent_sdk import ClaudeSDKClient
+from langgraph.func import entrypoint, task
+
+@task
+async def invoke_claude(prompt: str) -> str:
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+        chunks: list[str] = []
+        async for message in client.receive_response():
+            chunks.append(str(message))
+        return "\n".join(chunks)
+
+@entrypoint()
+async def agent(messages: list[dict], previous: list[dict] | None = None):
+    history = operator.add(previous or [], messages)
+    prompt = history[-1]["content"]
+    response = await invoke_claude(prompt)
+    new_message = {"role": "assistant", "content": response}
+    return entrypoint.final(
+        value=[new_message],
+        save=operator.add(history, [new_message]),
+    )
+```
+
+</Tab>
+<Tab title="Strands Agents">
+
+</Tab>
+
+```python
+import operator
+
+from langgraph.func import entrypoint, task
+from strands.types.content import Message
+
+@task
+def invoke_strands(messages: list[Message]):
+    result = strands_agent(messages)
+    return [result.message]
+
+@entrypoint()
+def agent(messages: list[Message], previous: list[Message] | None = None):
+    messages = operator.add(previous or [], messages)
+    response = invoke_strands(messages).result()
+    return entrypoint.final(value=response, save=operator.add(messages, response))
+```
+
+</Tab>
+<Tab title="CrewAI">
+
+
+</Tab>
+
+```python
+import operator
+
+from langgraph.func import entrypoint, task
+
+@task
+def run_crew(topic: str) -> str:
+    return str(crew.kickoff(inputs={"topic": topic}))
+
+@entrypoint()
+def agent(messages: list[dict], previous: list[dict] | None = None):
+    history = operator.add(previous or [], messages)
+    response = run_crew(history[-1]["content"]).result()
+    new_message = {"role": "assistant", "content": response}
+    return entrypoint.final(value=[new_message], save=operator.add(history, [new_message]))
+```
+
+</Tab>
+<Tab title="AutoGen">
+
+</Tab>
+
+```python
+import operator
+
+from langgraph.func import entrypoint, task
+
+@task
+async def invoke_autogen(prompt: str) -> str:
+    result = await assistant.run(task=prompt)
+    return result.messages[-1].content
+
+@entrypoint()
+async def agent(messages: list[dict], previous: list[dict] | None = None):
+    history = operator.add(previous or [], messages)
+    response = await invoke_autogen(history[-1]["content"])
+    new_message = {"role": "assistant", "content": response}
+    return entrypoint.final(value=[new_message], save=operator.add(history, [new_message]))
+```
+
+</Tab>
+</Tabs>
+
+</Step>
+<Step title="配置追踪" id="configure-tracing">
+
+将框架原生追踪转发到 LangSmith。在应用程序启动时调用一次追踪设置，且应在创建或调用代理之前执行。
+
+<Tabs>
+<Tab title="Claude Agent SDK">
+
+
+</Tab>
+</Tabs>
+
+```python
+from langsmith.integrations.claude_agent_sdk import configure_claude_agent_sdk
+
+configure_claude_agent_sdk()
+```
+
+有关完整设置详情，请参阅[追踪 Claude Agent SDK 应用程序](/langsmith/trace-claude-agent-sdk)。
+
+</Tab>
+<Tab title="Strands Agents">
+
+设置您的 [LangSmith API 密钥](/langsmith/create-account-api-key) 和项目名称。如果您使用 Amazon Bedrock，还需要配置 AWS 凭证。
+
+```python
+from langsmith.integrations.strands_agents import setup_langsmith_telemetry
+
+setup_langsmith_telemetry()
+```
+
+<Note>
+如果您正在[自托管 LangSmith](/langsmith/self-hosted)，请为您的部署配置 OpenTelemetry OTLP 端点和请求头。请参阅[追踪 Strands Agents 应用](/langsmith/trace-with-strands-agents)。
+</Note>
+
+<Note>
+Strands 的 OTel 追踪包含同步代码。部署到 Agent Server 时，您可能需要设置 `BG_JOB_ISOLATED_LOOPS=true`。请参阅[`BG_JOB_ISOLATED_LOOPS`](/langsmith/env-var#bg_job_isolated_loops)。
+</Note>
+
+有关完整设置详情，请参阅[追踪 Strands Agents 应用](/langsmith/trace-with-strands-agents)。
+
+</Tab>
+<Tab title="CrewAI">
+
+将 LangSmith span processor 注册到 CrewAI 和 OpenAI instrumentors：
+
+```python
+from langsmith.integrations.otel import OtelSpanProcessor
+from opentelemetry import trace
+from opentelemetry.instrumentation.crewai import CrewAIInstrumentor
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+
+current_provider = trace.get_tracer_provider()
+if isinstance(current_provider, TracerProvider):
+    tracer_provider = current_provider
+else:
+    tracer_provider = TracerProvider()
+    trace.set_tracer_provider(tracer_provider)
+
+tracer_provider.add_span_processor(OtelSpanProcessor())
+CrewAIInstrumentor().instrument(tracer_provider=tracer_provider)
+OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
+```
+
+有关完整的设置详情，请参阅[追踪 CrewAI 应用](/langsmith/trace-with-crewai)。
+
+</Tab>
+<Tab title="AutoGen">
+
+将 LangSmith span processor 注册到 OpenAI instrumentor 中：
+
+```python
+from langsmith.integrations.otel import OtelSpanProcessor
+from opentelemetry import trace
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+
+tracer_provider = TracerProvider()
+tracer_provider.add_span_processor(OtelSpanProcessor())
+trace.set_tracer_provider(tracer_provider)
+OpenAIInstrumentor().instrument()
+```
+
+有关完整的设置详情，请参阅[追踪 AutoGen 应用程序](/langsmith/trace-with-autogen)。
+
+</Tab>
+</Tabs>
+
+</Step>
+</Steps>
+
+## 端到端示例
+
+以下示例将智能体定义、函数式 API 包装、追踪设置以及 `agent` 符号的导出组合在单个 `agent.py` 文件中。选择与您的框架对应的标签页。
+
+<Tabs>
+<Tab title="Claude Agent SDK">
+
+```python agent.py
+import operator
+
+from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+from langgraph.func import entrypoint, task
+from langsmith.integrations.claude_agent_sdk import configure_claude_agent_sdk
+
+configure_claude_agent_sdk()
+
+options = ClaudeAgentOptions(
+    model="claude-sonnet-4-6",
+    system_prompt="You are a helpful assistant.",
+)
+
+@task
+async def invoke_claude(prompt: str) -> str:
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+        chunks: list[str] = []
+        async for message in client.receive_response():
+            chunks.append(str(message))
+        return "\n".join(chunks)
+
+@entrypoint()
+async def agent(messages: list[dict], previous: list[dict] | None = None):
+    history = operator.add(previous or [], messages)
+    prompt = history[-1]["content"]
+    response = await invoke_claude(prompt)
+    new_message = {"role": "assistant", "content": response}
+    return entrypoint.final(
+        value=[new_message],
+        save=operator.add(history, [new_message]),
+    )
+```
+
+</Tab>
+<Tab title="Strands Agents">
+
+
+</Tab>
+
+```python agent.py
+import operator
+
+from langgraph.func import entrypoint, task
+from langsmith.integrations.strands_agents import setup_langsmith_telemetry
+from strands import Agent
+from strands.types.content import Message
+
+setup_langsmith_telemetry()
+
+strands_agent = Agent(
+    system_prompt="You are a helpful assistant.",
+    model="us.anthropic.claude-sonnet-4-20250514-v1:0",
+)
+
+@task
+def invoke_strands(messages: list[Message]):
+    result = strands_agent(messages)
+    return [result.message]
+
+@entrypoint()
+def agent(messages: list[Message], previous: list[Message] | None = None):
+    messages = operator.add(previous or [], messages)
+    response = invoke_strands(messages).result()
+    return entrypoint.final(value=response, save=operator.add(messages, response))
+```
+
+</Tab>
+<Tab title="CrewAI">
+
+```python agent.py
+import operator
+
+from crewai import Agent as CrewAgent, Crew, Task
+from langgraph.func import entrypoint, task
+from langsmith.integrations.otel import OtelSpanProcessor
+from opentelemetry import trace
+from opentelemetry.instrumentation.crewai import CrewAIInstrumentor
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+
+current_provider = trace.get_tracer_provider()
+if isinstance(current_provider, TracerProvider):
+    tracer_provider = current_provider
+else:
+    tracer_provider = TracerProvider()
+    trace.set_tracer_provider(tracer_provider)
+
+tracer_provider.add_span_processor(OtelSpanProcessor())
+CrewAIInstrumentor().instrument(tracer_provider=tracer_provider)
+OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
+
+researcher = CrewAgent(role="Researcher", goal="Research a topic", backstory="Expert researcher.")
+crew = Crew(
+    agents=[researcher],
+    tasks=[Task(description="{topic}", agent=researcher, expected_output="A short report.")],
+)
+
+@task
+def run_crew(topic: str) -> str:
+    return str(crew.kickoff(inputs={"topic": topic}))
+
+@entrypoint()
+def agent(messages: list[dict], previous: list[dict] | None = None):
+    history = operator.add(previous or [], messages)
+    response = run_crew(history[-1]["content"]).result()
+    new_message = {"role": "assistant", "content": response}
+    return entrypoint.final(value=[new_message], save=operator.add(history, [new_message]))
+```
+
+</Tab>
+<Tab title="AutoGen">
+
+
+</Tab>
+
+```python agent.py
+import operator
+
+from autogen_agentchat.agents import AssistantAgent
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+from langgraph.func import entrypoint, task
+from langsmith.integrations.otel import OtelSpanProcessor
+from opentelemetry import trace
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+
+tracer_provider = TracerProvider()
+tracer_provider.add_span_processor(OtelSpanProcessor())
+trace.set_tracer_provider(tracer_provider)
+OpenAIInstrumentor().instrument()
+
+assistant = AssistantAgent(
+    name="assistant",
+    model_client=OpenAIChatCompletionClient(model="gpt-4o"),
+)
+
+@task
+async def invoke_autogen(prompt: str) -> str:
+    result = await assistant.run(task=prompt)
+    return result.messages[-1].content
+
+@entrypoint()
+async def agent(messages: list[dict], previous: list[dict] | None = None):
+    history = operator.add(previous or [], messages)
+    response = await invoke_autogen(history[-1]["content"])
+    new_message = {"role": "assistant", "content": response}
+    return entrypoint.final(value=[new_message], save=operator.add(history, [new_message]))
+```
+
+</Tab>
+</Tabs>
+
+每个示例都有两个要点：
+
+1. 在模块作用域中，将带有 `@entrypoint` 装饰器的函数导出为 `agent`。Agent Server 在服务图时导入此符号。
+2. 返回 `entrypoint.final()` 并使用 `save` 参数，以便对话状态在同一线程的多次交互中保持一致。
+
+## 项目布局
+
+可部署项目需要以下文件：
+
+```
+my-agent/
+├── agent.py              # exports the agent graph
+├── langgraph.json        # Agent Server config
+├── pyproject.toml        # Python dependencies
+└── .env                  # Provider credentials and LangSmith variables
+```
+
+[`langgraph.json`](/langsmith/application-structure#configuration-file-concepts) 指向 Agent Server 导出的符号：
+
+<Tabs>
+<Tab title="Claude Agent SDK">
+
+```json langgraph.json
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "claude_agent": "./agent.py:agent"
+  },
+  "env": ".env"
+}
+```
+
+```toml pyproject.toml
+[project]
+name = "my-claude-agent"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = [
+    "langsmith[claude-agent-sdk]>=0.3.0",
+    "langgraph>=0.4.0",
+]
+```
+
+```bash .env
+LANGSMITH_API_KEY=your-langsmith-api-key
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=my-claude-agent
+ANTHROPIC_API_KEY=your-anthropic-api-key
+```
+
+</Tab>
+<Tab title="Strands Agents">
+
+</Tab>
+
+```json langgraph.json
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "strands_agent": "./agent.py:agent"
+  },
+  "env": ".env"
+}
+```
+
+```toml pyproject.toml
+[project]
+name = "my-strands-agent"
+version = "0.0.1"
+requires-python = ">=3.9"
+dependencies = [
+    "strands-agents>=0.1.0",
+    "strands-agents-tools>=0.1.0",
+    "langsmith[strands-agents]>=0.3.0",
+    "langgraph>=0.4.0",
+]
+```
+
+```bash .env
+LANGSMITH_API_KEY=your-langsmith-api-key
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=my-strands-agent
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.smith.langchain.com/otel/v1/traces
+OTEL_EXPORTER_OTLP_HEADERS=x-api-key=your-langsmith-api-key,Langsmith-Project=my-strands-agent
+AWS_REGION=your-aws-region
+AWS_PROFILE=your-aws-profile
+```
+
+</Tab>
+<Tab title="CrewAI">
+
+```json langgraph.json
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "crewai_agent": "./agent.py:agent"
+  },
+  "env": ".env"
+}
+```
+
+```toml pyproject.toml
+[project]
+name = "my-crewai-agent"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = [
+    "crewai>=0.100.0",
+    "langgraph>=0.4.0",
+    "langsmith>=0.3.0",
+    "opentelemetry-instrumentation-crewai>=0.1.0",
+    "opentelemetry-instrumentation-openai>=0.1.0",
+]
+```
+
+```bash .env
+LANGSMITH_API_KEY=your-langsmith-api-key
+LANGSMITH_PROJECT=my-crewai-agent
+OPENAI_API_KEY=your-openai-api-key
+```
+
+</Tab>
+<Tab title="AutoGen">
+
+```json langgraph.json
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "autogen_agent": "./agent.py:agent"
+  },
+  "env": ".env"
+}
+```
+
+```toml pyproject.toml
+[project]
+name = "my-autogen-agent"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = [
+    "autogen-agentchat>=0.4.0",
+    "autogen-ext>=0.4.0",
+    "langgraph>=0.4.0",
+    "langsmith>=0.3.0",
+    "opentelemetry-instrumentation-openai>=0.1.0",
+]
+```
+
+```bash .env
+LANGSMITH_API_KEY=your-langsmith-api-key
+LANGSMITH_PROJECT=my-autogen-agent
+OPENAI_API_KEY=your-openai-api-key
+```
+
+</Tab>
+</Tabs>
+
+## 安装依赖项
+
+从项目目录中：
+
+```bash
+pip install -e .
+```
+
+## 启用追踪
+
+使用 [项目布局](#project-layout) 中特定于框架的 `.env` 模板。当 `langgraph.json` 中设置 `"env": ".env"` 时，Agent Server 会加载此文件。
+
+在该文件中设置 `LANGSMITH_PROJECT` 和您的框架提供商凭据。对于 Claude Agent SDK 和 Strands Agents，还要设置 `LANGSMITH_TRACING=true`。对于 CrewAI 和 AutoGen，追踪通过 `agent.py` 中的 `OtelSpanProcessor()` 和框架检测工具启用，因此只需设置 `LANGSMITH_API_KEY` 和 `LANGSMITH_PROJECT`。
+
+[追踪](/langsmith/observability) 会在 [LangSmith UI](https://smith.langchain.com) 中显示 agent 调用、工具调用和 LLM 交互。了解框架特定的追踪选项，请参阅 [配置追踪](#configure-tracing) 中的链接。
+
+## 本地运行
+
+使用 [LangGraph CLI](/langsmith/cli) 启动本地 Agent Server：
+
+```bash
+langgraph dev
+```
+
+<Note>
+如果 `langgraph dev` 报告 `langgraph-api` 缺失，请在相同环境中安装 `langgraph-cli[inmem]`。
+</Note>
+
+此命令在 `http://127.0.0.1:2024` 启动代理服务并打开 [LangSmith Studio](/langsmith/studio)。使用 `curl` 发送请求：
+
+<Note>
+`langgraph dev` 可能会在不同的端口上运行。请检查终端输出中的 URL，并根据需要更新下面的 `curl` 命令。
+</Note>
+
+<Tabs>
+<Tab title="Claude Agent SDK, CrewAI, AutoGen">
+
+
+</fragment>
+
+```bash
+# Create a thread
+THREAD=$(curl -s -X POST http://127.0.0.1:2024/threads \
+  -H "Content-Type: application/json" -d '{}' | python -c "import sys, json; print(json.load(sys.stdin)['thread_id'])")
+
+# Run the agent and wait for the final response
+curl -s -X POST "http://127.0.0.1:2024/threads/$THREAD/runs/wait" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "assistant_id": "ASSISTANT_ID",
+    "input": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+</Tab>
+<Tab title="Strands 代理">
+
+</Tab>
+
+```bash
+# Create a thread
+THREAD=$(curl -s -X POST http://127.0.0.1:2024/threads \
+  -H "Content-Type: application/json" -d '{}' | python -c "import sys, json; print(json.load(sys.stdin)['thread_id'])")
+
+# Run the agent and wait for the final response
+curl -s -X POST "http://127.0.0.1:2024/threads/$THREAD/runs/wait" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "assistant_id": "ASSISTANT_ID",
+    "input": [
+      {
+        "role": "user",
+        "content": [
+          {"type": "text", "text": "Hello"}
+        ]
+      }
+    ]
+  }'
+```
+
+<Note>
+如果此请求失败并出现 `NoCredentialsError`，请为您的模型提供商配置 AWS 凭证（例如 `AWS_PROFILE` 或 `AWS_ACCESS_KEY_ID` 和 `AWS_SECRET_ACCESS_KEY`），然后重启 `langgraph dev`。
+</Note>
+
+</Tab>
+</Tabs>
+
+将 `ASSISTANT_ID` 替换为 `langgraph.json` 中 `graphs` 对象内的图键。例如，如果您的配置是 `"graphs": {"claude_agent": "./agent.py:agent"}`，则使用 `claude_agent`；如果您的配置是 `"graphs": {"strands_agent": "./agent.py:agent"}`，则使用 `strands_agent`。
+
+<Note>
+在部署之前，[验证 LangGraph API 是否在本地运行](/langsmith/local-dev-testing)。如果 `langgraph dev` 失败，则部署到 LangSmith 也会失败。
+</Note>
+
+## 部署到 LangSmith
+
+在代理本地运行后，使用 `langgraph deploy` 将其部署：
+
+```bash
+langgraph deploy --name my-agent
+```
+
+有关环境配置、部署类型和修订管理，请参阅[部署到云端](/langsmith/deploy-to-cloud)。有关自托管设置，请参阅[自托管部署](/langsmith/self-hosted)。有关不使用控制平面的纯 Docker 托管，请参阅[部署独立服务器](/langsmith/deploy-standalone-server)。

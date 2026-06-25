@@ -1,0 +1,157 @@
+---
+title: 追踪 Google Gemini 应用程序
+sidebarTitle: Google Gemini
+---
+
+本指南介绍如何在 LangSmith 中追踪和记录 [Google 的 Gemini](https://ai.google.dev/gemini-api/docs) 模型。您将使用最新的 [`google-genai` SDK](https://googleapis.github.io/python-genai/)（Python）或 [`@google/genai` SDK](https://googleapis.github.io/js-genai/release_docs/index.html)（JavaScript）来检测 Gemini 调用，包装 Gemini 客户端以进行追踪，并尝试包括基本提示、元数据标记和多轮对话的示例。
+
+<Note>
+LangSmith Gemini 包装器处于 **[beta](/langsmith/release-stages)** 阶段。API 可能在未来版本中发生变化。
+</Note>
+
+## 安装
+
+使用您偏好的包管理器安装所需的包：
+
+<CodeGroup>
+
+
+</fragment>
+
+```bash pip
+pip install langsmith google-genai
+```
+
+```bash npm
+npm install langsmith@latest @google/genai
+```
+
+</CodeGroup>
+
+## 设置
+
+设置您的 [API 密钥](/langsmith/create-account-api-key) 和项目名称：
+
+</fragment>
+
+```bash
+export LANGSMITH_API_KEY=<your_langsmith_api_key>
+export LANGSMITH_PROJECT=<your_project_name>
+export LANGSMITH_TRACING=true
+export GOOGLE_API_KEY=<your_google_api_key>
+```
+
+要创建 Google API 密钥，请参阅 [Google AI Studio](https://aistudio.google.com/apikey)。
+
+## 配置跟踪
+
+要跟踪 Gemini API 调用，请使用 LangSmith 的 @[`wrap_gemini`][wrap_gemini]（Python）或 @[`wrapGemini`][wrapGemini]（JavaScript）包装函数。此包装器拦截对 Gemini 客户端的调用，并自动将其记录为 LangSmith 中的跟踪。该包装器在增加可观测性的同时，保留了原始客户端的所有功能：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+from google import genai
+from langsmith import wrappers
+
+def main():
+    # genai.Client() reads GOOGLE_API_KEY / GEMINI_API_KEY from the environment
+    gemini_client = genai.Client()
+
+    # Wrap the Gemini client to enable LangSmith tracing
+    client = wrappers.wrap_gemini(
+        gemini_client,
+        tracing_extra={
+            "tags": ["gemini", "python"],
+            "metadata": {
+                "integration": "google-genai",
+            },
+        },
+    )
+
+    # Make a traced Gemini call
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents="Explain quantum computing in simple terms.",
+    )
+
+    print(response.text)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+```javascript JavaScript
+import { GoogleGenAI } from "@google/genai";
+import { wrapGemini } from "langsmith/wrappers/gemini";
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// Initialize the Gemini client
+const geminiClient = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+
+// Wrap the client to enable LangSmith tracing
+// Configuration is applied to ALL calls made with this wrapped client
+const client = wrapGemini(geminiClient, {
+  tags: ["gemini", "javascript"],
+  metadata: {
+    integration: "google-genai",
+  },
+});
+
+// Make a traced call - tracing happens automatically
+const response = await client.models.generateContent({
+  model: "gemini-2.5-flash",
+  contents: "Explain quantum computing in simple terms.",
+});
+
+console.log(response.text);
+```
+
+<CodeGroup>
+
+<Tabs>
+<Tab title="Python" icon="brand-python">
+
+您可以通过在调用 `wrap_gemini()` 时传递 @[`tracing_extra`][wrap_gemini] 来自定义追踪功能。此参数适用于您使用该包装客户端进行的所有后续请求，允许您附加标签和元数据，以便在 [LangSmith UI](https://smith.langchain.com) 中过滤和组织追踪。`tracing_extra` 参数接受：
+
+- `tags`：用于对追踪进行分类的字符串列表（例如 `["production", "gemini"]`）。
+- `metadata`：用于附加上下文的键值对字典（例如 `{"team": "ml-research", "integration": "google-genai"}`）。
+- `client`：可选的自定义 LangSmith 客户端实例。
+
+这些设置将一致地应用于包装客户端的所有追踪，以便您可以包含应在整个应用程序中保持不变的环境级标签或团队元数据。
+
+</Tab>
+<Tab title="JavaScript" icon="brand-javascript">
+
+您可以通过在调用 @[`wrapGemini`][wrapGemini] 时传递配置选项来自定义追踪功能。这些选项适用于您使用该包装客户端进行的所有后续请求，允许您附加标签和元数据，以便在 [LangSmith UI](https://smith.langchain.com) 中过滤和组织追踪。配置接受：
+
+- `tags`：用于对追踪进行分类的字符串数组（例如 `["production", "gemini"]`）。
+- `metadata`：用于附加上下文的键值对对象（例如 `{ team: "ml-research", integration: "google-genai" }`）。
+- `client`：可选的自定义 LangSmith 客户端实例。
+
+这些设置将一致地应用于包装客户端的所有追踪，以便您可以包含应在整个应用程序中保持不变的环境级标签或团队元数据。
+
+</Tab>
+</Tabs>
+
+## 在 LangSmith 中查看追踪
+
+运行应用程序后，您可以在 [LangSmith UI](https://smith.langchain.com) 中查看包含以下内容的追踪：
+
+- **模型请求**：发送给 Gemini 模型的完整提示词
+- **模型响应**：生成的文本和结构化输出
+- **函数调用**：使用函数调用时的工具调用和结果
+- **对话会话**：多轮对话上下文
+- **性能指标**：延迟和 token 使用信息
+
+
+
+
+
+
+
+</CodeGroup>

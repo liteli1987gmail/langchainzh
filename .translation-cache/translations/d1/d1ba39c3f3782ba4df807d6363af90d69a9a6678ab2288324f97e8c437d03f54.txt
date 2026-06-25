@@ -1,0 +1,84 @@
+---
+title: 使用 HTTP 标头进行运行时配置
+sidebarTitle: 可配置标头
+---
+LangGraph 允许运行时配置动态修改代理行为和权限。使用 [LangSmith 部署](/langsmith/deployment-quickstart) 时，您可以在请求体（`config`）或特定请求标头中传递此配置。这使得能够根据用户身份或其他请求进行调整。
+
+出于隐私考虑，请通过 [`langgraph.json`](/langsmith/application-structure#configuration-file) 文件中的 `http.configurable_headers` 部分来控制哪些标头被传递到运行时配置。
+
+以下是自定义包含和排除的标头的方法：
+
+```json
+{
+  "http": {
+    "configurable_headers": {
+      "includes": ["x-user-id", "x-organization-id", "my-prefix-*"],
+      "excludes": ["authorization", "x-api-key"]
+    }
+  }
+}
+```
+
+`includes` 和 `excludes` 列表接受精确的标头名称或使用 `*` 来匹配任意数量字符的模式。为了您的安全，不支持其他正则表达式模式。
+
+## 在图表中使用
+
+您可以使用任意节点的 `config` 参数来访问图表中已包含的标头。
+
+```python
+def my_node(state, config):
+  organization_id = config["configurable"].get("x-organization-id")
+  ...
+```
+
+或通过上下文获取（这在工具中或在嵌套函数内使用时很有用）。
+
+```python
+from langgraph.config import get_config
+
+def search_everything(query: str):
+  organization_id = get_config()["configurable"].get("x-organization-id")
+  ...
+```
+
+你甚至可以用它来动态编译图。
+
+```python
+# my_graph.py.
+import contextlib
+
+@contextlib.asynccontextmanager
+async def generate_agent(config):
+  organization_id = config["configurable"].get("x-organization-id")
+  if organization_id == "org1":
+    graph = ...
+    yield graph
+  else:
+    graph = ...
+    yield graph
+
+```
+
+```json
+{
+  "graphs": {"agent": "my_grph.py:generate_agent"}
+}
+```
+
+### 退出可配置标头
+
+如果您想退出可配置标头，可以在 `s` 列表中设置通配符模式：
+
+```json
+{
+  "http": {
+    "configurable_headers": {
+      "excludes": ["*"]
+    }
+  }
+}
+```
+
+这将从您运行的配置中排除所有标头。
+
+请注意，排除优先于包含。

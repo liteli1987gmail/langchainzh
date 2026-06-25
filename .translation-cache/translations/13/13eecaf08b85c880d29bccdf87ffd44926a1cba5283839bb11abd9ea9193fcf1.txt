@@ -1,0 +1,74 @@
+---
+title: "Valthera 集成"
+description: "使用 LangChain Python 与 Valthera 集成。"
+---
+
+> [Valthera](https://github.com/valthera/valthera) 是一个开源框架，使 LLM Agents 能够推动有意义的、上下文感知的用户参与。它实时评估用户动机和能力，确保仅在用户最易接受时触发通知和操作。
+>
+> **langchain-valthera** 将 Valthera 与 LangChain 集成，使开发者能够构建更智能的行为驱动参与系统，提供个性化交互。
+
+## 安装和设置
+
+### 安装 langchain-valthera
+
+通过 pip 安装 LangChain Valthera 包：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install -U langchain-valthera
+```
+
+```bash uv
+uv add langchain-valthera
+```
+</CodeGroup>
+
+导入 ValtheraTool：
+
+```python
+from langchain_valthera.tools import ValtheraTool
+```
+
+### 示例：初始化用于 LangChain 的 ValtheraTool
+
+此示例展示如何使用 `DataAggregator` 和动机与能力评分配置来初始化 ValtheraTool。
+
+```python
+import os
+from langchain_openai import ChatOpenAI
+from valthera.aggregator import DataAggregator
+from mocks import hubspot, posthog, snowflake  # Replace these with your actual connector implementations
+from langchain_valthera.tools import ValtheraTool
+
+# Initialize the DataAggregator with your data connectors
+data_aggregator = DataAggregator(
+    connectors={
+        "hubspot": hubspot(),
+        "posthog": posthog(),
+        "app_db": snowflake()
+    }
+)
+
+# Initialize the ValtheraTool with your scoring configurations
+valthera_tool = ValtheraTool(
+    data_aggregator=data_aggregator,
+    motivation_config=[
+        {"key": "hubspot_lead_score", "weight": 0.30, "transform": lambda x: min(x, 100) / 100.0},
+        {"key": "posthog_events_count_past_30days", "weight": 0.30, "transform": lambda x: min(x, 50) / 50.0},
+        {"key": "hubspot_marketing_emails_opened", "weight": 0.20, "transform": lambda x: min(x / 10.0, 1.0)},
+        {"key": "posthog_session_count", "weight": 0.20, "transform": lambda x: min(x / 5.0, 1.0)}
+    ],
+    ability_config=[
+        {"key": "posthog_onboarding_steps_completed", "weight": 0.30, "transform": lambda x: min(x / 5.0, 1.0)},
+        {"key": "posthog_session_count", "weight": 0.30, "transform": lambda x: min(x / 10.0, 1.0)},
+        {"key": "behavior_complexity", "weight": 0.40, "transform": lambda x: 1 - (min(x, 5) / 5.0)}
+    ]
+)
+
+print("✅ ValtheraTool successfully initialized for LangChain integration!")
+```
+
+
+langchain-valthera 集成允许您评估用户行为并决定最佳的参与策略，确保您的 LangChain 应用程序中的交互既及时又相关。

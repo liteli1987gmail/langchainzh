@@ -1,0 +1,215 @@
+---
+title: "Azure Logic Apps 集成"
+description: "使用 LangChain Python 与 Azure Logic Apps 集成。"
+---
+
+本页介绍 `langchain_azure_ai.tools` 中的 Azure Logic Apps 集成。
+
+Azure Logic Apps 是一项云服务，可帮助您自动化工作流和业务流程。您可以使用 `AzureLogicAppTool` 从 LangChain 代理调用预配置的 Logic App 工作流，从而实现自动化、通知、数据同步和多步骤流程编排。
+
+## 概述
+
+`AzureLogicAppTool` 允许代理通过向命名触发器发送 JSON 有效载荷来触发 Azure Logic Apps 工作流。这对于自动化发送电子邮件、处理数据、调用 API 或与其他 Azure 和第三方服务集成的任务非常有用。
+
+常见用例：
+
+1. **电子邮件通知** - 通过 Logic App 发送警报和通知
+2. **数据同步** - 在系统之间同步数据
+3. **订单处理** - 触发订单履约工作流
+4. **API 集成** - 通过 Logic Apps 调用外部 API
+5. **审批工作流** - 启动审批流程
+6. **数据转换** - 处理和转换数据
+7. **多步骤自动化** - 编排复杂的业务流程
+
+## 设置
+
+安装集成包并配置您的 Azure 凭据。
+
+### 安装
+
+安装带有 `tools` 额外依赖的包：
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install -U "langchain-azure-ai[tools]"
+    ```
+    ```bash uv
+    uv add "langchain-azure-ai[tools]"
+    ```
+</CodeGroup>
+
+此额外的包安装了所需的 `azure-mgmt-logic` 依赖项。
+
+### 前置条件
+
+在使用此工具之前，您需要：
+
+1. 一个 Azure 订阅
+2. 一个包含至少一个 HTTP 请求触发器的 Azure 逻辑应用
+3. 订阅 ID、资源组名称、逻辑应用名称和触发器名称
+
+### 凭据
+
+该工具默认使用 `DefaultAzureCredential()`，支持多种身份验证方法，包括环境变量、托管标识和交互式登录。
+
+```python Initialize credential icon="shield-lock"
+from azure.identity import DefaultAzureCredential
+
+credential = DefaultAzureCredential()
+```
+
+您也可以显式地传递特定的凭证：
+
+```python
+from azure.identity import ManagedIdentityCredential
+
+credential = ManagedIdentityCredential()
+```
+
+## 基本用法
+
+### 实例化工具
+
+```python Initialize tool icon="arrows-shuffle"
+from langchain_azure_ai.tools import AzureLogicAppTool
+
+tool = AzureLogicAppTool(
+    subscription_id="<your-subscription-id>",
+    resource_group="<your-resource-group>",
+    logic_app_name="<your-logic-app-name>",
+    trigger_name="<your-trigger-name>",
+)
+```
+
+### 调用工具
+
+```python
+import json
+
+# Simple text input
+result = tool.invoke("Send an email notification")
+print(result)
+
+# JSON payload input
+payload = {
+    "email": "user@example.com",
+    "subject": "Test Email",
+    "message": "This is a test message from a Logic App trigger."
+}
+result = tool.invoke(json.dumps(payload))
+print(result)
+```
+
+## 与代理一起使用
+
+将工具传递给 @[`create_agent`]。
+
+```python Agent with Logic Apps icon="robot"
+from azure.identity import DefaultAzureCredential
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
+from langchain_azure_ai.tools import AzureLogicAppTool
+
+credential = DefaultAzureCredential()
+tool = AzureLogicAppTool(
+    subscription_id="<your-subscription-id>",
+    resource_group="<your-resource-group>",
+    logic_app_name="notification-workflow",
+    trigger_name="manual_trigger",
+    credential=credential,
+)
+
+agent = create_agent(
+    model=init_chat_model("azure_ai:gpt-4.1", credential=credential),
+    tools=[tool],
+    system_prompt=(
+        "You are a workflow automation assistant. Use the Logic Apps tool to trigger "
+        "workflows for sending notifications, processing data, or integrating with "
+        "other services when users request automation tasks."
+    ),
+)
+```
+
+## 配置
+
+### 参数
+
+<Accordion title="配置选项">
+    <ParamField body="subscription_id" type="str" required>
+        托管 Logic Apps 的 Azure 订阅 ID。
+    </ParamField>
+
+    <ParamField body="resource_group" type="str" required>
+        Logic App 部署所在的 Azure 资源组名称。
+    </ParamField>
+
+    <ParamField body="logic_app_name" type="str" required>
+        要调用的 Logic App 工作流名称。
+    </ParamField>
+
+    <ParamField body="trigger_name" type="str" required>
+        要调用的 Logic App 中的触发器名称。通常，对于基于 HTTP 请求的触发器，这是 `manual_trigger` 或 `http_request`。
+    </ParamField>
+
+    <ParamField body="credential" type="TokenCredential | None" default="None">
+        用于身份验证的可选 Azure 凭据。如果为 `None`，则使用 `DefaultAzureCredential()`。可以是任何 Azure SDK 凭据，如 `ManagedIdentityCredential`、`ClientSecretCredential` 等。
+    </ParamField>
+
+    <ParamField body="name" type="str" default="azure_logic_app_tool">
+        工具名称。为不同的 Logic Apps 或用例自定义此名称。
+    </ParamField>
+
+    <ParamField body="description" type="str">
+        工具用途的描述。自定义此描述以帮助代理了解何时使用此特定的 Logic App。
+    </ParamField>
+</Accordion>
+
+## 输入格式
+
+该工具接受以下格式的输入：
+
+1. **纯文本** - 自动转换为带有 `input` 键的 JSON
+2. **JSON 字符串** - 解析后按原样发送到 Logic App 触发器
+
+### 示例
+
+```python
+# Plain text input
+tool.invoke("Process this order")
+# Sent as: {"input": "Process this order"}
+
+# JSON payload
+import json
+payload = {
+    "orderId": "12345",
+    "customerEmail": "customer@example.com",
+    "items": ["item1", "item2"]
+}
+tool.invoke(json.dumps(payload))
+```
+
+## 响应格式
+
+该工具返回一个 JSON 响应，指示成功或失败：
+
+```json
+{
+  "result": "Successfully invoked <logic-app-name>."
+}
+```
+
+或者出错时：
+
+```json
+{
+  "error": "Error invoking <logic-app-name> (HTTP_STATUS): ERROR_DETAILS"
+}
+```
+
+## API 参考
+
+```python
+from langchain_azure_ai.tools import AzureLogicAppTool
+```

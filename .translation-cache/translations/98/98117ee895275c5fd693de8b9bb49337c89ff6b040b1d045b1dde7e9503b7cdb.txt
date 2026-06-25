@@ -1,0 +1,249 @@
+---
+title: "Amazon Bedrock agentcore 代码解释器集成"
+description: "使用 LangChain Python 与 Amazon Bedrock agentcore 代码解释器工具集成。"
+---
+
+[Amazon Bedrock AgentCore Code Interpreter](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html) 使代理能够在安全托管的沙盒环境中执行代码。代理可以运行 Python、JavaScript 和 TypeScript 代码，用于计算、数据分析、文件操作和可视化。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [JS 支持](https://js.langchain.com/docs/integrations/tools/) | 版本 |
+|:------|:--------|:------------:|:---------------------------------------------------------------:|:--------:|
+| [`CodeInterpreterToolkit`](https://github.com/langchain-ai/langchain-aws/tree/main/libs/aws/langchain_aws/tools) | [`langchain-aws`](https://pypi.org/project/langchain-aws/) | ✅ | ❌ | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-aws?style=flat-square&label=%20) |
+
+### 工具特性
+
+| [返回产物](/oss/langchain/tools) | 原生异步 | 返回数据 | 定价 |
+|:-----------------------------------------------:|:------------:|:-----------:|:-------:|
+| ✅ | ✅ | 文本、文件、图片 | 按需付费 (AWS) |
+
+### 可用工具
+
+该工具包提供多个用于代码执行和文件管理的工具：
+
+| 工具 | 描述 |
+|:-----|:------------|
+| `execute_code` | 运行 Python/JavaScript/TypeScript 代码并保持状态 |
+| `execute_command` | 在环境中运行 shell 命令 |
+| `read_files` | 读取环境中文件的内容 |
+| `write_files` | 创建或更新文件 |
+| `list_files` | 列出目录中的文件 |
+| `delete_files` | 从环境中删除文件 |
+| `upload_file` | 上传带有语义描述的文件 |
+| `install_packages` | 安装 Python 包 |
+| `start_command_execution` | 异步启动长时间运行的命令 |
+| `get_task` | 通过 task_id 检查异步任务的状态 |
+| `stop_task` | 通过 task_id 停止正在运行的异步任务 |
+
+## 设置
+
+该集成位于 `langchain-aws` 包中，它封装了 `bedrock-agentcore` SDK。
+
+<CodeGroup>
+    ```bash pip
+    pip install -U langchain-aws bedrock-agentcore
+    ```
+    ```bash uv
+    uv add langchain-aws bedrock-agentcore
+    ```
+### 凭证
+
+您需要配置具有 Bedrock AgentCore 代码解释器权限的 AWS 凭证。请参阅 [Amazon Bedrock AgentCore 文档](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html) 了解所需的 IAM 权限。
+
+设置 LangSmith 也会有所帮助（但不是必需的），可以提供一流的可观测性：
+
+```python
+import os
+
+os.environ["LANGSMITH_API_KEY"] = "your-api-key"
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+## 实例化
+
+该工具包使用 **async** 异步工厂函数创建：
+
+```python
+from langchain_aws.tools import create_code_interpreter_toolkit
+
+# Create toolkit and get tools (async)
+toolkit, code_tools = await create_code_interpreter_toolkit(region="us-west-2")
+```
+
+## 调用
+
+### 直接使用工具
+
+获取特定工具并调用它们：
+
+```python
+# Get tools by name
+tools_by_name = toolkit.get_tools_by_name()
+
+# Execute Python code
+result = tools_by_name["execute_code"].invoke({
+    "code": """
+import numpy as np
+data = [1, 2, 3, 4, 5]
+print(f"Mean: {np.mean(data)}")
+print(f"Sum: {np.sum(data)}")
+""",
+    "language": "python"
+})
+print(result)
+```
+
+### 在代理中使用
+
+```python
+import asyncio
+from langchain.agents import create_react_agent
+from langchain.chat_models import init_chat_model
+from langchain_aws.tools import create_code_interpreter_toolkit
+
+async def main():
+    # Create toolkit
+    toolkit, code_tools = await create_code_interpreter_toolkit(region="us-west-2")
+
+    # Initialize chat model
+    llm = init_chat_model(
+        "us.anthropic.claude-sonnet-4-20250514-v1:0",
+        model_provider="bedrock_converse",
+    )
+
+    # Create agent with code interpreter tools
+    agent = create_react_agent(
+        model=llm,
+        tools=code_tools,
+    )
+
+    # Create config with thread_id for session isolation
+    config = {"configurable": {"thread_id": "session-123"}}
+
+    # Run the agent
+    result = await agent.ainvoke(
+        {"messages": [{"role": "user", "content": "Calculate the factorial of 10"}]},
+        config=config
+    )
+    print(result["messages"][-1].content)
+
+    # Clean up when done
+    await toolkit.cleanup()
+
+asyncio.run(main())
+```
+
+## 基于线程的会话隔离
+
+该工具包通过 `thread_id` 支持多个并发会话。每个线程维护自己的代码解释器会话，具有独立的状态：
+
+```python
+# Different threads have isolated sessions
+config_user1 = {"configurable": {"thread_id": "user-1"}}
+config_user2 = {"configurable": {"thread_id": "user-2"}}
+
+# Variables defined in user-1's session won't exist in user-2's session
+await agent.ainvoke(
+    {"messages": [{"role": "user", "content": "Set x = 100"}]},
+    config=config_user1
+)
+
+await agent.ainvoke(
+    {"messages": [{"role": "user", "content": "What is x?"}]},  # x is undefined here
+    config=config_user2
+)
+```
+
+## 处理文件
+
+### 写入和读取文件
+
+```python
+tools_by_name = toolkit.get_tools_by_name()
+
+# Write a file
+tools_by_name["write_files"].invoke({
+    "files": [{"path": "data.csv", "text": "name,value\nAlice,100\nBob,200"}]
+})
+
+# Read it back
+content = tools_by_name["read_files"].invoke({"paths": ["data.csv"]})
+print(content)
+
+# List files in current directory
+files = tools_by_name["list_files"].invoke({"directory_path": "."})
+print(files)
+```
+
+### 上传带描述的文件
+
+```python
+tools_by_name["upload_file"].invoke({
+    "path": "sales.csv",
+    "content": "date,revenue,product\n2024-01-01,1000,Widget\n2024-01-02,1500,Gadget",
+    "description": "Sales data with columns: date, revenue, product_id"
+})
+```
+
+## 安装软件包
+
+```python
+tools_by_name["install_packages"].invoke({
+    "packages": ["pandas>=2.0", "matplotlib", "scikit-learn"],
+    "upgrade": False
+})
+```
+
+## 异步任务管理
+
+对于长时间运行的命令，您可以异步启动它们并检查其状态：
+
+```python
+tools_by_name = toolkit.get_tools_by_name()
+config = {"configurable": {"thread_id": "session-123"}}
+
+# Start a long-running command asynchronously
+result = tools_by_name["start_command_execution"].invoke(
+    {"command": "python long_running_script.py"},
+    config=config
+)
+# Returns a task_id
+
+# Check task status
+status = tools_by_name["get_task"].invoke(
+    {"task_id": "task-abc123"},
+    config=config
+)
+print(status)
+
+# Stop a running task if needed
+tools_by_name["stop_task"].invoke(
+    {"task_id": "task-abc123"},
+    config=config
+)
+```
+
+## 会话清理
+
+使用完毕后请务必清理会话，以释放资源：
+
+```python
+# Clean up all sessions
+await toolkit.cleanup()
+
+# Or clean up a specific thread's session
+await toolkit.cleanup(thread_id="session-123")
+```
+
+---
+
+## API 参考
+
+有关所有特性和配置的详细文档，请参阅：
+
+- [langchain-aws API 参考](https://reference.langchain.com/python/langchain-aws)
+- [Amazon Bedrock AgentCore 文档](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)
+
+---

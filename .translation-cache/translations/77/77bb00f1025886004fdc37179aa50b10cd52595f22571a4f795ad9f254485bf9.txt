@@ -1,0 +1,92 @@
+---
+title: "StripeAgentToolkit 集成"
+description: "使用 LangChain Python 与 StripeAgentToolkit 工具集成。"
+---
+
+本指南概述了如何开始使用 Stripe 的代理工具包。
+
+您可以在 [Stripe 的发布博客](https://stripe.dev/blog/adding-payments-to-your-agentic-workflows) 或项目的 [PyPI 页面](https://pypi.org/project/stripe-agent-toolkit/) 上阅读更多关于 `StripeAgentToolkit` 的信息。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [JS 支持](https://github.com/stripe/agent-toolkit?tab=readme-ov-file#typescript) | 版本 |
+| :--- | :--- | :---: | :---: | :---: |
+| `StripeAgentToolkit` | [`stripe-agent-toolkit`](https://pypi.org/project/stripe-agent-toolkit) | ❌ | ✅ | ![PyPI - Version](https://img.shields.io/pypi/v/stripe-agent-toolkit?style=flat-square&label=%20) |
+
+## 设置
+
+此外部管理的包托管在 `stripe-agent-toolkit` 项目中，由 Stripe 团队管理。
+
+您可以使用 `pip` 安装它以及以下示例所需的 langgraph：
+
+```python
+pip install --quiet -U langgraph stripe-agent-toolkit
+```
+
+### 凭证
+
+除了安装包之外，您还需要使用 Stripe 账户的密钥配置集成，该密钥可在您的 [Stripe 管理平台](https://dashboard.stripe.com/account/apikeys) 中获取。
+
+```python
+import getpass
+import os
+
+if not os.environ.get("STRIPE_SECRET_KEY"):
+    os.environ["STRIPE_SECRET_KEY"] = getpass.getpass("STRIPE API key:\n")
+```
+
+这也很有帮助（但非必需）来设置 [LangSmith](https://smith.langchain.com)，以获得一流的可观测性：
+
+```python
+os.environ["LANGSMITH_TRACING"] = "true"
+# os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
+```
+
+## 实例化
+
+这里我们展示如何创建一个 Stripe Toolkit 实例
+
+```python
+from stripe_agent_toolkit.langchain.toolkit import StripeAgentToolkit
+
+stripe_agent_toolkit = StripeAgentToolkit(
+    secret_key=os.getenv("STRIPE_SECRET_KEY"),
+    configuration={
+        "actions": {
+            "payment_links": {
+                "create": True,
+            },
+        }
+    },
+)
+```
+
+## 代理
+
+以下是如何使用工具包在 langgraph 中创建基本代理：
+
+```python
+from langchain_anthropic import ChatAnthropic
+from langchain.agents import create_agent
+
+
+model = ChatAnthropic(
+    model="claude-3-5-sonnet-20240620",
+)
+
+langgraph_agent_executor = create_agent(model, stripe_agent_toolkit.get_tools())
+
+input_state = {
+    "messages": """
+        Create a payment link for a new product called 'test' with a price
+        of $100. Come up with a funny description about buy bots,
+        maybe a haiku.
+    """,
+}
+
+output_state = langgraph_agent_executor.invoke(input_state)
+
+print(output_state["messages"][-1].content)
+```

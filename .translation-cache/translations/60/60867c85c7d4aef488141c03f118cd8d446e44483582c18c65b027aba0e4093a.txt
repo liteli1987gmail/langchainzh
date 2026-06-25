@@ -1,0 +1,83 @@
+---
+title: 追踪 Visual Studio Code Copilot Chat 会话
+sidebarTitle: VS Code Copilot
+description: 通过 OpenTelemetry 在 LangSmith 中捕获 VS Code Copilot Chat 代理交互、LLM 调用、工具执行和 token 使用情况。
+---
+
+[Visual Studio Code Copilot Chat](https://code.visualstudio.com/docs/copilot/overview) 可以通过 [OpenTelemetry](https://opentelemetry.io/) (OTel) 导出追踪。LangSmith 直接摄入 OTLP，因此您可以将 Copilot Chat 指向 LangSmith，并与 LLM 追踪的其他内容一起检查代理轮次、模型元数据、工具调用和 token 使用情况。
+
+本指南基于 Copilot 的[使用 OpenTelemetry 监控代理使用情况](https://code.visualstudio.com/docs/copilot/guides/monitoring-agents)参考文档。
+
+## 前置要求
+
+在设置追踪之前，请确保您已具备：
+
+- 已安装 GitHub Copilot Chat 并登录的最新版 [Visual Studio Code](https://code.visualstudio.com/)。
+- 一个 [LangSmith API 密钥](/langsmith/create-account-api-key)。
+
+## 配置追踪
+
+当设置了 `COPILOT_OTEL_ENABLED`、`OTEL_EXPORTER_OTLP_ENDPOINT` 或 `github.copilot.chat.otel.enabled` 设置中的任何一个时，Copilot Chat 会启用 OTel 发送。将 Copilot Chat 追踪发送到 LangSmith 的最简单方法是在启动 VS Code 之前导出以下环境变量：
+
+```bash
+export COPILOT_OTEL_ENABLED=true
+export COPILOT_OTEL_PROTOCOL=http
+export COPILOT_OTEL_ENDPOINT=https://api.smith.langchain.com/otel
+export COPILOT_OTEL_CAPTURE_CONTENT=true
+export OTEL_EXPORTER_OTLP_HEADERS="x-api-key=<your_langsmith_api_key>,Langsmith-Project=<your_project_name>"
+```
+
+| 变量 | 描述 |
+| --- | --- |
+| `COPILOT_OTEL_ENABLED` | 设置为 `true` 以启用 Copilot Chat OTel 导出。 |
+| `COPILOT_OTEL_PROTOCOL` | OTLP 协议。使用 `http` 以指向 LangSmith 的 HTTP OTLP 接收端点。 |
+| `COPILOT_OTEL_ENDPOINT` | LangSmith OTLP 端点。优先于 `OTEL_EXPORTER_OTLP_ENDPOINT`。 |
+| `COPILOT_OTEL_CAPTURE_CONTENT` | 在 span 上捕获完整的提示词、响应、工具参数和工具结果。默认关闭。 |
+| `OTEL_EXPORTER_OTLP_HEADERS` | OTLP 导出器的认证头信息。使用 `x-api-key=<your_langsmith_api_key>`，可选地使用 `Langsmith-Project=<project>` 将追踪路由到特定的 [LangSmith 项目](/langsmith/log-traces-to-project)。 |
+
+VS Code 必须继承这些环境变量，因此请在启动 VS Code 的 shell 会话中导出它们（例如，通过将它们添加到 `~/.zshrc`、`~/.bashrc` 或 shell 配置文件中）再启动编辑器。
+
+<Note>
+针对自托管安装或区域 SaaS 更新 LangSmith 端点：GCP EU 使用 `eu.api.smith.langchain.com`；GCP APAC 使用 `apac.api.smith.langchain.com`；AWS US 使用 `aws.api.smith.langchain.com`。对于自托管 LangSmith，请在 LangSmith API URL 后追加 `/api/v1/otel`——例如，`https://ai-company.com/api/v1/otel`。
+</Note>
+
+<Warning>
+`COPILOT_OTEL_CAPTURE_CONTENT=true` 会记录完整的提示词和响应内容、系统提示词、工具架构、工具参数和工具结果。仅在可接受捕获源代码、文件内容和用户提示词的受信任环境中启用。
+</Warning>
+
+### 替代方案：VS Code 设置
+
+如果您不想设置环境变量，也可以从 VS Code 设置中启用 OTel。打开**设置**（`⌘,` / `Ctrl+,`），搜索 `copilot otel`，然后进行配置：
+
+```json
+{
+  "github.copilot.chat.otel.enabled": true,
+  "github.copilot.chat.otel.exporterType": "otlp-http",
+  "github.copilot.chat.otel.otlpEndpoint": "https://api.smith.langchain.com/otel",
+  "github.copilot.chat.otel.captureContent": true
+}
+```
+
+身份验证头仍需通过 `OTEL_EXPORTER_OTLP_HEADERS` 环境变量提供——VS Code 设置不暴露头字段。当两者同时设置时，环境变量优先于 VS Code 设置。
+
+## 在 LangSmith 中查看追踪
+
+启动 Copilot Chat 会话并发送请求。打开您的 [LangSmith 项目](https://smith.langchain.com) 查看生成的追踪。每个 agent 交互都会根据 [OTel GenAI 语义约定](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/gen-ai/) 生成层级 span 树：
+
+- `invoke_agent` span 包装完整的 agent 编排，包括 agent 名称、会话 ID、轮次计数和总 token 使用量。
+- `chat` span 捕获单个 LLM API 调用，包含模型、token 计数、响应时间和结束原因。
+- `execute_tool` span 捕获工具调用，包含工具名称、类型、持续时间和成功状态。
+
+当一个 agent 调用 subagent 时，Copilot Chat 自动传播追踪上下文，因此 subagent 的 `invoke_agent` span 在 LangSmith 中显示为父级 `execute_tool` span 的子级。
+
+## 故障排除
+
+- **LangSmith 中没有追踪。** 确认 `COPILOT_OTEL_ENABLED=true`，并且 VS Code 从导出变量的 shell 启动。验证 `OTEL_EXPORTER_OTLP_HEADERS` 包含 `x-api-key=<your_langsmith_api_key>`，并且该 API 密钥属于您要追踪的工作区。修改环境变量后重启 VS Code。
+- **追踪落在错误的项目中。** 在 `OTEL_EXPORTER_OTLP_HEADERS` 中设置 `Langsmith-Project=<your_project_name>`。如果未设置，追踪将进入工作区的 `default` 项目。
+- **提示和响应缺失。** 内容捕获是可选的。设置 `COPILOT_OTEL_CAPTURE_CONTENT=true`（或启用 `github.copilot.chat.otel.captureContent` 设置）。
+
+## 相关资源
+
+- [VS Code Copilot：使用 OpenTelemetry 监控 agent 使用情况](https://code.visualstudio.com/docs/copilot/guides/monitoring-agents)
+- [使用 OpenTelemetry 进行追踪](/langsmith/trace-with-opentelemetry)
+- [将追踪记录到项目](/langsmith/log-traces-to-project)

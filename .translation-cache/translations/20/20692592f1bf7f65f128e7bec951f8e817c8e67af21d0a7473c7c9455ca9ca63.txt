@@ -1,0 +1,82 @@
+---
+title: 如何添加自定义生命周期事件
+sidebarTitle: 添加自定义生命周期事件
+---
+当将代理部署到 LangSmith 时，您通常需要在服务器启动时初始化数据库连接等资源，并确保在服务器关闭时正确关闭它们。生命周期事件允许您挂接到服务器的启动和关闭序列中，以处理这些关键的设置和清理任务。
+
+这与[添加自定义路由](/langsmith/custom-routes)的方式相同。您只需要提供自己的 [`Starlette`](https://www.starlette.io/applications/) 应用（包括 [`FastAPI`](https://fastapi.tiangolo.com/)、[`FastHTML`](https://fastht.ml/) 及其他兼容应用）。
+
+以下是一个使用 FastAPI 的示例。
+
+<Note>
+"仅限 Python"
+目前我们仅支持在 `langgraph-api>=0.0.26` 的 Python 部署中使用自定义生命周期事件。
+</Note>
+
+## 创建应用
+
+从一个**现有的** LangSmith 应用开始，将以下生命周期代码添加到您的 `webapp.py` 文件中。如果您是从头开始，可以使用 CLI 从模板创建新应用。
+
+```bash
+langgraph new --template=new-langgraph-project-python my_new_project
+```
+
+当你有了 LangGraph 项目后，添加以下应用代码：
+
+```python {highlight={19}}
+# ./src/agent/webapp.py
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # for example...
+    engine = create_async_engine("postgresql+asyncpg://user:pass@localhost/db")
+    # Create reusable session factory
+    async_session = sessionmaker(engine, class_=AsyncSession)
+    # Store in app state
+    app.state.db_session = async_session
+    yield
+    # Clean up connections
+    await engine.dispose()
+
+app = FastAPI(lifespan=lifespan)
+
+# ... can add custom routes if needed.
+```
+
+## 配置 `langgraph.json`
+
+将以下内容添加到你的 `langgraph.json` 配置文件中。确保路径指向你上面创建的 `webapp.py` 文件。
+
+```json
+{
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./src/agent/graph.py:graph"
+  },
+  "env": ".env",
+  "http": {
+    "app": "./src/agent/webapp.py:app"
+  }
+  // Other configuration options like auth, store, etc.
+}
+```
+
+## 启动服务器
+
+在本地测试服务器：
+
+```bash
+langgraph dev --no-browser
+```
+
+## 部署
+
+您可以将应用原样部署到云端或自托管平台。
+
+## 下一步
+
+既然您已经为部署添加了生命周期事件，您可以使用类似的技术添加[自定义路由](/langsmith/custom-routes)或[自定义中间件](/langsmith/custom-middleware)来进一步自定义服务器的行为。

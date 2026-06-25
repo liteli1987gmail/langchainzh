@@ -1,0 +1,209 @@
+---
+title: "Redis 集成"
+description: "使用 LangChain Python 与 Redis 向量存储集成。"
+---
+
+>[Redis](https://redis.io/docs/latest/) 是一个内存数据平台，具有向量搜索、全文搜索和语义缓存功能，专为实时 AI 应用而设计。
+
+本笔记本展示了如何使用与 `RedisVectorStore` 相关的功能。
+
+## 设置
+
+要使用 `RedisVectorStore`，您首先需要安装合作伙伴包，以及本笔记本中使用的其他包。
+
+```bash
+pip install -qU langchain-redis langchain-openai
+```
+
+你需要运行一个启用了 Redis Search 功能的 Redis 实例。我们推荐 Redis 8.4+。你可以使用 Docker 在本地启动一个：
+
+```bash
+docker run -d --name redis -p 6379:6379 redis:8.4
+```
+
+或使用 [Redis Cloud](https://redis.io/cloud/) 进行托管部署。
+
+（可选）下载 [RedisInsight](https://redis.io/insight/) —— 一个用于检查数据和索引的基于浏览器的 GUI。
+
+```bash
+docker run -d --name redisinsight -p 5540:5540 redis/redisinsight:latest
+```
+
+### 凭据
+
+通过设置以下环境变量来配置 Redis 连接：
+
+```bash
+export REDIS_URL="redis://localhost:6379"
+```
+
+对于启用认证的 Redis：
+
+```bash
+export REDIS_URL="redis://username:password@localhost:6379"
+```
+
+对于 Redis Cloud，请使用数据库仪表板中的连接字符串：
+
+```bash
+export REDIS_URL="redis://default:<password>@<host>:<port>"
+```
+
+此包还支持 SSL/TLS（`rediss://`）和高可用性 Redis Sentinel 部署（`redis+sentinel://`）。有关完整的连接选项，请参阅 [langchain-redis README](https://github.com/langchain-ai/langchain-redis/blob/main/libs/redis/README.md#redis-connection-options)。
+
+设置您的 OpenAI API 密钥：
+
+```bash
+export OPENAI_API_KEY="your-api-key-here"
+```
+
+<Tip>
+[`langchain-redis`](https://github.com/langchain-ai/langchain-redis/blob/main/libs/redis/README.md) 包还提供了用于会话记忆的 `RedisChatMessageHistory` 和用于 LLM 响应缓存的 `RedisSemanticCache` — 全部由与向量存储相同的 Redis 实例支持。
+</Tip>
+
+## 初始化
+
+```python
+import os
+from langchain_openai import OpenAIEmbeddings
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+```
+
+```python
+from langchain_redis import RedisConfig, RedisVectorStore
+
+config = RedisConfig(
+    index_name="my_vectors",
+    redis_url=os.getenv("REDIS_URL", "redis://localhost:6379"),
+    distance_metric="COSINE",  # Options: COSINE, L2, IP
+    metadata_schema=[
+        {"name": "baz", "type": "tag"},
+        {"name": "foo", "type": "tag"},
+    ]
+)
+
+vector_store = RedisVectorStore(embeddings=embeddings, config=config)
+```
+
+<Note>
+`metadata_schema` 参数告诉 Redis 要索引哪些元数据字段。未在此列出的字段不能用于筛选器。对于分类字符串值使用 `"tag"`，对于数字使用 `"numeric"`。
+</Note>
+
+## 管理向量存储
+
+### 向向量存储添加项目
+
+```python
+texts = ["foo", "bar"]
+metadatas = [{"baz": "bar"}, {"foo": "baz"}]
+vector_store.add_texts(texts, metadatas=metadatas)
+```
+
+您也可以使用自定义键添加文档：
+
+```python
+custom_keys = ["doc1", "doc2"]
+vector_store.add_texts(texts, metadatas=metadatas, keys=custom_keys)
+```
+
+或者将 `add_documents` 与 LangChain `Document` 对象配合使用：
+
+```python
+from langchain_core.documents import Document
+
+document_1 = Document(page_content="foo", metadata={"baz": "bar"})
+document_2 = Document(page_content="bar", metadata={"foo": "baz"})
+document_3 = Document(page_content="to be deleted")
+
+documents = [document_1, document_2, document_3]
+ids = ["1", "2", "3"]
+vector_store.add_documents(documents=documents, ids=ids)
+```
+
+### 从向量存储中删除项目
+
+```python
+vector_store.delete(ids=["3"])
+```
+
+## 查询向量存储
+
+一旦您的向量存储已创建且相关文档已添加，您很可能希望在链或代理运行期间对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以按如下方式进行：
+
+```python
+query = "foo"
+docs = vector_store.similarity_search(query, k=2)
+for doc in docs:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+#### 带分数的相似性搜索
+
+```python
+docs_and_scores = vector_store.similarity_search_with_score(query, k=2)
+for doc, score in docs_and_scores:
+    print(f"* [SIM={score:.3f}] {doc.page_content} [{doc.metadata}]")
+```
+
+#### 相似性搜索与过滤
+
+```python
+from redisvl.query.filter import Tag
+
+results = vector_store.similarity_search(
+    query="foo",
+    k=1,
+    filter=Tag("baz") == "bar"
+)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+#### 最大边际相关性搜索
+
+```python
+docs = vector_store.max_marginal_relevance_search(query, k=2, fetch_k=10)
+for doc in docs:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+#### 其他搜索方法
+
+有更多未在此笔记本中列出的搜索方法，若要查找全部方法，请务必阅读 @[`API 参考`][RedisVectorStore]。
+
+<Tip>
+Redis 支持将向量相似度与全文搜索相结合的混合搜索。参见 @[`API 参考`][RedisVectorStore] 中 `similarity_search` 的参数，包括 `return_all` 和 `distance_threshold`。
+</Tip>
+
+### 通过转换为检索器进行查询
+
+你也可以将向量存储转换为检索器，以便在链中更方便地使用。
+
+```python
+retriever = vector_store.as_retriever(
+    search_type="mmr",
+    search_kwargs={"k": 1, "fetch_k": 2, "lambda_mult": 0.5},
+)
+retriever.invoke("your query here")
+```
+
+## 用于检索增强生成
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下部分：
+
+- [检索文档](/oss/langchain/retrieval)
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [智能体 RAG](/oss/langgraph/agentic-rag)
+
+有关使用 `langchain-redis` 的完整 RAG 演练，请参阅此[示例笔记本](https://github.com/redis-developer/redis-ai-resources/blob/main/python-recipes/RAG/02_langchain.ipynb)。
+
+---
+
+## API 参考
+
+有关 `RedisVectorStore` 功能和配置的详细文档，请前往 @[`API 参考`][RedisVectorStore]。

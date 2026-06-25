@@ -1,0 +1,341 @@
+---
+title: "AzureOpenAIEmbeddings 集成"
+sidebarTitle: "嵌入"
+description: "使用 LangChain JavaScript 与 AzureOpenAIEmbeddings 嵌入模型集成。"
+---
+
+[Azure OpenAI](https://azure.microsoft.com/products/ai-services/openai-service/) 是一项云服务，可帮助您使用来自 OpenAI、Meta 等的多种预构建和精选模型快速开发生成式 AI 应用。
+
+LangChain.js 通过 OpenAI SDK 中的新版 Azure 集成支持与 [Azure OpenAI](https://azure.microsoft.com/products/ai-services/openai-service/) 的集成。
+
+您可以在[此页面](https://learn.microsoft.com/azure/ai-services/openai/overview)了解更多关于 Azure OpenAI 及其与 OpenAI API 的差异。如果您没有 Azure 账户，可以[创建一个免费账户](https://azure.microsoft.com/free/)来开始使用。
+
+本文档将帮助您开始使用 LangChain 的 AzureOpenAIEmbeddings [嵌入模型](/oss/integrations/embeddings)。如需了解 `AzureOpenAIEmbeddings` 功能和配置选项的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-openai/AzureOpenAIEmbeddings)。
+
+<Info>
+**此前，LangChain.js 使用专用的 [Azure OpenAI SDK](https://github.com/Azure/azure-sdk-for-js/tree/main/sdk/openai/openai) 支持与 Azure OpenAI 的集成。该 SDK 现已弃用，取而代之的是 OpenAI SDK 中的新版 Azure 集成，它可以访问最新发布的 OpenAI 模型和功能，并支持 OpenAI API 与 Azure OpenAI 之间的无缝切换。**
+
+如果您正在使用已弃用的 SDK 的 Azure OpenAI，请参阅[迁移指南](#migration-from-azure-openai-sdk)以更新到新版 API。
+
+</Info>
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 本地 | [Py 支持](https://python.langchain.com/docs/integrations/embeddings/azure_openai/) | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: |  :---: | :---: |
+| [`AzureOpenAIEmbeddings`](https://reference.langchain.com/javascript/langchain-openai/AzureOpenAIEmbeddings) | [`@langchain/openai`](https://www.npmjs.com/package/@langchain/openai) | ❌ | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/openai?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/openai?style=flat-square&label=%20&) |
+
+## 设置
+
+要访问 Azure OpenAI 嵌入模型，您需要创建一个 Azure 账户、获取 API 密钥，并安装 `@langchain/openai` 集成包。
+
+### 凭据
+
+您需要部署一个 Azure OpenAI 实例。您可以按照[本指南](https://learn.microsoft.com/azure/ai-services/openai/how-to/create-resource?pivots=web-portal)在 Azure Portal 上部署一个版本。
+
+一旦您的实例运行，确保您有实例名称和密钥。您可以在 Azure Portal 中实例的"密钥和终结点"部分找到密钥。
+
+如果您使用的是 Node.js，可以定义以下环境变量来使用该服务：
+
+```bash
+AZURE_OPENAI_API_INSTANCE_NAME=<YOUR_INSTANCE_NAME>
+AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME=<YOUR_EMBEDDINGS_DEPLOYMENT_NAME>
+AZURE_OPENAI_API_KEY=<YOUR_KEY>
+AZURE_OPENAI_API_VERSION="2024-02-01"
+```
+
+如果你想对模型调用进行自动追踪，也可以通过取消下方的注释来设置你的 [LangSmith](/langsmith/observability) API 密钥：
+
+```bash
+# export LANGSMITH_TRACING="true"
+# export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+LangChain AzureOpenAIEmbeddings 集成位于 `@langchain/openai` 包中：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash npm
+npm install @langchain/openai @langchain/core
+```
+```bash yarn
+yarn add @langchain/openai @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/openai @langchain/core
+```
+</CodeGroup>
+
+
+<Info>
+**您可以在 [Azure OpenAI 文档](https://learn.microsoft.com/azure/ai-services/openai/reference) 中找到支持的 API 版本列表。**
+
+
+</Info>
+
+<Tip>
+**如果未定义 `AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME`，它将回退到 `AZURE_OPENAI_API_DEPLOYMENT_NAME` 的值作为部署名称。`AzureOpenAIEmbeddings` 构造函数中的 `azureOpenAIApiEmbeddingsDeploymentName` 参数也是如此，如果未定义，它将回退到 `azureOpenAIApiDeploymentName` 的值。**
+
+
+</Tip>
+
+## 实例化
+
+现在我们可以实例化模型对象并嵌入文本：
+
+```typescript
+import { AzureOpenAIEmbeddings } from "@langchain/openai";
+
+const embeddings = new AzureOpenAIEmbeddings({
+  azureOpenAIApiKey: "<your_key>", // In Node.js defaults to process.env.AZURE_OPENAI_API_KEY
+  azureOpenAIApiInstanceName: "<your_instance_name>", // In Node.js defaults to process.env.AZURE_OPENAI_API_INSTANCE_NAME
+  azureOpenAIApiEmbeddingsDeploymentName: "<your_embeddings_deployment_name>", // In Node.js defaults to process.env.AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME
+  azureOpenAIApiVersion: "<api_version>", // In Node.js defaults to process.env.AZURE_OPENAI_API_VERSION
+  maxRetries: 1,
+});
+```
+
+## 索引与检索
+
+嵌入模型常用于检索增强生成（RAG）流程中，既可作为索引数据的一部分，也可在后续检索时使用。如需更详细的说明，请参阅 [**Learn** 选项卡下的 RAG 教程 (/oss/learn/)。
+
+下面展示了如何使用上面初始化的 `embeddings` 对象来索引和检索数据。在此示例中，我们将使用演示版 [`MemoryVectorStore`](/oss/integrations/vectorstores/memory) 来索引和检索示例文档。
+
+```typescript
+// Create a vector store with a sample text
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+
+const text = "LangChain is the framework for building context-aware reasoning applications";
+
+const vectorstore = await MemoryVectorStore.fromDocuments(
+  [{ pageContent: text, metadata: {} }],
+  embeddings,
+);
+
+// Use the vector store as a retriever that returns a single document
+const retriever = vectorstore.asRetriever(1);
+
+// Retrieve the most similar text
+const retrievedDocuments = await retriever.invoke("What is LangChain?");
+
+retrievedDocuments[0].pageContent;
+```
+
+```text
+LangChain is the framework for building context-aware reasoning applications
+```
+
+## 直接使用
+
+在底层，向量存储和检索器的实现正在调用 `embeddings.embedDocument(...)` 和 `embeddings.embedQuery(...)`，分别为 `fromDocuments` 中使用的文本和检索器的 `invoke` 操作创建嵌入。
+
+您可以直接调用这些方法来获取适合您自身用例的嵌入。
+
+### 嵌入单个文本
+
+您可以使用 `embedQuery` 来嵌入搜索查询。这会生成一个针对该查询的向量表示：
+
+```typescript
+const singleVector = await embeddings.embedQuery(text);
+
+console.log(singleVector.slice(0, 100));
+```
+
+```text
+[
+   -0.024253517, -0.0054218727,   0.048715446,   0.020580322,    0.03180832,
+   0.0028770117,  -0.012367731,   0.037383243,  -0.054915592,   0.032225136,
+     0.00825818,  -0.023888804,   -0.01184671,   0.012257014,   0.016294925,
+    0.009254632,  0.0051353113,  -0.008889917,   0.016855022,    0.04207243,
+  0.00082589936,  -0.011664353,    0.00818654,   0.029020859,  -0.012335167,
+   -0.019603407,  0.0013945447,    0.05538451,  -0.011625277,  -0.008153976,
+    0.038607642,   -0.03811267, -0.0074440846,   0.047647353,   -0.00927417,
+    0.024201415, -0.0069230637,  -0.008538228,   0.003910912,   0.052805457,
+   -0.023159374,  0.0014352495,  -0.038659744,   0.017141584,   0.005587948,
+    0.007971618,  -0.016920151,    0.06658646, -0.0016916894,   0.045667473,
+   -0.042202685,   -0.03983204,   -0.04160351,  -0.011729481,  -0.055905532,
+    0.012543576,  0.0038848612,   0.007919516,   0.010915386,  0.0033117384,
+   -0.007548289,  -0.030427614,  -0.041890074,   0.036002535,  -0.023771575,
+   -0.008792226,  -0.049444873,   0.016490309, -0.0060568666,   0.040196754,
+    0.014106638,  -0.014575557, -0.0017356506,  -0.011234511,  -0.012517525,
+    0.008362384,    0.01253055,   0.036158845,   0.008297256, -0.0010908874,
+   -0.014888169,  -0.020489143,   0.018965157,  -0.057937514, -0.0037122732,
+    0.004402626,   -0.00840146,   0.042984217,   -0.04936672,   -0.03714878,
+    0.004969236,    0.03707063,   0.015396165,   -0.02055427,    0.01988997,
+    0.030219207,  -0.021257648,    0.01340326,   0.003692735,   0.012595678
+]
+```
+
+### 嵌入多个文本
+
+您可以使用 `embedDocuments` 嵌入多个文本用于索引。此方法内部使用的机制可能（但并非必须）与嵌入查询不同：
+
+```typescript
+const text2 = "LangGraph is a library for building stateful, multi-actor applications with LLMs";
+
+const vectors = await embeddings.embedDocuments([text, text2]);
+
+console.log(vectors[0].slice(0, 100));
+console.log(vectors[1].slice(0, 100));
+```
+
+```text
+[
+   -0.024253517, -0.0054218727,   0.048715446,   0.020580322,    0.03180832,
+   0.0028770117,  -0.012367731,   0.037383243,  -0.054915592,   0.032225136,
+     0.00825818,  -0.023888804,   -0.01184671,   0.012257014,   0.016294925,
+    0.009254632,  0.0051353113,  -0.008889917,   0.016855022,    0.04207243,
+  0.00082589936,  -0.011664353,    0.00818654,   0.029020859,  -0.012335167,
+   -0.019603407,  0.0013945447,    0.05538451,  -0.011625277,  -0.008153976,
+    0.038607642,   -0.03811267, -0.0074440846,   0.047647353,   -0.00927417,
+    0.024201415, -0.0069230637,  -0.008538228,   0.003910912,   0.052805457,
+   -0.023159374,  0.0014352495,  -0.038659744,   0.017141584,   0.005587948,
+    0.007971618,  -0.016920151,    0.06658646, -0.0016916894,   0.045667473,
+   -0.042202685,   -0.03983204,   -0.04160351,  -0.011729481,  -0.055905532,
+    0.012543576,  0.0038848612,   0.007919516,   0.010915386,  0.0033117384,
+   -0.007548289,  -0.030427614,  -0.041890074,   0.036002535,  -0.023771575,
+   -0.008792226,  -0.049444873,   0.016490309, -0.0060568666,   0.040196754,
+    0.014106638,  -0.014575557, -0.0017356506,  -0.011234511,  -0.012517525,
+    0.008362384,    0.01253055,   0.036158845,   0.008297256, -0.0010908874,
+   -0.014888169,  -0.020489143,   0.018965157,  -0.057937514, -0.0037122732,
+    0.004402626,   -0.00840146,   0.042984217,   -0.04936672,   -0.03714878,
+    0.004969236,    0.03707063,   0.015396165,   -0.02055427,    0.01988997,
+    0.030219207,  -0.021257648,    0.01340326,   0.003692735,   0.012595678
+]
+[
+   -0.033366997,   0.010419146,  0.0118083665,  -0.040441725, 0.0020355924,
+   -0.015808804,  -0.023629595, -0.0066180876,  -0.040004376,  0.020053642,
+  -0.0010797002,   -0.03900105,  -0.009956073,  0.0027896944,  0.003305828,
+   -0.034010153,   0.009833873,  0.0061164247,   0.022536227,  0.029147884,
+    0.017789727,    0.03182342,   0.010869357,   0.031849146, -0.028093107,
+    0.008283865, -0.0145610785,    0.01645196,  -0.029430874,  -0.02508313,
+    0.046178687,   -0.01722375,  -0.010046115,   0.013101112, 0.0044538635,
+     0.02197025,    0.03985002,   0.007955855,  0.0008819293,  0.012657333,
+    0.014368132,  -0.014007963,   -0.03722594,   0.031617608, -0.011570398,
+    0.039052505,  0.0020018267,   0.023706773, -0.0046950476,  0.056083307,
+    -0.08412496,  -0.043425974,  -0.015512952,   0.015950298,  -0.03624834,
+  -0.0053317733,  -0.037251666,  0.0046339477,    0.04193385,  0.023475237,
+   -0.021378545,   0.013699248,  -0.026009277,   0.050757967,   -0.0494202,
+   0.0007874656,   -0.07208506,   0.015885983,  -0.003259199,  0.015127057,
+   0.0068946453,  -0.035373647,  -0.005875241, -0.0032238255,  -0.04185667,
+   -0.022047428,  0.0014326327, -0.0070940237, -0.0027864785, -0.016271876,
+    0.005097021,   0.034473225,   0.012361481,  -0.026498076, 0.0067274245,
+   -0.026330855,  -0.006132504,   0.008180959,  -0.049368747, -0.032337945,
+    0.011049441,    0.00186194,  -0.012097787,    0.01930758,   0.07059293,
+    0.029713862,    0.04337452, -0.0048461896,  -0.019976463,  0.011473924
+]
+```
+
+## 使用 Azure Managed Identity
+
+如果您使用的是 Azure Managed Identity，可以按如下方式配置凭据：
+
+```typescript
+import {
+  DefaultAzureCredential,
+  getBearerTokenProvider,
+} from "@azure/identity";
+import { AzureOpenAIEmbeddings } from "@langchain/openai";
+
+const credentials = new DefaultAzureCredential();
+const azureADTokenProvider = getBearerTokenProvider(
+  credentials,
+  "https://cognitiveservices.azure.com/.default"
+);
+
+const modelWithManagedIdentity = new AzureOpenAIEmbeddings({
+  azureADTokenProvider,
+  azureOpenAIApiInstanceName: "<your_instance_name>",
+  azureOpenAIApiEmbeddingsDeploymentName: "<your_embeddings_deployment_name>",
+  azureOpenAIApiVersion: "<api_version>",
+});
+
+```
+
+## 使用不同的域名
+
+如果您的实例托管在默认域名 `openai.azure.com` 以外的域名下，您需要使用备用的 `AZURE_OPENAI_BASE_PATH` 环境变量。
+例如，以下是连接到域 `https://westeurope.api.microsoft.com/openai/deployments/{DEPLOYMENT_NAME}` 的方法：
+
+```typescript
+import { AzureOpenAIEmbeddings } from "@langchain/openai";
+
+const embeddingsDifferentDomain = new AzureOpenAIEmbeddings({
+  azureOpenAIApiKey: "<your_key>", // In Node.js defaults to process.env.AZURE_OPENAI_API_KEY
+  azureOpenAIApiEmbeddingsDeploymentName: "<your_embedding_deployment_name>", // In Node.js defaults to process.env.AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME
+  azureOpenAIApiVersion: "<api_version>", // In Node.js defaults to process.env.AZURE_OPENAI_API_VERSION
+  azureOpenAIBasePath:
+    "https://westeurope.api.microsoft.com/openai/deployments", // In Node.js defaults to process.env.AZURE_OPENAI_BASE_PATH
+});
+
+```
+
+## 自定义请求头
+
+你可以通过传入 `configuration` 字段来指定自定义请求头：
+
+```typescript
+import { AzureOpenAIEmbeddings } from "@langchain/openai";
+
+const embeddingsWithCustomHeaders = new AzureOpenAIEmbeddings({
+  azureOpenAIApiKey: "<your_key>",
+  azureOpenAIApiInstanceName: "<your_instance_name>",
+  azureOpenAIApiEmbeddingsDeploymentName: "<your_embeddings_deployment_name>",
+  azureOpenAIApiVersion: "<api_version>",
+  configuration: {
+    defaultHeaders: {
+      "x-custom-header": `SOME_VALUE`,
+    },
+  },
+});
+```
+
+`configuration` 字段还接受官方 SDK 支持的其他 `ClientOptions` 参数。
+
+**注意：** 特定的 `api-key` header 目前无法以这种方式覆盖，它将从 `azureOpenAIApiKey` 传递值。
+
+## 从 Azure OpenAI SDK 迁移
+
+如果您正在使用已弃用的 Azure OpenAI SDK（`@langchain/azure-openai` 包），可以按照以下步骤更新代码以使用新的 Azure 集成：
+
+1. 安装新的 `@langchain/openai` 包并移除之前的 `@langchain/azure-openai` 包：
+
+   ```bash npm
+   npm install @langchain/openai
+   npm uninstall @langchain/azure-openai
+   ```
+
+2. 更新您的导入语句，使用 `@langchain/openai` 包中的新 `AzureOpenAIEmbeddings` 类：
+
+   ```typescript
+   import { AzureOpenAIEmbeddings } from "@langchain/openai";
+   ```
+
+3. 更新您的代码以使用新的 `AzureOpenAIEmbeddings` 类并传递所需参数：
+
+   ```typescript
+   const model = new AzureOpenAIEmbeddings({
+     azureOpenAIApiKey: "<your_key>",
+     azureOpenAIApiInstanceName: "<your_instance_name>",
+     azureOpenAIApiEmbeddingsDeploymentName:
+       "<your_embeddings_deployment_name>",
+     azureOpenAIApiVersion: "<api_version>",
+   });
+   ```
+
+请注意，构造函数现在需要 `azureOpenAIApiInstanceName` 参数，而不是 `azureOpenAIEndpoint` 参数，并新增了 `azureOpenAIApiVersion` 参数来指定 API 版本。
+
+- 如果您使用的是 Azure 托管标识，现在需要使用构造函数的 `azureADTokenProvider` 参数而不是 `credentials`，请参阅 [Azure 托管标识](#using-azure-managed-identity) 部分了解更多详情。
+
+- 如果您使用的是环境变量，现在需要设置 `AZURE_OPENAI_API_INSTANCE_NAME` 环境变量而不是 `AZURE_OPENAI_API_ENDPOINT`，并添加 `AZURE_OPENAI_API_VERSION` 环境变量来指定 API 版本。
+
+---
+
+## API 参考
+
+有关 `AzureOpenAIEmbeddings` 所有功能和配置的详细文档，请前往 [API 参考](https://reference.langchain.com/javascript/langchain-openai/AzureOpenAIEmbeddings)。

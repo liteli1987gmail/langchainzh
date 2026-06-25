@@ -1,0 +1,292 @@
+---
+title: "ChatVertexAI 集成"
+sidebarTitle: "ChatVertexAI (旧版)"
+description: "使用 LangChain JavaScript 与 ChatVertexAI 聊天模型集成。"
+---
+
+[Google Vertex](https://cloud.google.com/vertex-ai) 是一项服务，可访问 Google Cloud 中所有可用的基础模型，如 `gemini-2.5-pro`、`gemini-2.5-flash` 等。
+它还提供一些非 Google 模型，如 [Anthropic 的 Claude](https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude)。
+
+本文档将帮助您开始使用 `ChatVertexAI` [聊天模型](/oss/langchain/models)。有关所有 `ChatVertexAI` 功能和配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-google-vertexai/index/ChatVertexAI)。
+
+<Note>
+    **此库将被弃用**
+
+    此库将被 [ChatGoogle](/oss/integrations/chat/google) 库取代。
+    新实现应改用 [ChatGoogle](/oss/integrations/chat/google) 库，
+    现有实现应考虑迁移。
+</Note>
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | Python 支持 | 下载量 | 版本 |
+| :--- | :--- | :---: |  :---: | :---: | :---: |
+| [`ChatVertexAI`](https://reference.langchain.com/javascript/langchain-google-vertexai/index/ChatVertexAI) | [`@langchain/google-vertexai`](https://www.npmjs.com/package/@langchain/google-vertexai) | ✅ | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/google-vertexai?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/google-vertexai?style=flat-square&label=%20&) |
+
+### 模型功能
+
+请参阅下表标题中的链接，了解如何使用特定功能。
+
+| [工具调用](/oss/langchain/tools) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | 视频输入 | [令牌级流式传输](/oss/langchain/streaming/) | [令牌使用量](/oss/langchain/models#token-usage) | [Logprobs](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: |  :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+请注意，虽然支持 logprobs，但 Gemini 对其使用有相当严格的限制。
+
+## 设置
+
+LangChain.js 支持两种不同的身份验证方法，具体取决于您是在 Node.js 环境还是 Web 环境中运行。它还支持使用任一包通过 Vertex AI Express 模式使用的身份验证方法。
+
+要访问 `ChatVertexAI` 模型，您需要在 Google Cloud Platform (GCP) 账户中设置 Google VertexAI，保存凭证文件，并安装 `@langchain/google-vertexai` 集成包。在 Node.js 上，该包使用 [`@langchain/google-gauth`](https://github.com/langchain-ai/langchainjs/tree/main/libs/providers/langchain-google-gauth) 进行身份验证（您不需要单独安装它）。
+
+### 凭证
+
+前往您的 [GCP 账户](https://console.cloud.google.com/) 并生成一个凭证文件。完成此操作后，设置 `GOOGLE_APPLICATION_CREDENTIALS` 环境变量：
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/credentials.json"
+```
+
+或者，在本地机器上，你可以运行 `gcloud auth application-default login` 来使用应用默认凭据。
+
+如果在 Web 环境中运行，请安装 `@langchain/google-vertexai-web` 包（该包使用 [`@langchain/google-webauth`](https://github.com/langchain-ai/langchainjs/tree/main/libs/providers/langchain-google-webauth) 进行身份验证）。在 `GOOGLE_WEB_CREDENTIALS` 中设置服务账号 JSON：
+
+```bash
+export GOOGLE_WEB_CREDENTIALS='{"type":"service_account","project_id":"YOUR_PROJECT-12345",...}'
+```
+
+`GOOGLE_VERTEX_AI_WEB_CREDENTIALS` 也受支持，但已弃用。
+
+如果您使用的是 Vertex AI Express Mode，则可以安装 `@langchain/google-vertexai` 或 `@langchain/google-vertexai-web` 软件包。
+然后您可以前往 [Express Mode](https://console.cloud.google.com/vertex-ai/studio) API 密钥页面，并在 `GOOGLE_API_KEY` 环境变量中设置您的 API 密钥：
+
+```bash
+export GOOGLE_API_KEY="api_key_value"
+```
+
+如果你想获取模型调用的自动追踪，你也可以设置你的 [LangSmith](/langsmith/observability) API 密钥，只需取消下方注释即可：
+
+```bash
+# export LANGSMITH_TRACING="true"
+# export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+LangChain 的 `ChatVertexAI` 集成位于 `@langchain/google-vertexai` 包中：
+
+<CodeGroup>
+```bash npm
+npm install @langchain/google-vertexai @langchain/core
+```
+```bash yarn
+yarn add @langchain/google-vertexai @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/google-vertexai @langchain/core
+```
+</CodeGroup>
+
+或者，如果使用在 Web 环境中，如 [Vercel Edge 函数](https://vercel.com/blog/edge-functions-generally-available)：
+
+<CodeGroup>
+```bash npm
+npm install @langchain/google-vertexai-web @langchain/core
+```
+```bash yarn
+yarn add @langchain/google-vertexai-web @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/google-vertexai-web @langchain/core
+```
+</CodeGroup>
+
+## 实例化
+
+现在我们可以实例化模型对象并生成聊天补全：
+
+```typescript
+import { ChatVertexAI } from "@langchain/google-vertexai"
+// Uncomment the following line if you're running in a web environment:
+// import { ChatVertexAI } from "@langchain/google-vertexai-web"
+
+const llm = new ChatVertexAI({
+    model: "gemini-2.5-flash",
+    temperature: 0,
+    maxRetries: 2,
+    // For web, authOptions.credentials
+    // authOptions: { ... }
+    // other params...
+})
+```
+
+## 调用
+
+```typescript
+const aiMsg = await llm.invoke([
+    [
+        "system",
+        "You are a helpful assistant that translates English to French. Translate the user sentence.",
+    ],
+    ["human", "I love programming."],
+])
+aiMsg
+```
+
+```text
+AIMessageChunk {
+  "content": "J'adore programmer. \n",
+  "additional_kwargs": {},
+  "response_metadata": {},
+  "tool_calls": [],
+  "tool_call_chunks": [],
+  "invalid_tool_calls": [],
+  "usage_metadata": {
+    "input_tokens": 20,
+    "output_tokens": 7,
+    "total_tokens": 27
+  }
+}
+```
+
+```typescript
+console.log(aiMsg.content)
+```
+
+```text
+J'adore programmer.
+```
+
+## 使用 Google 搜索检索的工具调用
+
+可以使用 Google 搜索工具调用模型，您可以用它来[接地](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/grounding)内容生成与真实世界信息并减少幻觉。
+
+接地目前不支持 `gemini-2.0-flash-exp`。
+
+您可以选择使用 Google 搜索接地或使用自定义数据存储。以下是两者的示例：
+
+### Google 搜索检索
+
+使用 Google 搜索的接地示例：
+
+```typescript
+import { ChatVertexAI } from "@langchain/google-vertexai"
+
+const searchRetrievalTool = {
+  googleSearchRetrieval: {
+    dynamicRetrievalConfig: {
+      mode: "MODE_DYNAMIC", // Use Dynamic Retrieval
+      dynamicThreshold: 0.7, // Default for Dynamic Retrieval threshold
+    },
+  },
+};
+
+const searchRetrievalModel = new ChatVertexAI({
+  model: "gemini-2.5-pro",
+  temperature: 0,
+  maxRetries: 0,
+}).bindTools([searchRetrievalTool]);
+
+const searchRetrievalResult = await searchRetrievalModel.invoke("Who won the 2024 NBA Finals?");
+
+console.log(searchRetrievalResult.content);
+```
+
+```text
+The Boston Celtics won the 2024 NBA Finals, defeating the Dallas Mavericks 4-1 in the series to claim their 18th NBA championship. This victory marked their first title since 2008 and established them as the team with the most NBA championships, surpassing the Los Angeles Lakers' 17 titles.
+```
+
+### 使用数据存储的 Google 搜索检索
+
+首先，设置您的数据存储（这是一个示例数据存储的架构）：
+
+|    ID   |     Date     |   Team 1    |  Score  |   Team 2    |
+|:-------:|:------------:|:-----------:|:-------:|:-----------:|
+|  3001   |  2023-09-07  |  Argentina  |  1 - 0  |  Ecuador    |
+|  3002   |  2023-09-12  |  Venezuela  |  1 - 0  |  Paraguay   |
+|  3003   |  2023-09-12  |  Chile      |  0 - 0  |  Colombia   |
+|  3004   |  2023-09-12  |  Peru       |  0 - 1  |  Brazil     |
+|  3005   |  2024-10-15  |  Argentina  |  6 - 0  |  Bolivia    |
+
+然后，在下面的示例中使用此数据存储：
+
+（请注意，您必须使用您自己的 `projectId` 和 `datastoreId` 变量）
+
+```typescript
+import { ChatVertexAI } from "@langchain/google-vertexai";
+
+const projectId = "YOUR_PROJECT_ID";
+const datastoreId = "YOUR_DATASTORE_ID";
+
+const searchRetrievalToolWithDataset = {
+  retrieval: {
+    vertexAiSearch: {
+      datastore: `projects/${projectId}/locations/global/collections/default_collection/dataStores/${datastoreId}`,
+    },
+    disableAttribution: false,
+  },
+};
+
+const searchRetrievalModelWithDataset = new ChatVertexAI({
+  model: "gemini-2.5-pro",
+  temperature: 0,
+  maxRetries: 0,
+}).bindTools([searchRetrievalToolWithDataset]);
+
+const searchRetrievalModelResult = await searchRetrievalModelWithDataset.invoke(
+  "What is the score of Argentina vs Bolivia football game?"
+);
+
+console.log(searchRetrievalModelResult.content);
+```
+
+```text
+Argentina won against Bolivia with a score of 6-0 on October 15, 2024.
+```
+
+您现在应该会获得基于所提供数据存储中的数据的结果。
+
+## 上下文缓存
+
+Vertex AI 提供上下文缓存功能，该功能通过存储和重复使用跨多个 API 请求的长消息内容块来帮助优化成本。当您有冗长的对话历史记录或在交互中频繁出现的消息段时，这尤其有用。
+
+要使用此功能，请先按照[此官方指南](https://cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-create)创建上下文缓存。
+
+创建缓存后，您可以通过以下方式将其 ID 作为运行时参数传递：
+
+```typescript
+import { ChatVertexAI } from "@langchain/google-vertexai";
+
+const modelWithCachedContent = new ChatVertexAI({
+  model: "gemini-2.5-pro-002",
+  location: "us-east5",
+});
+
+await modelWithCachedContent.invoke("What is in the content?", {
+  cachedContent:
+    "projects/PROJECT_NUMBER/locations/LOCATION/cachedContents/CACHE_ID",
+});
+```
+
+你也可以将此字段直接绑定到模型实例上：
+
+```typescript
+const modelWithBoundCachedContent = new ChatVertexAI({
+  model: "gemini-2.5-pro-002",
+  location: "us-east5",
+}).bind({
+  cachedContent:
+    "projects/PROJECT_NUMBER/locations/LOCATION/cachedContents/CACHE_ID",
+});
+
+```
+
+请注意，并非所有模型目前都支持上下文缓存。
+
+---
+
+## API 参考
+
+有关所有 `ChatVertexAI` 功能与配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-google-vertexai/index/ChatVertexAI)。

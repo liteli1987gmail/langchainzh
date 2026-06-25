@@ -1,0 +1,396 @@
+---
+title: "Composio 集成"
+description: 通过 Composio 的统一 API 平台访问 500+ 工具和集成，为 AI 代理提供 OAuth 处理、事件驱动工作流和多用户支持。
+---
+
+[Composio](https://composio.dev) 是一个集成平台，可通过统一 API 访问 500+ 跨流行应用的工具，如 GitHub、Slack、Notion 等。它使 AI 代理能够通过统一 API 与外部服务交互，处理身份验证、权限和事件驱动工作流。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [JS 支持](https://js.langchain.com/docs/integrations/tools/composio) | 版本 |
+|:---|:---|:---:|:---:|:---:|
+| Composio | [`composio-langchain`](https://pypi.org/project/composio-langchain/) | ❌ | ✅ | ![PyPI - Version](https://img.shields.io/pypi/v/composio-langchain?style=flat-square&label=%20) |
+
+### 工具功能
+
+- **500+ 工具访问**：为 GitHub、Slack、Gmail、Jira、Notion 等提供的预构建集成
+- **身份验证管理**：处理 OAuth 流程、API 密钥和身份验证状态
+- **事件驱动工作流**：基于外部事件触发代理（如新的 Slack 消息、GitHub 问题等）
+- **细粒度权限**：控制每个用户的工具访问和数据暴露
+- **自定义工具支持**：添加专有 API 和内部工具
+
+## 设置
+
+该集成位于 `composio-langchain` 包中。
+
+<CodeGroup>
+```python pip
+pip install -U composio-langchain
+```
+```python uv
+uv add composio-langchain
+```
+</CodeGroup>
+
+### 凭证
+
+您需要一个 Composio API 密钥。请在 [composio.dev](https://composio.dev) 免费注册以获取您的 API 密钥。
+
+```python Set API key icon="key"
+import getpass
+import os
+
+if not os.environ.get("COMPOSIO_API_KEY"):
+    os.environ["COMPOSIO_API_KEY"] = getpass.getpass("Enter your Composio API key: ")
+```
+
+设置 LangSmith 来进行跟踪也很有帮助：
+
+```python Enable tracing icon="flask"
+# os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+# os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+## 实例化
+
+使用 LangChain 提供程序初始化 Composio，并从特定工具包中获取工具。每个工具包代表一个服务（如 GitHub、Slack），包含多个工具（您可以执行的操作）。
+
+```python Initialize Composio icon="robot"
+from composio import Composio
+from composio_langchain import LangchainProvider
+
+# Initialize Composio with LangChain provider
+composio = Composio(provider=LangchainProvider())
+
+# Get tools from specific toolkits
+# You can specify one or more toolkits
+tools = composio.tools.get(
+    user_id="default",
+    toolkits=["GITHUB"]
+)
+
+print(f"Loaded {len(tools)} tools from GitHub toolkit")
+```
+
+### 可用工具包
+
+Composio 为多种服务提供工具包：
+
+**生产力**：GitHub、Slack、Gmail、Jira、Notion、Asana、Trello、ClickUp
+**通讯**：Discord、Telegram、WhatsApp、Microsoft Teams
+**开发**：GitLab、Bitbucket、Linear、Sentry
+**数据与分析**：Google Sheets、Airtable、HubSpot、Salesforce
+还有 100+ 更多...
+
+## 调用
+
+### 从多个工具包获取工具
+
+您可以一次从多个服务加载工具：
+
+```python
+# Get tools from multiple toolkits
+tools = composio.tools.get(
+    user_id="default",
+    toolkits=["GITHUB", "SLACK", "GMAIL"]
+)
+```
+
+### 获取特定工具
+
+您可以加载特定工具，而不是整个工具包：
+
+```python
+# Get specific tools by name
+tools = composio.tools.get(
+    user_id="default",
+    tools=["GITHUB_CREATE_ISSUE", "SLACK_SEND_MESSAGE"]
+)
+```
+
+### 用户特定工具
+
+Composio 支持多用户场景，提供用户特定的身份验证：
+
+```python
+# Get tools for a specific user
+# This user must have authenticated their accounts first
+tools = composio.tools.get(
+    user_id="user_123",
+    toolkits=["GITHUB"]
+)
+```
+
+## 在代理中使用
+
+这是一个完整示例，展示如何使用 Composio 工具与 LangChain 代理交互 GitHub：
+
+<ChatModelTabs customVarName="llm" />
+
+```python
+import os
+import getpass
+
+if not os.environ.get("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter your OpenAI API key: ")
+```
+
+```python
+# | output: false
+# | echo: false
+
+from langchain.chat_models import init_chat_model
+
+llm = init_chat_model(model="gpt-5.5", model_provider="openai")
+```
+
+```python Agent with Composio tools icon="robot"
+from composio import Composio
+from composio_langchain import LangchainProvider
+from langchain import hub
+from langchain.agents import AgentExecutor, create_openai_functions_agent
+
+# Pull the prompt template
+prompt = hub.pull("hwchase17/openai-functions-agent")
+
+# Initialize Composio
+composio = Composio(provider=LangchainProvider())
+
+# Get GitHub tools
+tools = composio.tools.get(user_id="default", toolkits=["GITHUB"])
+
+# Define task
+task = "Star a repo composiohq/composio on GitHub"
+
+# Create agent
+agent = create_openai_functions_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+# Execute using agent_executor
+agent_executor.invoke({"input": task})
+```
+
+### 事件驱动的工作流
+
+Composio 支持基于外部事件触发智能体。当连接的应用中发生事件时（如新的 GitHub 提交或 Slack 消息），触发器会自动向您的应用程序发送结构化数据。
+
+#### 创建触发器
+
+首先，为您想要监控的事件创建一个触发器：
+
+```python
+from composio import Composio
+
+composio = Composio(api_key="your_api_key")
+user_id = "user_123"
+
+# Check what configuration is required for the trigger
+trigger_type = composio.triggers.get_type("GITHUB_COMMIT_EVENT")
+print(trigger_type.config)
+
+# Create trigger with required configuration
+trigger = composio.triggers.create(
+    slug="GITHUB_COMMIT_EVENT",
+    user_id=user_id,
+    trigger_config={
+        "owner": "composiohq",
+        "repo": "composio"
+    }
+)
+
+print(f"Trigger created: {trigger.trigger_id}")
+```
+
+#### 订阅触发器（开发）
+
+对于本地开发和原型设计，您可以直接订阅触发器：
+
+```python
+from composio import Composio
+
+composio = Composio(api_key="your_api_key")
+
+# Subscribe to trigger events
+subscription = composio.triggers.subscribe()
+
+# Define event handler
+@subscription.handle(trigger_id="your_trigger_id")
+def handle_github_commit(data):
+    print(f"New commit detected: {data}")
+    # Process the event with your agent
+    # ... invoke your agent with the task
+
+# Note: For production, use webhooks instead
+```
+
+#### Webhook（生产环境）
+
+对于生产环境，请在 [Composio 仪表板](https://platform.composio.dev/settings/events) 中配置 Webhook：
+
+```python
+from fastapi import FastAPI, Request
+import json
+
+app = FastAPI()
+
+@app.post("/webhook")
+async def webhook_handler(request: Request):
+    # Get the webhook payload
+    payload = await request.json()
+
+    print("Received trigger event:")
+    print(json.dumps(payload, indent=2))
+
+    # Process the event with your agent
+    if payload.get("triggerSlug") == "GITHUB_COMMIT_EVENT":
+        commit_data = payload.get("payload")
+        # ... invoke your agent with commit_data
+
+    return {"status": "success"}
+```
+
+如需更多详细信息，请参阅 [Composio Triggers 文档](https://docs.composio.dev/docs/using-triggers)
+
+## 身份验证设置
+
+在使用需要身份验证的工具之前，用户需要连接他们的账户：
+
+```python
+from composio import Composio
+
+composio = Composio()
+
+# Get authentication URL for a user
+auth_connection = composio.integrations.create(
+    user_id="user_123",
+    integration="github"
+)
+
+print(f"Authenticate at: {auth_connection.redirect_url}")
+
+# After authentication, the user's connected account will be available
+# and tools will work with their credentials
+```
+
+## 多用户场景
+
+对于有多位用户的应用程序：
+
+```python
+# Each user authenticates their own accounts
+tools_user_1 = composio.tools.get(user_id="user_1", toolkits=["GITHUB"])
+tools_user_2 = composio.tools.get(user_id="user_2", toolkits=["GITHUB"])
+
+# Tools will use the respective user's credentials
+# User 1's agent will act on User 1's GitHub account
+agent_1 = create_agent(llm, tools_user_1)
+
+# User 2's agent will act on User 2's GitHub account
+agent_2 = create_agent(llm, tools_user_2)
+```
+
+## 高级功能
+
+### 自定义工具
+
+Composio 允许您创建可与内置工具一起使用的自定义工具。有两种类型：
+
+#### 独立工具
+
+无需身份验证的简单工具：
+
+```python
+from pydantic import BaseModel, Field
+from composio import Composio
+
+composio = Composio()
+
+class AddTwoNumbersInput(BaseModel):
+    a: int = Field(description="The first number to add")
+    b: int = Field(description="The second number to add")
+
+# Function name will be used as the tool slug
+@composio.tools.custom_tool
+def add_two_numbers(request: AddTwoNumbersInput) -> int:
+    """Add two numbers."""
+    return request.a + request.b
+
+# Use with your agent
+tools = composio.tools.get(user_id="default", toolkits=["GITHUB"])
+tools.append(add_two_numbers)
+```
+
+#### 基于工具包的工具
+
+需要身份验证并可使用工具包凭据的工具：
+
+```python
+from composio.types import ExecuteRequestFn
+
+class GetIssueInfoInput(BaseModel):
+    issue_number: int = Field(
+        ..., description="The number of the issue to get information about"
+    )
+
+@composio.tools.custom_tool(toolkit="github")
+def get_issue_info(
+    request: GetIssueInfoInput,
+    execute_request: ExecuteRequestFn,
+    auth_credentials: dict,
+) -> dict:
+    """Get information about a GitHub issue."""
+    response = execute_request(
+        endpoint=f"/repos/composiohq/composio/issues/{request.issue_number}",
+        method="GET",
+        parameters=[
+            {
+                "name": "Accept",
+                "value": "application/vnd.github.v3+json",
+                "type": "header",
+            },
+            {
+                "name": "Authorization",
+                "value": f"Bearer {auth_credentials['access_token']}",
+                "type": "header",
+            },
+        ],
+    )
+    return {"data": response.data}
+```
+
+执行自定义工具：
+
+```python
+response = composio.tools.execute(
+    user_id="default",
+    slug="get_issue_info",  # Use function name as slug
+    arguments={"issue_number": 1},
+)
+```
+
+有关更多详细信息，请参阅 [Composio 自定义工具文档](https://docs.composio.dev/docs/custom-tools)
+
+### 细粒度权限
+
+控制工具可以执行的操作：
+
+```python
+# Get tools with specific permissions
+tools = composio.tools.get(
+    user_id="default",
+    toolkits=["GITHUB"],
+    # Limit to read-only operations
+    permissions=["read"]
+)
+```
+
+---
+
+## API 参考
+
+有关所有 Composio 功能和配置的详细文档，请访问：
+- [Composio 文档](https://docs.composio.dev)
+- [LangChain 提供商指南](https://docs.composio.dev/providers/langchain)
+- [可用工具与操作](https://docs.composio.dev/toolkits/introduction)

@@ -1,0 +1,813 @@
+---
+title: 使用 LangChain 构建语音智能体
+sidebarTitle: 语音智能体
+---
+
+## 概述
+
+聊天界面一直是人与 AI 交互的主要方式，但多模态 AI 的最新突破正在开辟令人兴奋的新可能。高质量的生成模型和富有表现力的文本转语音 (TTS) 系统使我们能够构建不再像工具、更像对话伙伴的智能体。
+
+语音智能体就是其中一个例子。与其依赖键盘和鼠标将输入内容输入到智能体中，不如使用口语与其交互。这是一种更自然、更具吸引力的 AI 交互方式，在某些场景下尤其有用。
+
+### 什么是语音智能体？
+
+语音智能体是能够与用户进行自然口语对话的[智能体](/oss/langchain/agents)。这些智能体结合了语音识别、自然语言处理、生成式 AI 和文本转语音技术，创造出无缝、自然的对话体验。
+
+它们适用于多种用例，包括：
+
+- 客户支持
+- 个人助理
+- 免手操作界面
+- 指导与培训
+
+### 语音智能体是如何工作的？
+
+从高层次来看，每个语音智能体都需要处理三个任务：
+
+1. **聆听** - 捕获音频并转录
+2. **思考** - 解析意图、推理、规划
+3. **说话** - 生成音频并流式传输回用户
+
+区别在于这些步骤的顺序和耦合方式。在实践中，生产级智能体遵循两种主要架构之一：
+
+#### 1. STT > 智能体 > TTS 架构（"三明治"架构）
+
+三明治架构由三个独立组件组成：语音转文本 (STT)、基于文本的 LangChain 智能体，以及文本转语音 (TTS)。
+
+```mermaid
+flowchart LR
+    A[User Audio] --> B[Speech-to-Text]
+    B --> C[LangChain Agent]
+    C --> D[Text-to-Speech]
+    D --> E[Audio Output]
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+
+    class A,E trigger
+    class B,C,D process
+```
+
+**优点：**
+- 完全控制每个组件（根据需要更换 STT/TTS 提供商）
+- 可以访问现代文本模型的最新功能
+- 透明的行为，组件边界清晰
+
+**缺点：**
+- 需要编排多个服务
+- 管理管道会增加复杂性
+- 从语音到文本的转换会丢失信息（例如，语调、情感）
+
+#### 2. 语音到语音架构 (S2S)
+
+语音到语音使用多模态模型，原生处理音频输入并生成音频输出。
+
+```mermaid
+flowchart LR
+    A[User Audio] --> B[Multimodal Model]
+    B --> C[Audio Output]
+
+    classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+
+    class A,C trigger
+    class B process
+```
+
+**优势：**
+- 更简单的架构，移动部件更少
+- 通常对于简单交互具有更低的延迟
+- 直接音频处理能够捕捉语音的语调和其他细微差别
+
+**劣势：**
+- 模型选择有限，供应商锁定的风险更大
+- 功能可能落后于文本模态模型
+- 音频处理方式透明度较低
+- 可控性和定制化选项减少
+
+本指南展示了**三明治架构**，以平衡性能、可控性和对现代模型能力的访问。三明治架构在一些 STT 和 TTS 提供商中可以实现低于 700ms 的延迟，同时保持对模块化组件的控制。
+
+### 示例应用概述
+
+我们将逐步介绍使用三明治架构构建基于语音的代理。该代理将管理三明治店的订单。该应用将展示三明治架构的所有三个组件，使用 [AssemblyAI](https://www.assemblyai.com/) 进行 STT 和 [Cartesia](https://cartesia.ai/) 进行 TTS（尽管可以为大多数提供商构建适配器）。
+
+一个端到端参考应用可在 [voice-sandwich-demo](https://github.com/langchain-ai/voice-sandwich-demo) 仓库中找到。我们将在这里逐步讲解该应用。
+
+该演示使用 WebSocket 实现浏览器与服务器之间的实时双向通信。同样的架构可以适配其他传输方式，如电话系统（Twilio、Vonage）或 WebRTC 连接。
+
+### 架构
+
+该演示实现了一个流式管道，其中每个阶段异步处理数据：
+
+**客户端（浏览器）**
+- 捕获麦克风音频并将其编码为 PCM
+- 与后端服务器建立 WebSocket 连接
+- 实时将音频块流式传输到服务器
+- 接收并播放合成的语音音频
+
+:::python
+**服务器（Python）**
+:::
+:::js
+**服务器（Node.js）**
+:::
+
+- 接受来自客户端的 WebSocket 连接
+- 编排三步管道：
+  - [语音转文本（STT）](#1-语音转文本)：将音频转发到 STT 提供商（如 AssemblyAI），接收转录事件
+  - [代理](#2-langchain-代理)：使用 LangChain 代理处理转录文本，流式传输响应令牌
+  - [文本转语音（TTS）](#3-文本转语音)：将代理响应发送到 TTS 提供商（如 Cartesia），接收音频块
+
+- 将合成的音频返回给客户端进行播放
+
+:::python
+该管道使用异步生成器在每个阶段启用流式处理。这允许下游组件在上游阶段完成之前开始处理，从而最小化端到端延迟。
+:::
+:::js
+该管道使用异步迭代器在每个阶段启用流式处理。这允许下游组件在上游阶段完成之前开始处理，从而最小化端到端延迟。
+:::
+
+## 设置
+
+有关详细的安装说明和设置，请参阅[仓库 README](https://github.com/langchain-ai/voice-sandwich-demo#readme)。
+
+## 1. 语音转文本
+
+STT 阶段将传入的音频流转换为文本转录。该实现使用生产者-消费者模式来并发处理音频流式传输和转录接收。
+
+### 关键概念
+
+**生产者-消费者模式**：音频块在接收转录事件的同时并发发送到 STT 服务。这允许在所有音频到达之前开始转录。
+
+**事件类型**：
+- `stt_chunk`：STT 服务处理音频时提供的部分转录
+- `stt_output`：触发代理处理的最终格式化转录
+
+**WebSocket 连接**：保持与 AssemblyAI 实时 STT API 的持久连接，配置为 16kHz PCM 音频并自动处理对话轮次。
+
+### 实现
+
+:::python
+```python
+from typing import AsyncIterator
+import asyncio
+from assemblyai_stt import AssemblyAISTT
+from events import VoiceAgentEvent
+
+async def stt_stream(
+    audio_stream: AsyncIterator[bytes],
+) -> AsyncIterator[VoiceAgentEvent]:
+    """
+    Transform stream: Audio (Bytes) → Voice Events (VoiceAgentEvent)
+
+    Uses a producer-consumer pattern where:
+    - Producer: Reads audio chunks and sends them to AssemblyAI
+    - Consumer: Receives transcription events from AssemblyAI
+    """
+    stt = AssemblyAISTT(sample_rate=16000)
+
+    async def send_audio():
+        """Background task that pumps audio chunks to AssemblyAI."""
+        try:
+            async for audio_chunk in audio_stream:
+                await stt.send_audio(audio_chunk)
+        finally:
+            # Signal completion when audio stream ends
+            await stt.close()
+
+    # Launch audio sending in background
+    send_task = asyncio.create_task(send_audio())
+
+    try:
+        # Receive and yield transcription events as they arrive
+        async for event in stt.receive_events():
+            yield event
+    finally:
+        # Cleanup
+        with contextlib.suppress(asyncio.CancelledError):
+            send_task.cancel()
+            await send_task
+        await stt.close()
+```
+:::
+
+:::js
+```typescript
+import { AssemblyAISTT } from "./assemblyai";
+import type { VoiceAgentEvent } from "./types";
+
+async function* sttStream(
+  audioStream: AsyncIterable<Uint8Array>
+): AsyncGenerator<VoiceAgentEvent> {
+  const stt = new AssemblyAISTT({ sampleRate: 16000 });
+  const passthrough = writableIterator<VoiceAgentEvent>();
+
+  // Producer: pump audio chunks to AssemblyAI
+  const producer = (async () => {
+    try {
+      for await (const audioChunk of audioStream) {
+        await stt.sendAudio(audioChunk);
+      }
+    } finally {
+      await stt.close();
+    }
+  })();
+
+  // Consumer: receive transcription events
+  const consumer = (async () => {
+    for await (const event of stt.receiveEvents()) {
+      passthrough.push(event);
+    }
+  })();
+
+  try {
+    // Yield events as they arrive
+    yield* passthrough;
+  } finally {
+    // Wait for producer and consumer to complete
+    await Promise.all([producer, consumer]);
+  }
+}
+```
+该应用程序实现了一个 AssemblyAI 客户端来管理 WebSocket 连接和消息解析。请参阅下面的实现；可以为其他 STT 提供商构建类似的适配器。
+
+<Accordion title="AssemblyAI 客户端">
+
+:::python
+```python
+class AssemblyAISTT:
+    def __init__(self, api_key: str | None = None, sample_rate: int = 16000):
+        self.api_key = api_key or os.getenv("ASSEMBLYAI_API_KEY")
+        self.sample_rate = sample_rate
+        self._ws: WebSocketClientProtocol | None = None
+
+    async def send_audio(self, audio_chunk: bytes) -> None:
+        """Send PCM audio bytes to AssemblyAI."""
+        ws = await self._ensure_connection()
+        await ws.send(audio_chunk)
+
+    async def receive_events(self) -> AsyncIterator[STTEvent]:
+        """Yield STT events as they arrive from AssemblyAI."""
+        async for raw_message in self._ws:
+            message = json.loads(raw_message)
+
+            if message["type"] == "Turn":
+                # Final formatted transcript
+                if message.get("turn_is_formatted"):
+                    yield STTOutputEvent.create(message["transcript"])
+                # Partial transcript
+                else:
+                    yield STTChunkEvent.create(message["transcript"])
+
+    async def _ensure_connection(self) -> WebSocketClientProtocol:
+        """Establish WebSocket connection if not already connected."""
+        if self._ws is None:
+            url = f"wss://streaming.assemblyai.com/v3/ws?sample_rate={self.sample_rate}&format_turns=true"
+            self._ws = await websockets.connect(
+                url,
+                additional_headers={"Authorization": self.api_key}
+            )
+        return self._ws
+```
+:::
+
+:::js
+```typescript
+export class AssemblyAISTT {
+  protected _bufferIterator = writableIterator<VoiceAgentEvent.STTEvent>();
+  protected _connectionPromise: Promise<WebSocket> | null = null;
+
+  async sendAudio(buffer: Uint8Array): Promise<void> {
+    const conn = await this._connection;
+    conn.send(buffer);
+  }
+
+  async *receiveEvents(): AsyncGenerator<VoiceAgentEvent.STTEvent> {
+    yield* this._bufferIterator;
+  }
+
+  protected get _connection(): Promise<WebSocket> {
+    if (this._connectionPromise) return this._connectionPromise;
+
+    this._connectionPromise = new Promise((resolve, reject) => {
+      const params = new URLSearchParams({
+        sample_rate: this.sampleRate.toString(),
+        format_turns: "true",
+      });
+      const url = `wss://streaming.assemblyai.com/v3/ws?${params}`;
+      const ws = new WebSocket(url, {
+        headers: { Authorization: this.apiKey },
+      });
+
+      ws.on("open", () => resolve(ws));
+
+      ws.on("message", (data) => {
+        const message = JSON.parse(data.toString());
+        if (message.type === "Turn") {
+          if (message.turn_is_formatted) {
+            this._bufferIterator.push({
+              type: "stt_output",
+              transcript: message.transcript,
+              ts: Date.now()
+            });
+          } else {
+            this._bufferIterator.push({
+              type: "stt_chunk",
+              transcript: message.transcript,
+              ts: Date.now()
+            });
+          }
+        }
+      });
+    });
+
+    return this._connectionPromise;
+  }
+}
+```
+## 2. LangChain 代理
+
+代理阶段通过 LangChain [代理](/oss/langchain/agents)处理文本转录并流式传输响应令牌。在这种情况下，我们流式传输代理生成的所有[文本内容块](/oss/langchain/messages#content-block-reference)。
+
+### 关键概念
+
+**流式响应**：代理使用 [`stream_events(version="v3")`](/oss/langchain/streaming) 和 `stream.messages` 在生成响应令牌时立即发送，而不是等待完整响应。这使 TTS 阶段能够立即开始合成。
+
+**对话记忆**：[检查点器](/oss/langchain/short-term-memory)使用唯一线程 ID 在多次对话中维护对话状态。这使代理能够引用对话中的先前交互内容。
+
+### 实现
+
+:::python
+```python
+from langchain_core.utils.uuid import uuid7
+from langchain.agents import create_agent
+from langchain.messages import HumanMessage
+from langgraph.checkpoint.memory import InMemorySaver
+
+# Define agent tools
+def add_to_order(item: str, quantity: int) -> str:
+    """Add an item to the customer's sandwich order."""
+    return f"Added {quantity} x {item} to the order."
+
+def confirm_order(order_summary: str) -> str:
+    """Confirm the final order with the customer."""
+    return f"Order confirmed: {order_summary}. Sending to kitchen."
+
+# Create agent with tools and memory
+agent = create_agent(
+    model="google_genai:gemini-3.5-flash",  # Select your model
+    tools=[add_to_order, confirm_order],
+    system_prompt="""You are a helpful sandwich shop assistant.
+    Your goal is to take the user's order. Be concise and friendly.
+    Do NOT use emojis, special characters, or markdown.
+    Your responses will be read by a text-to-speech engine.""",
+    checkpointer=InMemorySaver(),
+)
+
+async def agent_stream(
+    event_stream: AsyncIterator[VoiceAgentEvent],
+) -> AsyncIterator[VoiceAgentEvent]:
+    """
+    Transform stream: Voice Events → Voice Events (with Agent Responses)
+
+    Passes through all upstream events and adds agent_chunk events
+    when processing STT transcripts.
+    """
+    # Generate unique thread ID for conversation memory
+    thread_id = str(uuid7())
+
+    async for event in event_stream:
+        # Pass through all upstream events
+        yield event
+
+        # Process final transcripts through the agent
+        if event.type == "stt_output":
+            # Stream agent response with conversation context
+            stream = await agent.astream_events(
+                {"messages": [HumanMessage(content=event.transcript)]},
+                {"configurable": {"thread_id": thread_id}},
+                version="v3",
+            )
+
+            # Yield agent response chunks as they arrive
+            async for message in stream.messages:
+                async for token in message.text:
+                    yield AgentChunkEvent.create(token)
+```
+:::
+
+:::js
+```typescript
+import { createAgent } from "langchain";
+import { HumanMessage } from "@langchain/core/messages";
+import { MemorySaver } from "@langchain/langgraph";
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+
+// Define agent tools
+const addToOrder = tool(
+  async ({ item, quantity }) => {
+    return `Added ${quantity} x ${item} to the order.`;
+  },
+  {
+    name: "add_to_order",
+    description: "Add an item to the customer's sandwich order.",
+    schema: z.object({
+      item: z.string(),
+      quantity: z.number(),
+    }),
+  }
+);
+
+const confirmOrder = tool(
+  async ({ orderSummary }) => {
+    return `Order confirmed: ${orderSummary}. Sending to kitchen.`;
+  },
+  {
+    name: "confirm_order",
+    description: "Confirm the final order with the customer.",
+    schema: z.object({
+      orderSummary: z.string().describe("Summary of the order"),
+    }),
+  }
+);
+
+// Create agent with tools and memory
+const agent = createAgent({
+  model: "claude-haiku-4-5",
+  tools: [addToOrder, confirmOrder],
+  checkpointer: new MemorySaver(),
+  systemPrompt: `You are a helpful sandwich shop assistant.
+Your goal is to take the user's order. Be concise and friendly.
+Do NOT use emojis, special characters, or markdown.
+Your responses will be read by a text-to-speech engine.`,
+});
+
+async function* agentStream(
+  eventStream: AsyncIterable<VoiceAgentEvent>
+): AsyncGenerator<VoiceAgentEvent> {
+  // Generate unique thread ID for conversation memory
+  const threadId = crypto.randomUUID();
+
+  for await (const event of eventStream) {
+    // Pass through all upstream events
+    yield event;
+
+    // Process final transcripts through the agent
+    if (event.type === "stt_output") {
+      const stream = await agent.streamEvents(
+        { messages: [new HumanMessage(event.transcript)] },
+        {
+          configurable: { thread_id: threadId },
+          version: "v3",
+        }
+      );
+
+      // Yield agent response chunks as they arrive
+      for await (const message of stream.messages) {
+        for await (const token of message.text) {
+          yield { type: "agent_chunk", text: token, ts: Date.now() };
+        }
+      }
+    }
+  }
+}
+```
+## 3. 语音合成
+
+TTS 阶段将智能体回复文本合成为音频并将其流式传输回客户端。与 STT 阶段类似，它使用生产者-消费者模式来处理并发的文本发送和音频接收。
+
+### 核心概念
+
+**并发处理**：该实现合并了两个异步流：
+- **上游处理**：传递所有事件并将智能体文本块发送到 TTS 提供商
+- **音频接收**：从 TTS 提供商接收合成的音频块
+
+**流式 TTS**：某些提供商（如 [Cartesia](https://cartesia.ai/)）在收到文本后立即开始合成音频，使音频播放能够在智能体完成完整响应之前开始。
+
+**事件透传**：所有上游事件保持不变地传递，使客户端或其他观察者能够跟踪完整的管道状态。
+
+### 实现
+
+:::python
+```python
+from cartesia_tts import CartesiaTTS
+from utils import merge_async_iters
+
+async def tts_stream(
+    event_stream: AsyncIterator[VoiceAgentEvent],
+) -> AsyncIterator[VoiceAgentEvent]:
+    """
+    Transform stream: Voice Events → Voice Events (with Audio)
+
+    Merges two concurrent streams:
+    1. process_upstream(): passes through events and sends text to Cartesia
+    2. tts.receive_events(): yields audio chunks from Cartesia
+    """
+    tts = CartesiaTTS()
+
+    async def process_upstream() -> AsyncIterator[VoiceAgentEvent]:
+        """Process upstream events and send agent text to Cartesia."""
+        async for event in event_stream:
+            # Pass through all events
+            yield event
+            # Send agent text to Cartesia for synthesis
+            if event.type == "agent_chunk":
+                await tts.send_text(event.text)
+
+    try:
+        # Merge upstream events with TTS audio events
+        # Both streams run concurrently
+        async for event in merge_async_iters(
+            process_upstream(),
+            tts.receive_events()
+        ):
+            yield event
+    finally:
+        await tts.close()
+```
+:::
+
+:::js
+```typescript
+import { CartesiaTTS } from "./cartesia";
+
+async function* ttsStream(
+  eventStream: AsyncIterable<VoiceAgentEvent>
+): AsyncGenerator<VoiceAgentEvent> {
+  const tts = new CartesiaTTS();
+  const passthrough = writableIterator<VoiceAgentEvent>();
+
+  // Producer: read upstream events and send text to Cartesia
+  const producer = (async () => {
+    try {
+      for await (const event of eventStream) {
+        passthrough.push(event);
+        if (event.type === "agent_chunk") {
+          await tts.sendText(event.text);
+        }
+      }
+    } finally {
+      await tts.close();
+    }
+  })();
+
+  // Consumer: receive audio from Cartesia
+  const consumer = (async () => {
+    for await (const event of tts.receiveEvents()) {
+      passthrough.push(event);
+    }
+  })();
+
+  try {
+    // Yield events from both producer and consumer
+    yield* passthrough;
+  } finally {
+    await Promise.all([producer, consumer]);
+  }
+}
+```
+:::
+
+该应用实现了一个 Cartesia 客户端来管理 WebSocket 连接和音频流传输。请参阅下面的实现；类似的适配器也可以为其他 TTS 提供商构建。
+
+<Accordion title="Cartesia Client">
+
+:::python
+```python
+import base64
+import json
+import websockets
+
+class CartesiaTTS:
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        voice_id: str = "f6ff7c0c-e396-40a9-a70b-f7607edb6937",
+        model_id: str = "sonic-3",
+        sample_rate: int = 24000,
+        encoding: str = "pcm_s16le",
+    ):
+        self.api_key = api_key or os.getenv("CARTESIA_API_KEY")
+        self.voice_id = voice_id
+        self.model_id = model_id
+        self.sample_rate = sample_rate
+        self.encoding = encoding
+        self._ws: WebSocketClientProtocol | None = None
+
+    def _generate_context_id(self) -> str:
+        """Generate a valid context_id for Cartesia."""
+        timestamp = int(time.time() * 1000)
+        counter = self._context_counter
+        self._context_counter += 1
+        return f"ctx_{timestamp}_{counter}"
+
+    async def send_text(self, text: str | None) -> None:
+        """Send text to Cartesia for synthesis."""
+        if not text or not text.strip():
+            return
+
+        ws = await self._ensure_connection()
+        payload = {
+            "model_id": self.model_id,
+            "transcript": text,
+            "voice": {
+                "mode": "id",
+                "id": self.voice_id,
+            },
+            "output_format": {
+                "container": "raw",
+                "encoding": self.encoding,
+                "sample_rate": self.sample_rate,
+            },
+            "language": self.language,
+            "context_id": self._generate_context_id(),
+        }
+        await ws.send(json.dumps(payload))
+
+    async def receive_events(self) -> AsyncIterator[TTSChunkEvent]:
+        """Yield audio chunks as they arrive from Cartesia."""
+        async for raw_message in self._ws:
+            message = json.loads(raw_message)
+
+            # Decode and yield audio chunks
+            if "data" in message and message["data"]:
+                audio_chunk = base64.b64decode(message["data"])
+                if audio_chunk:
+                    yield TTSChunkEvent.create(audio_chunk)
+
+    async def _ensure_connection(self) -> WebSocketClientProtocol:
+        """Establish WebSocket connection if not already connected."""
+        if self._ws is None:
+            url = (
+                f"wss://api.cartesia.ai/tts/websocket"
+                f"?api_key={self.api_key}&cartesia_version={self.cartesia_version}"
+            )
+            self._ws = await websockets.connect(url)
+
+        return self._ws
+```
+:::
+
+:::js
+```typescript
+export class CartesiaTTS {
+  protected _bufferIterator = writableIterator<VoiceAgentEvent.TTSEvent>();
+  protected _connectionPromise: Promise<WebSocket> | null = null;
+
+  async sendText(text: string | null): Promise<void> {
+    if (!text || !text.trim()) return;
+
+    const conn = await this._connection;
+    const payload = { text, try_trigger_generation: false };
+    conn.send(JSON.stringify(payload));
+  }
+
+  async *receiveEvents(): AsyncGenerator<VoiceAgentEvent.TTSEvent> {
+    yield* this._bufferIterator;
+  }
+
+  protected _generateContextId(): string {
+    const timestamp = Date.now();
+    const counter = this._contextCounter++;
+    return `ctx_${timestamp}_${counter}`;
+  }
+
+  protected get _connection(): Promise<WebSocket> {
+    if (this._connectionPromise) return this._connectionPromise;
+
+    this._connectionPromise = new Promise((resolve, reject) => {
+      const params = new URLSearchParams({
+        api_key: this.apiKey,
+        cartesia_version: this.cartesiaVersion,
+      });
+      const url = `wss://api.cartesia.ai/tts/websocket?${params.toString()}`;
+      const ws = new WebSocket(url);
+
+      ws.on("open", () => {
+        resolve(ws);
+      });
+
+      ws.on("message", (data: WebSocket.RawData) => {
+        const message: CartesiaTTSResponse = JSON.parse(data.toString());
+        if (message.data) {
+          this._bufferIterator.push({
+            type: "tts_chunk",
+            audio: message.data,
+            ts: Date.now(),
+          });
+        } else if (message.error) {
+          throw new Error(`Cartesia error: ${message.error}`);
+        }
+      });
+    });
+
+    return this._connectionPromise;
+  }
+}
+```
+:::
+</Accordion>
+
+### LangSmith
+
+您使用 LangChain 构建的许多应用程序将包含多个步骤和多次 LLM 调用。随着这些应用程序变得越来越复杂，能够检查链或代理内部发生的情况变得至关重要。最好的方法是使用 [LangSmith](https://smith.langchain.com)。
+
+在上面的链接注册后，请确保设置您的环境变量以开始记录追踪：
+
+```shell
+export LANGSMITH_TRACING="true"
+export LANGSMITH_API_KEY="..."
+```
+
+:::python
+或者，在 Python 中设置它们：
+
+:::
+
+```python
+import getpass
+import os
+
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
+```
+:::
+
+## 整合所有内容
+
+完整的管道将三个阶段链接在一起：
+
+:::python
+
+:::
+```python
+from langchain_core.runnables import RunnableGenerator
+
+pipeline = (
+    RunnableGenerator(stt_stream)      # Audio → STT events
+    | RunnableGenerator(agent_stream)  # STT events → Agent events
+    | RunnableGenerator(tts_stream)    # Agent events → TTS audio
+)
+
+# Use in WebSocket endpoint
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+
+    async def websocket_audio_stream():
+        """Yield audio bytes from WebSocket."""
+        while True:
+            data = await websocket.receive_bytes()
+            yield data
+
+    # Transform audio through pipeline
+    output_stream = pipeline.atransform(websocket_audio_stream())
+
+    # Send TTS audio back to client
+    async for event in output_stream:
+        if event.type == "tts_chunk":
+            await websocket.send_bytes(event.audio)
+```
+
+我们使用 [RunnableGenerators](https://reference.langchain.com/python/langchain_core/runnables/#langchain_core.runnables.base.RunnableGenerator) 来组合管道的每个步骤。 这是 LangChain 在内部使用的抽象，用于管理 [跨组件的流式处理](https://reference.langchain.com/python/langchain_core/runnables/)。
+:::
+
+:::js
+```typescript
+// using https://hono.dev/
+app.get("/ws", upgradeWebSocket(async () => {
+  const inputStream = writableIterator<Uint8Array>();
+
+  // Chain the three stages
+  const transcriptEventStream = sttStream(inputStream);
+  const agentEventStream = agentStream(transcriptEventStream);
+  const outputEventStream = ttsStream(agentEventStream);
+
+  // Process pipeline and send TTS audio to client
+  const flushPromise = (async () => {
+    for await (const event of outputEventStream) {
+      if (event.type === "tts_chunk") {
+        currentSocket?.send(event.audio);
+      }
+    }
+  })();
+
+  return {
+    onMessage(event) {
+      // Push incoming audio into pipeline
+      const data = event.data;
+      if (Buffer.isBuffer(data)) {
+        inputStream.push(new Uint8Array(data));
+      }
+    },
+    async onClose() {
+      inputStream.cancel();
+      await flushPromise;
+    },
+  };
+}));
+```
+每个阶段独立且并发地处理事件：音频转录在音频到达时立即开始，代理在有转录文本时立即开始推理，语音合成在代理生成文本时立即开始。这种架构可以实现低于 700ms 的延迟，以支持自然对话。
+
+有关使用 LangChain 构建代理的更多信息，请参阅[代理指南](/oss/langchain/agents)。

@@ -1,0 +1,316 @@
+---
+title: 使用 Webhook
+sidebarTitle: Webhook
+---
+
+Webhook 支持从 LangSmith 应用向外接服务发送事件驱动的通信。例如，您可能希望在 API 调用 LangSmith 完成后向其他服务发送更新。
+
+多个 LangSmith 端点接受 `webhook` 参数。如果某个端点可以接受 POST 请求并指定了此参数，LangSmith 将在运行完成时发送一个请求。
+
+使用 LangSmith 时，您可能希望使用 webhook 在 API 调用完成后接收更新。Webhook 对于在运行完成处理后在服务中触发操作非常有用。要实现此功能，您需要暴露一个可以接受 `POST` 请求的端点，并在 API 请求中将其作为 `webhook` 参数传递。
+
+目前，SDK 不提供用于定义 webhook 端点的内置支持，但您可以使用 API 请求手动指定它们。
+
+## 支持的端点
+
+以下 API 端点接受 `webhook` 参数：
+
+| 操作 | HTTP 方法 | 端点 |
+|----------------------|-------------|-----------------------------------|
+| 创建运行 | `POST` | `/thread/{thread_id}/runs` |
+| 创建线程定时任务 | `POST` | `/thread/{thread_id}/runs/crons` |
+| 流式运行 | `POST` | `/thread/{thread_id}/runs/stream` |
+| 等待运行 | `POST` | `/thread/{thread_id}/runs/wait` |
+| 创建定时任务 | `POST` | `/runs/crons` |
+| 无状态流式运行 | `POST` | `/runs/stream` |
+| 无状态等待运行 | `POST` | `/runs/wait` |
+
+在本指南中，我们将展示如何在流式运行后触发 webhook。
+
+## 设置您的助手和线程
+
+在发出 API 调用之前，请先设置您的助手和线程。
+
+<Tabs>
+    <Tab title="Python">
+
+</fragment>
+    ```python
+    from langgraph_sdk import get_client
+
+    client = get_client(url=<DEPLOYMENT_URL>)
+    assistant_id = "agent"
+    thread = await client.threads.create()
+    print(thread)
+    ```
+</Tab>
+    <Tab title="JavaScript">
+
+</fragment>
+    ```js
+    import { Client } from "@langchain/langgraph-sdk";
+
+    const client = new Client({ apiUrl: <DEPLOYMENT_URL> });
+    const assistantID = "agent";
+    const thread = await client.threads.create();
+    console.log(thread);
+    ```
+</Tab>
+    <Tab title="CURL">
+    ```bash
+    curl --request POST \
+        --url <DEPLOYMENT_URL>/assistants/search \
+        --header 'Content-Type: application/json' \
+        --data '{ "limit": 10, "offset": 0 }' | jq -c 'map(select(.config == null or .config == {})) | .[0]' && \
+    curl --request POST \
+        --url <DEPLOYMENT_URL>/threads \
+        --header 'Content-Type: application/json' \
+        --data '{}'
+    ```
+</Tab>
+</Tabs>
+
+```json
+{
+    "thread_id": "9dde5490-2b67-47c8-aa14-4bfec88af217",
+    "created_at": "2024-08-30T23:07:38.242730+00:00",
+    "updated_at": "2024-08-30T23:07:38.242730+00:00",
+    "metadata": {},
+    "status": "idle",
+    "config": {},
+    "values": null
+}
+```
+
+## 将 Webhook 与图运行结合使用
+
+要使用 Webhook，请在 API 请求中指定 `webhook` 参数。运行完成后，LangSmith 会向指定的 Webhook URL 发送 `POST` 请求。
+
+例如，如果您的服务器在 `https://my-server.app/my-webhook-endpoint` 监听 Webhook 事件，请在请求中包含以下内容：
+
+<Tabs>
+    <Tab title="Python">
+    ```python
+    input = { "messages": [{ "role": "user", "content": "Hello!" }] }
+
+    async for chunk in client.runs.stream(
+        thread_id=thread["thread_id"],
+        assistant_id=assistant_id,
+        input=input,
+        stream_mode="events",
+        webhook="https://my-server.app/my-webhook-endpoint"
+    ):
+        pass
+    ```
+</Tab>
+    <Tab title="JavaScript">
+    ```js
+    const input = { messages: [{ role: "human", content: "Hello!" }] };
+
+    const streamResponse = client.runs.stream(
+      thread["thread_id"],
+      assistantID,
+      {
+        input: input,
+        webhook: "https://my-server.app/my-webhook-endpoint"
+      }
+    );
+
+    for await (const chunk of streamResponse) {
+      // Handle stream output
+    }
+    ```
+</Tab>
+    <Tab title="CURL">
+
+</fragment>
+    ```bash
+    curl --request POST \
+        --url <DEPLOYMENT_URL>/threads/<THREAD_ID>/runs/stream \
+        --header 'Content-Type: application/json' \
+        --data '{
+            "assistant_id": <ASSISTANT_ID>,
+            "input": {"messages": [{"role": "user", "content": "Hello!"}]},
+            "webhook": "https://my-server.app/my-webhook-endpoint"
+        }'
+    ```
+</Tab>
+</Tabs>
+
+## Webhook 负载
+
+LangSmith 以 [Run](/langsmith/runs) 的格式发送 Webhook 通知。请求负载在 `kwargs` 字段中包含运行输入、配置和其他元数据。除了标准运行字段外，Webhook 负载还包括 `values`、`webhook_sent_at` 和 `error` 字段。
+
+完整的 Webhook 负载包含以下字段：
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `run_id` | `string` (UUID) | 运行的唯一标识符。 |
+| `thread_id` | `string` (UUID) | 运行所属线程的标识符。 |
+| `assistant_id` | `string` | 执行运行的助手的标识符。 |
+| `status` | `string` | 运行的最终状态（例如 `"success"`、`"error"`）。 |
+| `created_at` | `string` (datetime) | 运行创建时的时间戳。 |
+| `updated_at` | `string` (datetime) | 运行最后更新时的时间戳。 |
+| `run_started_at` | `string` (datetime) | 运行开始执行时的时间戳。 |
+| `run_ended_at` | `string` (datetime) | 运行结束时的时间戳。如果运行未结束则省略。 |
+| `webhook_sent_at` | `string` (datetime) | Webhook 请求发送时的时间戳。 |
+| `metadata` | `JSON object` | 与运行关联的自定义元数据。 |
+| `kwargs` | `JSON object` | 运行输入、配置和其他调用参数。 |
+| `values` | `JSON object` | 线程最新检查点的状态值。仅在有状态运行中存在。 |
+| `multitask_strategy` | `string` | 运行使用的多任务策略。 |
+| `error` | `JSON object \| null` | 仅在运行失败时出现。包含 `error`（错误类型）和 `message`（详细信息）字段。 |
+
+示例负载：
+
+```json
+{
+  "run_id": "1ef6a5b8-4457-6db0-8b15-cffd3797fa04",
+  "thread_id": "9dde5490-2b67-47c8-aa14-4bfec88af217",
+  "assistant_id": "agent",
+  "status": "success",
+  "created_at": "2024-08-30T23:07:38.242730+00:00",
+  "updated_at": "2024-08-30T23:07:40.120000+00:00",
+  "run_started_at": "2024-08-30T23:07:38.300000+00:00",
+  "run_ended_at": "2024-08-30T23:07:40.100000+00:00",
+  "webhook_sent_at": "2024-08-30T23:07:40.150000+00:00",
+  "metadata": {},
+  "kwargs": {
+    "input": {
+      "messages": [{"role": "user", "content": "Hello!"}]
+    }
+  },
+  "values": {
+    "messages": [
+      {"role": "user", "content": "Hello!"},
+      {"role": "assistant", "content": "Hi there! How can I help you today?"}
+    ]
+  },
+  "multitask_strategy": "reject",
+  "error": null
+}
+```
+
+当运行失败时，`error` 字段包含有关失败的详细信息：
+
+```json
+{
+  "error": {
+    "error": "TimeoutError",
+    "message": "Run exceeded maximum execution time"
+  }
+}
+```
+
+## 安全的 Webhook
+
+为了确保只有经过授权的请求才能访问您的 Webhook 端点，建议将安全令牌添加为查询参数：
+
+```
+https://my-server.app/my-webhook-endpoint?token=YOUR_SECRET_TOKEN
+```
+
+您的服务器应在处理请求之前提取并验证此令牌。
+
+## 为 webhook 请求添加标头
+
+<Note>
+`langgraph-api>=0.5.36` 版本可用。
+</Note>
+
+您可以配置静态标头，将其包含在所有出站 webhook 请求中。这对于向 webhook 端点进行身份验证、路由或传递元数据非常有用。
+
+在 `langgraph.json` 文件中添加 `webhooks.headers` 配置：
+
+```json
+{
+  "webhooks": {
+    "headers": {
+      "X-Custom-Header": "my-value",
+      "X-Environment": "production"
+    }
+  }
+}
+```
+
+### 在请求头中使用环境变量
+
+如需包含密钥或特定环境的值，而又不想将其提交到配置文件中，请使用 `${{ env.VAR }}` 模板语法：
+
+```json
+{
+  "webhooks": {
+    "headers": {
+      "Authorization": "Bearer ${{ env.LG_WEBHOOK_TOKEN }}"
+    }
+  }
+}
+```
+
+出于安全考虑，默认情况下，只有以 `LG_WEBHOOK_` 开头的环境变量才能被引用。这可以防止意外泄露无关的环境变量。你可以使用 `env_prefix` 自定义此前缀：
+
+```json
+{
+  "webhooks": {
+    "env_prefix": "MY_APP_",
+    "headers": {
+      "Authorization": "Bearer ${{ env.MY_APP_SECRET }}"
+    }
+  }
+}
+```
+
+<Note>
+缺失必需的环境变量将阻止服务器启动，确保您不会部署配置不完整的应用。
+</Note>
+
+## 限制 Webhook 目标地址
+
+<Note>
+在 `langgraph-api>=0.5.36` 中可用。
+</Note>
+
+出于安全或合规目的，您可以使用 `webhooks.url` 配置来限制哪些 URL 是有效的 Webhook 目标地址：
+
+```json
+{
+  "webhooks": {
+    "url": {
+      "allowed_domains": ["*.mycompany.com", "api.trusted-service.com"],
+      "require_https": true
+    }
+  }
+}
+```
+
+| 选项 | 说明 |
+|--------|-------------|
+| `allowed_domains` | 主机名白名单。支持子域通配符（例如 `*.mycompany.com`）。 |
+| `require_https` | 设为 `true` 时，拒绝 `http://` URL。 |
+| `allowed_ports` | 显式端口白名单。默认为 443（https）和 80（http）。 |
+| `disable_loopback` | 设为 `true` 时，禁止相对 URL（内部回环调用）。 |
+| `max_url_length` | 最大允许的 URL 长度（字符数）。 |
+
+## 禁用 webhooks
+
+从 `langgraph-api>=0.2.78` 开始，开发者可以在 `langgraph.json` 文件中禁用 webhooks：
+
+```json
+{
+  "http": {
+    "disable_webhooks": true
+  }
+}
+```
+
+此功能主要面向自托管部署场景，平台管理员或开发人员可能更倾向于禁用 Webhook 以简化其安全态势——尤其是当他们未配置防火墙规则或其他网络控制时。禁用 Webhook 有助于防止不可信的有效载荷被发送到内部端点。
+
+完整的配置详情，请参阅[配置文件参考](/langsmith/cli?h=disable_webhooks#configuration-file)。
+
+## 测试 Webhook
+
+您可以使用以下在线服务测试 Webhook：
+
+* **[Beeceptor](https://beeceptor.com/)** – 快速创建测试端点并检查传入的 Webhook 有效载荷。
+* **[Webhook.site](https://webhook.site/)** – 实时查看、调试和记录传入的 Webhook 请求。
+
+这些工具可帮助您验证 LangSmith 是否正确触发并向您的服务发送 Webhook。

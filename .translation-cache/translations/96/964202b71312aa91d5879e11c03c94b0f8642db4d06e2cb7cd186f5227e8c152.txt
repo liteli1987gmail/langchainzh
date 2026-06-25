@@ -1,0 +1,272 @@
+
+
+```text
+sha256=<hex-encoded HMAC-SHA256 digest>
+```
+
+在解析或处理负载之前，请先验证签名。HMAC 输入是精确的原始请求体字节，HMAC 密钥是订阅的签名密钥。在验证之前，不要解析并重新序列化 JSON 体。
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+import hashlib
+import hmac
+from typing import Optional
+
+
+def verify_langsmith_signature(
+    *,
+    body: bytes,
+    signing_secret: str,
+    signature_header: Optional[str],
+) -> bool:
+    if not signature_header or not signature_header.startswith("sha256="):
+        return False
+
+    expected = "sha256=" + hmac.new(
+        signing_secret.encode("utf-8"),
+        body,
+        hashlib.sha256,
+    ).hexdigest()
+
+    return hmac.compare_digest(expected, signature_header)
+```
+
+```typescript TypeScript
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+export function verifyLangSmithSignature({
+  body,
+  signingSecret,
+  signatureHeader,
+}: {
+  body: Buffer;
+  signingSecret: string;
+  signatureHeader: string | undefined;
+}) {
+  if (!signatureHeader?.startsWith("sha256=")) {
+    return false;
+  }
+
+  const expected = `sha256=${createHmac("sha256", signingSecret)
+    .update(body)
+    .digest("hex")}`;
+
+  const expectedBytes = Buffer.from(expected);
+  const actualBytes = Buffer.from(signatureHeader);
+
+  return (
+    expectedBytes.length === actualBytes.length &&
+    timingSafeEqual(expectedBytes, actualBytes)
+  );
+}
+```
+
+### 滚动签名密钥
+
+当签名密钥可能已泄露时，或当组织的凭证轮换策略要求使用新密钥时，请滚动签名密钥。
+
+要滚动密钥，请在 **Engine Settings** 中打开订阅行，点击 **Roll signing secret**，然后确认。LangSmith 会生成一个新的签名密钥，并立即将其用于后续的 webhook 投递。滚动完成后，旧密钥将立即停止对投递进行签名。
+
+滚动密钥后，请使用新值更新每个验证 `X-LangSmith-Signature` 的消费者。
+
+### 严重性过滤
+
+每个订阅都有一个从 `0` 到 `3` 的 `severity_threshold`。对于问题事件，只有当问题的 `severity` 小于或等于阈值时，事件才会被投递。数字越小越紧急。
+
+| 严重性 | 含义 |
+| --- | --- |
+| `0` | 紧急 |
+| `1` | 高 |
+| `2` | 中 |
+| `3` | 低 |
+
+例如，`severity_threshold: 1` 的订阅仅接收 `URGENT`（0）和 `HIGH`（1）问题的事件。
+
+严重性阈值不适用于 [`issue.agent_run.failed`](#issue-agent_run-failed)，因为运行失败事件的作用域是 Engine 会话而不是特定问题。
+
+### 事件类型过滤
+
+每个订阅都指定了它想要接收的[事件类型](#event-types)。未指定明确列表的订阅默认为 `["issue.created"]`。
+
+## 事件信封
+
+投递到端点的每个事件都使用相同的外层 JSON 结构。
+
+| 字段 | 类型 | 描述 |
+| --- | --- | --- |
+| `id` | UUID | 此次投递的唯一标识符。在重试时保持稳定。用于去重。 |
+| `type` | string | 事件类型。值为 [`issue.created`](#issue-created)、[`issue.trace.added`](#issue-trace-added) 或 [`issue.agent_run.failed`](#issue-agent_run-failed) 之一。 |
+| `created` | integer | 事件入队时的 Unix 秒数（UTC）。 |
+| `request_id` | UUID | 同一上游操作触发的所有事件共享此 ID。请参阅[批量合并](#batch-coalescing)。 |
+| `data` | object | 事件载荷。始终包含 `data.object`。仅在 [`issue.trace.added`](#issue-trace-added) 事件上包含 [`data.trace`](#data-trace)。 |
+
+### 问题 `data.object`
+
+对于 [`issue.created`](#issue-created) 和 [`issue.trace.added`](#issue-trace-added)，`data.object` 是问题的快照。请将其视为事件生成时问题的权威状态。
+
+| 字段 | 类型 | 描述 |
+| --- | --- | --- |
+| `id` | UUID | 问题 ID。 |
+| `name` | string | 问题简短标题。 |
+| `description` | string | 人类可读的描述。 |
+| `severity` | integer | `0`（紧急）到 `3`（低）。请参阅[严重性过滤](#severity-filtering)。 |
+| `tenant_id` | UUID | 问题所属的工作区。 |
+| `tenant_name` | string | 工作区显示名称。 |
+| `session_id` | UUID | 问题所属的追踪项目。 |
+| `session_name` | string | 追踪项目名称。 |
+| `url` | string | LangSmith UI 中问题的深度链接。 |
+
+### 运行失败 `data.object`
+
+对于 [`issue.agent_run.failed`](#issue-agent_run-failed)，`data.object` 描述失败的 Engine 运行。
+
+| 字段 | 类型 | 描述 |
+| --- | --- | --- |
+| `tenant_id` | UUID | 运行所属的工作区。 |
+| `tenant_name` | string | 工作区显示名称。 |
+| `session_id` | UUID | 运行所属的追踪项目。 |
+| `session_name` | string | 追踪项目名称。 |
+| `url` | string | UI 中 LangSmith 项目的深度链接。 |
+| `thread_id` | string | Engine 线程 ID。 |
+| `run_id` | string | Engine 运行 ID。不可用时省略。 |
+| `status` | string | 最终运行状态。 |
+| `error_message` | string | 失败运行的错误文本。不可用时省略。 |
+| `occurred_at` | string | 失败发生时间的 RFC 3339 时间戳。 |
+
+### `data.trace`
+
+`data.trace` 仅包含在 [`issue.trace.added`](#issue-trace-added) 事件上。
+
+| 字段 | 类型 | 描述 |
+| --- | --- | --- |
+| `run_id` | UUID | 链接到问题的运行 ID。 |
+| `trace_id` | UUID | 包含该运行的追踪 ID。 |
+| `start_time` | string | 运行开始时间的 RFC 3339 时间戳。 |
+| `comment` | string \| null | 链接追踪时记录的可选备注。为空时省略。 |
+
+### 批量合并
+
+单个上游操作可以产生多个 webhook 事件。当 Engine 打开一个新问题并向其附加五个追踪时，您会收到一个 [`issue.created`](#issue-created) 事件和五个 [`issue.trace.added`](#issue-trace-added) 事件，它们都共享相同的 `request_id`。使用 `request_id` 将这些事件分组为一个下游通知。
+
+## 事件类型
+
+以下是 LangSmith Engine 当前发送的完整事件类型集。未来可能会添加新类型，因此处理程序应该忽略未知的 `type` 值而不是失败。
+
+### `issue.created`
+
+当 LangSmith Engine 创建新问题时发送。`data.trace` 被省略。
+
+```json
+{
+  "id": "b91c1f0e-7c4a-4f53-9d3e-9f1c8e7a2b10",
+  "type": "issue.created",
+  "created": 1747238400,
+  "request_id": "0d2f4f6a-2a3a-4b6e-9b87-5d5b6e8c9a01",
+  "data": {
+    "object": {
+      "id": "9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d",
+      "name": "Tool selection inconsistency",
+      "description": "Agent repeatedly calls the search tool with identical arguments before terminating.",
+      "severity": 1,
+      "tenant_id": "11111111-2222-3333-4444-555555555555",
+      "tenant_name": "Acme Workspace",
+      "session_id": "66666666-7777-8888-9999-aaaaaaaaaaaa",
+      "session_name": "prod-api",
+      "url": "https://smith.langchain.com/o/11111111-2222-3333-4444-555555555555/projects/p/66666666-7777-8888-9999-aaaaaaaaaaaa?tab=5&issue=9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d"
+    }
+  }
+}
+```
+
+### `issue.trace.added`
+
+当新的追踪记录链接到现有问题时发送。`data.trace` 描述链接的追踪记录。
+
+```json
+{
+  "id": "c02e3a4b-5c6d-7e8f-9a0b-1c2d3e4f5a6b",
+  "type": "issue.trace.added",
+  "created": 1747238410,
+  "request_id": "0d2f4f6a-2a3a-4b6e-9b87-5d5b6e8c9a01",
+  "data": {
+    "object": {
+      "id": "9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d",
+      "name": "Tool selection inconsistency",
+      "description": "Agent repeatedly calls the search tool with identical arguments before terminating.",
+      "severity": 1,
+      "tenant_id": "11111111-2222-3333-4444-555555555555",
+      "tenant_name": "Acme Workspace",
+      "session_id": "66666666-7777-8888-9999-aaaaaaaaaaaa",
+      "session_name": "prod-api",
+      "url": "https://smith.langchain.com/o/11111111-2222-3333-4444-555555555555/projects/p/66666666-7777-8888-9999-aaaaaaaaaaaa?tab=5&issue=9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d"
+    },
+    "trace": {
+      "run_id": "f1e2d3c4-b5a6-9788-6655-44332211ffee",
+      "trace_id": "abcdefab-1234-5678-9abc-def012345678",
+      "start_time": "2026-05-14T12:30:00Z",
+      "comment": "Reproduces the same tool-loop pattern."
+    }
+  }
+}
+```
+
+### `issue.agent_run.failed`
+
+当 LangSmith Engine 未能完成运行时报送。此事件是会话作用域的，因此它不包含 `data.trace` 且不使用严重级别过滤。
+
+```json
+{
+  "id": "4d0e8db2-81e6-4491-b8e5-b13a8f5afc0d",
+  "type": "issue.agent_run.failed",
+  "created": 1747238500,
+  "request_id": "f6bbd48a-0386-403d-9344-31051264b45f",
+  "data": {
+    "object": {
+      "tenant_id": "11111111-2222-3333-4444-555555555555",
+      "tenant_name": "Acme Workspace",
+      "session_id": "66666666-7777-8888-9999-aaaaaaaaaaaa",
+      "session_name": "prod-api",
+      "url": "https://smith.langchain.com/o/11111111-2222-3333-4444-555555555555/projects/p/66666666-7777-8888-9999-aaaaaaaaaaaa",
+      "thread_id": "thread-123",
+      "run_id": "run-456",
+      "status": "error",
+      "error_message": "RuntimeError: missing API key",
+      "occurred_at": "2026-05-14T12:45:00Z"
+    }
+  }
+}
+```
+
+## 测试您的端点
+
+在将真实订阅指向您的端点之前，请发送一个示例负载以验证它在 20 秒超时内接受并确认请求：
+
+```bash
+curl -X POST https://your-endpoint.example.com/webhook \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $WEBHOOK_SECRET" \
+  -d @sample-issue-created.json
+```
+
+使用 [`issue.created`](#issue-created) 中的示例 body 作为 `sample-issue-created.json`。验证以下内容：
+
+- 自定义的 `Authorization` 请求头已到达，并与您在订阅上配置的密钥匹配。
+- 处理程序通过 `id` 对事件进行持久化，以便对重试进行去重。
+- 处理程序在启动缓慢的下游工作之前返回 `2xx`。
+
+## 安全
+
+- 在订阅创建时和交付时都会验证 Webhook URL。私有 IP 范围和元数据 IP 范围在 SaaS 中被阻止。`http://` 和 `https://` 都被接受；使用 `https://` 以便有效负载和任何自定义请求头不以明文形式发送。
+- LangSmith 使用订阅的签名密钥对 Webhook body 进行签名。在处理有效负载之前验证 `X-LangSmith-Signature`。
+- 您还可以在订阅上设置自定义请求头，例如 `Authorization: Bearer …`，用于路由或在您的端点进行额外身份验证。
+- 根据事件的 `id` 进行去重，以便重试的交付不会导致重复通知。
+
+## 最佳实践
+
+- **快速确认。** 一旦您已持久化了事件，就立即返回 `2xx`。将慢速工作（扇出、分页、下游 API 调用）转移到队列上，以便您的处理程序保持在 20 秒的超时限制内。
+- **容忍未知的事件类型。** 忽略您的处理程序无法识别的 `type` 值。新的事件类型可能会在未经通知的情况下添加。
+- **容忍新字段。** 使用宽松的 schema 解析有效负载。新字段可能会在未经通知的情况下添加到现有事件类型中。

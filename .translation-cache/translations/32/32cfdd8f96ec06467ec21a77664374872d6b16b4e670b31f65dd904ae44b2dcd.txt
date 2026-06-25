@@ -1,0 +1,72 @@
+---
+title:管理工作区设置
+sidebarTitle:工作区管理员
+description:为 Fleet 配置工作区级设置。
+---
+
+配置工作区密钥并管理 Fleet 代理和用户的支出限额。
+
+## 工作区密钥
+
+Fleet 使用[工作区密钥](/langsmith/set-up-hierarchy#configure-workspace-settings)来存储模型和工具的 API 密钥。以下密钥类型可用：
+
+- **必需的模型密钥**：Fleet 需要 OpenAI 或 Anthropic API 密钥才能进行 LLM API 调用。代理图会从工作区密钥中加载此密钥以进行推理。
+- **Fleet 专用密钥**：以 `FLEET_` 为前缀的密钥在 Fleet 内部优先于工作区密钥。这样可以更好地追踪 Fleet 与使用相同密钥的 LangSmith 其他部分的用量。如果您同时拥有 `OPENAI_API_KEY` 和 `FLEET_OPENAI_API_KEY`，将使用 `FLEET_OPENAI_API_KEY` 密钥。
+- **可选的工具密钥**：为您启用的任何工具添加密钥。这些在运行时从工作区密钥中读取。
+  - `EXA_API_KEY`：Exa 搜索工具（通用网页和 LinkedIn 个人资料搜索）必需。
+  - `TAVILY_API_KEY`：Tavily 网页搜索必需。
+  - `TWITTER_API_KEY` 和 `TWITTER_API_KEY_SECRET`：Twitter/X 读取操作必需（仅应用级 bearer）。不支持发帖/媒体上传。
+- **MCP 服务器配置**：Fleet 可以从一个或多个远程 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 服务器拉取工具。在您的[工作区](/langsmith/administration-overview#workspaces)设置中配置 MCP 服务器和请求头。Fleet 自动发现工具并在调用时应用配置的请求头。有关更多信息，请参阅[远程 MCP 服务器](/langsmith/fleet/remote-mcp-servers)页面。
+
+<Note icon="wand" iconType="regular">
+  Fleet 支持每个代理使用自定义模型。有关更多信息，请参阅[自定义模型](/langsmith/fleet/essentials#custom-models)。
+</Note>
+
+### 添加密钥
+
+添加密钥的步骤：
+
+1. 在 [LangSmith UI](https://smith.langchain.com) 中，导航至 <Icon icon="settings" /> **设置**，然后进入 **密钥** 选项卡。
+1. 选择 **添加密钥**，输入密钥的**名称**（例如 `OPENAI_API_KEY` 或 `ANTHROPIC_API_KEY`）和您的密钥作为**值**。
+
+    <Note>
+    确保密钥名称与您的模型提供商期望的环境变量名称匹配。
+    </Note>
+
+1. 选择 **保存密钥**。
+
+## 使用量和支出限额
+
+**使用量**页面让工作区管理员可以查看 Fleet 支出情况，并为代理和用户设置支出限额。此页面仅对拥有 `fleet:read-admin-config` 权限的用户可见。
+
+### 查看当前支出
+
+**使用量**页面显示您的工作区在所选时间段（**最近 7 天**或**最近 14 天**）内的总支出，以及总线程数和总运行次数。
+
+每日支出图表提供了所选时间段内成本的直观分布。**明细**部分让您可以以下两种方式查看支出详情：
+
+- **按代理**：查看每个代理的总成本、运行次数、首次和最后使用日期、所有者以及每周限额。
+- **按用户**：查看每个用户的支出和活动情况。
+
+### 设置支出限额
+
+支出限额让您可以控制代理和用户的支出额度。管理支出限额需要 `fleet:write-admin-config` 权限。
+
+#### 默认每周支出限额
+
+在**默认每周支出限额**部分，您可以配置：
+
+- **每个代理的默认限额（美元）**：设置适用于工作区中所有代理的默认每周支出限额。
+- **每个用户的默认限额（美元）**：设置适用于工作区中所有用户的默认每周支出限额。
+
+限额按周累计，在周一重置。
+
+#### 为单个代理和用户覆盖限额
+
+您可以为单个代理或用户覆盖默认支出限额，设置自定义每周限额。
+
+#### 支出限额行为
+
+- 支出限额的更改可能需要几分钟才能传播到所有正在运行的代理。
+- 支出限额在每次运行开始时检查。如果运行开始时用量在限额内，即使最终成本超过限额，也将允许完成。
+- 支出计算基于追踪记录。删除追踪记录会影响报告的用量和支出限额执行。

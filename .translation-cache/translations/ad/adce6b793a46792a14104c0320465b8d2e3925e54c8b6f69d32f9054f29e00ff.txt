@@ -1,0 +1,221 @@
+---
+title: 使用 API 管理您的组织
+sidebarTitle: 使用 API 管理组织
+---
+
+LangSmith 的 API 支持通过 API 密钥以编程方式访问 UI 中提供的所有操作，只有少数例外情况在[仅用户端点](#user-only-endpoints)中注明。
+
+<Tip>
+倾向于基础设施即代码？请使用 [LangSmith Terraform provider](/langsmith/manage-with-terraform) 以声明方式管理工作区、角色、成员、评估器和警报。
+</Tip>
+
+<Check>
+在深入了解本文内容之前，阅读以下内容可能会有所帮助：
+
+* [组织和 workspaces 概念指南](/langsmith/administration-overview)
+* [组织设置操作指南](/langsmith/set-up-hierarchy#set-up-an-organization)
+</Check>
+
+<Note>
+存在一些即将解除的限制：
+
+* LangSmith SDK 尚不支持这些组织管理操作。
+* 具有组织管理员权限的组织范围[服务密钥](/langsmith/administration-overview#service-keys)可用于这些操作。
+</Note>
+
+<Warning>
+使用 `X-Tenant-Id` 标头指定要针对的工作区。如果标头不存在，且密钥不是组织范围的，操作将默认针对密钥最初创建时的工作区。
+
+**如果在使用组织范围的服务密钥访问工作区范围的资源时未指定 `X-Tenant-Id`，请求将失败并返回 `403 Forbidden`。**
+</Warning>
+
+以下是一些常用的端点和用例。 如需获取可用端点的完整列表，请参阅 [API 文档](/langsmith/smith-api-ref)。**所有请求都应包含 `X-Organization-Id` 标头，作用于特定工作区的请求应包含 `X-Tenant-Id` 标头。**
+
+## 工作区
+
+* [列出工作区](/langsmith/smith-api/workspaces/list-workspaces)
+* [创建工作区](/langsmith/smith-api/workspaces/create-workspace)
+* [更新工作区名称](/langsmith/smith-api/workspaces/patch-workspace)
+
+## 用户管理
+
+### RBAC
+
+* [列出角色](/langsmith/smith-api/orgs/list-organization-roles)
+* [列出权限](/langsmith/smith-api/orgs/update-organization-roles)
+* [创建角色](/langsmith/smith-api/orgs/create-organization-roles)
+* [更新角色](/langsmith/smith-api/orgs/update-organization-roles)
+
+### 成员资格管理
+
+[RBAC](#rbac) 中的 `列出角色` 应用于检索这些操作的 role ID。[列出[组织|工作区]成员]端点（如下）响应中的 `"id"` 应在这些操作中用作 `identity_id`。
+
+组织级别：
+
+* [列出活跃的组织成员](/langsmith/smith-api/orgs/get-current-active-org-members)
+* [列出待处理的组织成员](/langsmith/smith-api/orgs/get-current-pending-org-members)
+* [邀请用户加入组织和多个工作区](/langsmith/smith-api/orgs/add-members-to-current-org-batch)。当用户尚未成为组织成员时使用。
+* [更新用户的组织角色](/langsmith/smith-api/workspaces/add-member-to-current-workspace)
+* [从组织中移除成员](/langsmith/smith-api/orgs/remove-member-from-current-org)
+
+工作区级别：
+
+* [列出工作区成员](/langsmith/smith-api/workspaces/get-current-workspace-members)
+* [向已属于组织的工作区添加成员](/langsmith/smith-api/workspaces/add-member-to-current-workspace)
+* [更新用户的工作区角色](/langsmith/smith-api/workspaces/add-member-to-current-workspace)
+* [从工作区移除成员](/langsmith/smith-api/workspaces/delete-current-workspace-member)
+
+<Note>
+应省略这些参数：`read_only`（已弃用）、`password` 和 `full_name`（仅限[基本认证](/langsmith/authentication-methods)）
+</Note>
+
+## API 密钥
+
+* [创建服务密钥](/langsmith/smith-api/api-key/generate-api-key)
+* [更新服务密钥角色](/langsmith/smith-api/orgs/update-org-service-key)
+* [删除服务密钥](/langsmith/smith-api/api-key/delete-api-key)
+
+## 安全设置
+
+<Note>
+进行这些更改需要组织管理员权限。
+</Note>
+
+<Note>
+此上下文中的"共享资源"指[公开提示](/langsmith/create-a-prompt#save-your-prompt)、[共享运行](/langsmith/manage-trace#share-a-trace)和[共享数据集](/langsmith/manage-datasets#share-a-dataset)。
+</Note>
+
+<Warning>
+更新这些设置会影响**组织中的所有资源**。
+</Warning>
+
+您可以在工作区的**设置 > 共享**标签下更新这些设置，或通过 API：
+* [更新组织共享设置](/langsmith/smith-api/orgs/update-current-organization-info)
+  * 使用 `unshare_all` 取消共享选定工作区的**所有**共享资源 - 使用 `disable_public_sharing` 阻止将来共享资源
+
+这些设置只能通过 API 编辑：
+* [禁用/启用 PAT 创建](/langsmith/smith-api/orgs/update-current-organization-info)（对于自托管，Helm chart 版本 0.11.25+ 可用）
+  * 使用 `pat_creation_disabled` 禁用整个组织的 PAT 创建。
+  * 有关无法创建 PAT 的组织查看者角色的信息，请参阅[管理员指南](/langsmith/administration-overview#organization-roles)。
+  * 对于自托管部署，您还可以使用环境变量在所有组织中[全局禁用 PAT 创建](/langsmith/self-host-user-management#disabling-personal-access-token-creation)。
+
+## 仅用户端点
+
+这些端点的作用域为用户，需要已登录用户的 JWT，因此只能通过 UI 执行。
+
+* `/api-key/current` 端点：这些与用户的 PAT 相关
+* `/sso/email-verification/send`（仅云端）：此端点与 [SAML SSO](/langsmith/user-management) 相关
+
+## 示例代码
+
+下面的示例代码演示了与组织管理相关的一些常见工作流程。请务必在代码中所有 `<replace_me>` 的位置进行必要的替换。
+
+```python
+import os
+import requests
+
+def main():
+    api_key = os.environ["LANGSMITH_API_KEY"]
+    # LANGSMITH_ORGANIZATION_ID is not a standard environment variable in the SDK, just used for this example
+    organization_id = os.environ["LANGSMITH_ORGANIZATION_ID"]
+    base_url = os.environ.get("LANGSMITH_ENDPOINT")  # or "https://api.smith.langchain.com". Update appropriately for self-hosted installations or regional SaaS
+    headers = {
+        "Content-Type": "application/json",
+        "X-API-Key": api_key,
+        "X-Organization-Id": organization_id,
+    }
+    session = requests.Session()
+    session.headers.update(headers)
+    workspaces_path = f"{base_url}/api/v1/workspaces"
+    orgs_path = f"{base_url}/api/v1/orgs/current"
+    api_keys_path = f"{base_url}/api/v1/api-key"
+
+    # Create a workspace
+    workspace_res = session.post(workspaces_path, json={"display_name": "My Workspace"})
+    workspace_res.raise_for_status()
+    workspace = workspace_res.json()
+    workspace_id = workspace["id"]
+    new_workspace_headers = {
+        "X-Tenant-Id": workspace_id,
+    }
+
+    # Grab roles - this includes both organization and workspace roles
+    roles_res = session.get(f"{orgs_path}/roles")
+    roles_res.raise_for_status()
+    roles = roles_res.json()
+    # system org roles are 'Organization Admin', 'Organization User'
+    # system workspace roles are 'Admin', 'Editor', 'Viewer'
+    org_roles_by_name = {role["display_name"]: role for role in roles if role["access_scope"] == "organization"}
+    ws_roles_by_name = {role["display_name"]: role for role in roles if role["access_scope"] == "workspace"}
+
+    # Invite a user to the org and the new workspace, as an Editor.
+    # workspace_role_id is only allowed if RBAC is enabled (an enterprise feature).
+    new_user_email = "<replace_me>"
+    new_user_res = session.post(
+        f"{orgs_path}/members",
+        json={
+            "email": new_user_email,
+            "role_id": org_roles_by_name["Organization User"]["id"],
+            "workspace_ids": [workspace_id],
+            "workspace_role_id": ws_roles_by_name["Editor"]["id"],
+        },
+    )
+    new_user_res.raise_for_status()
+
+    # Add a user that already exists in the org to the new workspace, as a Viewer.
+    # workspace_role_id is only allowed if RBAC is enabled (an enterprise feature).
+    existing_user_email = "<replace_me>"
+    org_members_res = session.get(f"{orgs_path}/members")
+    org_members_res.raise_for_status()
+    org_members = org_members_res.json()
+    existing_org_member = next(
+        (member for member in org_members["members"] if member["email"] == existing_user_email), None
+    )
+    existing_user_res = session.post(
+        f"{workspaces_path}/current/members",
+        json={
+            "user_id": existing_org_member["user_id"],
+            "workspace_ids": [workspace_id],
+            "workspace_role_id": ws_roles_by_name["Viewer"]["id"],
+        },
+        headers=new_workspace_headers,
+    )
+    existing_user_res.raise_for_status()
+
+    # List all members of the workspace
+    members_res = session.get(f"{workspaces_path}/current/members", headers=new_workspace_headers)
+    members_res.raise_for_status()
+    members = members_res.json()
+    workspace_member = next(
+        (member for member in members["members"] if member["email"] == existing_user_email), None
+    )
+
+    # Update the user's workspace role to Admin (enterprise-only)
+    existing_user_id = workspace_member["id"]
+    update_res = session.patch(
+        f"{workspaces_path}/current/members/{existing_user_id}",
+        json={"role_id": ws_roles_by_name["Admin"]["id"]},
+        headers=new_workspace_headers,
+    )
+    update_res.raise_for_status()
+
+    # Update the user's organization role to Organization Admin
+    update_res = session.patch(
+        f"{orgs_path}/members/{existing_org_member['id']}",
+        json={"role_id": org_roles_by_name["Organization Admin"]["id"]},
+    )
+    update_res.raise_for_status()
+
+    # Create a new Service key
+    api_key_res = session.post(
+        api_keys_path,
+        json={"description": "my key"},
+        headers=new_workspace_headers,
+    )
+    api_key_res.raise_for_status()
+    api_key_json = api_key_res.json()
+    api_key = api_key_json["key"]
+
+if __name__ == "__main__":
+    main()
+```

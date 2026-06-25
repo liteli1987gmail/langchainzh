@@ -1,0 +1,98 @@
+---
+title: 如何使用自定义 store
+sidebarTitle: 添加自定义 store
+tag: "Alpha"
+description: 在您的 agent 部署中用自定义 BaseStore 实现替换内置的 Postgres store。
+---
+
+将 agents 部署到 LangSmith 时，服务器会提供一个内置的 Postgres 支持的长期记忆存储，并可通过 pgvector 进行可选的向量搜索。您可以用自己的 @[BaseStore] 实现替换它，以使用不同的存储后端、自定义索引或专门的搜索功能。
+
+您需要提供一个异步上下文管理器的路径，该管理器会生成一个 `BaseStore` 实例，服务器会自动管理该 store 的生命周期。
+
+<Warning>
+自定义 store 处于 **alpha** 阶段。此功能在次版本更新中可能会有破坏性变更。
+</Warning>
+
+## 定义 store
+
+从一个**现有的** LangSmith 应用程序开始，创建一个文件来定义异步上下文管理器，该管理器会生成您的自定义 store。如果您要开始一个新项目，可以使用 CLI 从模板创建一个应用程序。
+
+```bash
+langgraph new --template=new-langgraph-project-python my_new_project
+```
+
+异步上下文管理器模式允许服务器在应用程序生命周期的正确时机打开和关闭存储连接。以下示例使用 `AsyncSqliteStore` 进行语义搜索：
+
+<Note>
+不建议在生产环境中使用 SQLite。
+</Note>
+
+```python
+# ./src/agent/store.py
+import contextlib
+
+from langchain.embeddings import init_embeddings
+from langgraph.store.base import IndexConfig
+from langgraph.store.sqlite import AsyncSqliteStore
+
+embeddings = init_embeddings("openai:text-embedding-3-small")
+
+
+@contextlib.asynccontextmanager
+async def generate_store():
+    """Yield a BaseStore, open for the duration of the server."""
+    async with AsyncSqliteStore.from_conn_string(
+        "./custom_store.sql",
+        index=IndexConfig(
+            dims=1536,
+            embed=embeddings,
+            fields=["$"],
+        ),
+    ) as store:
+        await store.setup()
+        yield store
+```
+
+<Note>
+当配置了自定义存储后，它会**完全替换**内置的 Postgres 存储。语义搜索和 TTL 清理等功能依赖于您的具体实现。
+</Note>
+
+## 配置 `langgraph.json`
+
+在您的 [`langgraph.json` 配置文件](/langsmith/application-structure#configuration-file-concepts) 中添加 `store` 键。`path` 指向您[之前定义](#define-the-store)的异步上下文管理器。
+
+```json
+{
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./src/agent/graph.py:graph"
+  },
+  "env": ".env",
+  "store": {
+    "path": "./src/agent/store.py:generate_store"
+  }
+}
+```
+
+## 启动服务器
+
+在本地测试服务器：
+
+```bash
+langgraph dev --no-browser
+```
+
+服务器日志将确认您的自定义商店已激活：
+
+```
+Using custom store. Skipping store TTL sweeper.
+```
+
+## 部署
+
+您可以按原样将此应用部署到 LangSmith 或您自托管的平台。
+
+## 下一步
+
+- [使用自定义检查点存储](/langsmith/custom-checkpointer) 替换内置的检查点存储。
+- 了解 LangGraph 中的 [持久化和内存](/oss/langgraph/persistence)。

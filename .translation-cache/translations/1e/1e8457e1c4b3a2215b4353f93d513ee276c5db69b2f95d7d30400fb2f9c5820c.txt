@@ -1,0 +1,142 @@
+---
+title: "Zotero 集成"
+description: "使用 LangChain Python 与 Zotero 检索器集成。"
+---
+
+这将帮助您开始使用 Zotero [检索器](/oss/langchain/retrieval)。有关 `ZoteroRetriever` 所有功能和配置的详细文档，请访问 [GitHub 页面](https://github.com/TimBMK/langchain-zotero-retriever)。
+
+## 设置
+
+如果您想从单个查询获取自动跟踪，您也可以通过取消下面的注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+此检索器位于 `langchain-zotero-retriever` 包中。我们还需要 `pyzotero` 依赖项：
+
+```python
+pip install -qU langchain-zotero-retriever pyzotero
+```
+
+## 实例化
+
+`ZoteroRetriever` 参数包括：
+
+- `k`：要包含的结果数量（默认值：50）
+- `type`：要执行的搜索类型。"Top" 检索顶层 Zotero 库项目，"items" 返回任意 Zotero 库项目。（默认值：top）
+- `get_fulltext`：如果库中的项目附加了全文，则检索全文。如果为 False，或没有附加文本，则 page_content 返回空字符串。（默认值：True）
+- `library_id`：要搜索的 Zotero 库 ID。连接库时必需。
+- `library_type`：要搜索的库类型。"user" 表示个人库，"group" 表示共享群组库。（默认值：user）
+- `api_key`：未设置为环境变量时的 Zotero API 密钥。可选，访问非公开群组库或个人库时必需。如果提供了 ZOTERO_API_KEY 环境变量，则自动获取。
+
+```python
+from langchain_zotero_retriever.retrievers import ZoteroRetriever
+
+retriever = ZoteroRetriever(
+    k=10,
+    library_id="2319375",  # a public group library that does not require an API key for access
+    library_type="group",  # set this to "user" if you are using a personal library. Personal libraries require an API key
+)
+```
+
+## 使用方法
+
+除 `query` 之外，检索器还提供以下附加搜索参数：
+
+- `itemType`：要搜索的条目类型（例如 "book" 或 "journalArticle"）
+- `tag`：用于搜索附加到文献库条目的标签（请参阅搜索语法以了解如何组合多个标签）
+- `qmode`：要使用的搜索模式。更改查询的搜索范围。"everything" 包括全文内容。"titleCreatorYear" 用于搜索标题、作者和年份。
+- `since`：仅返回在指定文献库版本之后修改的对象。默认为返回所有内容。
+
+搜索语法，请参阅 Zotero API 文档：[www.zotero.org/support/dev/web_api/v3/basics#search_syntax](https://www.zotero.org/support/dev/web_api/v3/basics#search_syntax)
+
+完整的 API schema（包括可用的 itemTypes）请参阅：[github.com/zotero/zotero-schema](https://github.com/zotero/zotero-schema)
+
+```python
+query = "Zuboff"
+
+retriever.invoke(query)
+```
+
+```python
+tags = [
+    "Surveillance",
+    "Digital Capitalism",
+]  # note that providing tags as a list will result in a logical AND operation
+
+retriever.invoke("", tag=tags)
+```
+
+## 在链中使用
+
+由于 Zotero API 搜索的工作方式，直接将用户问题传递给 ZoteroRetriever 通常不会返回满意的结果。对于在链式或代理框架中的使用，建议将 ZoteroRetriever 转换为[工具](/oss/langchain/tools)。这样，LLM 就可以将用户查询转换为更简洁的 API 搜索查询。此外，这还允许 LLM 填写其他搜索参数，如标签或条目类型。
+
+```python
+from typing import List, Optional, Union
+
+from langchain_core.output_parsers import PydanticToolsParser
+from langchain.tools import StructuredTool, tool
+from langchain_openai import ChatOpenAI
+
+
+def retrieve(
+    query: str,
+    itemType: Optional[str],
+    tag: Optional[Union[str, List[str]]],
+    qmode: str = "everything",
+    since: Optional[int] = None,
+):
+    retrieved_docs = retriever.invoke(
+        query, itemType=itemType, tag=tag, qmode=qmode, since=since
+    )
+    serialized_docs = "\n\n".join(
+        (
+            f"Metadata: { {key: doc.metadata[key] for key in doc.metadata if key != 'abstractNote'} }\n"
+            f"Abstract: {doc.metadata['abstractNote']}\n"
+        )
+        for doc in retrieved_docs
+    )
+
+    return serialized_docs, retrieved_docs
+
+
+description = """Search and return relevant documents from a Zotero library. The following search parameters can be used:
+
+    Args:
+        query: str: The search query to be used. Try to keep this specific and short, e.g. a specific topic or author name
+        itemType: Optional. Type of item to search for (e.g. "book" or "journalArticle"). Multiple types can be passed as a string separated by "||", e.g. "book || journalArticle". Defaults to all types.
+        tag: Optional. For searching over tags attached to library items. If documents tagged with multiple tags are to be retrieved, pass them as a list. If documents with any of the tags are to be retrieved, pass them as a string separated by "||", e.g. "tag1 || tag2"
+        qmode: Search mode to use. Changes what the query searches over. "everything" includes full-text content. "titleCreatorYear" to search over title, authors and year. Defaults to "everything".
+        since: Return only objects modified after the specified library version. Defaults to return everything.
+    """
+
+retriever_tool = StructuredTool.from_function(
+    func=retrieve,
+    name="retrieve",
+    description=description,
+    return_direct=True,
+)
+
+
+llm = ChatOpenAI(model="gpt-5.4-mini")
+
+llm_with_tools = llm.bind_tools([retrieve])
+
+q = "What journal articles do I have on Surveillance in the zotero library?"
+
+chain = llm_with_tools | PydanticToolsParser(tools=[retrieve])
+
+chain.invoke(q)
+```
+
+---
+
+## API 参考
+
+有关所有 `ZoteroRetriever` 功能配置的详细文档，请前往 [GitHub 页面](https://github.com/TimBMK/langchain-zotero-retriever)。
+
+有关 Zotero API 的详细文档，请前往 [Zotero API 参考](https://www.zotero.org/support/dev/web_api/v3/start)。

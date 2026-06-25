@@ -1,0 +1,149 @@
+---
+title: "Amazon Neptune 与 Cypher 集成"
+description: "使用 LangChain Python 与 Amazon Neptune 的 Cypher 图进行集成。"
+---
+
+>[Amazon Neptune](https://aws.amazon.com/neptune/) 是一个高性能图形分析和无服务器数据库，提供卓越的可扩展性和可用性。
+>
+>此示例展示使用 `openCypher` 查询 `Neptune` 图数据库并返回人类可读响应的问答链。
+>
+>[Cypher](https://en.wikipedia.org/wiki/Cypher_(query_language)) 是一种声明式图查询语言，允许在属性图中进行表达性且高效的数据查询。
+>
+>[openCypher](https://opencypher.org/) 是 Cypher 的开源实现。# Neptune Open Cypher 问答链
+此问答链使用 openCypher 查询 Amazon Neptune 并返回人类可读响应
+
+LangChain 支持使用 `create_neptune_opencypher_qa_chain` 连接 [Neptune Database](https://docs.aws.amazon.com/neptune/latest/userguide/intro.html) 和 [Neptune Analytics](https://docs.aws.amazon.com/neptune-analytics/latest/userguide/what-is-neptune-analytics.html)。
+
+Neptune Database 是一个无服务器图数据库，专为最佳可扩展性和可用性而设计。它为需要扩展到每秒 100,000 次查询、多可用区高可用性和多区域部署的图数据库工作负载提供解决方案。您可以将 Neptune Database 用于社交网络、欺诈警报和 Customer 360 应用程序。
+
+Neptune Analytics 是一个分析数据库引擎，可以快速分析内存中大量图数据以获取洞察并发现趋势。Neptune Analytics 是用于快速分析现有图数据库或存储在数据湖中的图数据集的解决方案。它使用流行的图分析算法和低延迟分析查询。
+
+## 使用 Neptune Database
+
+```python
+from langchain_aws.graphs import NeptuneGraph
+
+host = "<neptune-host>"
+port = 8182
+use_https = True
+
+graph = NeptuneGraph(host=host, port=port, use_https=use_https)
+```
+
+### 使用 neptune analytics
+
+```python
+from langchain_aws.graphs import NeptuneAnalyticsGraph
+
+graph = NeptuneAnalyticsGraph(graph_identifier="<neptune-analytics-graph-id>")
+```
+
+## 使用 neptune openCypher QA 链
+
+此 QA 链使用 openCypher 查询 Neptune 图数据库并返回人类可读的响应。
+
+```python
+from langchain_aws import ChatBedrockConverse
+from langchain_aws.chains import create_neptune_opencypher_qa_chain
+
+MODEL_ID = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+llm = ChatBedrockConverse(
+    model=MODEL_ID,
+    temperature=0,
+)
+
+chain = create_neptune_opencypher_qa_chain(llm=llm, graph=graph)
+
+result = chain.invoke("How many outgoing routes does the Austin airport have?")
+print(result["result"].content)
+```
+
+```text
+Austin airport has 98 outgoing routes.
+```
+
+### 添加消息历史记录
+
+Neptune openCypher QA 链可以被 [`RunnableWithMessageHistory`](https://python.langchain.com/v0.2/api_reference/core/runnables/langchain_core.runnables.history.RunnableWithMessageHistory.html#langchain_core.runnables.history.RunnableWithMessageHistory) 包装。这可以为链添加消息历史记录，使我们能够创建一个在多次调用中保持对话状态的聊天机器人。
+
+首先，我们需要一种存储和加载消息历史记录的方法。为此，每个线程都将创建为 [`InMemoryChatMessageHistory`](https://reference.langchain.com/python/langchain-core/chat_history/InMemoryChatMessageHistory) 的实例，并存储到字典中以便重复访问。
+
+（另请参阅：[python.langchain.com/docs/versions/migrating_memory/chat_history/#chatmessagehistory](https://python.langchain.com/docs/versions/migrating_memory/chat_history/#chatmessagehistory)）
+
+```python
+from langchain_core.chat_history import InMemoryChatMessageHistory
+
+chats_by_session_id = {}
+
+
+def get_chat_history(session_id: str) -> InMemoryChatMessageHistory:
+    chat_history = chats_by_session_id.get(session_id)
+    if chat_history is None:
+        chat_history = InMemoryChatMessageHistory()
+        chats_by_session_id[session_id] = chat_history
+    return chat_history
+```
+
+现在，QA 链和消息历史存储可用于创建新的 `RunnableWithMessageHistory`。请注意，我们必须将 `query` 设置为输入键，以匹配基础链所期望的格式。
+
+```python
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
+runnable_with_history = RunnableWithMessageHistory(
+    chain,
+    get_chat_history,
+    input_messages_key="query",
+)
+```
+
+在调用链之前，需要为对话生成一个唯一的 `session_id`，新的 `InMemoryChatMessageHistory` 将记住该对话。
+
+```python
+import uuid
+
+session_id = uuid.uuid4()
+```
+
+最后，使用 `session_id` 调用启用消息历史记录的链。
+
+```python
+result = runnable_with_history.invoke(
+    {"query": "How many destinations can I fly to directly from Austin airport?"},
+    config={"configurable": {"session_id": session_id}},
+)
+print(result["result"].content)
+```
+
+```text
+You can fly directly to 98 destinations from Austin airport.
+```
+
+当链继续使用相同的 `session_id` 进行调用时，响应将以对话中之前查询的上下文形式返回。
+
+```python
+result = runnable_with_history.invoke(
+    {"query": "Out of those destinations, how many are in Europe?"},
+    config={"configurable": {"session_id": session_id}},
+)
+print(result["result"].content)
+```
+
+```text
+You can fly directly to 4 destinations in Europe from Austin airport.
+```
+
+```python
+result = runnable_with_history.invoke(
+    {"query": "Give me the codes and names of those airports."},
+    config={"configurable": {"session_id": session_id}},
+)
+print(result["result"].content)
+```
+
+```text
+The four European destinations you can fly to directly from Austin airport are:
+- AMS (Amsterdam Airport Schiphol)
+- FRA (Frankfurt am Main)
+- LGW (London Gatwick)
+- LHR (London Heathrow)
+```

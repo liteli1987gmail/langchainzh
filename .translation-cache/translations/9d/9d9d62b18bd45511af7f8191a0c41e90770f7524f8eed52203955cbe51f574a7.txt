@@ -1,0 +1,410 @@
+---
+title: LangChain v1 新功能
+sidebarTitle: LangChain v1
+---
+
+import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
+
+**LangChain v1 是一个专注于生产的构建代理的基础框架。** 我们围绕三个核心改进精简了框架：
+
+<CardGroup cols={1}>
+    <Card title="create_agent" icon="robot" href="#create_agent" arrow>
+        在 LangChain 中构建代理的新标准，替代 `langgraph.prebuilt.create_react_agent`。
+    </Card>
+    <Card title="标准内容块" icon="cube" href="#standard-content-blocks" arrow>
+        新的 `content_blocks` 属性，可跨提供商统一访问现代 LLM 功能。
+    </Card>
+    <Card title="精简的命名空间" icon="sitemap" href="#simplified-package" arrow>
+        `langchain` 命名空间已精简为专注于代理的基本构建块，旧功能已移至 `langchain-classic`。
+    </Card>
+</CardGroup>
+
+升级方法：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install -U langchain
+```
+```bash uv
+uv add langchain
+```
+</CodeGroup>
+
+有关完整的更改列表，请参阅[迁移指南](/oss/migrate/langchain-v1)。
+
+## `create_agent`
+
+@[`create_agent`] 是在 LangChain 1.0 中构建代理的标准方式。与 @[`langgraph.prebuilt.create_react_agent`][create_react_agent] 相比，它提供了更简单的接口，同时通过使用[中间件](#middleware)提供了更大的自定义潜力。
+
+```python
+from langchain.agents import create_agent
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=[search_web, analyze_data, send_email],
+    system_prompt="You are a helpful research assistant."
+)
+
+result = agent.invoke({
+    "messages": [
+        {"role": "user", "content": "Research AI safety trends"}
+    ]
+})
+```
+
+在底层，@[`create_agent`] 构建于基础 agent 循环之上——调用模型、让模型选择要执行的工具，然后在不再调用工具时结束：
+
+<div style={{ display: "flex", justifyContent: "center" }}>
+    <img
+        src="/oss/images/core_agent_loop.png"
+        alt="Core agent loop diagram"
+        className="rounded-lg"
+    />
+</div>
+
+更多信息请参阅 [Agents](/oss/langchain/agents)。
+
+### 中间件
+
+中间件是 @[`create_agent`] 的核心特性。它提供了一个高度可定制的入口，提升了你能够构建的内容的上限。
+
+优秀的 agent 需要[上下文工程](/oss/langchain/context-engineering)：在正确的时机向模型提供正确的信息。中间件通过可组合的抽象帮助你控制动态提示词、对话摘要、选择性工具访问、状态管理和防护栏。
+
+#### 预构建中间件
+
+LangChain 为常见模式提供了一些[预构建中间件](/oss/langchain/middleware#built-in-middleware)，包括：
+
+- @[`PIIMiddleware`]：在发送到模型之前删除敏感信息
+- @[`SummarizationMiddleware`]：当对话历史过长时压缩内容
+- @[`HumanInTheLoopMiddleware`]：对敏感工具调用要求人工确认
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    PIIMiddleware,
+    SummarizationMiddleware,
+    HumanInTheLoopMiddleware
+)
+
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=[read_email, send_email],
+    middleware=[
+        PIIMiddleware("email", strategy="redact", apply_to_input=True),
+        PIIMiddleware(
+            "phone_number",
+            detector=(
+                r"(?:\+?\d{1,3}[\s.-]?)?"
+                r"(?:\(?\d{2,4}\)?[\s.-]?)?"
+                r"\d{3,4}[\s.-]?\d{4}"
+			),
+			strategy="block"
+        ),
+        SummarizationMiddleware(
+            model="claude-sonnet-4-6",
+            trigger={"tokens": 500}
+        ),
+        HumanInTheLoopMiddleware(
+            interrupt_on={
+                "send_email": {
+                    "allowed_decisions": ["approve", "edit", "reject"]
+                }
+            }
+        ),
+    ]
+)
+```
+
+#### 自定义中间件
+
+您还可以构建自定义中间件以满足您的需求。中间件在代理执行的每个步骤都公开钩子：
+
+<div style={{ display: "flex", justifyContent: "center" }}>
+    <img
+        src="/oss/images/middleware_final.png"
+        alt="中间件流程图"
+        className="rounded-lg"
+    />
+</div>
+
+通过在 @[`AgentMiddleware`] 类的子类上实现这些钩子中的任何一个来构建自定义中间件：
+
+| 钩子               | 运行时间                | 使用案例                                  |
+|-------------------|------------------------|-----------------------------------------|
+| `before_agent`    | 在调用代理之前           | 加载内存，验证输入                         |
+| `before_model`    | 在每次 LLM 调用之前       | 更新提示词，修剪消息                       |
+| `wrap_model_call` | 在每次 LLM 调用周围       | 拦截并修改请求/响应                        |
+| `wrap_tool_call`  | 在每次工具调用周围        | 拦截并修改工具执行                         |
+| `after_model`     | 在每次 LLM 响应之后       | 验证输出，应用防护栏                       |
+| `after_agent`     | 在代理完成后             | 保存结果，清理                            |
+
+
+自定义中间件示例：
+
+```python expandable
+from dataclasses import dataclass
+from typing import Callable
+
+from langchain_openai import ChatOpenAI
+
+from langchain.agents.middleware import (
+    AgentMiddleware,
+    ModelRequest
+)
+from langchain.agents.middleware.types import ModelResponse
+
+@dataclass
+class Context:
+    user_expertise: str = "beginner"
+
+class ExpertiseBasedToolMiddleware(AgentMiddleware):
+    def wrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        user_level = request.runtime.context.user_expertise
+
+        if user_level == "expert":
+            # More powerful model
+            model = ChatOpenAI(model="gpt-5.5")
+            tools = [advanced_search, data_analysis]
+        else:
+            # Less powerful model
+            model = ChatOpenAI(model="gpt-5-nano")
+            tools = [simple_search, basic_calculator]
+
+        return handler(request.override(model=model, tools=tools))
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=[
+        simple_search,
+        advanced_search,
+        basic_calculator,
+        data_analysis
+    ],
+    middleware=[ExpertiseBasedToolMiddleware()],
+    context_schema=Context
+)
+```
+
+更多信息，请参阅[完整中间件指南](/oss/langchain/middleware)。
+
+### 基于 LangGraph 构建
+
+因为 @[`create_agent`] 基于 [LangGraph](/oss/langgraph) 构建，您自动获得内置支持，实现长时间运行和可靠的代理：
+
+<CardGroup cols={2}>
+    <Card title="持久化" icon="database">
+        对话通过内置检查点自动跨会话持久化
+    </Card>
+    <Card title="流式传输" icon="droplet">
+        实时流式传输令牌、工具调用和推理追踪
+    </Card>
+    <Card title="人工介入" icon="hand-stop">
+        在敏感操作前暂停代理执行，等待人工批准
+    </Card>
+    <Card title="时间旅行" icon="history">
+        回溯对话到任意时间点，探索替代路径和提示
+    </Card>
+</CardGroup>
+
+您无需学习 LangGraph 即可使用这些功能——它们开箱即用。
+
+### 结构化输出
+
+@[`create_agent`] 改进了结构化输出生成：
+
+- **主循环集成**：结构化输出现在在主循环中生成，无需额外的 LLM 调用
+- **结构化输出策略**：模型可以选择调用工具或使用提供商端结构化输出生成
+- **成本降低**：消除了额外 LLM 调用的费用
+
+```python
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
+from pydantic import BaseModel
+
+
+class Weather(BaseModel):
+    temperature: float
+    condition: str
+
+def weather_tool(city: str) -> str:
+    """Get the weather for a city."""
+    return f"it's sunny and 70 degrees in {city}"
+
+agent = create_agent(
+    "gpt-5.4-mini",
+    tools=[weather_tool],
+    response_format=ToolStrategy(Weather)
+)
+
+result = agent.invoke({
+    "messages": [{"role": "user", "content": "What's the weather in SF?"}]
+})
+
+print(repr(result["structured_response"]))
+# results in `Weather(temperature=70.0, condition='sunny')`
+```
+
+**错误处理**：通过 `handle_errors` 参数控制 `ToolStrategy` 的错误处理：
+- **解析错误**：模型生成的数据不符合预期结构
+- **多工具调用**：模型为结构化输出模式生成 2+ 个工具调用
+
+---
+
+## 标准内容块
+
+<Note>
+    内容块支持目前仅适用于以下集成：
+
+    - [`langchain-anthropic`](https://pypi.org/project/langchain-anthropic/)
+    - [`langchain-aws`](https://pypi.org/project/langchain-aws/)
+    - [`langchain-openai`](https://pypi.org/project/langchain-openai/)
+    - [`langchain-google-genai`](https://pypi.org/project/langchain-google-genai/)
+    - [`langchain-ollama`](https://pypi.org/project/langchain-ollama/)
+
+    内容块支持将逐步推广到更多提供商。
+</Note>
+
+新的 @[`content_blocks`][BaseMessage(content_blocks)] 属性引入了一种跨提供商的标准消息内容表示方式：
+
+```python
+from langchain_anthropic import ChatAnthropic
+
+model = ChatAnthropic(model="claude-sonnet-4-6")
+response = model.invoke("What's the capital of France?")
+
+# Unified access to content blocks
+for block in response.content_blocks:
+    if block["type"] == "reasoning":
+        print(f"Model reasoning: {block['reasoning']}")
+    elif block["type"] == "text":
+        print(f"Response: {block['text']}")
+    elif block["type"] == "tool_call":
+        print(f"Tool call: {block['name']}({block['args']})")
+```
+
+### 优势
+
+- **与提供商无关**：无论使用哪家提供商，都可以使用相同的 API 访问推理轨迹、引用、内置工具（网络搜索、代码解释器等）及其他功能
+- **类型安全**：为所有内容块类型提供完整的类型提示
+- **向后兼容**：标准内容可以[延迟加载](/oss/langchain/messages#standard-content-blocks)，因此不会产生相关的破坏性变更
+
+有关更多信息，请参阅我们关于[内容块](/oss/langchain/messages#standard-content-blocks)的指南。
+
+---
+
+## 简化包
+
+LangChain v1 简化了 [`langchain`](https://pypi.org/project/langchain/) 包命名空间，专注于代理的核心构建块。精简后的命名空间暴露了最有用的相关功能：
+
+### 命名空间
+
+| 模块 | 可用内容 | 说明 |
+|------|----------|------|
+| @[`langchain.agents`] | @[`create_agent`], @[`AgentState`] | 核心代理创建功能 |
+| @[`langchain.messages`] | 消息类型、@[内容块][ContentBlock]、@[`trim_messages`] | 从 @[`langchain-core`] 重新导出 |
+| @[`langchain.tools`] | @[`@tool`], @[`BaseTool`], 注入辅助函数 | 从 @[`langchain-core`] 重新导出 |
+| @[`langchain.chat_models`] | @[`init_chat_model`], @[`BaseChatModel`] | 统一模型初始化 |
+| @[`langchain.embeddings`] | @[`Embeddings`], @[`init_embeddings`] | 嵌入模型 |
+
+这些功能大多从 `langchain-core` 重新导出，以便于使用，为您提供了专注于代理构建的 API 界面。
+
+```python
+# Agent building
+from langchain.agents import create_agent
+
+# Messages and content
+from langchain.messages import AIMessage, HumanMessage
+
+# Tools
+from langchain.tools import tool
+
+# Model initialization
+from langchain.chat_models import init_chat_model
+from langchain.embeddings import init_embeddings
+```
+
+### `langchain-classic`
+
+旧功能已迁移到 [`langchain-classic`](https://pypi.org/project/langchain-classic)，以保持核心包的精简和专注。
+
+**`langchain-classic` 中包含的内容：**
+
+- 旧版链和链实现
+- 检索器（例如 `MultiQueryRetriever` 或之前 `langchain.retrievers` 模块中的任何内容）
+- 索引 API
+- Hub 模块（用于以编程方式管理提示）
+- [`langchain-community`](https://pypi.org/project/langchain-community) 导出
+- 其他已弃用的功能
+
+如果您使用上述任何功能，请安装 [`langchain-classic`](https://pypi.org/project/langchain-classic)：
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install langchain-classic
+```
+
+```bash uv
+uv add langchain-classic
+```
+</CodeGroup>
+
+然后更新你的导入：
+
+```python
+from langchain import ...  # [!code --]
+from langchain_classic import ...  # [!code ++]
+
+from langchain.chains import ...  # [!code --]
+from langchain_classic.chains import ...  # [!code ++]
+
+from langchain.retrievers import ...  # [!code --]
+from langchain_classic.retrievers import ...  # [!code ++]
+
+from langchain import hub  # [!code --]
+from langchain_classic import hub  # [!code ++]
+```
+
+## 迁移指南
+
+请参阅我们的[迁移指南](/oss/migrate/langchain-v1)，了解如何将代码更新到 LangChain v1。
+
+## 报告问题
+
+请在 [GitHub](https://github.com/langchain-ai/langchain/issues) 上使用 `'v1'` [标签](https://github.com/langchain-ai/langchain/issues?q=state%3Aopen%20label%3Av1) 报告在使用 1.0 时发现的任何问题。
+
+## 其他资源
+
+<CardGroup cols={3}>
+    <Card title="LangChain 1.0" icon="rocket" href="https://blog.langchain.com/langchain-langchain-1-0-alpha-releases/">
+        阅读公告
+    </Card>
+    <Card title="Middleware guide" icon="puzzle" href="https://blog.langchain.com/agent-middleware/">
+        深入了解中间件
+    </Card>
+    <Card title="Agents Documentation" icon="book" href="/oss/langchain/agents" arrow>
+        完整的代理文档
+    </Card>
+    <Card title="Message Content" icon="message" href="/oss/langchain/messages#message-content" arrow>
+        新的内容块 API
+    </Card>
+    <Card title="Migration guide" icon="arrows-exchange" href="/oss/migrate/langchain-v1" arrow>
+        如何迁移到 LangChain v1
+    </Card>
+    <Card title="GitHub" icon="brand-github" href="https://github.com/langchain-ai/langchain">
+        报告问题或参与贡献
+    </Card>
+</CardGroup>
+
+## 另请参阅
+
+- [版本控制](/oss/versioning) – 了解版本号
+- [发布策略](/oss/release-policy) – 详细的发布策略

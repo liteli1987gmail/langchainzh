@@ -1,0 +1,314 @@
+---
+title: "ChatWatsonx 集成"
+description: "使用 LangChain Python 与 ChatWatsonx 聊天模型集成。"
+---
+
+>ChatWatsonx 是 IBM [watsonx.ai](https://www.ibm.com/products/watsonx-ai) 基础模型的包装器。
+
+这些示例的目的是展示如何使用 `LangChain` LLMs API 与 `watsonx.ai` 模型进行通信。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [JS 支持](https://js.langchain.com/docs/integrations/chat/ibm/) | 下载量 | 版本 |
+| :--- | :--- | :---: |  :--- | :---: | :---: |
+| [`ChatWatsonx`](https://reference.langchain.com/python/integrations/langchain_ibm/ChatWatsonx/) | [`langchain-ibm`](https://reference.langchain.com/python/integrations/langchain_ibm/) | ❌ | ✅ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-ibm?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-ibm?style=flat-square&label=%20) |
+
+### 模型特性
+
+| [工具调用](/oss/langchain/tools/) | [结构化输出](/oss/langchain/structured-output) | 图像输入 | 音频输入 | 视频输入 | [Token 级流式处理](/oss/langchain/streaming/) | 原生异步 | [Token 使用量](/oss/langchain/models#token-usage) | [Logprobs](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: |  :---: | :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ |
+
+## 设置
+
+要访问 IBM watsonx.ai 模型，您需要创建 IBM watsonx.ai 账户、获取 API 密钥，并安装 `langchain-ibm` 集成包。
+
+### 凭证
+
+下面的单元格定义了使用 watsonx Foundation Model 推理所需的凭证。
+
+**操作：** 提供 IBM Cloud 用户 API 密钥。有关详细信息，请参阅
+[管理用户 API 密钥](https://cloud.ibm.com/docs/account?topic=account-userapikey&interface=ui)。
+
+```python
+import os
+from getpass import getpass
+
+watsonx_api_key = getpass()
+os.environ["WATSONX_APIKEY"] = watsonx_api_key
+```
+
+此外，您还能够将其他密钥作为环境变量传递。
+
+```python
+import os
+
+os.environ["WATSONX_URL"] = "your service instance url"
+os.environ["WATSONX_TOKEN"] = "your token for accessing the CLOUD or CPD cluster"
+os.environ["WATSONX_PASSWORD"] = "your password for accessing the CPD cluster"
+os.environ["WATSONX_USERNAME"] = "your username for accessing the CPD cluster"
+os.environ["WATSONX_INSTANCE_ID"] = "your instance_id for accessing the CPD cluster"
+```
+
+### 安装
+
+LangChain IBM 集成位于 `langchain-ibm` 包中：
+
+```python
+!pip install -qU langchain-ibm
+```
+
+## 实例化
+
+您可能需要针对不同的模型或任务调整模型 `parameters`。有关详细信息，请参阅[可用的 TextChatParameters](https://ibm.github.io/watsonx-ai-python-sdk/fm_schema.html#ibm_watsonx_ai.foundation_models.schema.TextChatParameters)。
+
+```python
+parameters = {
+    "temperature": 0.9,
+    "max_tokens": 200,
+}
+```
+
+使用先前设置的参数初始化 `WatsonxLLM` 类。
+
+**注意**：
+
+- 为了给 API 调用提供上下文，您必须传递 `project_id` 或 `space_id`。要获取您的项目或空间 ID，请打开您的项目或空间，转到 **Manage** 选项卡，然后单击 **General**。有关更多信息，请参阅：[项目文档](https://www.ibm.com/docs/en/watsonx-as-a-service?topic=projects) 或 [部署空间文档](https://www.ibm.com/docs/en/watsonx/saas?topic=spaces-creating-deployment)。
+- 根据您配置的服务实例所在的区域，使用 [watsonx.ai API 认证](https://ibm.github.io/watsonx-ai-python-sdk/setup_cloud.html#authentication) 中列出的其中一个 URL。
+
+在此示例中，我们将使用 `project_id` 和达拉斯 URL。
+
+您需要指定将用于推理的 `model_id`。您可以在 [支持的聊天模型](https://ibm.github.io/watsonx-ai-python-sdk/fm_helpers.html#ibm_watsonx_ai.foundation_models_manager.FoundationModelsManager.get_chat_model_specs) 中找到所有可用模型的列表。
+
+```python
+from langchain_ibm import ChatWatsonx
+
+chat = ChatWatsonx(
+    model_id="ibm/granite-34b-code-instruct",
+    url="https://us-south.ml.cloud.ibm.com",
+    project_id="PASTE YOUR PROJECT_ID HERE",
+    params=parameters,
+)
+```
+
+或者，您可以使用 Cloud Pak for Data 凭证。有关详细信息，请参阅 [watsonx.ai software setup](https://ibm.github.io/watsonx-ai-python-sdk/setup_cpd.html)。
+
+```python
+chat = ChatWatsonx(
+    model_id="ibm/granite-34b-code-instruct",
+    url="PASTE YOUR URL HERE",
+    username="PASTE YOUR USERNAME HERE",
+    password="PASTE YOUR PASSWORD HERE",
+    instance_id="openshift",
+    version="4.8",
+    project_id="PASTE YOUR PROJECT_ID HERE",
+    params=parameters,
+)
+```
+
+除了 `model_id` 之外，您还可以传递之前通过 Prompt Template 部署的模型的 `deployment_id`（引用）。
+
+```python
+chat = ChatWatsonx(
+    deployment_id="PASTE YOUR DEPLOYMENT_ID HERE",
+    url="https://us-south.ml.cloud.ibm.com",
+    project_id="PASTE YOUR PROJECT_ID HERE",
+    params=parameters,
+)
+```
+
+对于某些需求，可以选择将 IBM 的 [`APIClient`](https://ibm.github.io/watsonx-ai-python-sdk/base.html#apiclient) 对象传入 `ChatWatsonx` 类。
+
+```python
+from ibm_watsonx_ai import APIClient
+
+api_client = APIClient(...)
+
+chat = ChatWatsonx(
+    model_id="ibm/granite-34b-code-instruct",
+    watsonx_client=api_client,
+)
+```
+
+## 调用
+
+要获取补全结果，您可以直接使用字符串提示词调用模型。
+
+```python
+# Invocation
+
+messages = [
+    ("system", "You are a helpful assistant that translates English to French."),
+    (
+        "human",
+        "I love you for listening to Rock.",
+    ),
+]
+
+chat.invoke(messages)
+```
+
+```text
+AIMessage(content="J'adore que tu escois de écouter de la rock ! ", additional_kwargs={}, response_metadata={'token_usage': {'completion_tokens': 19, 'prompt_tokens': 34, 'total_tokens': 53}, 'model_name': 'ibm/granite-34b-code-instruct', 'system_fingerprint': '', 'finish_reason': 'stop'}, id='chat-ef888fc41f0d4b37903b622250ff7528', usage_metadata={'input_tokens': 34, 'output_tokens': 19, 'total_tokens': 53})
+```
+
+```python
+# Invocation multiple chat
+from langchain.messages import (
+    HumanMessage,
+    SystemMessage,
+)
+
+system_message = SystemMessage(
+    content="You are a helpful assistant which telling short-info about provided topic."
+)
+human_message = HumanMessage(content="horse")
+
+chat.invoke([system_message, human_message])
+```
+
+```text
+AIMessage(content='horses are quadrupedal mammals that are members of the family Equidae. They are typically farm animals, competing in horse racing and other forms of equine competition. With over 200 breeds, horses are diverse in their physical appearance and behavior. They are intelligent, social animals that are often used for transportation, food, and entertainment.', additional_kwargs={}, response_metadata={'token_usage': {'completion_tokens': 89, 'prompt_tokens': 29, 'total_tokens': 118}, 'model_name': 'ibm/granite-34b-code-instruct', 'system_fingerprint': '', 'finish_reason': 'stop'}, id='chat-9a6e28abb3d448aaa4f83b677a9fd653', usage_metadata={'input_tokens': 29, 'output_tokens': 89, 'total_tokens': 118})
+```
+
+## 链式调用
+
+创建 `ChatPromptTemplate` 对象，该对象将负责创建随机问题。
+
+```python
+from langchain_core.prompts import ChatPromptTemplate
+
+system = (
+    "You are a helpful assistant that translates {input_language} to {output_language}."
+)
+human = "{input}"
+prompt = ChatPromptTemplate.from_messages([("system", system), ("human", human)])
+```
+
+提供输入并运行链。
+
+```python
+chain = prompt | chat
+chain.invoke(
+    {
+        "input_language": "English",
+        "output_language": "German",
+        "input": "I love Python",
+    }
+)
+```
+
+```text
+AIMessage(content='Ich liebe Python.', additional_kwargs={}, response_metadata={'token_usage': {'completion_tokens': 7, 'prompt_tokens': 28, 'total_tokens': 35}, 'model_name': 'ibm/granite-34b-code-instruct', 'system_fingerprint': '', 'finish_reason': 'stop'}, id='chat-fef871190b6047a7a3e68c58b3810c33', usage_metadata={'input_tokens': 28, 'output_tokens': 7, 'total_tokens': 35})
+```
+
+## 流式传输模型输出
+
+您可以流式传输模型输出。
+
+```python
+system_message = SystemMessage(
+    content="You are a helpful assistant which telling short-info about provided topic."
+)
+human_message = HumanMessage(content="moon")
+
+stream = chat.stream_events([system_message, human_message], version="v3")
+for token in stream.text:
+    print(token, end="", flush=True)
+```
+
+```text
+The Moon is the fifth largest moon in the solar system and the largest relative to its host planet. It is the fifth brightest object in Earth's night sky after the Sun, the stars, the Milky Way, and the Moon itself. It orbits around the Earth at an average distance of 238,855 miles (384,400 kilometers). The Moon's gravity is about one-sixthth of Earth's and thus allows for the formation of tides on Earth. The Moon is thought to have formed around 4.5 billion years ago from debris from a collision between Earth and a Mars-sized body named Theia. The Moon is effectively immutable, with its current characteristics remaining from formation. Aside from Earth, the Moon is the only other natural satellite of Earth. The most widely accepted theory is that it formed from the debris of a collision
+```
+
+## 批量处理模型输出
+
+您可以批量处理模型输出。
+
+```python
+message_1 = [
+    SystemMessage(
+        content="You are a helpful assistant which telling short-info about provided topic."
+    ),
+    HumanMessage(content="cat"),
+]
+message_2 = [
+    SystemMessage(
+        content="You are a helpful assistant which telling short-info about provided topic."
+    ),
+    HumanMessage(content="dog"),
+]
+
+chat.batch([message_1, message_2])
+```
+
+```text
+[AIMessage(content='The cat is a popular domesticated carnivorous mammal that belongs to the family Felidae. Cats arefriendly, intelligent, and independent animals that are well-known for their playful behavior, agility, and ability to hunt prey. cats come in a wide range of breeds, each with their own unique physical and behavioral characteristics. They are kept as pets worldwide due to their affectionate nature and companionship. Cats are important members of the household and are often involved in everything from childcare to entertainment.', additional_kwargs={}, response_metadata={'token_usage': {'completion_tokens': 127, 'prompt_tokens': 28, 'total_tokens': 155}, 'model_name': 'ibm/granite-34b-code-instruct', 'system_fingerprint': '', 'finish_reason': 'stop'}, id='chat-fa452af0a0fa4a668b6a704aecd7d718', usage_metadata={'input_tokens': 28, 'output_tokens': 127, 'total_tokens': 155}),
+ AIMessage(content='Dogs are domesticated animals that belong to the Canidae family, also known as wolves. They are one of the most popular pets worldwide, known for their loyalty and affection towards their owners. Dogs come in various breeds, each with unique characteristics, and are trained for different purposes such as hunting, herding, or guarding. They require a lot of exercise and mental stimulation to stay healthy and happy, and they need proper training and socialization to be well-behaved. Dogs are also known for their playful and energetic nature, making them great companions for people of all ages.', additional_kwargs={}, response_metadata={'token_usage': {'completion_tokens': 144, 'prompt_tokens': 28, 'total_tokens': 172}, 'model_name': 'ibm/granite-34b-code-instruct', 'system_fingerprint': '', 'finish_reason': 'stop'}, id='chat-cae7663c50cf4f3499726821cc2f0ec7', usage_metadata={'input_tokens': 28, 'output_tokens': 144, 'total_tokens': 172})]
+```
+
+## 工具调用
+
+### ChatWatsonx.bind_tools()
+
+```python
+from langchain_ibm import ChatWatsonx
+
+chat = ChatWatsonx(
+    model_id="mistralai/mistral-large",
+    url="https://us-south.ml.cloud.ibm.com",
+    project_id="PASTE YOUR PROJECT_ID HERE",
+    params=parameters,
+)
+```
+
+```python
+from pydantic import BaseModel, Field
+
+
+class GetWeather(BaseModel):
+    """Get the current weather in a given location"""
+
+    location: str = Field(description="The city and state, e.g. San Francisco, CA")
+
+
+llm_with_tools = chat.bind_tools([GetWeather])
+```
+
+```python
+ai_msg = llm_with_tools.invoke(
+    "Which city is hotter today: LA or NY?",
+)
+ai_msg
+```
+
+```text
+AIMessage(content='', additional_kwargs={'tool_calls': [{'id': 'chatcmpl-tool-6c06a19bbe824d78a322eb193dbde12d', 'type': 'function', 'function': {'name': 'GetWeather', 'arguments': '{"location": "Los Angeles, CA"}'}}, {'id': 'chatcmpl-tool-493542e46f1141bfbfeb5deae6c9e086', 'type': 'function', 'function': {'name': 'GetWeather', 'arguments': '{"location": "New York, NY"}'}}]}, response_metadata={'token_usage': {'completion_tokens': 46, 'prompt_tokens': 95, 'total_tokens': 141}, 'model_name': 'mistralai/mistral-large', 'system_fingerprint': '', 'finish_reason': 'tool_calls'}, id='chat-027f2bdb217e4238909cb26d3e8a8fbf', tool_calls=[{'name': 'GetWeather', 'args': {'location': 'Los Angeles, CA'}, 'id': 'chatcmpl-tool-6c06a19bbe824d78a322eb193dbde12d', 'type': 'tool_call'}, {'name': 'GetWeather', 'args': {'location': 'New York, NY'}, 'id': 'chatcmpl-tool-493542e46f1141bfbfeb5deae6c9e086', 'type': 'tool_call'}], usage_metadata={'input_tokens': 95, 'output_tokens': 46, 'total_tokens': 141})
+```
+
+### AIMessage.tool_calls
+
+注意，`AIMessage` 有一个 @[`tool_calls`][AIMessage.tool_calls] 属性。它以标准化的 `ToolCall` 格式返回，这种格式与模型提供商无关。
+
+```python
+ai_msg.tool_calls
+```
+
+```text
+[{'name': 'GetWeather',
+  'args': {'location': 'Los Angeles, CA'},
+  'id': 'chatcmpl-tool-6c06a19bbe824d78a322eb193dbde12d',
+  'type': 'tool_call'},
+ {'name': 'GetWeather',
+  'args': {'location': 'New York, NY'},
+  'id': 'chatcmpl-tool-493542e46f1141bfbfeb5deae6c9e086',
+  'type': 'tool_call'}]
+```
+
+---
+
+## API 参考
+
+有关所有 `ChatWatsonx` 功能和配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/python/integrations/langchain_ibm/ChatWatsonx/)。

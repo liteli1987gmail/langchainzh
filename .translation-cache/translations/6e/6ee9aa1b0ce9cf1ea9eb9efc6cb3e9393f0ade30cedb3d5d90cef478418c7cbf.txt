@@ -1,0 +1,198 @@
+---
+title: "TogetherAIEmbeddings 集成"
+description: "使用 LangChain JavaScript 与 TogetherAIEmbeddings 嵌入模型集成。"
+---
+
+这将帮助您开始使用 LangChain 的 TogetherAIEmbeddings [嵌入模型](/oss/integrations/embeddings)。有关 `TogetherAIEmbeddings` 功能和配置选项的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-together-ai/TogetherAIEmbeddings)。
+
+## 概览
+
+### 集成详情
+
+| 类 | 包 | 本地 | [Py 支持](https://python.langchain.com/docs/integrations/embeddings/together/) | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: |  :---: | :---: |
+| [`TogetherAIEmbeddings`](https://reference.langchain.com/javascript/langchain-together-ai/TogetherAIEmbeddings) | [`@langchain/together-ai`](https://www.npmjs.com/package/@langchain/together-ai) | ❌ | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/together-ai?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/together-ai?style=flat-square&label=%20&) |
+
+## 设置
+
+要访问 Together AI 嵌入模型，请创建一个 Together 账户，获取 API 密钥，并安装 `@langchain/together-ai` 集成包。
+
+### 凭据
+
+您可以[注册 Together 账户并创建 API 密钥](https://api.together.xyz/)。设置 `TOGETHER_AI_API_KEY` 环境变量：
+
+```bash
+export TOGETHER_AI_API_KEY="your-api-key"
+```
+
+如果您想自动追踪您的模型调用，您也可以通过取消下面的注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```bash
+# export LANGSMITH_TRACING="true"
+# export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+LangChain TogetherAIEmbeddings 集成位于 `@langchain/together-ai` 包中：
+
+<CodeGroup>
+```bash npm
+npm install @langchain/together-ai @langchain/core
+```
+```bash yarn
+yarn add @langchain/together-ai @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/together-ai @langchain/core
+```
+</CodeGroup>
+
+## 实例化
+
+实例化嵌入模型：
+
+```typescript
+import { TogetherAIEmbeddings } from "@langchain/together-ai";
+
+const embeddings = new TogetherAIEmbeddings({
+  model: "togethercomputer/m2-bert-80M-8k-retrieval", // Default value
+});
+```
+
+## 索引和检索
+
+Embedding 模型通常用于检索增强生成 (RAG) 流程，既作为索引数据的一部分，也用于后续的检索。如需更详细的说明，请参阅学习选项卡下的 [**RAG 教程**](/oss/learn/)。
+
+下面，请查看如何使用上面初始化的 `embeddings` 对象来索引和检索数据。在此示例中，我们将使用演示版 [`MemoryVectorStore`](/oss/integrations/vectorstores/memory) 来索引和检索示例文档。
+
+```typescript
+// Create a vector store with a sample text
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+
+const text = "LangChain is the framework for building context-aware reasoning applications";
+
+const vectorstore = await MemoryVectorStore.fromDocuments(
+  [{ pageContent: text, metadata: {} }],
+  embeddings,
+);
+
+// Use the vector store as a retriever that returns a single document
+const retriever = vectorstore.asRetriever(1);
+
+// Retrieve the most similar text
+const retrievedDocuments = await retriever.invoke("What is LangChain?");
+
+retrievedDocuments[0].pageContent;
+```
+
+```text
+LangChain is the framework for building context-aware reasoning applications
+```
+
+## 直接使用
+
+在底层，向量存储和检索器的实现正在调用 `embeddings.embedDocument(...)` 和 `embeddings.embedQuery(...)` 来为 `fromDocuments` 中使用的文本以及检索器的 `invoke` 操作创建嵌入向量。
+
+您可以直接调用这些方法来为您自己的使用场景获取嵌入向量。
+
+### 嵌入单个文本
+
+您可以使用 `embedQuery` 来嵌入搜索查询。这会生成针对该查询的向量表示：
+
+```typescript
+const singleVector = await embeddings.embedQuery(text);
+
+console.log(singleVector.slice(0, 100));
+```
+
+```text
+[
+     0.3812227, -0.052848946,  -0.10564975,   0.03480297,    0.2878488,
+  0.0084609175,   0.11605915,   0.05303011,   0.14711718,  -0.14407106,
+   -0.29865336,  -0.15807179, -0.068397366,   -0.2708063,  0.056596708,
+   -0.07656515,  0.052995138,  -0.11275427,  0.028096694,  0.123501234,
+  -0.039519835,   0.12148692,  -0.12820457,   0.15691335,  0.033519063,
+   -0.27026987,  -0.08460162,  -0.23792154,    -0.234982,  -0.05786798,
+   0.016467346,  -0.17168592, -0.060787182,  0.038752213,  -0.08169927,
+    0.09327062,   0.29490772,    0.0167866,  -0.32224452,   -0.2037822,
+   -0.10284172, -0.124050565,   0.25344968,  -0.06275548,  -0.14180769,
+  0.0046709594,  0.073105976,   0.12004031,   0.19224276, -0.022589967,
+   0.102790825,    0.1138286, -0.057701062, -0.050010648,   -0.1632584,
+   -0.18942119,  -0.12018798,   0.15288158,   0.07941474,   0.10440051,
+   -0.13257962,  -0.19282033,  0.044656333,   0.13560675, -0.068929024,
+   0.028590716,  0.055663664,   0.04652713,  0.014936657,  0.120679885,
+   0.053866718,  -0.16296014,  0.119450666,  -0.29559663,  0.008097747,
+    0.07380408,  -0.09010084,   -0.0687739,  -0.08575685,  -0.07202606,
+    0.18868081,  -0.08392917,  0.014016109,   0.15435852, -0.030115498,
+   -0.16927013,   0.02836557, -0.050763763,    0.0840437,  -0.22718845,
+   0.111397505,  0.033395614, -0.123287566,   -0.2111604,   -0.1580479,
+    0.05520573,   -0.1422921,   0.08828953,  0.051058788,  -0.13312188
+]
+```
+
+### 嵌入多个文本
+
+你可以使用 `embedDocuments` 嵌入多个文本用于索引。此方法内部使用的实现可能（但不必）与嵌入查询不同：
+
+```typescript
+const text2 = "LangGraph is a library for building stateful, multi-actor applications with LLMs";
+
+const vectors = await embeddings.embedDocuments([text, text2]);
+
+console.log(vectors[0].slice(0, 100));
+console.log(vectors[1].slice(0, 100));
+```
+
+```text
+[
+     0.3812227, -0.052848946,  -0.10564975,   0.03480297,    0.2878488,
+  0.0084609175,   0.11605915,   0.05303011,   0.14711718,  -0.14407106,
+   -0.29865336,  -0.15807179, -0.068397366,   -0.2708063,  0.056596708,
+   -0.07656515,  0.052995138,  -0.11275427,  0.028096694,  0.123501234,
+  -0.039519835,   0.12148692,  -0.12820457,   0.15691335,  0.033519063,
+   -0.27026987,  -0.08460162,  -0.23792154,    -0.234982,  -0.05786798,
+   0.016467346,  -0.17168592, -0.060787182,  0.038752213,  -0.08169927,
+    0.09327062,   0.29490772,    0.0167866,  -0.32224452,   -0.2037822,
+   -0.10284172, -0.124050565,   0.25344968,  -0.06275548,  -0.14180769,
+  0.0046709594,  0.073105976,   0.12004031,   0.19224276, -0.022589967,
+   0.102790825,    0.1138286, -0.057701062, -0.050010648,   -0.1632584,
+   -0.18942119,  -0.12018798,   0.15288158,   0.07941474,   0.10440051,
+   -0.13257962,  -0.19282033,  0.044656333,   0.13560675, -0.068929024,
+   0.028590716,  0.055663664,   0.04652713,  0.014936657,  0.120679885,
+   0.053866718,  -0.16296014,  0.119450666,  -0.29559663,  0.008097747,
+    0.07380408,  -0.09010084,   -0.0687739,  -0.08575685,  -0.07202606,
+    0.18868081,  -0.08392917,  0.014016109,   0.15435852, -0.030115498,
+   -0.16927013,   0.02836557, -0.050763763,    0.0840437,  -0.22718845,
+   0.111397505,  0.033395614, -0.123287566,   -0.2111604,   -0.1580479,
+    0.05520573,   -0.1422921,   0.08828953,  0.051058788,  -0.13312188
+]
+[
+   0.066308185, -0.032866564,  0.115751594,   0.19082588,      0.14017,
+   -0.26976448, -0.056340694,  -0.26923394,    0.2548541,  -0.27271318,
+    -0.2244126,   0.07949589,  -0.27710953,  -0.17993368,   0.09681616,
+   -0.08692256,   0.22127126,  -0.14512022,  -0.18016525,   0.14892976,
+    -0.0526347, -0.008140617,   -0.2916987,   0.23706906,  -0.38488507,
+   -0.35881752,   0.09276949,  -0.07051063,  -0.07778231,   0.12552947,
+    0.06256748,  -0.25832427,  0.025054429,   -0.1451448,   -0.2662871,
+    0.13676351,  -0.07413256,   0.14966589,  -0.39968985,   0.15542287,
+   -0.13107607,   0.02761394,  0.108077586,  -0.12076956,     0.128296,
+   -0.05625126,   0.15723586, -0.056932643,   0.23720805,   0.23993455,
+  -0.035553705, -0.053907514,  -0.11852807,   0.07005695,  -0.06317475,
+   0.070009425,     0.284697,    0.2212059,  0.018890115,   0.16924675,
+    0.21651487,   0.07259682,    0.1328156,    0.3261852,    0.1914124,
+   -0.10120423,   0.03450111,  -0.22588971,  -0.04458192,   0.24116798,
+  -0.021830376,  -0.30731413,   0.08586451, -0.058835756, 0.0010347435,
+  0.0031927782,  -0.09403646,  -0.22608931,   0.15865424,   0.15738021,
+    0.23582733,    0.1714161,    0.1585189,  -0.18085755,  0.019376995,
+  -0.026587496, -0.017079154,  -0.04588549, -0.047336094, -0.082413346,
+    -0.1114185,  -0.05403556,   0.12438637,  -0.20476522,     0.073182,
+   -0.12210378, -0.010543863,  -0.09767598,    0.1057683, -0.050204434
+]
+```
+
+---
+
+## API 参考
+
+有关所有 `TogetherAIEmbeddings` 功能及配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-together-ai/TogetherAIEmbeddings)。

@@ -1,0 +1,179 @@
+---
+title: 托管深度代理 API 参考
+sidebarTitle: API 概述
+description: 托管深度代理的通用 REST 命令和生成的端点参考。
+---
+
+托管深度代理 API 用于创建、更新、连接和调用[托管深度代理](/langsmith/managed-deep-agents-overview)。请使用适用于 Python、TypeScript 和 React 应用的[托管深度代理 SDK](/langsmith/managed-deep-agents-sdk)。当您需要直接控制请求负载时，请使用 REST API。如需了解推荐的端到端工作流程，请参阅[快速入门](/langsmith/managed-deep-agents-quickstart)。
+
+<Note>
+托管深度代理处于**私人测试版**，仅在美国区域的 [LangSmith Cloud](/langsmith/cloud) 上可用。[加入候补名单](https://www.langchain.com/langsmith-managed-deep-agents-waitlist)以请求访问权限。
+</Note>
+
+## 设置请求默认值
+
+API 使用 `/v1/deepagents`：
+
+```bash
+export LANGSMITH_API_KEY="<LANGSMITH_API_KEY>"
+export LANGSMITH_API_URL="https://api.smith.langchain.com"
+export DEEPAGENTS_BASE_URL="$LANGSMITH_API_URL/v1/deepagents"
+```
+
+请求需要 `X-Api-Key` 请求头：
+
+```txt
+X-Api-Key: <LANGSMITH_API_KEY>
+```
+
+例如，使用上面设置的 base URL 和 header 列出代理：
+
+```bash
+curl "$DEEPAGENTS_BASE_URL/agents" \
+  -H "X-Api-Key: $LANGSMITH_API_KEY"
+```
+
+缺少 `X-Api-Key` 头返回 `401` 和 `{"error": "Unauthorized"}`。无效或缺少工作区访问权限的密钥返回 `403` 和 `{"error": "Forbidden"}`。这些认证响应使用扁平的 `{"error": "..."}` 响应体，与其他 `4xx` 响应返回的结构化错误体不同。具有有效密钥但角色缺少所需权限也会返回 `403`，但响应体为纯文本，注明缺失的权限（例如 `missing permission mcp-servers:create`），SDK 会在 `error.body` 中暴露该信息。
+
+## 了解资源组
+
+| 资源组 | 用途 |
+| --- | --- |
+| Agents | 创建和管理托管深度代理资源，包括运行时和后端配置。 |
+| Threads | 为托管深度代理创建和管理持久化线程状态。 |
+| Runs | 启动和流式传输托管深度代理在线程上的运行。 |
+| MCP servers | 注册 MCP 服务器并存储代理工具引用的凭据。 |
+| MCP tools | 列出已注册 MCP 服务器公开的工具，以便客户端构建 `tools.json` 条目。 |
+| Auth sessions | 为 OAuth MCP 服务器启动和轮询用户 OAuth 会话。 |
+
+托管深度代理不是 LangSmith Deployments。创建托管深度代理会创建托管深度代理资源、单独的 LangSmith 跟踪项目和 Context Hub 代理仓库用于托管文件树。
+
+## 配置沙箱
+
+Create-agent 和 update-agent 负载可以包含一个 `backend` 对象。当代理不需要特定于沙箱的后端行为时，请使用 `state`：
+
+```json
+{
+  "backend": {
+    "type": "state"
+  }
+}
+```
+
+当代理需要 [LangSmith sandbox](/langsmith/sandboxes) 用于代码执行、文件系统操作或长时间运行的任务时，请使用 `sandbox`。Sandbox 后端设置位于 `backend.sandbox_config`，仅在 `backend.type` 设置为 `sandbox` 时有效：
+
+```json
+{
+  "backend": {
+    "type": "sandbox",
+    "sandbox_config": {
+      "scope": "thread",
+      "policy_ids": ["policy-id"],
+      "idle_ttl_seconds": 900,
+      "delete_after_stop_seconds": 300
+    }
+  }
+}
+```
+
+`sandbox` 对象接受以下字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `scope` | 沙箱作用域。使用 `thread` 为每个线程分配一个沙箱，或使用 `agent` 让一个沙箱由代理共享。 |
+| `policy_ids` | 要应用的沙箱策略 ID。 |
+| `idle_ttl_seconds` | 沙箱停止前的空闲超时时间，以秒为单位。 |
+| `delete_after_stop_seconds` | 沙箱停止后删除前的延迟时间，以秒为单位。 |
+
+有关后端指导，请参阅[部署代理](/langsmith/managed-deep-agents-deploy#choose-a-backend)。有关独立沙箱概念，请参阅 [LangSmith 沙箱概述](/langsmith/sandboxes)。
+
+## 使用常见 REST 命令
+
+### 代理
+
+有关创建和更新工作流，请参阅[部署代理](/langsmith/managed-deep-agents-deploy#create-or-update-an-agent-with-the-sdk-or-api)。有关删除行为，请参阅[限制和注意事项](/langsmith/managed-deep-agents-overview#delete-agents)。
+
+| 任务 | 端点参考 |
+| --- | --- |
+| 创建代理 | [`POST /v1/deepagents/agents`](/langsmith/managed-deep-agents-api/agents/create-agent) |
+| 列出代理 | [`GET /v1/deepagents/agents`](/langsmith/managed-deep-agents-api/agents/list-agents) |
+| 获取代理 | [`GET /v1/deepagents/agents/{agent_id}`](/langsmith/managed-deep-agents-api/agents/get-agent) |
+| 更新代理 | [`PATCH /v1/deepagents/agents/{agent_id}`](/langsmith/managed-deep-agents-api/agents/update-agent) |
+| 删除代理 | [`DELETE /v1/deepagents/agents/{agent_id}`](/langsmith/managed-deep-agents-api/agents/delete-agent) |
+| 克隆代理 | [`POST /v1/deepagents/agents/{agent_id}/clone`](/langsmith/managed-deep-agents-api/agents/clone-agent) |
+| 检查代理健康状态 | [`GET /v1/deepagents/agents/{agent_id}/health`](/langsmith/managed-deep-agents-api/agents/check-agent-health) |
+
+### 线程
+
+有关创建线程以及管理它们在多次运行之间保持的持久状态，请参阅[运行代理](/langsmith/managed-deep-agents-invoke#create-a-thread)。
+
+| 任务 | 端点参考 |
+| --- | --- |
+| 列出线程 | [`GET /v1/deepagents/threads`](/langsmith/managed-deep-agents-api/threads/list-threads) |
+| 创建线程 | [`POST /v1/deepagents/threads`](/langsmith/managed-deep-agents-api/threads/create-thread) |
+| 搜索线程 | [`POST /v1/deepagents/threads/search`](/langsmith/managed-deep-agents-api/threads/search-threads) |
+| 统计线程 | [`GET /v1/deepagents/threads/count`](/langsmith/managed-deep-agents-api/threads/count-threads) |
+| 获取线程 | [`GET /v1/deepagents/threads/{thread_id}`](/langsmith/managed-deep-agents-api/threads/get-thread) |
+| 更新线程 | [`PATCH /v1/deepagents/threads/{thread_id}`](/langsmith/managed-deep-agents-api/threads/update-thread) |
+| 删除线程 | [`DELETE /v1/deepagents/threads/{thread_id}`](/langsmith/managed-deep-agents-api/threads/delete-thread) |
+| 批量更新线程 | [`POST /v1/deepagents/threads/bulk-modify`](/langsmith/managed-deep-agents-api/threads/bulk-update-threads) |
+
+### 运行
+
+有关在线程上启动运行并流式传输其输出，请参阅[运行代理](/langsmith/managed-deep-agents-invoke#stream-a-run-from-a-thread)。
+
+| 任务 | 端点参考 |
+| --- | --- |
+| 创建线程并运行 | [`POST /v1/deepagents/threads/runs`](/langsmith/managed-deep-agents-api/runs/create-thread-and-run) |
+| 启动线程运行 | [`POST /v1/deepagents/threads/{thread_id}/runs`](/langsmith/managed-deep-agents-api/runs/create-thread-run) |
+| 流式传输线程运行 | [`POST /v1/deepagents/threads/{thread_id}/runs/stream`](/langsmith/managed-deep-agents-api/runs/stream-thread-run) |
+| 解决中断 | [`POST /v1/deepagents/threads/{thread_id}/resolve-interrupt`](/langsmith/managed-deep-agents-api/runs/resolve-interrupt) |
+
+### MCP 服务器
+
+有关注册 MCP 服务器和存储代理工具使用的凭据，请参阅[连接工具](/langsmith/managed-deep-agents-mcp#connect-tools-with-the-sdk-or-api)。
+
+| 任务 | 端点参考 |
+| --- | --- |
+| 创建 MCP 服务器 | [`POST /v1/deepagents/mcp-servers`](/langsmith/managed-deep-agents-api/mcp-servers/create-mcp-server) |
+| 列出 MCP 服务器 | [`GET /v1/deepagents/mcp-servers`](/langsmith/managed-deep-agents-api/mcp-servers/list-mcp-servers) |
+| 获取 MCP 服务器 | [`GET /v1/deepagents/mcp-servers/{mcp_server_id}`](/langsmith/managed-deep-agents-api/mcp-servers/get-mcp-server) |
+| 更新 MCP 服务器 | [`PATCH /v1/deepagents/mcp-servers/{mcp_server_id}`](/langsmith/managed-deep-agents-api/mcp-servers/update-mcp-server) |
+| 删除 MCP 服务器 | [`DELETE /v1/deepagents/mcp-servers/{mcp_server_id}`](/langsmith/managed-deep-agents-api/mcp-servers/delete-mcp-server) |
+| 注册 OAuth 提供商 | [`POST /v1/deepagents/mcp-servers/{mcp_server_id}/oauth-provider`](/langsmith/managed-deep-agents-api/mcp-servers/register-oauth-provider) |
+
+### MCP 工具
+
+有关列出已注册服务器公开的工具并构建 `tools.json` 条目，请参阅[连接工具](/langsmith/managed-deep-agents-mcp#connect-tools-with-the-sdk-or-api)。
+
+| 任务 | 端点参考 |
+| --- | --- |
+| 列出 MCP 工具 | [`GET /v1/deepagents/mcp/tools`](/langsmith/managed-deep-agents-api/mcp-tools/list-mcp-tools) |
+
+### 认证会话
+
+有关运行授权 MCP 服务器的 OAuth 流程，请参阅[连接工具](/langsmith/managed-deep-agents-mcp#connect-tools-with-the-sdk-or-api)。
+
+| 任务 | 端点参考 |
+| --- | --- |
+| 启动认证会话 | [`POST /v1/deepagents/auth-sessions`](/langsmith/managed-deep-agents-api/auth-sessions/start-auth-session) |
+| 获取认证会话 | [`GET /v1/deepagents/auth-sessions/{session_id}`](/langsmith/managed-deep-agents-api/auth-sessions/get-auth-session) |
+
+## 对代理列表进行分页
+
+[`GET /v1/deepagents/agents`](/langsmith/managed-deep-agents-api/agents/list-agents) 使用游标分页。传递 `page_size`（默认为 `20`，最大值为 `100`）以及前一个请求返回的不透明 `cursor`。响应将结果包装在 `items` 数组中，并附带 `next_cursor` 字段，在最后一页时该字段为 `null`：
+
+```json
+{
+  "items": [],
+  "next_cursor": null
+}
+```
+
+该端点还接受 `name` 以按名称子字符串进行筛选，`sort_by`（`created_at`、`updated_at` 或 `name`，默认为 `updated_at`），以及 `sort_order`（`asc` 或 `desc`，默认为 `desc`）。
+
+## 了解 API 稳定性
+
+路由在 `/v1/` 版本化，但接口处于私人测试阶段，在正式发布前可能会以不兼容的方式进行更改。详见 [API 稳定性](/langsmith/managed-deep-agents-overview#api-stability) 了解 breaking-change 通知。
+
+该 API 并非每个 LangSmith Deployment 端点的镜像。集成、触发器、技能、沙箱、身份验证提供者和身份验证令牌等端点组不被镜像。

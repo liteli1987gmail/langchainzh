@@ -1,0 +1,403 @@
+---
+title: 评估聊天机器人
+sidebarTitle: 评估聊天机器人
+---
+
+在本指南中，我们将为聊天机器人设置评估。这些评估允许您通过一组数据来衡量应用程序的运行表现。能够快速、可靠地获得这些洞察，将使您能够充满信心地进行迭代。
+
+从高层次来看，在本教程中我们将：
+
+* *创建一个初始的黄金数据集来衡量性能*
+* *定义用于衡量性能的指标*
+* *在几个不同的提示或模型上运行评估*
+* *手动比较结果*
+* *随时间跟踪结果*
+* *设置自动化测试以在 CI/CD 中运行*
+
+有关 LangSmith 支持的评估工作流程的更多信息，请查看[操作指南](/langsmith/evaluation)，或参阅 @[evaluate][Client.evaluate] 及其异步对应方法 @[aevaluate][Client.aevaluate] 的参考文档。
+
+内容很多，让我们开始吧！
+
+## 设置
+
+首先安装本教程所需的依赖项。我们恰好使用 OpenAI，但 LangSmith 可以与任何模型一起使用：
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install -U langsmith openai
+```
+
+```bash uv
+uv add langsmith openai
+```
+</CodeGroup>
+
+然后设置环境变量以启用 LangSmith 追踪：
+
+```bash
+export LANGSMITH_TRACING="true"
+export LANGSMITH_API_KEY="<Your LangSmith API key>"
+export OPENAI_API_KEY="<Your OpenAI API key>"
+```
+
+## 创建数据集
+
+在准备测试和评估应用程序时，第一步是定义要评估的数据点。需要考虑以下几个方面：
+
+* 每个数据点的模式应该是什么样的？
+* 我应该收集多少数据点？
+* 我应该如何收集这些数据点？
+
+**模式：** 每个数据点至少应该包含应用程序的输入。如果可以，定义预期输出也很有帮助——这些输出代表您期望一个正常运行的应用程序应该输出的内容。通常您无法定义完美的输出——没关系！评估是一个迭代的过程。有时您可能还想为每个示例定义更多信息——比如 RAG 中要获取的预期文档，或代理要执行的预期步骤。LangSmith 数据集非常灵活，允许您定义任意模式。
+
+**收集数量：** 收集多少数据点没有硬性规定。关键是要确保对您想要防范的边缘情况有适当的覆盖。即使 10-50 个示例也能提供很大价值！不要担心开始时数量太少——您可以（也应该）随时增加！
+
+**如何获取：** 这可能是最棘手的部分。一旦您知道自己想要收集一个数据集......您实际上如何去做？对于大多数刚开始新项目的团队，我们通常看到他们首先手动收集前 10-20 个数据点。在开始使用这些数据点后，这些数据集通常是 *活的* 结构，会随着时间增长。它们通常在看到真实用户如何使用您的应用程序、发现存在的痛点，然后将其中一些数据点移入这个集合后增长。还有一些方法可以合成生成数据来扩充您的数据集。我们建议先不要担心这些，直接手动标注约 10-20 个示例。
+
+一旦您有了数据集，有几种不同的方式可以将其上传到 LangSmith。在本教程中，我们将使用客户端，但您也可以通过 UI 上传（甚至可以在 UI 中创建它们）。
+
+在本教程中，我们将创建 5 个数据点进行评估。我们将评估一个问答应用程序。输入将是一个问题，输出将是一个答案。由于这是一个问答应用程序，我们可以定义预期答案。让我们展示如何创建这个数据集并上传到 LangSmith！
+
+```python
+from langsmith import Client
+
+client = Client()
+
+# Define dataset: these are your test cases
+dataset_name = "QA Example Dataset"
+dataset = client.create_dataset(dataset_name)
+
+client.create_examples(
+    dataset_id=dataset.id,
+    examples=[
+        {
+            "inputs": {"question": "What is LangChain?"},
+            "outputs": {"answer": "A framework for building LLM applications"},
+        },
+        {
+            "inputs": {"question": "What is LangSmith?"},
+            "outputs": {"answer": "A platform for observing and evaluating LLM applications"},
+        },
+        {
+            "inputs": {"question": "What is OpenAI?"},
+            "outputs": {"answer": "A company that creates Large Language Models"},
+        },
+        {
+            "inputs": {"question": "What is Google?"},
+            "outputs": {"answer": "A technology company known for search"},
+        },
+        {
+            "inputs": {"question": "What is Mistral?"},
+            "outputs": {"answer": "A company that creates Large Language Models"},
+        }
+    ]
+)
+```
+
+现在，如果我们打开 LangSmith UI，在 `Datasets & Testing` 页面中查找 `QA Example Dataset`，当我们点击进入时，应该会看到五个新示例。
+
+![Testing tutorial dataset](/langsmith/images/testing-tutorial-dataset.png)
+
+## 定义指标
+
+创建数据集后，我们现在可以定义一些指标来评估我们的响应。由于我们有一个预期答案，我们可以将其作为评估的一部分进行比较。但是，我们并不期望应用程序输出那些**完全相同**的答案，而是期望输出相似的内容。这使我们的评估变得稍微复杂一些。
+
+除了评估正确性之外，我们还要确保答案简短且简洁。这会稍微容易一些——我们可以定义一个简单的 Python 函数来测量响应的长度。
+
+让我们继续定义这两个指标。
+
+对于第一个指标，我们将使用 LLM 来**判断**输出是否正确（相对于预期输出）。这种**LLM-as-a-judge**方法在过于复杂而无法用简单函数衡量的场景中相对常见。我们可以在这里定义自己的提示和 LLM 用于评估：
+
+```python
+import openai
+from langsmith import wrappers
+
+openai_client = wrappers.wrap_openai(openai.OpenAI())
+
+eval_instructions = "You are an expert professor specialized in grading students' answers to questions."
+
+def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
+    user_content = f"""You are grading the following question:
+{inputs['question']}
+Here is the real answer:
+{reference_outputs['answer']}
+You are grading the following predicted answer:
+{outputs['response']}
+Respond with CORRECT or INCORRECT:
+Grade:"""
+    response = openai_client.chat.completions.create(
+        model="gpt-5.4-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": eval_instructions},
+            {"role": "user", "content": user_content},
+        ],
+    ).choices[0].message.content
+    return response == "CORRECT"
+```
+
+对于评估响应的长度，这要简单得多！我们可以直接定义一个简单的函数来检查实际输出是否小于预期结果长度的 2 倍。
+
+```python
+def concision(outputs: dict, reference_outputs: dict) -> bool:
+    return int(len(outputs["response"]) < 2 * len(reference_outputs["answer"]))
+```
+
+## 运行评估
+
+太好了！现在我们如何运行评估？既然我们有了数据集和评估器，我们需要的只是我们的应用程序了！我们将构建一个简单的应用程序，它只有一个带有响应指令的系统消息，然后将其传递给 LLM。我们将直接使用 OpenAI SDK 来构建这个应用：
+
+```python
+default_instructions = "Respond to the users question in a short, concise manner (one short sentence)."
+
+def my_app(question: str, model: str = "gpt-5.4-mini", instructions: str = default_instructions) -> str:
+    return openai_client.chat.completions.create(
+        model=model,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": question},
+        ],
+    ).choices[0].message.content
+```
+
+在通过 LangSmith 评估运行之前，我们需要定义一个简单的包装器，它将数据集中的输入键映射到我们想要调用的函数，然后再将函数的输出映射到我们期望的输出键。
+
+```python
+def ls_target(inputs: str) -> dict:
+    return {"response": my_app(inputs["question"])}
+```
+
+太棒了！现在我们已经准备好运行评估了。开始吧！
+
+```python
+experiment_results = client.evaluate(
+    ls_target, # Your AI system
+    data=dataset_name, # The data to predict and grade over
+    evaluators=[concision, correctness], # The evaluators to score the results
+    experiment_prefix="openai-4o-mini", # A prefix for your experiment names to easily identify them
+)
+```
+
+这将输出一个 URL。如果我们点击它，应该能看到评估结果！
+
+![Testing tutorial run](/langsmith/images/testing-tutorial-run.png)
+
+如果我们回到数据集页面并选择 `Experiments` 标签，现在就能看到我们一次运行的摘要！
+
+![Testing tutorial one run](/langsmith/images/testing-tutorial-one-run.png)
+
+现在让我们用不同的模型来试试！让我们尝试 `gpt-4-turbo`
+
+```python
+def ls_target_v2(inputs: str) -> dict:
+    return {"response": my_app(inputs["question"], model="gpt-4-turbo")}
+
+experiment_results = client.evaluate(
+    ls_target_v2,
+    data=dataset_name,
+    evaluators=[concision, correctness],
+    experiment_prefix="openai-4-turbo",
+)
+```
+
+现在让我们使用 GPT-4，但也要更新提示词，要求回答更加简短一些。
+
+```python
+instructions_v3 = "Respond to the users question in a short, concise manner (one short sentence). Do NOT use more than ten words."
+
+def ls_target_v3(inputs: str) -> dict:
+    response = my_app(
+        inputs["question"],
+        model="gpt-4-turbo",
+        instructions=instructions_v3
+    )
+    return {"response": response}
+
+experiment_results = client.evaluate(
+    ls_target_v3,
+    data=dataset_name,
+    evaluators=[concision, correctness],
+    experiment_prefix="strict-openai-4-turbo",
+)
+```
+
+如果我们回到数据集页面的 `Experiments` 实验标签，应该能看到所有三个运行都显示出来了！
+
+![Testing tutorial three runs](/langsmith/images/testing-tutorial-three-runs.png)
+
+## 比较结果
+
+太棒了，我们已经评估了三个不同的运行。但如何比较结果呢？第一种方法就是直接在 `Experiments` 实验标签中查看运行情况。这样我们可以看到每个运行的高级指标视图：
+
+![Testing tutorial compare metrics](/langsmith/images/testing-tutorial-compare-metrics.png)
+
+我们可以看出 GPT-4 在了解公司信息方面比 GPT-3.5 表现更好，而严格的提示词对长度控制有很大帮助。但如果想更详细地探索呢？
+
+为了做到这一点，我们可以选择所有想要比较的运行（在这个案例中是全部三个），然后在比较视图中打开它们。我们会立即看到所有三个测试并排显示。某些单元格有颜色编码——这显示了相对于某个基准的*某个指标*的回归。我们会自动选择基准和指标的默认值，但你可以自己更改这些。你也可以使用 `Display` 显示控制来选择你看到的列和指标。你还可以通过点击顶部的图标自动筛选只看有改进/回归的运行。
+
+![Testing tutorial compare runs](/langsmith/images/testing-tutorial-compare-runs.png)
+
+如果我们想查看更多信息，还可以选择悬停在行上时出现的 `Expand` 展开按钮，打开带有更详细信息的面板：
+
+![Testing tutorial side panel](/langsmith/images/testing-tutorial-side-panel.png)
+
+## 设置在 CI/CD 中运行的自动化测试
+
+既然我们以一次性方式运行了测试，就可以将其设置为自动化运行。我们可以通过将其作为在 CI/CD 中运行的 pytest 文件来轻松实现这一点。作为其中的一部分，我们可以只记录结果，或者设置一些标准来判断是否通过。例如，如果我想确保生成的响应始终至少有 80% 通过 `length` 长度检查，我们可以用这样的测试来设置：
+
+```python
+def test_length_score() -> None:
+    """Test that the length score is at least 80%."""
+    experiment_results = evaluate(
+        ls_target, # Your AI system
+        data=dataset_name, # The data to predict and grade over
+        evaluators=[concision, correctness], # The evaluators to score the results
+    )
+    # This will be cleaned up in the next release:
+    feedback = client.list_feedback(
+        run_ids=[r.id for r in client.list_runs(project_name=experiment_results.experiment_name)],
+        feedback_key="concision"
+    )
+    scores = [f.score for f in feedback]
+    assert sum(scores) / len(scores) >= 0.8, "Aggregate score should be at least .8"
+```
+
+## 随时间追踪结果
+
+现在我们已经让这些实验以自动化方式运行，我们希望随时间追踪这些结果。我们可以通过数据集页面中的整体 `Experiments`（实验）标签页来执行此操作。默认情况下，我们会随时间展示评估指标（红色高亮显示）。我们还会自动追踪 git 指标，以便轻松地将其与代码分支关联（黄色高亮显示）。
+
+![随时间测试教程](/langsmith/images/testing-tutorial-over-time.png)
+
+## 结论
+
+本教程到此结束！
+
+我们已经介绍了如何创建初始测试集、定义一些评估指标、运行实验、手动比较、设置 CI/CD，以及随时间追踪结果。这可以帮助您充满信心地进行迭代。
+
+这只是开始。如前所述，评估是一个持续的过程。例如，您希望评估的数据点可能会随着时间继续变化。您可能希望探索许多类型的评估器。要了解更多信息，请参阅[操作指南](/langsmith/evaluation)。
+
+此外，除了这种"离线"方式外，还有其他评估数据的方法（例如，您可以评估生产数据）。要了解有关在线评估的更多信息，请参阅[设置 LLM-as-a-judge 在线评估器](/langsmith/online-evaluations-llm-as-judge)。
+
+## 参考代码
+
+<Accordion title="点击查看合并的代码片段">
+
+</Accordion>
+```python
+import openai
+from langsmith import Client, wrappers
+
+# Application code
+openai_client = wrappers.wrap_openai(openai.OpenAI())
+
+default_instructions = "Respond to the users question in a short, concise manner (one short sentence)."
+
+def my_app(question: str, model: str = "gpt-5.4-mini", instructions: str = default_instructions) -> str:
+    return openai_client.chat.completions.create(
+        model=model,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": question},
+        ],
+    ).choices[0].message.content
+
+client = Client()
+
+# Define dataset: these are your test cases
+dataset_name = "QA Example Dataset"
+dataset = client.create_dataset(dataset_name)
+
+client.create_examples(
+    dataset_id=dataset.id,
+    examples=[
+        {
+            "inputs": {"question": "What is LangChain?"},
+            "outputs": {"answer": "A framework for building LLM applications"},
+        },
+        {
+            "inputs": {"question": "What is LangSmith?"},
+            "outputs": {"answer": "A platform for observing and evaluating LLM applications"},
+        },
+        {
+            "inputs": {"question": "What is OpenAI?"},
+            "outputs": {"answer": "A company that creates Large Language Models"},
+        },
+        {
+            "inputs": {"question": "What is Google?"},
+            "outputs": {"answer": "A technology company known for search"},
+        },
+        {
+            "inputs": {"question": "What is Mistral?"},
+            "outputs": {"answer": "A company that creates Large Language Models"},
+        }
+    ]
+)
+
+# Define evaluators
+eval_instructions = "You are an expert professor specialized in grading students' answers to questions."
+
+def correctness(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
+    user_content = f"""You are grading the following question:
+{inputs['question']}
+Here is the real answer:
+{reference_outputs['answer']}
+You are grading the following predicted answer:
+{outputs['response']}
+Respond with CORRECT or INCORRECT:
+Grade:"""
+    response = openai_client.chat.completions.create(
+        model="gpt-5.4-mini",
+        temperature=0,
+        messages=[
+            {"role": "system", "content": eval_instructions},
+            {"role": "user", "content": user_content},
+        ],
+    ).choices[0].message.content
+    return response == "CORRECT"
+
+def concision(outputs: dict, reference_outputs: dict) -> bool:
+    return int(len(outputs["response"]) < 2 * len(reference_outputs["answer"]))
+
+# Run evaluations
+def ls_target(inputs: str) -> dict:
+    return {"response": my_app(inputs["question"])}
+
+experiment_results_v1 = client.evaluate(
+    ls_target, # Your AI system
+    data=dataset_name, # The data to predict and grade over
+    evaluators=[concision, correctness], # The evaluators to score the results
+    experiment_prefix="openai-4o-mini", # A prefix for your experiment names to easily identify them
+)
+
+def ls_target_v2(inputs: str) -> dict:
+    return {"response": my_app(inputs["question"], model="gpt-4-turbo")}
+
+experiment_results_v2 = client.evaluate(
+    ls_target_v2,
+    data=dataset_name,
+    evaluators=[concision, correctness],
+    experiment_prefix="openai-4-turbo",
+)
+
+instructions_v3 = "Respond to the users question in a short, concise manner (one short sentence). Do NOT use more than ten words."
+
+def ls_target_v3(inputs: str) -> dict:
+    response = my_app(
+        inputs["question"],
+        model="gpt-4-turbo",
+        instructions=instructions_v3
+    )
+    return {"response": response}
+
+experiment_results_v3 = client.evaluate(
+    ls_target_v3,
+    data=dataset_name,
+    evaluators=[concision, correctness],
+    experiment_prefix="strict-openai-4-turbo",
+)
+```
+</Accordion>

@@ -1,0 +1,335 @@
+---
+title: 追踪 Claude Code 应用
+sidebarTitle: Claude Code
+---
+
+本指南介绍如何自动将 [Claude Code CLI](https://code.claude.com/docs/en/overview) 中的对话发送到 LangSmith。
+
+配置完成后，每个 Claude Code 项目都可以选择向 LangSmith 发送追踪。每个追踪包含用户消息、工具调用、压缩、子代理运行和助手回复。系统提示词不包含在内，因为 Claude Code 不会在对话记录中返回它们。
+
+## 前提条件
+
+在设置追踪之前，请确保您已具备：
+
+- 已安装 [**Claude Code CLI**](https://code.claude.com/docs/en/overview)。
+- 一个 [**LangSmith API 密钥**](/langsmith/create-account-api-key)。
+- 已安装 [**Node.js**](https://nodejs.org/)。
+
+## 开始使用
+
+在 Claude Code 中，运行：
+
+```bash
+/plugin marketplace add langchain-ai/langsmith-claude-code-plugins
+/plugin install langsmith-tracing@langsmith-claude-code-plugins
+/reload-plugins
+```
+
+要更新插件，请运行：
+
+```bash
+/plugin marketplace update langsmith-claude-code-plugins
+/reload-plugins
+```
+
+<Note> 如果您正在从之前推荐的使用手动创建的停止钩子追踪 Claude Code 的版本迁移，请参阅[从手动停止钩子迁移](#migrating-from-the-manual-stop-hook)。</Note>
+
+### 设置环境变量
+
+**选项 1: 项目级配置（推荐）**
+
+此插件需要以下环境变量：
+
+- `TRACE_TO_LANGSMITH: "true"`：启用此项目的追踪功能。移除或设置为 `false` 可禁用追踪。
+- `CC_LANGSMITH_API_KEY`：您的 LangSmith API 密钥。
+- `CC_LANGSMITH_PROJECT`：将发送追踪的 LangSmith 项目名称。
+- （可选）`CC_LANGSMITH_METADATA`：要附加到所有运行的自定义元数据 JSON 对象（例如 PR URL、作者）。
+- （可选）`CC_LANGSMITH_DEBUG: "true"`：启用详细调试日志。移除或设置为 `false` 可禁用调试日志。
+
+要完成设置，请创建或编辑 [Claude Code 的项目设置文件](https://code.claude.com/docs/en/settings#:~:text=Project%20settings%20are%20saved%20in%20your%20project%20directory%3A)。在您的项目目录中创建 `.claude/settings.local.json` 文件，并按如下方式填充：
+
+```json
+{
+  "env": {
+    "TRACE_TO_LANGSMITH": "true",
+    "CC_LANGSMITH_API_KEY": "<LangSmith API key>",
+    "CC_LANGSMITH_PROJECT": "my-project"
+  }
+}
+```
+
+<Note> 或者，要为所有 Claude Code 会话启用到 LangSmith 的追踪功能，您可以将上述 JSON 添加到您的[全局 Claude Code settings.json](https://code.claude.com/docs/en/settings#:~:text=User%20settings%20are%20defined%20in%20~/.claude/settings.json%20and%20apply%20to%20all%20projects.)文件中。 </Note>
+
+**选项 2：Shell 环境变量**
+
+在您的 shell 中运行以下命令，或将它们添加到您的 shell 配置文件（`~/.zshrc`、`~/.bashrc` 或 `~/.bash_profile`）：
+
+```bash
+export TRACE_TO_LANGSMITH="true"
+export CC_LANGSMITH_API_KEY="<LangSmith API key>"
+export CC_LANGSMITH_PROJECT="my-project"
+```
+
+## 验证设置
+
+在 Claude Code 响应后，追踪记录将在你的 [LangSmith](https://smith.langchain.com) 项目中完整显示。如果在运行进行时中断它，插件只会在你发送下一条消息或结束会话时刷新该运行。
+
+在 LangSmith 中，你会看到：
+
+- 发送给 Claude Code 的每条消息都会显示为一条追踪记录。
+- 来自同一 Claude Code 会话的所有轮次都使用共享的 `thread_id` 分组，你可以在项目的 **Threads** 标签页中查看。
+
+## 自定义元数据
+
+将 `CC_LANGSMITH_METADATA` 环境变量设置为 JSON 对象，可为所有追踪运行附加自定义元数据。这对于使用上下文信息（如 PR URL、作者或环境名称）标记追踪记录非常有用。
+
+<Tabs>
+
+<Tab title="配置文件（推荐）">
+
+
+</Tab>
+</Tabs>
+
+```json
+{
+  "env": {
+    "TRACE_TO_LANGSMITH": "true",
+    "CC_LANGSMITH_API_KEY": "<LangSmith API key>",
+    "CC_LANGSMITH_PROJECT": "my-project",
+    "CC_LANGSMITH_METADATA": "{\"author\":\"jane\",\"environment\":\"development\"}"
+  }
+}
+```
+
+</Tab>
+
+<Tab title="Shell 环境变量">
+
+
+</Tab>
+
+```bash
+export CC_LANGSMITH_METADATA='{"author":"jane","environment":"development"}'
+```
+
+</Tab>
+
+</Tabs>
+
+元数据键和值将显示在 LangSmith 的所有运行中，您可以使用它们来过滤和搜索追踪。
+
+## 与 GitHub Actions 配合使用
+
+您可以将此插件与 [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) 配合使用，以在 CI 中追踪 Claude Code 运行。将以下内容添加到您的工作流程中：
+
+```yaml
+- uses: anthropics/claude-code-action@v1
+  env:
+    TRACE_TO_LANGSMITH: "true"
+    CC_LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+    CC_LANGSMITH_PROJECT: "my-project"
+    CC_LANGSMITH_METADATA: |
+      {
+        "pr_url": "${{ github.event.pull_request.html_url || '' }}",
+        "pr_number": "${{ github.event.pull_request.number || '' }}",
+        "pr_author": "${{ github.event.pull_request.user.login || '' }}",
+        "repository": "${{ github.repository }}",
+        "commit_sha": "${{ github.sha }}",
+        "trigger": "${{ github.event_name }}"
+      }
+  with:
+    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    plugin_marketplaces: |
+      https://github.com/langchain-ai/langsmith-claude-code-plugins.git
+    plugins: |
+      langsmith-tracing@langsmith-claude-code-plugins
+    prompt: |
+      Your prompt here
+```
+
+确保将 `LANGSMITH_API_KEY` 和 `ANTHROPIC_API_KEY` 添加为[仓库密钥](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions)。
+
+这允许您在 LangSmith 中将追踪关联到特定的 PR、提交和作者。
+
+## 将追踪嵌套在现有运行下
+
+您还可以设置名为 `CC_LANGSMITH_PARENT_DOTTED_ORDER` 的环境变量，将所有 Claude Code 追踪嵌套为现有 LangSmith 运行的子项。当 Claude Code 作为更大追踪工作流的一部分以编程方式调用时，这非常有用。
+
+**Python**
+
+```python
+import subprocess
+from langsmith import traceable, get_current_run_tree
+
+
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = "<LangSmith API key>"
+os.environ["LANGSMITH_PROJECT"] = "claude-code"
+
+@traceable
+def run_claude(prompt: str):
+    run_tree = get_current_run_tree()
+    subprocess.run(
+        ["claude", "-p", prompt],
+        env={
+            **os.environ,
+            "TRACE_TO_LANGSMITH": "true",
+            "CC_LANGSMITH_API_KEY": "<LangSmith API key>",
+            "CC_LANGSMITH_PROJECT": "claude-code",
+            "CC_LANGSMITH_PARENT_DOTTED_ORDER": run_tree.dotted_order,
+        },
+    )
+```
+
+**TypeScript**
+
+```ts
+import { traceable, getCurrentRunTree } from "langsmith/traceable";
+import { execSync } from "node:child_process";
+
+process.env.LANGSMITH_TRACING = "true";
+process.env.LANGSMITH_API_KEY = "<LangSmith API key>";
+process.env.LANGSMITH_PROJECT = "claude-code";
+
+const runClaude = traceable(
+  async (prompt: string) => {
+    const runTree = getCurrentRunTree();
+    const pluginDir = new URL(".", import.meta.url).pathname;
+    const res = execSync(`claude -p "${prompt}" --plugin-dir '${pluginDir}'`, {
+      env: {
+        ...process.env,
+        TRACE_TO_LANGSMITH: "true",
+        CC_LANGSMITH_API_KEY: "<LangSmith API key>",
+        CC_LANGSMITH_PROJECT: "claude-code",
+        CC_LANGSMITH_PARENT_DOTTED_ORDER: runTree.dotted_order,
+      },
+    });
+    return res.toString();
+  },
+  { name: "run_claude" },
+);
+```
+
+生成的追踪层级结构如下所示：
+
+```
+Your outer run (chain)
+└── Claude Code Turn (chain)
+    ├── Claude (llm)
+    ├── Read (tool)
+    └── Claude (llm)
+```
+
+## 跟踪多个目的地（副本）
+
+您可以使用 `CC_LANGSMITH_RUNS_ENDPOINTS` 环境变量同时跟踪多个 LangSmith 项目或工作区。将 `CC_LANGSMITH_RUNS_ENDPOINTS` 设置为副本配置的 JSON 数组。这将覆盖其他客户端设置。
+
+跟踪多个[副本](/langsmith/log-traces-to-project)可用于：
+
+- 将跟踪同时发送到生产环境和预发布环境项目。
+- 使用不同的 API 密钥跟踪多个工作区。
+- 为特定的副本目标添加额外的元数据。
+
+每个副本对象支持以下字段：
+
+| 字段 | 必填 | 描述 |
+| --- | --- | --- |
+| `apiUrl` | 是 | LangSmith API URL（通常为 `https://api.smith.langchain.com`） |
+| `apiKey` | 是 | 目标[工作区](/langsmith/administration-overview#workspaces) 的 API 密钥 |
+| `projectName` | 是 | 目标工作区中的项目名称 |
+| `updates` | 否 | 要在复制的运行上覆盖的可选元数据/字段 |
+
+设置 `CC_LANGSMITH_RUNS_ENDPOINTS` 环境变量有两种方式：
+
+<Tabs>
+
+<Tab title="设置文件（推荐）">
+
+在您的本地 `.claude/settings.local.json` 或全局 `~/.claude/settings.json` 中：
+
+```json
+{
+  "env": {
+    "TRACE_TO_LANGSMITH": "true",
+    "CC_LANGSMITH_RUNS_ENDPOINTS": "[{\"apiUrl\":\"https://api.smith.langchain.com\",\"apiKey\":\"ls__key_workspace_a\",\"projectName\":\"project-prod\"},{\"apiUrl\":\"https://api.smith.langchain.com\",\"apiKey\":\"ls__key_workspace_b\",\"projectName\":\"project-staging\",\"updates\":{\"metadata\":{\"environment\":\"staging\"}}}]"
+  }
+}
+```
+
+<Tip>
+要生成转义的 JSON 字符串，请使用：
+
+
+</Tip>
+
+```bash
+echo '[{"apiUrl":"...","apiKey":"...","projectName":"..."}]' | jq -cR .
+```
+</Tip>
+
+</Tab>
+
+<Tab title="Shell 环境变量">
+
+**选项 2：Shell 环境变量**
+
+添加到您的 `~/.zshrc`、`~/.bashrc` 或 `~/.bash_profile`：</Tab>
+
+```bash
+export CC_LANGSMITH_RUNS_ENDPOINTS='[{"apiUrl":"https://api.smith.langchain.com","apiKey":"ls__key_workspace_a","projectName":"project-prod"},{"apiUrl":"https://api.smith.langchain.com","apiKey":"ls__key_workspace_b","projectName":"project-staging","updates":{"metadata":{"environment":"staging"}}}]'
+```
+
+</Tab>
+
+</Tabs>
+
+## 故障排除
+
+### LangSmith 中未显示追踪
+
+1. **检查 Hook 是否正在运行**：
+   ```bash
+   tail -f ~/.claude/state/hook.log
+   ```
+在每次 Claude 响应后，你应该看到日志条目。
+
+2. **验证环境变量**：
+   - 检查项目的 `.claude/settings.local.json` 中的 `TRACE_TO_LANGSMITH="true"`。
+   - 验证你的个人访问令牌 (PAT) 是否正确（以 `lsv2_pt_` 开头）。
+   - 确保项目名称存在于 LangSmith 中。
+
+3. **启用调试模式** 以查看详细的 API 活动：
+   ```json
+   {
+     "env": {
+       "CC_LANGSMITH_DEBUG": "true"
+     }
+   }
+   ```
+然后检查日志中的 API 调用和 HTTP 状态码。
+
+### 用户中断后子代理运行不会显示
+
+子代理仅在完成时才会被追踪。这意味着如果您在子代理运行过程中中断对话轮次，子代理的子运行将不会被追踪。
+
+### 管理日志文件大小
+
+Hook 会将所有活动记录到 `~/.claude/state/hook.log`。启用调试模式后，此文件可能会变得很大：
+
+```bash
+# View log file size
+ls -lh ~/.claude/state/hook.log
+
+# Clear logs if needed
+> ~/.claude/state/hook.log
+```
+
+## 从手动 stop hook 迁移
+
+如果您之前使用旧版本的 LangSmith tracing Claude Code，则需要删除 `~/.claude/hooks/stop_hook.sh`，并从之前添加过该 hook 引用的任何 `settings.local.json` 或 `settings.json` 文件中移除相关引用，然后按照 [插件安装说明](#getting-started) 进行操作。
+
+## 源代码
+
+该插件采用 MIT 许可证开源，可在 [此 GitHub 仓库](https://github.com/langchain-ai/langsmith-claude-code-plugins) 中获取。

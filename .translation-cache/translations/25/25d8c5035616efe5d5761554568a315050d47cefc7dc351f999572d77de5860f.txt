@@ -1,0 +1,185 @@
+---
+title: cloro
+---
+
+[cloro](https://cloro.dev) 提供用于监控 AI 平台和搜索引擎的结构化数据提取工具。
+
+## 安装
+
+安装 `langchain-cloro` 包：
+
+```python
+pip install -U langchain-cloro
+```
+
+从 [cloro 控制面板](https://dashboard.cloro.dev) 获取您的 API 密钥，并将其设置为环境变量：
+
+```python
+import os
+os.environ["CLORO_API_KEY"] = "your-api-key"
+```
+
+## Google Search 搜索结果抓取工具
+
+从 Google 搜索结果中提取结构化数据，包括自然搜索结果、People Also Ask 问题、相关搜索，以及可选的 AI Overview。
+
+```python
+from langchain_cloro import CloroGoogleSearch
+
+tool = CloroGoogleSearch()
+result = tool.invoke({"query": "best laptops for programming"})
+```
+
+### 包含 AI 概览
+
+```python
+result = tool.invoke({
+    "query": "best laptops for programming",
+    "include_aioverview": True,
+    "aioverview_markdown": True
+})
+```
+
+### 自定义参数
+
+```python
+result = tool.invoke({
+    "query": "python tutorials",
+    "country": "GB",  # UK results
+    "device": "mobile",  # or "desktop"
+    "pages": 3  # Number of pages (1-20)
+})
+```
+
+## ChatGPT scraper
+
+从 ChatGPT 提取结构化数据，支持购物卡片、实体提取和高级功能，用于监控产品、价格和品牌提及。
+
+```python
+from langchain_cloro import CloroChatGPT
+
+tool = CloroChatGPT()
+result = tool.invoke({"prompt": "What are the best sneakers under $100?"})
+```
+
+### 包含原始响应和搜索查询
+
+```python
+result = tool.invoke({
+    "prompt": "best running shoes 2024",
+    "include_raw_response": True,
+    "include_search_queries": True,
+    "country": "US"
+})
+```
+
+## Gemini scraper
+
+从 Google Gemini AI 提取结构化数据，支持来源引用和置信度。
+
+```python
+from langchain_cloro import CloroGemini
+
+tool = CloroGemini()
+result = tool.invoke({"prompt": "Explain quantum entanglement"})
+```
+
+### 包含 Markdown 响应
+
+```python
+result = tool.invoke({
+    "prompt": "What is machine learning?",
+    "include_markdown": True,
+    "country": "US"
+})
+```
+
+## Perplexity 抓取器
+
+从 Perplexity AI 中提取全面的结构化数据，包括实时网络来源、购物产品、媒体内容和旅行信息。
+
+```python
+from langchain_cloro import CloroPerplexity
+
+tool = CloroPerplexity()
+result = tool.invoke({"prompt": "Best hotels in San Francisco"})
+```
+
+## Grok scraper
+
+从 Grok 提取全面结构化数据，借助实时网络来源以及增强的来源元数据，包括预览文本、创建者详情和图片。
+
+```python
+from langchain_cloro import CloroGrok
+
+tool = CloroGrok()
+result = tool.invoke({"prompt": "Latest news about AI"})
+```
+
+## Copilot scraper
+
+从 Microsoft Copilot 提取结构化数据并附带来源引用。
+
+```python
+from langchain_cloro import CloroCopilot
+
+tool = CloroCopilot()
+result = tool.invoke({"prompt": "What is the capital of France?"})
+```
+
+## 与智能体配合使用
+
+所有 cloro 工具都可以与 LangChain 智能体配合使用：
+
+```python
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_cloro import CloroGoogleSearch, CloroChatGPT
+
+# Initialize tools
+search_tool = CloroGoogleSearch()
+chatgpt_tool = CloroChatGPT()
+tools = [search_tool, chatgpt_tool]
+
+# Create agent
+llm = ChatOpenAI(model="gpt-4", temperature=0)
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant"),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+agent = create_tool_calling_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+
+# Run agent
+result = agent_executor.invoke({"input": "Search for information about AI trends and summarize what you find"})
+```
+
+## 响应格式
+
+所有 cloro 工具返回 JSON 格式的响应，包含结构化数据：
+
+```python
+import json
+
+result = tool.invoke({"query": "python programming"})
+data = json.loads(result)
+
+# Access structured results
+if "result" in data:
+    if "organicResults" in data["result"]:
+        for item in data["result"]["organicResults"]:
+            print(f"{item['title']}: {item['link']}")
+```
+
+## API 参考
+
+- **`CloroGoogleSearch`**：带有 AI Overview 支持的 Google 搜索
+- **`CloroChatGPT`**：带购物卡片的 ChatGPT 监控
+- **`CloroGemini`**：带引用的 Google Gemini AI
+- **`CloroPerplexity`**：带有来源和媒体的 Perplexity AI
+- **`CloroGrok`**：带有增强元数据的 Grok
+- **`CloroCopilot`**：Microsoft Copilot 监控
+
+欲了解更多详情，请访问 [cloro 文档](https://docs.cloro.dev)。

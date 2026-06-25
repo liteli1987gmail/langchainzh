@@ -1,0 +1,197 @@
+## `BG_JOB_ISOLATED_LOOPS`
+
+将 `BG_JOB_ISOLATED_LOOPS` 设置为 `True` 可在独立于服务 API 事件循环的后台事件循环中执行后台运行。
+
+<Warning>
+启用此标志不会消除根本问题。它只是将同步阻塞工作从服务 API 的事件循环中移出，使健康检查不再失败，但阻塞代码仍会在后台循环上运行，**并且**将继续在生产环境中造成问题，例如吞吐量下降、尾延迟峰值、工作线程饥饿或连接池耗尽（见下文连接池大小注意事项），以及在负载下扩展性差。
+
+要正确解决这些问题，请在整个代理中使用原生异步驱动程序和异步代码。这意味着使用异步 HTTP 客户端如 `httpx` 或 `aiohttp`（虽然我们建议缓存客户端以避免加载 SSL 上下文带来的 CPU 开销）、异步数据库驱动程序如 `asyncpg` 或 `psycopg[async]`，以及异步模型 SDK。对于不可避免的同步库，请将特定调用包装在 `asyncio.to_thread(...)` 或 `loop.run_in_executor(...)` 中，而不是为整个部署启用此标志。
+</Warning>
+
+如果图/节点的实现包含同步代码，则应将此环境变量设置为 `True`。在这种情况下，同步代码会阻塞服务 API 事件循环，这可能导致 API 不可用。API 不可用的一个症状是由于健康检查失败而导致应用程序持续重启。
+
+<Warning>
+启用 `BG_JOB_ISOLATED_LOOPS` 时，每个后台工作线程在自己的线程中运行，并拥有**独立的 Postgres 连接池**。每个工作线程的连接池大小为 `LANGGRAPH_POSTGRES_POOL_MAX_SIZE // N_JOBS_PER_WORKER`。例如，当 `LANGGRAPH_POSTGRES_POOL_MAX_SIZE=20` 且 `N_JOBS_PER_WORKER=15` 时，每个工作线程仅获得 1 个连接的连接池。较小的每工作线程连接池更容易出现连接故障，因为单个陈旧连接在连接池中占很大比例。如果启用隔离循环，请确保 `LANGGRAPH_POSTGRES_POOL_MAX_SIZE` 足够大，以提供至少几个连接给每个工作线程。
+</Warning>
+
+默认为 `False`。
+
+## `BG_JOB_MAX_RETRIES`
+
+后台运行在遇到可重试的故障（如瞬态数据库错误、服务器关闭取消）后将被重试的最大次数。当运行因可重试错误而失败时，它会被放回队列并从最后一个检查点步骤恢复。如果运行超过最大重试次数，则会被标记为失败。
+
+默认为 `3`。
+
+## `BG_JOB_SHUTDOWN_GRACE_PERIOD_SECS`
+
+指定服务器在队列收到关闭信号后等待后台作业完成的时间（以秒为单位）。超过此时间后，服务器将强制终止。默认为 `180` 秒。最大值为 `3600` 秒。设置此参数以确保作业在关闭期间有足够的时间正常完成。在 `langgraph-api==0.2.16` 中添加。
+
+## `BG_JOB_TIMEOUT_SECS`
+
+可以增加后台运行的超时时间。但是，Cloud 部署的基础设施对 API 请求强制执行 1 小时超时限制。这意味着客户端和服务器之间的连接将在 1 小时后超时。这是不可配置的。
+
+后台运行可以执行超过 1 小时，但如果运行时间超过 1 小时，客户端必须重新连接到服务器（例如通过 `POST /threads/{thread_id}/runs/{run_id}/stream` 加入流）才能获取运行的输出。
+
+默认为 `86400`。
+
+## `CORS_ALLOW_ORIGINS`
+
+设置 `CORS_ALLOW_ORIGINS` 以指定允许的来源。
+- 允许单个来源的示例：`CORS_ALLOW_ORIGINS=https://example.com`
+- 允许多个来源的示例：`CORS_ALLOW_ORIGINS=https://example.com,https://app.example.com`
+
+有关高级 CORS 配置，请参阅[如何添加自定义 CORS 配置](/langsmith/cli#customizing-http-middleware-and-headers)。
+
+默认为 `*`（所有来源）。
+
+## `DD_API_KEY`
+
+指定 `DD_API_KEY`（您的 [Datadog API Key](https://docs.datadoghq.com/account_management/api-app-keys/)）以自动为部署启用 Datadog 追踪。指定其他 [`DD_*` 环境变量](https://ddtrace.readthedocs.io/en/stable/configuration.html) 以配置追踪检测。
+
+如果指定了 `DD_API_KEY`，应用程序进程将被包装在 [`ddtrace-run` 命令](https://ddtrace.readthedocs.io/en/stable/installation_quickstart.html)中。通常需要其他 `DD_*` 环境变量（如 `DD_SITE`、`DD_ENV`、`DD_SERVICE`、`DD_TRACE_ENABLED`）来正确配置追踪检测。详情请参阅[`DD_*` 环境变量](https://ddtrace.readthedocs.io/en/stable/configuration.html)。您可以启用 `DD_TRACE_DEBUG=true` 并设置 `DD_LOG_LEVEL=debug` 来进行故障排除。
+
+<Note>
+启用 `DD_API_KEY`（从而启用 `ddtrace-run`）可能会覆盖或干扰您已集成到应用程序代码中的其他自动检测解决方案（如 OpenTelemetry）。
+</Note>
+
+## `LANGGRAPH_POSTGRES_POOL_MAX_SIZE`
+
+从 langgraph-api 版本 `0.2.12` 开始，可以使用 `LANGGRAPH_POSTGRES_POOL_MAX_SIZE` 环境变量控制 Postgres 连接池的最大大小（每个副本）。通过设置此变量，您可以确定服务器将与 Postgres 数据库建立的并发连接数的上限。
+
+例如，如果部署扩展到 10 个副本且 `LANGGRAPH_POSTGRES_POOL_MAX_SIZE` 配置为 `150`，则最多可建立 1500 个与 Postgres 的连接。这对于数据库资源有限（或更充足）的部署特别有用，或者在您需要出于性能或扩展原因调整连接行为时。
+
+当启用 [`BG_JOB_ISOLATED_LOOPS`](#bg_job_isolated_loops) 时，连接池不共享。相反，每个后台工作线程创建自己的连接池，最大大小为 `LANGGRAPH_POSTGRES_POOL_MAX_SIZE / N_JOBS_PER_WORKER`。降低连接池大小时请记住这一点。对于共享连接池来说效果好的值在隔离循环下可能会导致每个工作线程的连接池非常小。
+
+默认为 `150` 个连接。
+
+## `LS_CHECKPOINT_DELETE`
+
+用于延迟删除检查点的 JSON 值配置。启用后，线程删除和修剪操作会将检查点加入后台删除队列，而不是同步删除，从而将 I/O 从请求热路径移出。在 `langgraph-api>=0.8.1` 中可用。
+
+<Note>
+仅支持默认的 PostgreSQL 检查点后端。延迟删除将在未来版本中成为默认设置。
+</Note>
+
+接受的字段：
+
+- `enabled`（布尔值，默认为 `false`）：当为 `true` 时，线程删除和修剪操作会将检查点加入 `checkpoint_delete_queue` 并立即返回，后台工作线程会排出队列中的内容。
+- `enabledWorkerOnly`（布尔值，默认为 `false`）：仅运行后台排出工作线程，而不加入新条目。在将 `enabled` 回滚为 `false` 后使用此参数来完成排出队列。
+- `pollIntervalMs`（整数，默认为 `5000`）：工作线程轮询队列的频率，以毫秒为单位。
+- `batchSize`（整数，默认为 `25`）：工作线程每个事务出队的检查点条目数。较小的值会在更长的时间内分散 I/O，但代价是更长的排出延迟。
+- `batchSleepMs`（整数，默认为 `500`）：当队列非空时，工作线程在批次之间休眠的时长，以毫秒为单位。
+
+示例：`LS_CHECKPOINT_DELETE='{"enabled":true,"batchSize":10,"pollIntervalMs":1000}'`。
+
+默认为禁用（同步检查点删除）。
+
+## `LS_DEFAULT_CHECKPOINTER_BACKEND`
+
+为未在 `langgraph.json` 中指定检查点后端的代理服务器设置默认的[检查点后端](/langsmith/configure-checkpointer)。可接受的值：`"default"`（PostgreSQL）、`"mongo"`、`"custom"`。
+
+如果应用程序的 `langgraph.json` 包含 `checkpointer.backend` 值，它优先于此变量。
+
+当设置为 `"mongo"` 时，您还必须通过 [`LS_MONGODB_URI`](#ls_mongodb_uri) 提供 MongoDB 连接 URI。
+
+## `LANGSMITH_TRACING`
+
+将 `LANGSMITH_TRACING` 设置为 `false` 以禁用到 LangSmith 的追踪。
+
+<Note>
+有关基于运行时条件（如每个客户端的要求或数据敏感性）进行选择性追踪控制，请参阅[条件追踪](/langsmith/conditional-tracing)。
+</Note>
+
+默认为 `true`。
+
+## `LOG_COLOR`
+
+这主要在使用 `langgraph dev` 命令启动开发服务器的上下文中相关。将 `LOG_COLOR` 设置为 `true` 可在使用默认控制台渲染器时启用 ANSI 彩色控制台输出。将此变量设置为 `false` 可禁用彩色输出，从而产生单色日志。默认为 `true`。
+
+## `LOG_LEVEL`
+
+配置[日志级别](https://docs.python.org/3/library/logging.html#logging-levels)。默认为 `INFO`。
+
+## `LOG_JSON`
+
+将 `LOG_JSON` 设置为 `true` 可使用配置的 `JSONRenderer` 将所有日志消息呈现为 JSON 对象。这会产生可被日志管理系统轻松解析或摄入的结构化日志。默认为 `false`。
+
+## `N_JOBS_PER_WORKER`
+
+Agent Server 任务队列中每个工作线程的作业数。默认为 `10`。
+
+## `LS_APM_OTEL_ENABLED`
+
+要为您的部署配置 OpenTelemetry APM 追踪，请将 `LS_APM_OTEL_ENABLED` 设置为 `true`，并将 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 或 `OTEL_EXPORTER_OTLP_ENDPOINT` 设置为目标追踪接收端点。请注意，在服务器版本高于 `0.7.17` 时，需要 `LS_APM_OTEL_ENABLED` 和其他两个导出端点中的一个才能激活 OpenTelemetry APM 追踪。
+
+指定其他 [`OTEL_*` 环境变量](https://opentelemetry.io/docs/collector/configuration/) 以配置追踪、日志记录和其他检测。
+
+```shell
+# If you set LS_APM_OTEL_ENABLED AND (OTEL_EXPORTER_OTLP_TRACES_ENDPOINT or OTEL_EXPORTER_OTLP_ENDPOINT),
+# the server starts with OpenTelemetry instrumentation enabled.
+LS_APM_OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=<target trace ingestion endpoint>
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net
+OTEL_SERVICE_NAME=MY_LANGSMITH_DEPLOYMENT
+OTEL_EXPORTER_OTLP_HEADERS=api-key=<YOUR_INGEST_LICENSE_KEY>
+LANGSMITH_OTEL_ENABLED=true
+# Common OTEL settings
+OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT=4095
+OTEL_EXPORTER_OTLP_COMPRESSION=gzip
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE=delta
+OTEL_PYTHON_EXCLUDED_URLS=/metrics,/ok,/info
+# Optional: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+```
+
+例如，要将 OpenTelemetry 追踪数据提交到 [New Relic US 区域](https://docs.newrelic.com/docs/opentelemetry/best-practices/opentelemetry-otlp/)，请设置以下配置：
+
+```shell
+LS_APM_OTEL_ENABLED=true
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://otlp.nr-data.net/v1/traces
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net
+OTEL_EXPORTER_OTLP_HEADERS=api-key=<YOUR_INGEST_LICENSE_KEY>
+```
+
+<Note>
+OTel APM 追踪功能已在 Agent Server 版本 `0.5.32` 中添加，目前处于 Alpha 阶段。
+</Note>
+
+## `LS_MONGODB_URI`
+
+MongoDB 检查点后端的 MongoDB 连接 URI。
+
+URI 必须指向副本集成员或 `mongos` 路由器，并且必须在路径中包含数据库名称。
+
+请参阅[配置检查点后端](/langsmith/configure-checkpointer)了解详情。
+
+## `REDIS_KEY_PREFIX`
+
+<Info>
+**API Server 版本 0.1.9+ 可用**
+此环境变量在 API Server 版本 0.1.9 及更高版本中支持。
+</Info>
+
+指定 Redis 键的前缀。这样可以让多个 Agent Server 实例通过使用不同的键前缀来共享同一个 Redis 实例。
+
+默认为 `''`。
+
+## `REDIS_MAX_CONNECTIONS`
+
+可以使用 `REDIS_MAX_CONNECTIONS` 环境变量来控制 Redis 连接池的最大大小（每个副本）。通过设置此变量，您可以确定服务器将与 Redis 实例建立的同时连接数的上限。
+
+例如，如果部署扩展到 10 个副本，并且 `REDIS_MAX_CONNECTIONS` 配置为 `150`，则最多可以建立 `1500` 个到 Redis 的连接。
+
+默认为 `2000`。
+
+## `RESUMABLE_STREAM_TTL_SECONDS`
+
+Redis 中可恢复流数据的生存时间（以秒为单位）。
+
+创建运行并流式传输输出时，可以将流配置为可恢复的（例如 `stream_resumable=True`）。如果流是可恢复的，则流的输出会临时存储在 Redis 中。可以通过设置 `RESUMABLE_STREAM_TTL_SECONDS` 来配置此数据的 TTL。
+
+请参阅 @[Python][RunsClient.stream] 和 [JS/TS](https://langchain-ai.github.io/langgraphjs/reference/classes/sdk_client.RunsClient.html#stream) SDK 了解如何实现可恢复流的更多详细信息。
+
+默认为 `120` 秒。
+
+<Note>
+如果存在大量并发运行且流式输出较大或较频繁，为 `RESUMABLE_STREAM_TTL_SECONDS` 设置非常高的值可能导致 Redis 内存使用量大幅增加。请将此值设置为可恢复网络中断期间的最小值，并优先使用检查点来实现长期持久性和执行快照。
+</Note>

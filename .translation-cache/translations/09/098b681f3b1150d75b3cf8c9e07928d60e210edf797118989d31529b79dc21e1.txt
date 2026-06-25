@@ -1,0 +1,130 @@
+---
+title: 数据位置
+sidebarTitle: 应用数据
+description: Deep Agents Code 存储配置、会话和自定义文件的位置
+---
+
+Deep Agents Code 在两个目录层级中存储数据：
+
+- **`~/.deepagents/`** — Deep Agents 特定数据（代理记忆、技能、会话）
+- **`~/.agents/`** — 工具无关数据（跨 AI CLI 工具共享的技能）
+
+## 目录结构
+
+```text
+~/.deepagents/
+├── .state/                  # Per-machine Deep Agents Code state (managed automatically)
+│   ├── sessions.db          #   SQLite database for conversation checkpoints
+│   ├── history.jsonl        #   Command input history
+│   ├── chatgpt-auth.json    #   ChatGPT OAuth token for the openai_codex provider
+│   ├── ...                  #   Other markers & credentials
+└── {agent}/                 # Per-agent directory (default: "agent")
+    ├── AGENTS.md            # User customizations to agent instructions
+    ├── skills/              # User-level skills
+    │   └── {skill-name}/
+    │       └── SKILL.md
+    └── agents/              # Custom subagent definitions
+        └── {subagent-name}/
+            └── AGENTS.md
+
+~/.agents/                   # Tool-agnostic alias (shared across AI CLIs)
+└── skills/                  # Skills available to any compatible tool
+    └── {skill-name}/
+        └── SKILL.md
+
+{project}/                   # Project-level (in git repo root)
+├── AGENTS.md                # Project instructions (root-level)
+└── .deepagents/
+│   ├── AGENTS.md            # Project instructions (preferred location)
+│   ├── skills/              # Project-specific skills
+│   │   └── {skill-name}/
+│   │       └── SKILL.md
+│   └── agents/              # Project-specific subagents
+│       └── {subagent-name}/
+│           └── AGENTS.md
+└── .agents/                 # Tool-agnostic project skills
+    └── skills/
+        └── {skill-name}/
+            └── SKILL.md
+```
+
+## 存放位置
+
+| 数据 | 位置 | 读/写 | 说明 |
+|------|----------|------------|-------|
+| **会话** | `~/.deepagents/.state/sessions.db` | R/W | SQLite 检查点数据库 |
+| **输入历史** | `~/.deepagents/.state/history.jsonl` | R/W | JSON行格式，上下箭头记忆 |
+| **ChatGPT OAuth 令牌** | `~/.deepagents/.state/chatgpt-auth.json` | R/W | 备份 [`openai_codex`](/oss/deepagents/code/providers) 提供商；在使用 ChatGPT 登录时创建并自动刷新。仅对您的用户账户可读。 |
+| **基础指令** | 包 `default_agent_prompt.md` | R | 不可变，随 Deep Agents Code 升级更新 |
+| **用户自定义** | `~/.deepagents/{agent}/AGENTS.md` | R/W | 附加到基础指令 |
+| **项目指令** | `.deepagents/AGENTS.md` 或 `AGENTS.md` | R | 如果存在则同时加载 |
+| **用户技能** | `~/.deepagents/{agent}/skills/` | R/W | 代理特定技能 |
+| **共享技能** | `~/.agents/skills/` | R | 工具无关，跨CLI |
+| **项目技能** | `.deepagents/skills/` 或 `.agents/skills/` | R | 项目范围 |
+| **自定义子代理** | `~/.deepagents/{agent}/agents/` | R/W | 用户定义的子代理 |
+| **项目子代理** | `.deepagents/agents/` | R | 项目定义的子代理 |
+
+## 优先级规则
+
+当同一项目存在于多个位置时，**更高优先级完全覆盖**（不合并）。
+
+### 技能
+
+优先级顺序（从低到高）：
+
+1. `~/.deepagents/{agent}/skills/` — 用户 Deep Agents Code
+2. `~/.agents/skills/` — 用户工具无关
+3. `.deepagents/skills/` — 项目 Deep Agents Code
+4. `.agents/skills/` — 项目工具无关 *(最高)*
+
+加载技能时，Deep Agents Code 会验证解析后的文件路径是否在这些目录之一内。解析到所有技能根目录之外的符号链接会被拒绝。要允许其他目录中的符号链接目标，请参阅 [`[skills].extra_allowed_dirs`](/oss/deepagents/code/configuration#skill-directory-allowlist)。
+
+### 子代理
+
+优先级顺序（从低到高）：
+
+1. `~/.deepagents/{agent}/agents/` — 用户级别
+2. `.deepagents/agents/` — 项目级别 *(最高)*
+
+每个子代理都是一个包含 YAML frontmatter（`name`、`description`、可选 `model`）的 `AGENTS.md` 文件，以及作为系统提示的 markdown 正文。请参阅 [在 Deep Agents Code 中使用子代理](/oss/deepagents/code/subagents) 获取完整的格式参考。
+
+### 指令
+
+所有指令源都是**合并**的（不是覆盖）：
+
+1. 包基础提示 *(始终加载)*
+2. `~/.deepagents/{agent}/AGENTS.md` *(附加)*
+3. `.deepagents/AGENTS.md` *(附加)*
+4. 项目根目录的 `AGENTS.md` *(附加)*
+
+## `.deepagents` 与 `.agents`
+
+| 目录 | 用途 | 何时使用 |
+|-----------|---------|-------------|
+| `.deepagents/` | Deep Agents Code 专用 | 使用 Deep Agents Code 专用功能的技能和配置 |
+| `.agents/` | 工具无关 | 您希望在不同 AI CLI 工具之间共享的技能 |
+
+<Tip>
+使用 `.agents/skills/` 获取可与任何 AI 编码助手配合使用的技能。
+使用 `.deepagents/skills/` 获取依赖 Deep Agents 专用工具或约定的技能。
+</Tip>
+
+## 清理
+
+| 需求 | 操作 |
+|------|--------|
+| 重置所有数据 | `rm -rf ~/.deepagents` |
+| 仅清除会话 | `rm ~/.deepagents/.state/sessions.db*` |
+| 清除输入历史 | `rm ~/.deepagents/.state/history.jsonl` |
+| 清除存储的 API 密钥 | `rm ~/.deepagents/.state/auth.json` |
+| 清除 MCP OAuth 令牌 | `rm -rf ~/.deepagents/.state/mcp-tokens` |
+| 清除 MCP 项目信任 | `rm ~/.deepagents/.state/mcp_trust.json` |
+| 重新运行首次运行入门 | `rm ~/.deepagents/.state/onboarding_complete` |
+| 重置代理指令 | `dcode agents reset --agent {name}` |
+| 移除技能 | `rm -rf ~/.deepagents/{agent}/skills/{skill-name}` |
+
+<Warning>
+    删除 `~/.deepagents/.state/sessions.db` 将移除所有对话历史和检查点。
+
+    这无法撤销，除非您有 `sessions.db` 文件的备份。
+</Warning>

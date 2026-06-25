@@ -1,0 +1,235 @@
+---
+title: "Google Cloud SQL for PostgreSQL 集成"
+description: "使用 LangChain JavaScript 与 Google Cloud SQL for PostgreSQL 向量存储集成。"
+---
+
+[Cloud SQL](https://cloud.google.com/sql) 是一个完全托管的关系型数据库服务，提供高性能、无缝集成和令人印象深刻的可扩展性，并提供 PostgreSQL 等数据库引擎。
+
+本指南简要介绍如何使用 Cloud SQL for PostgreSQL 通过 `PostgresVectorStore` 类存储向量嵌入。
+
+## 概述
+
+### 集成详情
+
+| 类                   | 包                                          | [Python 支持](https://python.langchain.com/docs/integrations/vectorstores/google_cloud_sql_pg/) | 版本 |
+| :------------------ | :----------------------------------------- | :--------------------------------------------------------------------------------------------: | :------------: |
+| `PostgresVectorStore` | [`@langchain/google-cloud-sql-pg`](https://www.npmjs.com/package/@langchain/google-cloud-sql-pg) | ✅ | ![NPM - Version](https://img.shields.io/npm/v/@langchain/google-cloud-sql-pg?style=flat-square&label=%20&) |
+
+### 准备工作
+
+要使用此软件包，您需要先完成以下步骤：
+
+1. [选择或创建一个 Cloud Platform 项目。](https://developers.google.com/workspace/guides/create-project)
+2. [为您的项目启用结算功能。](https://cloud.google.com/billing/docs/how-to/modify-project#enable_billing_for_a_project)
+3. [启用 Cloud SQL Admin API。](https://console.cloud.google.com/flows/enableapi?apiid=sqladmin.googleapis.com)
+4. [设置身份验证。](https://cloud.google.com/docs/authentication)
+5. [创建一个 CloudSQL 实例](https://cloud.google.com/sql/docs/postgres/connect-instance-auth-proxy#create-instance)
+6. [创建一个 CloudSQL 数据库](https://cloud.google.com/sql/docs/postgres/create-manage-databases)
+7. [向数据库添加用户](https://cloud.google.com/sql/docs/postgres/create-manage-users)
+
+### 身份验证
+
+使用 `gcloud auth login` 命令在本地验证您的 Google Cloud 账户。
+
+### 设置 Google Cloud 项目
+
+设置您的 Google Cloud 项目 ID 以在本地利用 Google Cloud 资源：
+
+```bash
+gcloud config set project YOUR-PROJECT-ID
+```
+
+如果您不知道项目 ID，请尝试以下方法：
+
+* 运行 `gcloud config list`。
+* 运行 `gcloud projects list`。
+* 请参阅支持页面：[查找项目 ID](https://support.google.com/googleapi/answer/7014113)。
+
+## 设置 PostgresVectorStore 实例
+
+要使用 PostgresVectorStore 库，您需要安装 `@langchain/google-cloud-sql-pg` 包，然后按照以下步骤操作。
+
+<CodeGroup>
+
+</CodeGroup>
+```bash npm
+npm install @langchain/google-cloud-sql-pg @langchain/core
+```
+```bash yarn
+yarn add @langchain/google-cloud-sql-pg @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/google-cloud-sql-pg @langchain/core
+```
+</CodeGroup>
+
+首先，您需要登录到您的 Google Cloud 账户，并根据您的 Google Cloud 项目设置以下环境变量；这些将根据您想要如何配置 (fromInstance, fromEngine, fromEngineArgs) 您的 PostgresEngine 实例来定义：
+
+```bash
+PROJECT_ID="your-project-id"
+REGION="your-project-region" // example: "us-central1"
+INSTANCE_NAME="your-instance"
+DB_NAME="your-database-name"
+DB_USER="your-database-user"
+PASSWORD="your-database-password"
+```
+
+### 设置实例
+
+要实例化 PostgresVectorStore，您首先需要通过 PostgresEngine 创建数据库连接，然后初始化向量存储表，最后调用 `.initialize()` 方法来实例化向量存储。
+
+```typescript
+import {
+  Column,
+  PostgresEngine,
+  PostgresEngineArgs,
+  PostgresVectorStore,
+  PostgresVectorStoreArgs,
+  VectorStoreTableArgs,
+} from "@langchain/google-cloud-sql-pg";
+import { SyntheticEmbeddings } from "@langchain/core/utils/testing"; // This is used as an Embedding service
+import * as dotenv from "dotenv";
+
+dotenv.config();
+
+const peArgs: PostgresEngineArgs = {
+  user: process.env.DB_USER ?? "",
+  password: process.env.PASSWORD ?? "",
+};
+
+// PostgresEngine instantiation
+const engine: PostgresEngine = await PostgresEngine.fromInstance(
+  process.env.PROJECT_ID ?? "",
+  process.env.REGION ?? "",
+  process.env.INSTANCE_NAME ?? "",
+  process.env.DB_NAME ?? "",
+  peArgs
+);
+
+const vectorStoreArgs: VectorStoreTableArgs = {
+  metadataColumns: [new Column("page", "TEXT"), new Column("source", "TEXT")],
+};
+
+// Vector store table initialization
+await engine.initVectorstoreTable("my_vector_store_table", 768, vectorStoreArgs);
+const embeddingService = new SyntheticEmbeddings({ vectorSize: 768 });
+
+const pvectorArgs: PostgresVectorStoreArgs = {
+  metadataColumns: ["page", "source"],
+};
+
+// PostgresVectorStore instantiation
+const vectorStore = await PostgresVectorStore.initialize(
+  engine,
+  embeddingService,
+  "my_vector_store_table",
+  pvectorArgs
+);
+
+```
+
+## 管理向量存储
+
+### 向量存储添加文档
+
+要向向量存储添加文档，您可以通过传入或不传入 id 来实现
+
+```typescript
+import type { Document } from "@langchain/core/documents";
+
+const document1: Document = {
+  pageContent: "The powerhouse of the cell is the mitochondria",
+  metadata: { page: 0, source: "https://example.com" },
+};
+
+const document2: Document = {
+  pageContent: "Buildings are made out of brick",
+  metadata: { page: 1, source: "https://example.com" },
+};
+
+const document3: Document = {
+  pageContent: "Mitochondria are made out of lipids",
+  metadata: { page: 2, source: "https://example.com" },
+};
+
+const document4: Document = {
+  pageContent: "The 2024 Olympics are in Paris",
+  metadata: { page: 3, source: "https://example.com" },
+};
+
+const documents = [document1, document2, document3, document4];
+
+const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+
+await vectorStore.addDocuments(documents, { ids: ids });
+
+```
+
+### 从向量存储中删除文档
+
+您可以通过传递要删除的 ID 数组，从向量存储中删除一个或多个文档：
+
+```typescript
+// deleting a document
+const id1 = ids[0];
+await vectorStore.delete({ ids: [id1] });
+
+// deleting more than one document
+await vectorStore.delete({ ids: ids });
+
+```
+
+## 搜索文档
+
+一旦您的向量存储已创建并且相关文档已添加，您很可能会希望在运行链或代理时对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以按如下方式进行：
+
+```typescript
+const filter = `"source" = "https://example.com"`;
+
+const results = await vectorStore.similaritySearch("biology", 2, filter);
+
+for (const doc of results) {
+  console.log(`* ${doc.pageContent} [${JSON.stringify(doc.metadata, null)}]`);
+}
+
+```
+
+如果你想执行相似性搜索并获取相应的分数，可以运行：
+
+```typescript
+const filter = `"source" = "https://example.com"`;
+const resultsWithScores = await vectorStore.similaritySearchWithScore(
+  "biology",
+  2,
+  filter
+);
+
+for (const [doc, score] of resultsWithScores) {
+  console.log(
+    `* [SIM=${score.toFixed(3)}] ${doc.pageContent} [${JSON.stringify(doc.metadata)}]`
+  );
+}
+
+```
+
+### 使用最大边际相关性搜索进行查询
+
+最大边际相关性优化查询与所选文档之间的相似性以及文档间的多样性。
+
+```typescript
+const options = {
+  k: 4,
+  filter: `"source" = 'https://example.com'`,
+};
+
+const results = await vectorStore.maxMarginalRelevanceSearch("biology", options);
+
+for (const doc of results) {
+  console.log(`* ${doc.pageContent} [${JSON.stringify(doc.metadata, null)}]`);
+}
+
+```

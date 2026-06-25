@@ -1,0 +1,160 @@
+---
+title: 使用 OpenTelemetry Gateway 架构脱敏敏感数据
+sidebarTitle: 使用 OTEL 脱敏敏感数据
+description: 使用 OpenTelemetry 收集器在跟踪数据到达 LangSmith 之前对其中的敏感数据进行脱敏处理。
+---
+
+[LangChain](/langsmith/trace-with-langchain) 和 [LangGraph](/langsmith/trace-with-langgraph) 应用支持[基于 OpenTelemetry 的跟踪](/langsmith/trace-with-opentelemetry)。与其直接将跟踪数据发送到 LangSmith，不如将它们路由到你控制的 OpenTelemetry 收集器中，应用脱敏规则来移除敏感字段，然后将清理后的跟踪数据转发到 LangSmith。
+
+跟踪数据通过 OTLP/HTTP 从你的应用流向收集器。收集器运行一个转换处理器，在将清理后的跨度转发到 LangSmith API 之前，对其进行脱敏处理，移除敏感的跨度属性信息（例如提示词输入和模型输出）。
+
+```mermaid
+flowchart TD
+    A["Application<br/>(LangChain / LangGraph)"]
+
+    subgraph collector[":4318"]
+        B["Receiver<br/>OTLP/HTTP"]
+        C["Transform Processor<br/>PII Redaction<br/>(email, phone, SSN, CC)"]
+        D["OTLP/HTTP Exporter"]
+        B --> C --> D
+    end
+
+    E["LangSmith API<br/>api.smith.langchain.com"]
+
+    A -->|"OTLP/HTTP"| B
+    D -->|"OTLP/HTTP"| E
+```
+
+## 前提条件
+
+以下两种方法均需要设置以下环境变量。请将 `OTEL_EXPORTER_OTLP_ENDPOINT` 设置为你的收集器的地址：
+
+```bash
+LANGSMITH_OTEL_ENABLED="true"
+LANGSMITH_TRACING="true"
+LANGSMITH_OTEL_ONLY="true"
+LANGSMITH_PROJECT="my-project"
+OTEL_EXPORTER_OTLP_ENDPOINT="http://<my-otel-collector-endpoint>:4318"
+```
+
+## 配置收集器
+
+有关 `LANGSMITH_PROJECT` 的更多信息，请参阅[日志追踪到特定项目](/langsmith/log-traces-to-project)。
+
+两种方法都需要一个 OpenTelemetry 收集器作为您的应用程序和 LangSmith 之间的中间环节。以下配置设置了一个在端口 `4318` 上的 OTLP 接收器、一个转换处理器（用于删除 `gen_ai.prompt` 和 `gen_ai.completion` span 属性），以及一个将清理后的追踪转发到 LangSmith API 的导出器：
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+
+processors:
+  transform/redact:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - replace_pattern(attributes["gen_ai.completion"], "[\\s\\S]*", "[REDACTED]")
+          - replace_pattern(attributes["gen_ai.prompt"], "[\\s\\S]*", "[REDACTED]")
+
+exporters:
+  otlphttp/langsmith:
+    traces_endpoint: "https://api.smith.langchain.com/otel/v1/traces"
+    headers:
+      x-api-key: "${env:LANGSMITH_API_KEY}"
+      Langsmith-Project: "${env:LANGSMITH_PROJECT}"
+
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [transform/redact]
+      exporters: [otlphttp/langsmith]
+```
+
+## 使用 LangChain 或 LangGraph 进行追踪
+
+如果您的应用程序已经使用 [LangChain](/langsmith/trace-with-langchain) 或 [LangGraph](/langsmith/trace-with-langgraph)，请使用此方法。追踪集成会根据您的环境变量自动处理 span 的创建，因此无需额外的插桩代码：
+
+```python
+from langchain.agents import create_agent
+from langchain.tools import tool
+from langchain_openai import ChatOpenAI
+
+
+@tool
+def tell_joke(topic: str) -> str:
+   llm = ChatOpenAI()
+   response = llm.invoke(f"Tell me a short, funny joke about {topic}.")
+   return response.content
+
+
+agent = create_agent(
+   model=ChatOpenAI(),
+   tools=[tell_joke],
+   system_prompt="When the user asks for jokes, use the tell_joke tool for each topic.",
+)
+
+
+topics = ["programming", "python", "kubernetes", "machine learning"]
+
+
+result = agent.invoke(
+   {"messages": [{"role": "user", "content": f"Tell me jokes about these topics: {', '.join(topics)}"}]}
+)
+
+
+print(result["messages"][-1].content)
+```
+
+## 直接使用 OpenTelemetry SDK 进行追踪
+
+如果您需要对 tracer provider 和 exporter 进行编程控制，请使用此方法。例如，在运行时设置每个请求的项目名称或配置自定义标头。您在代码中显式配置 provider，而不是仅依赖环境变量：
+
+```python
+import os
+
+from langchain.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+
+project_name = os.environ["LANGSMITH_PROJECT"]
+otlp_endpoint = os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"]
+
+
+provider = TracerProvider()
+provider.add_span_processor(
+   BatchSpanProcessor(
+       OTLPSpanExporter(
+           endpoint=otlp_endpoint+"/v1/traces",
+           headers={"Langsmith-Project": project_name},
+       )
+   )
+)
+trace.set_tracer_provider(provider)
+
+
+chain = ChatPromptTemplate.from_template("Tell me a joke about {topic}") | ChatOpenAI()
+
+
+for topic in ["programming", "python", "databases", "kubernetes", "machine learning"]:
+   print(f"Asking about {topic}...")
+   result = chain.invoke({"topic": topic})
+   print(f"  {result.content[:100]}\n")
+
+
+provider.force_flush()
+provider.shutdown()
+```
+
+<Note>
+如果您希望在不使用收集器的情况下隐藏敏感数据，请参阅[防止在追踪中记录敏感数据](/langsmith/mask-inputs-outputs)。
+</Note>

@@ -1,0 +1,585 @@
+---
+title: "ChatNVIDIA 集成"
+description: "使用 LangChain Python 与 ChatNVIDIA 和 ChatNVIDIADynamo 聊天模型集成。"
+---
+
+本指南将帮助你开始使用 NVIDIA [聊天模型](/oss/langchain/models)。有关所有 `ChatNVIDIA` 功能配置的详细文档，请前往 [API 参考](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints/chat_models/ChatNVIDIA)。
+
+## 概述
+
+`langchain-nvidia-ai-endpoints` 包包含 LangChain 与 [NVIDIA AI 基础模型](https://www.nvidia.com/en-us/ai-data-science/foundation-models/) 驱动的聊天模型和嵌入模型的集成，并托管在 [NVIDIA API Catalog](https://build.nvidia.com/) 上。
+
+一个很好的起点是 [Nemotron](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/)，这是 NVIDIA 为 AI 智能体构建的开源模型系列。Nemotron 模型采用混合 Mamba-Transformer 专家混合架构，在保持领先准确性的同时，吞吐量比同类模型高出 3 倍，上下文窗口最高可达 100 万 token。模型权重、训练数据和实现配方均以 NVIDIA 开放模型许可证公开发布。
+
+NVIDIA AI 基础模型运行在 NIM 微服务上：这些容器镜像通过 [NVIDIA NGC Catalog](https://catalog.ngc.nvidia.com/) 分发，暴露标准 OpenAI 兼容 API，并使用 TensorRT-LLM 优化以实现最大吞吐量。可以通过托管的 [NVIDIA API Catalog](https://build.nvidia.com/) 访问，也可以使用 NVIDIA AI Enterprise 许可证在本地部署。
+
+本页介绍如何通过 `ChatNVIDIA` 使用 LangChain 与 NVIDIA 模型交互，包括 Nemotron 和 API Catalog 中的其他模型。
+
+有关通过此 API 访问嵌入模型的更多信息，请参阅 [`NVIDIAEmbeddings`](/oss/integrations/embeddings/nvidia_ai_endpoints) 文档。
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 下载量 | 版本 |
+| :--- | :--- | :---: |  :---: | :---: | :---: |
+| [`ChatNVIDIA`](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints/chat_models/ChatNVIDIA) | [`langchain-nvidia-ai-endpoints`](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints) | beta | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain_nvidia_ai_endpoints?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain_nvidia_ai_endpoints?style=flat-square&label=%20) |
+
+### 模型特性
+
+| [工具调用](/oss/langchain/tools) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | 视频输入 | [Token 级流式传输](/oss/langchain/streaming/) | 原生异步 | [Token 使用量](/oss/langchain/models#token-usage) | [Logprobs](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: |  :---: | :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |
+
+## 安装包
+
+```bash
+pip install -qU langchain-nvidia-ai-endpoints
+```
+
+## 访问 NVIDIA API 目录
+
+要访问 NVIDIA API 目录，请执行以下操作：
+
+1. 在 [NVIDIA API 目录](https://build.nvidia.com/) 上创建一个免费账户并登录。
+2. 点击您的个人资料图标，然后点击 **API 密钥**。**API 密钥**页面出现。
+3. 点击 **生成 API 密钥**。**生成 API 密钥**窗口出现。
+4. 点击 **生成密钥**。您应该看到 **API 密钥已授予**，您的密钥出现。
+5. 复制并保存密钥为 `NVIDIA_API_KEY`。
+6. 要验证您的密钥，请使用以下代码。
+
+```python
+import getpass
+import os
+
+if os.environ.get("NVIDIA_API_KEY", "").startswith("nvapi-"):
+    print("Valid NVIDIA_API_KEY already in environment. Delete to reset")
+else:
+    nvapi_key = getpass.getpass("NVAPI Key (starts with nvapi-): ")
+    assert nvapi_key.startswith(
+        "nvapi-"
+    ), f"{nvapi_key[:5]}... is not a valid key"
+    os.environ["NVIDIA_API_KEY"] = nvapi_key
+```
+
+您现在可以使用您的密钥访问 NVIDIA API Catalog 上的端点。
+
+要启用模型调用的自动化跟踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+```
+
+## 实例化
+
+现在我们可以访问 NVIDIA API 目录中的模型。[Nemotron](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/) 模型是智能体和推理工作负载的推荐起点：
+
+```python
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
+# Nemotron 3 Nano — efficient reasoning and agentic tasks
+llm = ChatNVIDIA(model="nvidia/nemotron-3-super-120b-a12b")
+```
+
+API 目录中的任何其他模型都可以通过传递其模型 ID 来使用：
+
+```python
+llm = ChatNVIDIA(model="mistralai/mixtral-8x7b-instruct-v0.1")
+```
+
+## 调用
+
+```python
+result = llm.invoke("Write a ballad about LangChain.")
+print(result.content)
+```
+
+## 启用思考模式
+
+一些 NVIDIA 推理模型支持可配置的思考模式。通过向 `invoke` 传递 `thinking_mode=True` 来为单个请求启用思考：
+
+```python
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
+model = ChatNVIDIA(model="nvidia/nemotron-3-nano-30b-a3b")
+
+response = model.invoke("Solve this step by step: 17 * 23", thinking_mode=True)
+print(response.content_blocks)
+```
+
+使用 `with_thinking_mode` 当您想要一个启用了思维功能且可重用的可运行对象时：
+
+```python
+thinking_model = model.with_thinking_mode(enabled=True)
+response = thinking_model.invoke("Solve this step by step: 17 * 23")
+```
+
+要列出已知支持思考模式的模型，请调用 `get_available_models` 并检查 `supports_thinking`。这会查询 NVIDIA 模型列表 API，然后过滤返回的模型元数据：
+
+```python
+thinking_models = [
+    model for model in ChatNVIDIA.get_available_models() if model.supports_thinking
+]
+```
+
+`ChatNVIDIA` 将 `thinking_mode=True` 转换为您所选模型所需的控制机制。有些模型使用请求参数，例如 `chat_template_kwargs={"enable_thinking": True}`。其他模型则使用基于提示的控制方式，LangChain 会向系统消息追加模型特定的思考前缀，或者在不存在系统消息时创建一个。如果某个模型同时配置了两种机制，则请求参数优先。
+
+在构造 `ChatNVIDIA` 时不要传递 `thinking_mode=True`。未知的构造函数参数会成为原始的 `model_kwargs`，这些参数会被直接合并到 API 请求负载中。思考模式转换仅在调用 kwargs 或绑定 kwargs 时运行，因此请使用以下形式之一：
+
+```python
+response = model.invoke("Solve this step by step: 17 * 23", thinking_mode=True)
+```
+
+```python
+thinking_model = model.with_thinking_mode(enabled=True)
+response = thinking_model.invoke("Solve this step by step: 17 * 23")
+```
+
+## 使用 NVIDIA NIM 微服务进行自托管
+
+当您准备好部署 AI 应用程序时，可以使用 NVIDIA NIM 进行模型自托管。如需更多信息，请参阅 [NVIDIA NIM 微服务](https://www.nvidia.com/en-us/ai-data-science/products/nim-microservices/)。
+
+以下代码连接到本地托管的 NIM 微服务。
+
+```python
+from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings, NVIDIARerank
+
+# Connect to a chat NIM running at localhost:8000, specifying a model
+llm = ChatNVIDIA(base_url="http://localhost:8000/v1", model="nvidia/nemotron-3-super-120b-a12b")
+
+# Connect to an embedding NIM running at localhost:8080
+embedder = NVIDIAEmbeddings(base_url="http://localhost:8080/v1")
+
+# Connect to a reranking NIM running at localhost:2016
+ranker = NVIDIARerank(base_url="http://localhost:2016/v1")
+```
+
+## Stream、batch 和 async
+
+这些模型原生支持流式传输，与所有 LangChain LLM 一样，它们暴露了批处理方法来处理并发请求，以及用于 invoke、stream 和 batch 的异步方法。下面是几个示例。
+
+```python
+print(llm.batch(["What's 2*3?", "What's 2*6?"]))
+# Or via the async API
+# await llm.abatch(["What's 2*3?", "What's 2*6?"])
+```
+
+```python
+stream = llm.stream_events("How far can a seagull fly in one day?", version="v3")
+for token in stream.text:
+    # Show the token separations
+    print(token, end="|")
+```
+
+```python
+stream = await llm.astream_events(
+    "How long does it take for monarch butterflies to migrate?", version="v3"
+)
+async for token in stream.text:
+    print(token, end="|")
+```
+
+## 支持的模型
+
+查询 `available_models` 仍会返回您的 API 凭证提供的所有其他模型。
+
+`playground_` 前缀是可选的。
+
+```python
+ChatNVIDIA.get_available_models()
+# llm.get_available_models()
+```
+
+## 模型类型
+
+上述所有模型均受支持，可通过 `ChatNVIDIA` 访问。
+
+某些模型类型支持独特的提示技术和聊天消息格式。我们将在下文介绍几个重要的模型。
+
+**如需了解特定模型的更多信息，请导航至 AI Foundation 模型的 API 部分，[点击此处](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/ai-foundation/models/codellama-13b/api)。**
+
+### Nemotron 模型用于智能体 AI
+
+[Nemotron](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/) 是 NVIDIA 开源模型系列，专为智能体工作流打造。关键特性：
+
+- **效率**：混合 Mamba-Transformer MoE 架构提供高达 3 倍的吞吐量提升，相比同类稠密模型
+- **长上下文**：原生支持高达 1M token 的上下文窗口
+- **智能体推理**：专门针对多步骤规划、工具使用和自主软件工程任务进行训练
+- **开源**：权重、训练配方和精选数据集以 NVIDIA Open Model License 发布
+
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "You are a helpful research assistant. Think step by step."),
+        ("user", "{input}"),
+    ]
+)
+chain = prompt | ChatNVIDIA(model="nvidia/nemotron-3-super-120b-a12b") | StrOutputParser()
+
+for txt in chain.stream({"input": "What are the key considerations when designing a multi-agent RAG system?"}):
+    print(txt, end="")
+```
+
+### 通用聊天
+
+像 `meta/llama3-8b-instruct` 和 `mistralai/mixtral-8x22b-instruct-v0.1` 这样的模型是出色的通用模型，可以与任何 LangChain 聊天消息一起使用。示例如下。
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
+prompt = ChatPromptTemplate.from_messages(
+    [("system", "You are a helpful AI assistant named Fred."), ("user", "{input}")]
+)
+chain = prompt | ChatNVIDIA(model="nvidia/nemotron-3-super-120b-a12b") | StrOutputParser()
+
+for txt in chain.stream({"input": "What's your name?"}):
+    print(txt, end="")
+```
+
+### 代码生成
+
+这些模型接受与常规聊天模型相同的参数和输入结构，但它们在代码生成和结构化代码任务上往往表现更好。例如，`meta/codellama-70b`。
+
+```python
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are an expert coding AI. Respond only in valid python; no narration whatsoever.",
+        ),
+        ("user", "{input}"),
+    ]
+)
+chain = prompt | ChatNVIDIA(model="meta/codellama-70b") | StrOutputParser()
+
+for txt in chain.stream({"input": "How do I solve this fizz buzz problem?"}):
+    print(txt, end="")
+```
+
+## 多模态
+
+NVIDIA 还支持多模态输入，这意味着您可以为模型提供图像和文本进行推理。支持多模态输入的示例模型是 `nvidia/neva-22b`。
+
+以下是使用示例：
+
+```python
+import IPython
+import requests
+
+image_url = "https://www.nvidia.com/content/dam/en-zz/Solutions/research/ai-playground/nvidia-picasso-3c33-p@2x.jpg"  ## Large Image
+image_content = requests.get(image_url).content
+
+IPython.display.Image(image_content)
+```
+
+```python
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+
+llm = ChatNVIDIA(model="nvidia/neva-22b")
+```
+
+#### 将图片作为 URL 传递
+
+```python
+from langchain.messages import HumanMessage
+
+llm.invoke(
+    [
+        HumanMessage(
+            content=[
+                {"type": "text", "text": "Describe this image:"},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ]
+        )
+    ]
+)
+```
+
+#### 将图像作为 base64 编码字符串传递
+
+目前，为了支持更大的图像（如上所示），会进行一些额外的客户端处理。但对于较小的图像（为了更好地说明幕后发生的过程），我们可以直接传入图像，如下所示：
+
+```python
+import IPython
+import requests
+
+image_url = "https://picsum.photos/seed/kitten/300/200"
+image_content = requests.get(image_url).content
+
+IPython.display.Image(image_content)
+```
+
+```python
+import base64
+
+from langchain.messages import HumanMessage
+
+## Works for simpler images. For larger images, see actual implementation
+b64_string = base64.b64encode(image_content).decode("utf-8")
+
+llm.invoke(
+    [
+        HumanMessage(
+            content=[
+                {"type": "text", "text": "Describe this image:"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{b64_string}"},
+                },
+            ]
+        )
+    ]
+)
+```
+
+#### 直接在字符串中
+
+NVIDIA API 独特地接受以 base64 编码的内联在 `<img/>` HTML 标签中的图像。虽然这与其他 LLM 不兼容，但您可以直接相应地提示模型。
+
+```python
+base64_with_mime_type = f"data:image/png;base64,{b64_string}"
+llm.invoke(f'What\'s in this image?\n<img src="{base64_with_mime_type}" />')
+```
+
+## Example usage within a `RunnableWithMessageHistory`
+
+与其他集成一样，`ChatNVIDIA` 完全可以支持 RunnableWithMessageHistory 等聊天工具，这与使用 `ConversationChain` 类似。下面我们展示将 [LangChain `RunnableWithMessageHistory`](https://reference.langchain.com/python/langchain-core/runnables/history/RunnableWithMessageHistory) 示例应用到 `mistralai/mixtral-8x22b-instruct-v0.1` 模型的方法。
+
+```python
+pip install -qU langchain
+```
+
+```python
+from langchain_core.chat_history import InMemoryChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
+# store is a dictionary that maps session IDs to their corresponding chat histories.
+store = {}  # memory is maintained outside the chain
+
+
+# A function that returns the chat history for a given session ID.
+def get_session_history(session_id: str) -> InMemoryChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = InMemoryChatMessageHistory()
+    return store[session_id]
+
+
+chat = ChatNVIDIA(
+    model="nvidia/nemotron-3-super-120b-a12b",
+    temperature=0.1,
+    max_tokens=100,
+    top_p=1.0,
+)
+
+#  Define a RunnableConfig object, with a `configurable` key. session_id determines thread
+config = {"configurable": {"session_id": "1"}}
+
+conversation = RunnableWithMessageHistory(
+    chat,
+    get_session_history,
+)
+
+conversation.invoke(
+    "Hi I'm Srijan Dubey.",  # input or query
+    config=config,
+)
+```
+
+```python
+conversation.invoke(
+    "I'm doing well! Just having a conversation with an AI.",
+    config=config,
+)
+```
+
+```python
+conversation.invoke(
+    "Tell me about yourself.",
+    config=config,
+)
+```
+
+## 工具调用
+
+从 v0.2 开始，`ChatNVIDIA` 支持 [`bind_tools`](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints/chat_models/ChatNVIDIA#member-bind_tools-2)。
+
+`ChatNVIDIA` 提供了与 [build.nvidia.com](https://build.nvidia.com) 上多种模型的集成，以及本地 NIM。并非所有这些模型都经过工具调用训练。请务必选择支持工具调用的模型用于您的实验和应用程序。
+
+您可以使用以下方式获取已知支持工具调用的模型列表，
+
+```python
+tool_models = [
+    model for model in ChatNVIDIA.get_available_models() if model.supports_tools
+]
+tool_models
+```
+
+使用能够调用工具的模型，
+
+```python
+from langchain.tools import tool
+from pydantic import Field
+
+
+@tool
+def get_current_weather(
+    location: str = Field(description="The location to get the weather for."),
+):
+    """Get the current weather for a location."""
+    ...
+
+
+llm = ChatNVIDIA(model=tool_models[0].id).bind_tools(tools=[get_current_weather])
+response = llm.invoke("What is the weather in Boston?")
+response.tool_calls
+```
+
+有关更多示例，请参阅[如何使用聊天模型调用工具](/oss/langchain/tools)。
+
+## 与 NVIDIA Dynamo 配合使用
+
+[NVIDIA Dynamo](https://developer.nvidia.com/dynamo) 是一个分布式推理服务框架，专为在数据中心规模的多节点环境中部署模型而构建。它通过将推理的各个阶段分解到不同的 GPU 上，智能地将请求路由到适当的 GPU 以避免冗余计算，并通过将数据缓存到经济高效的存储层来扩展 GPU 显存，从而简化并自动化了分布式服务的复杂性。
+
+`ChatNVIDIADynamo` 是 `ChatNVIDIA` 的直接替代品，会自动在每个请求中注入 `nvext.agent_hints`。这些提示会告诉 Dynamo 部署：
+
+- **`osl`**（输出序列长度）——预期生成的 token 数量，以便调度器规划显存分配
+- **`iat`**（到达间隔时间）——请求到达的速度，以便路由器预测负载
+- **`latency_sensitivity`**——请求的延迟敏感程度，以便交互式调用获得优先路由
+- **`priority`**——请求优先级，以便后台工作可以为关键路径请求让路
+
+每个请求都会自动生成唯一的 `prefix_id`，使路由器能够跟踪 KV 缓存亲和性。
+
+<Note>
+本节假设您已有一个运行中的 [NVIDIA Dynamo 部署](https://docs.nvidia.com/dynamo/latest/getting-started/quickstart)。
+</Note>
+
+### 基本用法
+
+将 `ChatNVIDIA` 替换为 `ChatNVIDIADynamo`，每个请求都会自动包含路由提示。所有标准的 `ChatNVIDIA` 参数均受支持。
+
+```python
+from langchain_nvidia_ai_endpoints import ChatNVIDIA, ChatNVIDIADynamo
+
+BASE_URL = "http://localhost:8099/v1"
+MODEL = "your-model-name"
+
+# Standard ChatNVIDIA — no Dynamo hints
+llm_standard = ChatNVIDIA(base_url=BASE_URL, model=MODEL)
+
+# ChatNVIDIADynamo — identical interface, automatically injects agent_hints
+llm = ChatNVIDIADynamo(base_url=BASE_URL, model=MODEL)
+
+result = llm.invoke("What is KV cache optimization?")
+print(result.content)
+```
+
+`ChatNVIDIADynamo` 在 `ChatNVIDIA` 支持的参数基础上，额外接受四个参数：
+
+| 参数 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `osl` | `int` | `512` | 预期输出序列长度（令牌数） |
+| `iat` | `int` | `250` | 预期到达间隔时间（毫秒） |
+| `latency_sensitivity` | `float` | `1.0` | 更高的延迟敏感度会获得优先路由 |
+| `priority` | `int` | `1` | 更低的优先级设置会获得更多调度优先级 |
+
+### 在构造时设置默认值
+
+在创建模型实例时配置 Dynamo 提示。这在模型实例始终承担特定角色时很有用，例如高优先级的交互式助手与低优先级的后台摘要器。
+
+```python
+# High-priority: short responses, latency-critical
+llm_critical = ChatNVIDIADynamo(
+    base_url=BASE_URL,
+    model=MODEL,
+    osl=20,
+    priority=0,
+    latency_sensitivity=10.0,
+)
+
+# Low-priority: long responses, latency-tolerant
+llm_background = ChatNVIDIADynamo(
+    base_url=BASE_URL,
+    model=MODEL,
+    osl=512,
+    priority=10,
+    latency_sensitivity=0,
+)
+```
+
+### 覆盖每次调用
+
+Dynamo 参数也可以在每次调用时被覆盖。这在同一个模型实例处理具有不同特征的请求时非常有用。
+
+```python
+result = llm.invoke(
+    "Classify this as positive or negative: 'I love this product!'",
+    osl=10,
+    iat=100,
+    latency_sensitivity=1.0,
+    priority=10,
+)
+print(result.content)
+```
+
+### 使用 Dynamo hints 进行流式传输
+
+Dynamo hints 包含在初始流式请求中。Dynamo 使用它们在 token 开始流动之前选择最优的工作节点。
+
+```python
+stream = llm_critical.stream_events("Give a one-sentence summary of GPU computing.", version="v3")
+for token in stream.text:
+    print(token, end="", flush=True)
+```
+
+### 检查负载内容
+
+要调试，请使用内部 `_get_payload` 方法检查 `ChatNVIDIADynamo` 发送到 NIM 端点的确切负载内容。
+
+```python
+import json
+
+payload = llm_critical._get_payload(
+    inputs=[{"role": "user", "content": "Hello!"}],
+    stop=None,
+)
+print(json.dumps(payload["nvext"], indent=2))
+```
+
+这会输出 `nvext.agent_hints` 部分：
+
+```json
+{
+  "agent_hints": {
+    "prefix_id": "langchain-dynamo-a1b2c3d4e5f6",
+    "osl": 20,
+    "iat": 250,
+    "latency_sensitivity": 1.0,
+    "priority": 10
+  }
+}
+```
+
+
+## API 参考
+
+有关 `ChatNVIDIA` 所有功能和配置的详细文档，请前往 [API 参考](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints/chat_models/ChatNVIDIA)。
+
+## 相关主题
+
+- [`langchain-nvidia-ai-endpoints` 包 `README`](https://github.com/langchain-ai/langchain-nvidia/blob/main/libs/ai-endpoints/README.md)
+- [Nemotron 模型系列](https://www.nvidia.com/en-us/ai-data-science/foundation-models/nemotron/) — NVIDIA 用于代理 AI 的开源模型
+- [NVIDIA API 目录](https://build.nvidia.com/explore/discover) — 浏览并试用所有可用模型
+- [NVIDIA NIM 大语言模型 (LLM) 概述](https://docs.nvidia.com/nim/large-language-models/latest/introduction.html)
+- [NeMo Retriever Embedding NIM 概述](https://docs.nvidia.com/nim/nemo-retriever/text-embedding/latest/overview.html)
+- [NeMo Retriever Reranking NIM 概述](https://docs.nvidia.com/nim/nemo-retriever/text-reranking/latest/overview.html)
+- [用于 RAG 工作流程的 `NVIDIAEmbeddings` 模型](/oss/integrations/embeddings/nvidia_ai_endpoints)
+- [NVIDIA Provider 页面](/oss/integrations/providers/nvidia)
+- [NVIDIA Dynamo](https://developer.nvidia.com/dynamo) — 开源推理框架
+- [Dynamo 快速入门指南](https://docs.nvidia.com/dynamo/latest/getting-started/quickstart) — 运行本地部署
+- [KV Cache 感知路由](https://docs.nvidia.com/dynamo/latest/user-guides/kv-cache-aware-routing) — Smart Router 的工作原理

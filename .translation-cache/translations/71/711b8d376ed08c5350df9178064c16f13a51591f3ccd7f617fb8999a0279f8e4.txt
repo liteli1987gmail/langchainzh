@@ -1,0 +1,161 @@
+---
+title: "Pandas Dataframe 集成"
+description: "使用 LangChain Python 与 Pandas Dataframe 工具集成。"
+---
+
+import LangchainExperimentalUnmaintained from '/snippets/oss/langchain-experimental-unmaintained.mdx';
+
+
+本笔记本展示了如何使用代理与 `Pandas DataFrame` 进行交互。它主要用于问答场景。
+
+**注意：此代理在后台调用 `Python` 代理，执行 LLM 生成的 Python 代码——如果 LLM 生成的 Python 代码有害，这可能会造成问题。请谨慎使用。**
+
+**注意：由于 langchain 已迁移到 v0.3，您应该升级 langchain_openai 和 langchain。这将避免导入错误。**
+
+```
+pip install -U langchain_openai
+pip install -U langchain
+```
+
+<LangchainExperimentalUnmaintained />
+
+```python
+from langchain.agents.agent_types import AgentType
+from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
+from langchain_openai import ChatOpenAI
+```
+
+```python
+import pandas as pd
+from langchain_openai import OpenAI
+
+df = pd.read_csv(
+    "https://raw.githubusercontent.com/pandas-dev/pandas/main/doc/data/titanic.csv"
+)
+```
+
+## 使用 `ZERO_SHOT_REACT_DESCRIPTION`
+
+本示例展示如何使用 `ZERO_SHOT_REACT_DESCRIPTION` agent 类型来初始化 agent。
+
+```python
+agent = create_pandas_dataframe_agent(OpenAI(temperature=0), df, verbose=True)
+```
+
+## 使用 OpenAI 函数
+
+本示例展示如何使用 OPENAI_FUNCTIONS 代理类型初始化代理。请注意，这是上述方法的替代方案。
+
+```python
+agent = create_pandas_dataframe_agent(
+    ChatOpenAI(temperature=0, model="gpt-3.5-turbo-0613"),
+    df,
+    verbose=True,
+    agent_type=AgentType.OPENAI_FUNCTIONS,
+)
+```
+
+```python
+agent.invoke("how many rows are there?")
+```
+
+```text
+> Entering new  chain...
+
+Invoking: `python_repl_ast` with `df.shape[0]`
+
+
+891There are 891 rows in the dataframe.
+
+> Finished chain.
+```
+
+```text
+'There are 891 rows in the dataframe.'
+```
+
+```python
+agent.invoke("how many people have more than 3 siblings")
+```
+
+```text
+> Entering new AgentExecutor chain...
+Thought: I need to count the number of people with more than 3 siblings
+Action: python_repl_ast
+Action Input: df[df['SibSp'] > 3].shape[0]
+Observation: 30
+Thought: I now know the final answer
+Final Answer: 30 people have more than 3 siblings.
+
+> Finished chain.
+```
+
+```text
+'30 people have more than 3 siblings.'
+```
+
+```python
+agent.invoke("what's the square root of the average age?")
+```
+
+```text
+> Entering new AgentExecutor chain...
+Thought: I need to calculate the average age first
+Action: python_repl_ast
+Action Input: df['Age'].mean()
+Observation: 29.69911764705882
+Thought: I now need to calculate the square root of the average age
+Action: python_repl_ast
+Action Input: math.sqrt(df['Age'].mean())
+Observation: NameError("name 'math' is not defined")
+Thought: I need to import the math library
+Action: python_repl_ast
+Action Input: import math
+Observation:
+Thought: I now need to calculate the square root of the average age
+Action: python_repl_ast
+Action Input: math.sqrt(df['Age'].mean())
+Observation: 5.449689683556195
+Thought: I now know the final answer
+Final Answer: The square root of the average age is 5.449689683556195.
+
+> Finished chain.
+```
+
+```text
+'The square root of the average age is 5.449689683556195.'
+```
+
+## Multi DataFrame 示例
+
+下一部分展示代理如何与作为列表传入的多个 DataFrame 进行交互。
+
+```python
+df1 = df.copy()
+df1["Age"] = df1["Age"].fillna(df1["Age"].mean())
+```
+
+```python
+agent = create_pandas_dataframe_agent(OpenAI(temperature=0), [df, df1], verbose=True)
+agent.invoke("how many rows in the age column are different?")
+```
+
+```text
+> Entering new AgentExecutor chain...
+Thought: I need to compare the age columns in both dataframes
+Action: python_repl_ast
+Action Input: len(df1[df1['Age'] != df2['Age']])
+Observation: 177
+Thought: I now know the final answer
+Final Answer: 177 rows in the age column are different.
+
+> Finished chain.
+```
+
+```text
+'177 rows in the age column are different.'
+```
+
+```python
+
+```

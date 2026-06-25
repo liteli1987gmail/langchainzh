@@ -1,0 +1,164 @@
+---
+title: "Prolog 集成"
+description: "使用 LangChain Python 与 Prolog 工具集成。"
+---
+
+使用 Prolog 规则生成答案的 LangChain 工具。
+
+## 概述
+
+PrologTool 类允许生成使用 Prolog 规则生成答案的 langchain 工具。
+
+## 设置
+
+让我们使用 family.pl 文件中的以下 Prolog 规则：
+
+```prolog
+parent(john, bianca, mary).\
+parent(john, bianca, michael).\
+parent(peter, patricia, jennifer).\
+partner(X, Y) :- parent(X, Y, _).
+```
+
+```python
+#!pip install langchain-prolog
+
+from langchain_prolog import PrologConfig, PrologRunnable, PrologTool
+
+TEST_SCRIPT = "family.pl"
+```
+
+## 实例化
+
+首先创建 Prolog 工具：
+
+```python
+schema = PrologRunnable.create_schema("parent", ["men", "women", "child"])
+config = PrologConfig(
+    rules_file=TEST_SCRIPT,
+    query_schema=schema,
+)
+prolog_tool = PrologTool(
+    prolog_config=config,
+    name="family_query",
+    description="""
+        Query family relationships using Prolog.
+        parent(X, Y, Z) implies only that Z is a child of X and Y.
+        Input can be a query string like 'parent(john, X, Y)' or 'john, X, Y'"
+        You have to specify 3 parameters: men, woman, child. Do not use quotes.
+    """,
+)
+```
+
+## 调用
+
+### 在 LLM 中使用 Prolog 工具和函数调用
+
+```python
+#!pip install python-dotenv
+
+from dotenv import find_dotenv, load_dotenv
+
+load_dotenv(find_dotenv(), override=True)
+
+#!pip install langchain-openai
+
+from langchain.messages import HumanMessage
+from langchain_openai import ChatOpenAI
+```
+
+要使用此工具，请将其绑定到 LLM 模型：
+
+```python
+model = ChatOpenAI(model="gpt-5.4-mini")
+model_with_tools = model.bind_tools([prolog_tool])
+```
+
+然后查询模型：
+
+```python
+query = "Who are John's children?"
+messages = [HumanMessage(query)]
+response = model_with_tools.invoke(messages)
+```
+
+LLM 将响应工具调用请求：
+
+```python
+messages.append(response)
+response.tool_calls[0]
+```
+
+```text
+{'name': 'family_query',
+ 'args': {'men': 'john', 'women': None, 'child': None},
+ 'id': 'call_gH8rWamYXITrkfvRP2s5pkbF',
+ 'type': 'tool_call'}
+```
+
+该工具接收此请求并查询 Prolog 数据库：
+
+```python
+tool_msg = prolog_tool.invoke(response.tool_calls[0])
+```
+
+该工具会返回一个包含该查询所有解决方案的列表：
+
+```python
+messages.append(tool_msg)
+tool_msg
+```
+
+```text
+ToolMessage(content='[{"Women": "bianca", "Child": "mary"}, {"Women": "bianca", "Child": "michael"}]', name='family_query', tool_call_id='call_gH8rWamYXITrkfvRP2s5pkbF')
+```
+
+然后我们将其传递给 LLM，LLM 使用工具响应来回答原始查询：
+
+```python
+answer = model_with_tools.invoke(messages)
+print(answer.content)
+```
+
+```text
+John has two children: Mary and Michael, with Bianca as their mother.
+```
+
+## 链式调用
+
+### 将 prolog 工具与 agent 结合使用
+
+要将 prolog 工具与 agent 结合使用，请将其传递给 agent 的构造函数：
+
+```python
+#!pip install langgraph
+
+from langchain.agents import create_agent
+
+
+agent_executor = create_agent(model, [prolog_tool])
+```
+
+代理获取查询，并在需要时使用 Prolog 工具：
+
+```python
+messages = agent_executor.invoke({"messages": [("human", query)]})
+```
+
+然后代理接收工具响应并生成答案：
+
+```python
+messages["messages"][-1].pretty_print()
+```
+
+```text
+================================== Ai Message ==================================
+
+John has two children: Mary and Michael, with Bianca as their mother.
+```
+
+---
+
+## API 参考
+
+参见 [langchain-prolog.readthedocs.io/en/latest/modules.html](https://langchain-prolog.readthedocs.io/en/latest/modules.html) 了解详情。

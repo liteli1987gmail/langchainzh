@@ -1,0 +1,211 @@
+---
+title: 如何设置 JavaScript 应用程序
+sidebarTitle: 设置 JavaScript 应用程序
+---
+
+import FrameworkAgnostic from '/snippets/langsmith/framework-agnostic.mdx';
+
+应用程序必须使用[配置文件](/langsmith/cli#configuration-file)进行配置，才能部署到 LangSmith（或进行自托管）。本操作指南讨论了使用 `package.json` 指定项目依赖来设置 JavaScript 应用程序进行部署的基本步骤。
+
+本教程基于[此代码仓库](https://github.com/langchain-ai/langgraphjs-studio-starter)，您可以自行操作以进一步了解如何设置应用程序进行部署。
+
+最终的代码仓库结构将类似于：
+
+```bash
+my-app/
+├── src # all project code lies within here
+│   ├── utils # optional utilities for your graph
+│   │   ├── tools.ts # tools for your graph
+│   │   ├── nodes.ts # node functions for your graph
+│   │   └── state.ts # state definition of your graph
+│   └── agent.ts # code for constructing your graph
+├── package.json # package dependencies
+├── .env # environment variables
+└── langgraph.json # configuration file for LangGraph
+```
+
+<Tip>
+<FrameworkAgnostic/>
+</Tip>
+
+每个步骤后都会提供一个示例文件目录，以演示如何组织代码。
+
+## 指定依赖项
+
+依赖项可以在 `package.json` 中指定。如果未创建这些文件，则可以稍后在[配置文件](#create-the-api-config)中指定依赖项。
+
+示例 `package.json` 文件：
+
+```json
+{
+  "name": "langgraphjs-studio-starter",
+  "packageManager": "yarn@1.22.22",
+  "dependencies": {
+    "@langchain/core": "^0.2.31",
+    "@langchain/langgraph": "^0.2.0",
+    "@langchain/openai": "^0.2.8",
+    "@langchain/tavily": "^0.1.5"
+  }
+}
+```
+
+部署你的应用时，依赖项将使用你选择的包管理器进行安装，前提是它们符合以下列出的兼容版本范围：
+
+```
+"@langchain/core": "^0.3.42",
+"@langchain/langgraph": "^0.2.57",
+"@langchain/langgraph-checkpoint": "~0.0.16",
+```
+
+示例文件目录：
+
+```bash
+my-app/
+└── package.json # package dependencies
+```
+
+## 指定环境变量
+
+环境变量可以选择性地在文件中指定（例如 `.env`）。请参阅[环境变量参考](/langsmith/env-var-cloud)以为部署配置其他变量。
+
+示例 `.env` 文件：
+
+```
+MY_ENV_VAR_1=foo
+MY_ENV_VAR_2=bar
+OPENAI_API_KEY=key
+TAVILY_API_KEY=key_2
+```
+
+示例文件目录：
+
+```bash
+my-app/
+├── package.json
+└── .env # environment variables
+```
+
+## 定义图
+
+实现你的图。图可以在单个文件或多个文件中定义。请记下要包含在应用程序中的每个编译图的变量名。变量名稍后会在创建[配置文件](/langsmith/cli#configuration-file)时使用。
+
+以下是示例 `agent.ts`：
+
+```ts
+import type { AIMessage } from "@langchain/core/messages";
+import { TavilySearch } from "@langchain/tavily";
+import { ChatOpenAI } from "@langchain/openai";
+
+import { MessagesAnnotation, StateGraph } from "@langchain/langgraph";
+import { ToolNode } from "@langchain/langgraph/prebuilt";
+
+const tools = [new TavilySearch({ maxResults: 3 })];
+
+// Define the function that calls the model
+async function callModel(state: typeof MessagesAnnotation.State) {
+  /**
+   * Call the LLM powering our agent.
+   * Feel free to customize the prompt, model, and other logic!
+   */
+  const model = new ChatOpenAI({
+    model: "gpt-5.5",
+  }).bindTools(tools);
+
+  const response = await model.invoke([
+    {
+      role: "system",
+      content: `You are a helpful assistant. The current date is ${new Date().getTime()}.`,
+    },
+    ...state.messages,
+  ]);
+
+  // MessagesAnnotation supports returning a single message or array of messages
+  return { messages: response };
+}
+
+// Define the function that determines whether to continue or not
+function routeModelOutput(state: typeof MessagesAnnotation.State) {
+  const messages = state.messages;
+  const lastMessage: AIMessage = messages[messages.length - 1];
+  // If the LLM is invoking tools, route there.
+  if ((lastMessage?.tool_calls?.length ?? 0) > 0) {
+    return "tools";
+  }
+  // Otherwise end the graph.
+  return "__end__";
+}
+
+// Define a new graph.
+// See https://langchain-ai.github.io/langgraphjs/how-tos/define-state/#getting-started for
+// more on defining custom graph states.
+const workflow = new StateGraph(MessagesAnnotation)
+  // Define the two nodes we will cycle between
+  .addNode("callModel", callModel)
+  .addNode("tools", new ToolNode(tools))
+  // Set the entrypoint as `callModel`
+  // This means that this node is the first one called
+  .addEdge("__start__", "callModel")
+  .addConditionalEdges(
+    // First, we define the edges' source node. We use `callModel`.
+    // This means these are the edges taken after the `callModel` node is called.
+    "callModel",
+    // Next, we pass in the function that will determine the sink node(s), which
+    // will be called after the source node is called.
+    routeModelOutput,
+    // List of the possible destinations the conditional edge can route to.
+    // Required for conditional edges to properly render the graph in Studio
+    ["tools", "__end__"]
+  )
+  // This means that after `tools` is called, `callModel` node is called next.
+  .addEdge("tools", "callModel");
+
+// Finally, we compile it!
+// This compiles it into a graph you can invoke and deploy.
+export const graph = workflow.compile();
+```
+
+示例文件目录：
+
+```
+
+```bash
+my-app/
+├── src # all project code lies within here
+│   ├── utils # optional utilities for your graph
+│   │   ├── tools.ts # tools for your graph
+│   │   ├── nodes.ts # node functions for your graph
+│   │   └── state.ts # state definition of your graph
+│   └── agent.ts # code for constructing your graph
+├── package.json # package dependencies
+├── .env # environment variables
+└── langgraph.json # configuration file for LangGraph
+```
+
+## 创建 API 配置
+
+创建一个名为 `langgraph.json` 的[配置文件](/langsmith/cli#configuration-file)。请参阅[配置文件参考](/langsmith/cli#configuration-file)获取该配置文件 JSON 对象中各键的详细说明。
+
+示例 `langgraph.json` 文件：
+
+```json
+{
+  "node_version": "20",
+  "dockerfile_lines": [],
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./src/agent.ts:graph"
+  },
+  "env": ".env"
+}
+```
+
+请注意，`CompiledGraph` 的变量名出现在每个子键值的末尾（即 `:<variable_name>`）。
+
+<Info>
+    **配置位置**
+    配置文件必须放置在与包含已编译图及其关联依赖项的 TypeScript 文件相同或更高级别的目录中。
+</Info>
+
+## 下一步
+
+在您设置好项目并将其放置在 GitHub 仓库后，就该[部署您的应用](/langsmith/deployment-quickstart)了。

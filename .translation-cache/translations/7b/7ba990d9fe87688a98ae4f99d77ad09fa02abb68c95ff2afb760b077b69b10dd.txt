@@ -1,0 +1,808 @@
+---
+title: "向量存储集成"
+sidebarTitle: "向量存储"
+description: "使用 LangChain JavaScript 与向量存储集成。"
+---
+
+## 概览
+
+[向量存储](/oss/integrations/vectorstores)可以存储[嵌入](/oss/integrations/embeddings)数据并执行相似性搜索。
+
+```mermaid
+flowchart LR
+
+    subgraph "📥 Indexing phase (store)"
+        A[📄 Documents] --> B[🔢 Embedding model]
+        B --> C[🔘 Embedding vectors]
+        C --> D[(Vector store)]
+    end
+
+    subgraph "📤 Query phase (retrieval)"
+        E[❓ Query text] --> F[🔢 Embedding model]
+        F --> G[🔘 Query vector]
+        G --> H[🔍 Similarity search]
+        H --> D
+        D --> I[📄 Top-k results]
+    end
+
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    class A,B,C,D,E,F,G,H,I process
+```
+
+### 接口
+
+LangChain 为向量存储提供了一个统一的接口，使您能够：
+
+- `addDocuments` - 向存储中添加文档。
+- `delete` - 根据 ID 删除存储的文档。
+- `similaritySearch` - 查询语义相似的文档。
+
+这种抽象使您能够在不更改应用程序逻辑的情况下切换不同的实现。
+
+### 初始化
+
+LangChain 中的大多数向量存储在初始化向量存储时接受一个嵌入模型作为参数。
+
+```typescript
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-small",
+});
+const vectorStore = new MemoryVectorStore(embeddings);
+```
+
+### 添加文档
+
+您可以通过使用 `addDocuments` 函数向向量存储添加文档。
+
+```typescript
+import { Document } from "@langchain/core/documents";
+const document = new Document({
+  pageContent: "Hello world",
+});
+await vectorStore.addDocuments([document]);
+```
+
+### 删除文档
+
+您可以使用 `delete` 函数从向量存储中删除文档。
+
+```typescript
+await vectorStore.delete({
+  filter: {
+    pageContent: "Hello world",
+  },
+});
+```
+
+### 相似性搜索
+
+使用 `similaritySearch` 发出语义查询，返回最相似的嵌入文档：
+
+```typescript
+const results = await vectorStore.similaritySearch("Hello world", 10);
+```
+
+
+许多向量存储支持以下参数：
+
+* `k` — 返回的结果数量
+* `filter` — 基于元数据的条件过滤
+
+### 相似度指标与索引
+
+嵌入相似度可通过以下方式计算：
+
+* **余弦相似度**
+* **欧几里得距离**
+* **点积**
+
+高效搜索通常采用 HNSW（层次可导航小世界）等索引方法，但具体实现取决于向量存储。
+
+### 元数据过滤
+
+通过元数据（例如来源、日期）进行过滤可以优化搜索结果：
+
+```typescript
+vectorStore.similaritySearch("query", 2, { source: "tweets" });
+```
+
+<important>
+对基于元数据过滤的支持因实现而异。
+请查阅所选向量存储的文档了解详情。
+</important>
+
+## 热门集成
+
+**选择嵌入模型：**
+
+<AccordionGroup>
+<Accordion title="OpenAI">
+
+安装依赖项：
+
+<CodeGroup>
+
+```bash npm
+npm install @langchain/openai @langchain/core
+```
+```bash yarn
+yarn add @langchain/openai @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/openai @langchain/core
+```
+</CodeGroup>
+
+添加环境变量：
+
+```bash
+OPENAI_API_KEY=your-api-key
+```
+
+实例化模型：
+
+```typescript
+import { OpenAIEmbeddings } from "@langchain/openai";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-large"
+});
+```
+
+</Accordion>
+<Accordion title="Azure">
+
+安装依赖项
+
+<CodeGroup>
+
+</fragment>
+
+```bash npm
+npm install @langchain/openai @langchain/core
+```
+```bash yarn
+yarn add @langchain/openai @langchain/core
+```
+
+```bash pnpm
+pnpm add @langchain/openai @langchain/core
+```
+</CodeGroup>
+
+添加环境变量：
+
+```bash
+AZURE_OPENAI_API_INSTANCE_NAME=<YOUR_INSTANCE_NAME>
+AZURE_OPENAI_API_KEY=<YOUR_KEY>
+AZURE_OPENAI_API_VERSION="2024-02-01"
+```
+
+实例化模型：
+
+```typescript
+import { AzureOpenAIEmbeddings } from "@langchain/openai";
+
+const embeddings = new AzureOpenAIEmbeddings({
+  azureOpenAIApiEmbeddingsDeploymentName: "text-embedding-ada-002"
+});
+```
+
+</Accordion>
+
+<Accordion title="AWS">
+
+安装依赖：
+
+<CodeGroup>
+
+
+</fragment>
+
+```bash npm
+npm i @langchain/aws
+```
+
+```bash yarn
+yarn add @langchain/aws
+```
+
+```bash pnpm
+pnpm add @langchain/aws
+```
+
+</CodeGroup>
+
+添加环境变量：
+
+```bash
+BEDROCK_AWS_REGION=your-region
+```
+
+实例化模型：
+
+```typescript
+import { BedrockEmbeddings } from "@langchain/aws";
+
+const embeddings = new BedrockEmbeddings({
+  model: "amazon.titan-embed-text-v1"
+});
+```
+
+<Accordion title="Google Gemini">
+
+安装依赖：
+
+<CodeGroup>
+
+</Accordion>
+```bash npm
+npm i @langchain/google-genai
+```
+
+```bash yarn
+yarn add @langchain/google-genai
+```
+
+```bash pnpm
+pnpm add @langchain/google-genai
+```
+</CodeGroup>
+
+添加环境变量：
+
+</fragment>
+
+```bash
+GOOGLE_API_KEY=your-api-key
+```
+
+实例化模型：
+
+```typescript
+import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
+
+const embeddings = new GoogleGenerativeAIEmbeddings({
+  model: "text-embedding-004"
+});
+```
+
+</Accordion>
+<Accordion title="Google Vertex">
+
+安装依赖项：
+
+<CodeGroup>
+
+</CodeGroup>
+
+<Accordion title="Google Vertex">
+
+安装依赖项：
+
+<CodeGroup>
+</CodeGroup>
+
+```bash npm
+npm i @langchain/google-vertexai
+```
+
+```bash yarn
+yarn add @langchain/google-vertexai
+```
+
+```bash pnpm
+pnpm add @langchain/google-vertexai
+```
+</CodeGroup>
+
+添加环境变量：
+
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=credentials.json
+```
+
+实例化模型：
+
+```typescript
+import { VertexAIEmbeddings } from "@langchain/google-vertexai";
+
+const embeddings = new VertexAIEmbeddings({
+  model: "gemini-embedding-001"
+});
+```
+
+</Accordion>
+<Accordion title="MistralAI">
+
+安装依赖：
+
+<CodeGroup>
+
+</fragment>
+```bash npm
+npm install @langchain/mistralai @langchain/core
+```
+
+```bash yarn
+yarn add @langchain/mistralai @langchain/core
+```
+
+```bash pnpm
+pnpm add @langchain/mistralai @langchain/core
+```
+</CodeGroup>
+
+添加环境变量：
+
+```bash
+MISTRAL_API_KEY=your-api-key
+```
+
+实例化模型：
+
+```typescript
+import { MistralAIEmbeddings } from "@langchain/mistralai";
+
+const embeddings = new MistralAIEmbeddings({
+  model: "mistral-embed"
+});
+```
+
+</Accordion>
+<Accordion title="Cohere">
+
+安装依赖项：
+
+<CodeGroup>
+```bash npm
+npm i @langchain/cohere
+```
+
+```bash yarn
+yarn add @langchain/cohere
+```
+
+```bash pnpm
+pnpm add @langchain/cohere
+```
+
+</CodeGroup>
+
+添加环境变量：
+
+</fragment>
+
+```bash
+COHERE_API_KEY=your-api-key
+```
+
+实例化模型：
+
+```typescript
+import { CohereEmbeddings } from "@langchain/cohere";
+
+const embeddings = new CohereEmbeddings({
+  model: "embed-english-v3.0"
+});
+```
+
+</Accordion>
+<Accordion title="Ollama">
+
+安装依赖项：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash npm
+npm install @langchain/ollama @langchain/core
+```
+
+```bash yarn
+yarn add @langchain/ollama @langchain/core
+```
+
+```bash pnpm
+pnpm add @langchain/ollama @langchain/core
+```
+</CodeGroup>
+
+实例化模型：
+
+```typescript
+import { OllamaEmbeddings } from "@langchain/ollama";
+
+const embeddings = new OllamaEmbeddings({
+  model: "llama2",
+  baseUrl: "http://localhost:11434", // Default value
+});
+```
+
+</Accordion>
+</AccordionGroup>
+
+**选择向量存储：**
+
+<AccordionGroup>
+<Accordion title="Memory">
+
+<CodeGroup>
+```bash
+npm i langchain
+```
+
+```bash yarn
+yarn add langchain
+```
+
+```bash pnpm
+pnpm add langchain
+```
+<CodeGroup>
+
+</CodeGroup>
+
+```typescript
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+
+const vectorStore = new MemoryVectorStore(embeddings);
+```
+
+</Accordion>
+<Accordion title="MongoDB">
+
+<Tabs>
+  <Tab title="手动嵌入">
+    <CodeGroup>
+    ```bash npm
+    npm install @langchain/mongodb mongodb @langchain/core
+    ```
+    ```bash yarn
+    yarn add @langchain/mongodb mongodb @langchain/core
+    ```
+    ```bash pnpm
+    pnpm add @langchain/mongodb mongodb @langchain/core
+    ```
+</CodeGroup>
+
+    ```typescript
+    import { MongoDBAtlasVectorSearch } from "@langchain/mongodb"
+    import { MongoClient } from "mongodb";
+
+    const client = new MongoClient(process.env.MONGODB_ATLAS_URI!);
+    const collection = client
+      .db(process.env.MONGODB_ATLAS_DB_NAME)
+      .collection(process.env.MONGODB_ATLAS_COLLECTION_NAME);
+
+    const vectorStore = new MongoDBAtlasVectorSearch(embeddings, {
+      collection,
+      indexName: "vector_index",
+      textKey: "text",
+      embeddingKey: "embedding",
+    });
+    ```
+</Tab>
+  <Tab title="自动嵌入">
+    <CodeGroup>
+    ```bash npm
+    npm install @langchain/mongodb mongodb @langchain/core
+    ```
+    ```bash yarn
+    yarn add @langchain/mongodb mongodb @langchain/core
+    ```
+    ```bash pnpm
+    pnpm add @langchain/mongodb mongodb @langchain/core
+    ```
+</CodeGroup>
+
+    ```typescript
+    import { MongoDBAtlasVectorSearch } from "@langchain/mongodb"
+    import { MongoClient } from "mongodb";
+
+    const client = new MongoClient(process.env.MONGODB_ATLAS_URI!);
+    const collection = client
+      .db(process.env.MONGODB_ATLAS_DB_NAME)
+      .collection(process.env.MONGODB_ATLAS_COLLECTION_NAME);
+
+    const vectorStore = new MongoDBAtlasVectorSearch({ collection });
+    ```
+</Tab>
+</Tabs>
+
+</Accordion>
+<Accordion title="Pinecone">
+
+<CodeGroup>
+
+
+</Accordion>
+
+```bash npm
+npm install @langchain/pinecone @langchain/core @pinecone-database/pinecone
+```
+
+```bash yarn
+yarn add @langchain/pinecone @langchain/core @pinecone-database/pinecone
+```
+
+```bash pnpm
+pnpm add @langchain/pinecone @langchain/core @pinecone-database/pinecone
+```
+
+<CodeGroup>
+
+</CodeGroup>
+
+```typescript
+import { PineconeStore } from "@langchain/pinecone";
+import { Pinecone as PineconeClient } from "@pinecone-database/pinecone";
+
+const pinecone = new PineconeClient();
+const vectorStore = new PineconeStore(embeddings, {
+  pineconeIndex,
+  maxConcurrency: 5,
+});
+```
+
+</Accordion>
+
+<Accordion title="Redis">
+
+<CodeGroup>
+
+</CodeGroup>
+
+</Accordion>
+```bash npm
+npm install @langchain/redis @langchain/core redis
+```
+
+```bash yarn
+yarn add @langchain/redis @langchain/core redis
+```
+
+```bash pnpm
+pnpm add @langchain/redis @langchain/core redis
+```
+<CodeGroup>
+
+
+</CodeGroup>
+
+```typescript
+import { RedisVectorStore } from "@langchain/redis";
+
+const vectorStore = new RedisVectorStore(embeddings, {
+  redisClient: client,
+  indexName: "langchainjs-testing",
+});
+```
+
+<Accordion title="Qdrant">
+
+<CodeGroup>
+
+</Accordion>
+```bash npm
+npm install @langchain/qdrant @langchain/core
+```
+
+```bash yarn
+yarn add @langchain/qdrant @langchain/core
+```
+
+```bash pnpm
+pnpm add @langchain/qdrant @langchain/core
+```
+
+<CodeGroup>
+
+</CodeGroup>
+
+```typescript
+import { QdrantVectorStore } from "@langchain/qdrant";
+
+const vectorStore = await QdrantVectorStore.fromExistingCollection(embeddings, {
+  url: process.env.QDRANT_URL,
+  collectionName: "langchainjs-testing",
+});
+```
+
+<Accordion title="Oracle AI Database">
+
+<CodeGroup>
+```bash npm
+npm i @oracle/langchain-oracledb @langchain/core
+```
+```bash yarn
+yarn add @oracle/langchain-oracledb @langchain/core
+```
+```bash pnpm
+pnpm add @oracle/langchain-oracledb @langchain/core
+```
+<CodeGroup>
+
+</CodeGroup>
+
+```typescript
+import oracledb from "oracledb";
+import { OracleEmbeddings, OracleVS } from "@oracle/langchain-oracledb";
+
+const connection = await oracledb.getConnection({
+  user: process.env.ORACLE_USER,
+  password: process.env.ORACLE_PASSWORD,
+  connectionString: process.env.ORACLE_DSN,
+});
+
+const embeddings = new OracleEmbeddings(connection, {
+  provider: "database",
+  model: process.env.DEMO_ONNX_MODEL ?? "DEMO_MODEL",
+});
+
+const vectorStore = new OracleVS(embeddings, {
+  client: connection,
+  tableName: "DEMO_VECTORS",
+  query: "Find support tickets mentioning service outages.",
+  distanceStrategy: "DOT",
+});
+await vectorStore.initialize();
+```
+
+</Accordion>
+
+<Accordion title="Weaviate">
+    <CodeGroup>
+
+</fragment>
+        ```bash npm
+        npm install @langchain/weaviate @langchain/core weaviate-client
+        ```
+
+        ```bash yarn
+        yarn add @langchain/weaviate @langchain/core weaviate-client
+        ```
+
+        ```bash pnpm
+        pnpm add @langchain/weaviate @langchain/core weaviate-client
+        ```
+</CodeGroup>
+
+    <CodeGroup>
+
+</fragment>
+
+    ```typescript
+    import { WeaviateStore } from "@langchain/weaviate";
+
+    const vectorStore = new WeaviateStore(embeddings, {
+        client: weaviateClient,
+        indexName: "Langchainjs_test",
+    });
+    ```
+</CodeGroup>
+</Accordion>
+
+</AccordionGroup>
+
+LangChain.js 与各种向量存储集成。您可以在下面查看完整列表：
+
+## 所有向量存储
+
+<Columns cols={3}>
+  <Card
+    title="Azure DocumentDB"
+    icon="link"
+    href="/oss/integrations/vectorstores/azure_documentdb"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Azure Cosmos DB for NoSQL"
+    icon="link"
+    href="/oss/integrations/vectorstores/azure_cosmosdb_nosql"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Cloudflare Vectorize"
+    icon="link"
+    href="/oss/integrations/vectorstores/cloudflare_vectorize"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Google Cloud SQL for PostgreSQL"
+    icon="link"
+    href="/oss/integrations/vectorstores/google_cloudsql_pg"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="In-memory"
+    icon="link"
+    href="/oss/integrations/vectorstores/memory"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Milvus"
+    icon="link"
+    href="/oss/integrations/vectorstores/milvus"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="MongoDB Atlas"
+    icon="link"
+    href="/oss/integrations/vectorstores/mongodb_atlas"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Oracle AI Database"
+    icon="link"
+    href="/oss/integrations/vectorstores/oracleai"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Pinecone"
+    icon="link"
+    href="/oss/integrations/vectorstores/pinecone"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Qdrant"
+    icon="link"
+    href="/oss/integrations/vectorstores/qdrant"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Redis"
+    icon="link"
+    href="/oss/integrations/vectorstores/redis"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Weaviate"
+    icon="link"
+    href="/oss/integrations/vectorstores/weaviate"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Neo4j Vector Index"
+    icon="link"
+    href="/oss/integrations/vectorstores/neo4jvector"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="PGVector"
+    icon="link"
+    href="/oss/integrations/vectorstores/pgvector"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="Turbopuffer"
+    icon="link"
+    href="/oss/integrations/vectorstores/turbopuffer"
+    arrow="true"
+    cta="查看指南"
+  />
+  <Card
+    title="YDB"
+    icon="link"
+    href="/oss/integrations/vectorstores/ydb"
+    arrow="true"
+    cta="查看指南"
+  />
+</Columns>

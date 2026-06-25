@@ -1,0 +1,314 @@
+---
+title: Managed Deep Agents SDK
+sidebarTitle: SDK
+description: 使用 Python、TypeScript 和 React SDK 构建 Managed Deep Agents。
+---
+
+通过 Python、TypeScript 和 React 构建、运行和流式传输 Managed Deep Agents。SDK 封装了 `/v1/deepagents` API，用于创建 Agent、管理线程、流式运行、注册 MCP 服务器和构建 React UI。
+
+有关概念，请参阅 [Managed Deep Agents 概述](/langsmith/managed-deep-agents-overview)。有关端到端演练，请按照[快速入门](/langsmith/managed-deep-agents-quickstart)操作。
+
+<Note>
+SDK 包处于**公开 [beta](/langsmith/release-stages)**阶段。方法签名和负载字段在 beta 期间可能会发生变化。
+
+Managed Deep Agents 处于**私有 beta**阶段，仅在美国区域的 [LangSmith Cloud](/langsmith/cloud) 上可用。[加入候补名单](https://www.langchain.com/langsmith-managed-deep-agents-waitlist)以请求访问权限。
+</Note>
+
+## 安装
+
+<CodeGroup>
+
+
+</fragment>
+
+```bash Python
+uv add managed-deepagents
+
+# or with pip
+pip install managed-deepagents
+```
+
+```bash TypeScript
+npm install @langchain/managed-deepagents
+```
+
+```bash React
+npm install @langchain/managed-deepagents @langchain/react
+```
+
+</CodeGroup>
+
+要求：
+
+- `managed-deepagents` 需要 Python 3.10 或更高版本。
+- `@langchain/managed-deepagents` 需要 Node.js 22 或更高版本。
+- Managed Deep Agents [私人测试版访问权限](https://www.langchain.com/langsmith-managed-deep-agents-waitlist)。
+- 拥有私人测试版访问权限的工作区的 [LangSmith API 密钥](/langsmith/create-account-api-key)。
+
+## 配置客户端
+
+设置您的 API 密钥：
+
+```bash
+export LANGSMITH_API_KEY="<LANGSMITH_API_KEY>"
+```
+
+两个 SDK 默认为 `https://api.smith.langchain.com/v1/deepagents`。要使用兼容的端点，请设置 `LANGSMITH_ENDPOINT` 或直接传递 API URL：
+
+<CodeGroup>
+
+
+</fragment>
+
+```python Python
+from managed_deepagents import Client
+
+client = Client(
+    api_key="<LANGSMITH_API_KEY>",
+    api_url="https://api.smith.langchain.com/v1/deepagents",
+)
+```
+
+```ts TypeScript
+import { Client } from "@langchain/managed-deepagents";
+
+const client = new Client({
+  apiKey: process.env.LANGSMITH_API_KEY,
+  apiUrl: "https://api.smith.langchain.com/v1/deepagents",
+});
+```
+
+<CodeGroup>
+
+`Client()` 和 `new Client()` 从环境变量中读取 `LANGSMITH_API_KEY` 和 `LANGSMITH_ENDPOINT`，因此本页面其余示例在构造客户端时不传入任何参数。
+
+## 创建代理
+
+创建代理的请求可以使用与 [Managed Deep Agents CLI](/langsmith/managed-deep-agents-cli) 相同的顶级 `model` 和 `backend` 字段。将 `model` 作为对象传递，其 `id` 为 `{provider}:{model_id}`。参见[支持的提供商和模型](/oss/langchain/models#supported-providers-and-models)。
+
+<CodeGroup>
+
+```python Python
+from managed_deepagents import Client
+
+with Client() as client:
+    agent = client.agents.create(
+        name="research-assistant",
+        description="Research assistant that can search the web and summarize sources.",
+        model="openai:gpt-5.5",
+        backend={"type": "state"},
+        instructions=(
+            "You are a careful research assistant. Search for sources, "
+            "keep notes, and return concise answers with citations."
+        ),
+    )
+
+agent_id = agent["id"]
+print(f"Agent ID: {agent_id}")
+```
+
+```ts TypeScript
+import { Client } from "@langchain/managed-deepagents";
+
+const client = new Client();
+
+const agent = await client.agents.create({
+  name: "research-assistant",
+  description: "Research assistant that can search the web and summarize sources.",
+  model: "openai:gpt-5.5",
+  backend: { type: "state" },
+  instructions:
+    "You are a careful research assistant. Search for sources, keep notes, and return concise answers with citations.",
+});
+
+const agentId = agent.id;
+console.log(`Agent ID: ${agentId}`);
+```
+
+</CodeGroup>
+
+Python 方法返回类似字典的响应，因此使用 `agent["id"]`。TypeScript 方法返回类型化对象，因此使用 `agent.id`。
+
+## 运行和流式处理
+
+在运行 agent 之前创建一个 thread。[Threads](/langsmith/use-threads#understand-threads) 会保留对话和执行状态，这样您就可以稍后恢复或检查运行。使用创建 agent 时返回的 `id`。
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from managed_deepagents import Client
+
+agent_id = "<agent_id>"
+
+with Client() as client:
+    thread = client.threads.create(
+        agent_id=agent_id,
+        options={
+            "test_run": False,
+            "skip_memory_write_protection": False,
+        },
+    )
+
+    for event in client.threads.stream(
+        thread["id"],
+        agent_id=agent_id,
+        messages=[
+            {
+                "role": "user",
+                "content": "Research recent approaches to agent memory and summarize the main trade-offs.",
+            }
+        ],
+        stream_mode=["values", "updates", "messages-tuple"],
+        stream_subgraphs=True,
+    ):
+        print(event.event, event.data)
+```
+
+```ts TypeScript
+import { Client } from "@langchain/managed-deepagents";
+
+const agentId = "<agent_id>";
+const client = new Client();
+
+const thread = await client.threads.create({
+  agent_id: agentId,
+  options: {
+    test_run: false,
+    skip_memory_write_protection: false,
+  },
+});
+
+const langGraphClient = client.getLangGraphClient({ agentId });
+const stream = langGraphClient.runs.stream(thread.id, agentId, {
+  input: {
+    messages: [
+      {
+        role: "user",
+        content:
+          "Research recent approaches to agent memory and summarize the main trade-offs.",
+      },
+    ],
+  },
+  streamMode: ["values", "updates", "messages-tuple"],
+  streamSubgraphs: true,
+});
+
+for await (const event of stream) {
+  console.log(event.event, event.data);
+}
+```
+
+<CodeGroup>
+
+`options` 对象是可选的，两个字段都默认为 `false`。将 `test_run` 设置为 `true` 以将线程标记为测试运行，并从使用情况和分析中过滤掉。默认情况下，`skip_memory_write_protection` 允许运行时在代理写入长期内存之前发起人工介入中断，以便您可以批准或拒绝该写入。将其设置为 `true` 可让内存写入立即进行，这在无人值守运行中很有用，此时没有人工可以批准写入。
+
+在 Python 中，使用 `client.threads.stream(...)` 直接进行流式传输。在 TypeScript 中，使用 `client.getLangGraphClient(...)` 获取 LangGraph 客户端，然后使用 `runs.stream(...)` 进行流式传输，它在 `input` 下接收消息列表。每个事件都包含一个 `event` 类型和一个 `data` 有效载荷。您收到的类型取决于 `stream_mode`。有关流模式和事件类型，请参阅[从线程流式传输运行](/langsmith/managed-deep-agents-invoke#stream-a-run-from-a-thread)。
+
+## 使用 React `useStream`
+
+TypeScript SDK 包含一个用于 `@langchain/react` 的 LangGraph 客户端适配器。使用 `getLangGraphClient()` 让 `useStream` 管理线程生命周期、运行提交和状态更新，而 Managed Deep Agents SDK 提供正确的路由、认证标头和有效载荷格式。
+
+<Warning>
+不要将您的 LangSmith API 密钥发送到浏览器。`new Client()` 从环境变量中读取 `LANGSMITH_API_KEY`，因此请避免将其暴露给客户端包。在生产环境的 React 应用中，请通过自定义 `fetch` 将请求路由到您的后端。
+</Warning>
+
+```tsx
+import { Client } from "@langchain/managed-deepagents";
+import { useStream } from "@langchain/react";
+
+const agentId = "<agent_id>";
+
+const managedDeepAgents = new Client();
+
+const client = managedDeepAgents.getLangGraphClient({ agentId });
+
+export function ManagedDeepAgentStream() {
+  const stream = useStream({
+    client,
+    assistantId: agentId
+  });
+
+  return (
+    <section>
+      <button
+        type="button"
+        disabled={stream.isLoading}
+        onClick={() => {
+          void stream.submit({
+            messages: [
+              { role: "user", content: "Write a short status update." },
+            ],
+          });
+        }}
+      >
+        Run agent
+      </button>
+
+      {stream.messages.map((message, index) => (
+        <p key={message.id ?? index}>{String(message.content)}</p>
+      ))}
+
+      <p>State keys: {Object.keys(stream.values).join(", ")}</p>
+    </section>
+  );
+}
+```
+
+## 资源
+
+SDK 客户端暴露以下资源组：
+
+| 资源 | Python | TypeScript |
+| --- | --- | --- |
+| Agent | `client.agents` | `client.agents` |
+| 线程和运行 | `client.threads` | `client.threads` |
+| MCP 服务器 | `client.mcp_servers` | `client.mcpServers` |
+| 身份验证会话 | `client.auth_sessions` | `client.authSessions` |
+
+Python 方法使用 `snake_case`，例如 `create_and_run` 和 `resolve_interrupt`。TypeScript 方法使用 `camelCase`，例如 `createAndRun` 和 `resolveInterrupt`。
+
+SDK 可以注册 MCP 服务器、完成身份验证会话，并通过 `client.mcp_servers.list_tools(...)`（Python）或 `client.mcpServers.listTools(...)`（TypeScript）发现已注册服务器的工具架构。将选定的工具条目传递给 `client.agents.create(...)` 或 `client.agents.update(...)`。
+
+## 处理错误
+
+请求会引发包含 HTTP 状态码的类型化错误，API 返回时还会包含错误代码和详细信息。
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from managed_deepagents import Client, ManagedDeepAgentsAPIError
+
+with Client() as client:
+    try:
+        client.agents.get("missing-agent")
+    except ManagedDeepAgentsAPIError as error:
+        # `code` and `detail` can be empty, for example on a 403 permission error.
+        # The raw message is on `error.body`.
+        print(error.status_code, error.code, error.detail, error.body)
+```
+
+```ts TypeScript
+import { Client, ManagedDeepAgentsAPIError } from "@langchain/managed-deepagents";
+
+const client = new Client();
+
+try {
+  await client.agents.get("missing-agent");
+} catch (error) {
+  if (error instanceof ManagedDeepAgentsAPIError) {
+    // `code` and `detail` can be undefined, for example on a 403 permission error.
+    // The raw message is on `error.body`.
+    console.log(error.status, error.code, error.detail, error.body);
+  }
+}
+```
+
+</CodeGroup>
+
+当请求因缺少权限而被拒绝时，响应是一个 `403`，其 `code` 和 `detail` 为空，原因是纯文本返回。在两个 SDK 中都从 `error.body` 中读取，例如 `missing permission mcp-servers:create`。
+
+有关端点级请求和响应模式，请参阅[托管深度代理 API 参考](/langsmith/managed-deep-agents-api-overview)。

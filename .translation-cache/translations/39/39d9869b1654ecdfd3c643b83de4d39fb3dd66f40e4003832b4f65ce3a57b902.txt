@@ -1,0 +1,32 @@
+---
+title: Auth-aware tool responses
+description: Format tool responses to trigger OAuth flows and resume execution automatically.
+sidebarTitle: Auth responses
+mode: wide
+---
+
+某些 [工具](/langsmith/fleet/tools) 需要用户授权（例如 Google、Slack、GitHub）。LangSmith Fleet 包含中间件，用于检测工具何时需要授权，并暂停运行同时向用户显示清晰的提示。用户完成认证后，相同的工具调用会自动重试。
+
+## 返回形状以请求授权
+
+如果工具检测到缺少授权，返回包含以下字段的 JSON 字符串：
+
+```json
+{
+  "auth_required": true,
+  "auth_url": "https://auth.example.com/start",
+  "auth_id": "opaque-tracking-id"
+}
+```
+
+- `auth_required`：设置为 `true` 以发出中断信号。
+- `auth_url`：用户应被重定向到的授权 URL。
+- `auth_id`：可选的相关 ID，用于跟踪身份验证会话。
+
+当 Fleet 检测到此响应时，它会中断运行，向用户显示身份验证 UI，并在授权完成后自动重试工具调用。
+
+如果您希望自定义工具重复使用相同的身份验证必需中断 + UI，请确保您的工具返回相同结构的 JSON。
+
+<Note>
+仅将此 JSON 作为工具输出返回。避免包含额外的文本或内容。Fleet 解析响应以触发身份验证流程。
+</Note>

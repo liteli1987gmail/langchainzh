@@ -1,0 +1,92 @@
+---
+title: "MemgraphToolkit 集成"
+description: "使用 LangChain Python 与 MemgraphToolkit 工具集成。"
+---
+
+这将帮助您开始使用 Memgraph [工具包](/oss/integrations/tools/memgraph)。
+
+`MemgraphToolkit` 中的工具旨在与 `Memgraph` 数据库进行交互。
+
+## 设置
+
+要想能够按照以下步骤操作，请确保您已在本地主机上运行 Memgraph 实例。有关如何运行 Memgraph 的更多详细信息，请参阅 [Memgraph 文档](https://memgraph.com/docs/getting-started)。
+
+如果您想从各个工具的运行中获得自动追踪，还可以取消下方注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+此工具包位于 `langchain-memgraph` 包中：
+
+```python
+pip install -qU langchain-memgraph
+```
+
+## 实例化
+
+现在我们可以实例化我们的工具包：
+
+```python
+from langchain.chat_models import init_chat_model
+from langchain_memgraph import MemgraphToolkit
+from langchain_memgraph.graphs.memgraph import MemgraphLangChain
+
+db = MemgraphLangChain(url=url, username=username, password=password)
+
+model = init_chat_model("gpt-5.4-mini", model_provider="openai")
+
+toolkit = MemgraphToolkit(
+    db=db,  # Memgraph instance
+    llm=model,  # LLM chat model for LLM operations
+)
+```
+
+## 工具
+
+查看可用工具：
+
+```python
+toolkit.get_tools()
+```
+
+## 调用
+
+工具可以单独调用，只需传递参数，对于 QueryMemgraphTool，调用方式如下：
+
+```python
+from langchain_memgraph.tools import QueryMemgraphTool
+
+# Rest of the code omitted for brevity
+
+tool.invoke({QueryMemgraphTool({"query": "MATCH (n) RETURN n LIMIT 5"})})
+```
+
+## 在代理内使用
+
+```python
+from langchain.agents import create_agent
+
+
+agent_executor = create_agent(model, tools)
+```
+
+```python
+example_query = "MATCH (n) RETURN n LIMIT 1"
+
+stream = agent_executor.stream_events(
+    {"messages": [("user", example_query)]},
+    version="v3",
+)
+for snapshot in stream.values:
+    snapshot["messages"][-1].pretty_print()
+```
+
+---
+
+## API 参考
+
+更多详细信息，请访问 [Memgraph 集成文档](https://memgraph.com/docs/ai-ecosystem/integrations#langchain)

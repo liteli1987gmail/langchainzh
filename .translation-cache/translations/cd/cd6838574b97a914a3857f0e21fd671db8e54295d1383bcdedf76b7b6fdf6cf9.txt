@@ -1,0 +1,139 @@
+---
+title: "Apify 数据集集成"
+description: "使用 LangChain Python 与 Apify 数据集文档加载器集成。"
+---
+
+> [Apify Dataset](https://docs.apify.com/platform/storage/dataset) 是一个可扩展的仅追加存储，具有顺序访问功能，专为存储结构化网页抓取结果而设计，例如产品列表或 Google SERP，然后将其导出为 JSON、CSV 或 Excel 等各种格式。数据集主要用于保存 [Apify Actors](https://apify.com/store) 的结果——用于各种网页抓取、爬取和数据提取用例的无服务器云程序。
+
+本笔记本展示了如何将 Apify 数据集加载到 LangChain。
+
+### 集成详情
+
+| Class | Package | Serializable | [JS support](https://js.langchain.com/docs/integrations/document-loaders/web_loaders/apify_dataset) | Version |
+|:------|:--------|:------------:|:---------------------------------------------------------------------------:|:-------:|
+| [`ApifyDatasetLoader`](https://github.com/apify/langchain-apify) | [`langchain-apify`](https://pypi.org/project/langchain-apify/) | ❌ | ✅ | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-apify?style=flat-square&label=%20) |
+
+### 加载器特性
+
+| Source | Document Lazy Loading | Native Async Support |
+|:------:|:-------------------:|:-------------------:|
+| Apify Dataset | ❌ | ❌ |
+
+## 前置条件
+
+你需要在 Apify 平台上有一个现有的数据集。本示例展示了如何加载由 [Website Content Crawler](https://apify.com/apify/website-content-crawler) 生成的数据集。
+
+```python
+pip install -qU langchain langchain-apify langchain-openai
+```
+
+首先，将 `ApifyDatasetLoader` 导入到您的源代码中：
+
+```python
+from langchain_apify import ApifyDatasetLoader
+from langchain_core.documents import Document
+```
+
+找到您的 [Apify API token](https://console.apify.com/account/integrations) 和 [OpenAI API key](https://platform.openai.com/account/api-keys)，并将它们初始化为环境变量：
+
+```python
+import os
+
+os.environ["APIFY_TOKEN"] = "your-apify-token"
+os.environ["OPENAI_API_KEY"] = "your-openai-api-key"
+```
+
+## 定价
+
+Apify Actor 可以采用不同的方式定价，具体取决于您运行的 Actor。
+许多 Actor 支持[按事件付费 (PPE) 定价](https://docs.apify.com/platform/actors/publishing/monetize/pay-per-event)，您需要为 Actor 作者定义的明确事件付费（例如按数据集项目计费）。这非常适合代理工作负载，在这些场景中您需要清晰的按操作计费。
+
+## 将数据集项目映射到文档
+
+接下来，定义一个函数，将 Apify 数据集记录字段映射到 LangChain @[`Document`] 格式。
+
+例如，如果您的数据集项目结构如下：
+
+```json
+{
+    "url": "https://apify.com",
+    "text": "Apify is the best web scraping and automation platform."
+}
+```
+
+下面的映射函数会将它们转换为 LangChain @[`Document`] 格式，这样你就可以在任何 LLM 模型中进一步使用它们（例如用于问答）。
+
+```python
+loader = ApifyDatasetLoader(
+    dataset_id="your-dataset-id",
+    dataset_mapping_function=lambda dataset_item: Document(
+        page_content=dataset_item["text"], metadata={"source": dataset_item["url"]}
+    ),
+)
+```
+
+```python
+data = loader.load()
+```
+
+## 问答示例
+
+在此示例中，我们使用数据集中的数据来回答一个问题。
+
+```python
+from langchain.indexes import VectorstoreIndexCreator
+from langchain_apify import ApifyWrapper
+from langchain_core.documents import Document
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import ChatOpenAI
+from langchain_openai.embeddings import OpenAIEmbeddings
+```
+
+```python
+loader = ApifyDatasetLoader(
+    dataset_id="your-dataset-id",
+    dataset_mapping_function=lambda item: Document(
+        page_content=item["text"] or "", metadata={"source": item["url"]}
+    ),
+)
+```
+
+```python
+index = VectorstoreIndexCreator(
+    vectorstore_cls=InMemoryVectorStore, embedding=OpenAIEmbeddings()
+).from_loaders([loader])
+```
+
+```python
+llm = ChatOpenAI(model="gpt-5-mini")
+```
+
+```python
+query = "What is Apify?"
+result = index.query_with_sources(query, llm=llm)
+```
+
+```python
+print(result["answer"])
+print(result["sources"])
+```
+
+```text
+ Apify is a platform for developing, running, and sharing serverless cloud programs. It enables users to create web scraping and automation tools and publish them on the Apify platform.
+
+https://docs.apify.com/platform/actors, https://docs.apify.com/platform/actors/running/actors-in-store, https://docs.apify.com/platform/security, https://docs.apify.com/platform/actors/examples
+```
+
+---
+
+## 使用 Apify MCP 服务器
+
+不确定使用哪个 Actor 或需要哪些参数？[Apify MCP（模型上下文协议）服务器](https://mcp.apify.com) 可以帮助您发现可用的 Actor、探索其输入模式并了解参数要求。
+
+通过 HTTP 连接到 Apify MCP 服务器时，请在请求头中包含您的 Apify 令牌：
+
+```text
+Authorization: Bearer <APIFY_TOKEN>
+```
+
+更多信息，请参阅 [LangChain MCP 文档](/oss/langchain/mcp)。

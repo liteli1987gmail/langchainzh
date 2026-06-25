@@ -1,0 +1,192 @@
+---
+title: 合规性数据清除
+sidebarTitle: 合规性数据清除
+---
+
+本指南介绍数据到达 LangSmith Cloud 服务器后可用的各种功能，帮助您实现隐私目标。
+
+## 数据保留
+
+LangSmith 提供自动数据保留功能，以帮助实现合规性和存储管理。数据保留策略可在两个级别进行配置：
+
+- **工作区级别**：具有所需权限的企业客户可以将扩展保留设置为工作区默认值，并自定义保留期限（最多 400 天）。请参阅[自定义扩展保留策略](#customize-extended-retention-policy)。
+- **项目级别**：具有所需权限的客户可以为每个追踪项目设置默认保留层级，选择基础保留（14 天）或扩展保留（400 天）。请参阅[更改项目级默认保留](/langsmith/billing#change-project-level-default-retention)。
+
+有关数据保留配置和管理的详细信息，请参阅[数据保留概念](/langsmith/usage-and-billing#data-retention)文档。
+
+## 自定义扩展保留策略
+
+<Note>
+此功能适用于 [Enterprise](/langsmith/pricing-plans) 计划客户。对于[自托管](/langsmith/self-hosted) Enterprise 客户，请参阅[工作区级别配置部分](#workspace-level-extended-retention-for-self-hosted)。
+</Note>
+
+[Enterprise](/langsmith/pricing-plans) 客户可以在[工作区](/langsmith/administration-overview#workspaces)级别自定义追踪的扩展数据保留期限，以满足特定的合规性要求。默认情况下，扩展保留设置为 400 天，但您可以根据组织的需求进行调整。保留期限的更改仅适用于新的追踪。
+
+<Note>
+保留期限的更改仅适用于新的追踪。现有追踪不受影响。
+</Note>
+
+### 配置扩展保留
+
+组织管理员和操作员（`organization:manage`）可以为任何工作区配置保留期。工作区管理员可以配置自己的工作区（`workspaces:manage`）。有关完整权限参考，请参阅[组织和workspace operations](/langsmith/organization-workspace-operations)。
+
+<Tabs>
+  <Tab title="UI">
+    在 [LangSmith UI](https://smith.langchain.com) 中：
+
+    1. 导航到页面底部的 **设置**。
+    2. 从左侧菜单中选择 **使用量配置**。
+    3. 在列表中找到您想要配置的工作区。
+    4. 点击该工作区 **数据保留策略** 列下的值。
+    5. 在 **工作区使用量配置** 模态框中，使用 **扩展保留 - 所有追踪的保留期限** 选项的下拉菜单自定义扩展策略。可用的期限为：30 天、60 天、90 天、120 天、150 天、180 天、240 天、300 天、365 天和 400 天。
+    6. 选择 **保存**。
+  </Tab>
+  <Tab title="API">
+    读取当前设置：
+
+    **组织级别**（`organization:manage`）
+
+    ```bash
+    curl -X GET "https://api.smith.langchain.com/api/v1/orgs/ttl-settings" \
+      -H "x-api-key: YOUR_API_KEY"
+    ```
+
+**工作区级别** (`workspaces:manage`)
+
+    ```bash
+    curl -X GET "https://api.smith.langchain.com/api/v1/ttl-settings" \
+      -H "x-api-key: YOUR_API_KEY"
+    ```
+
+要更新保留期限，请将 `resource_type` 设置为 `"run"` 以获取跟踪记录，并将 `ttl_days` 设置为您所需的持续时间。可用持续时间为：30、60、90、120、150、180、240、300、365 和 400 天。
+
+**组织级别**（`organization:manage`）
+
+    ```bash
+    curl -X PUT "https://api.smith.langchain.com/api/v1/orgs/ttl-settings" \
+      -H "x-api-key: YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"resource_type": "run", "ttl_days": 90}'
+    ```
+
+**工作区级别**（`workspaces:manage`）
+
+    ```bash
+    curl -X PUT "https://api.smith.langchain.com/api/v1/ttl-settings" \
+      -H "x-api-key: YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"resource_type": "run", "ttl_days": 90}'
+    ```
+</Tab>
+</Tabs>
+
+### 适用于自托管的工作区级扩展保留期
+
+自托管 [Enterprise](/langsmith/pricing-plans) 客户也可以使用工作区级扩展保留期配置，而不是系统级 TTL 设置。这提供了对不同工作区数据保留的更细粒度控制，无需更改环境变量。
+
+<Warning>
+如果您使用 blob 存储，则**必须**为每个配置的保留期添加生命周期规则。例如，将工作区设置为 90 天保留期意味着 blob 数据被写入 `ttl_90d/` 前缀，这需要一个匹配的生命周期规则来自动清理。请参阅 [blob 存储 TTL 配置](/langsmith/self-host-blob-storage#custom-workspace-level-retention-prefixes) 了解详细信息和示例。
+</Warning>
+
+要为自托管部署配置此功能，请参阅 [自托管 TTL 文档](/langsmith/self-host-ttl) 了解传统的系统级方法，或联系 [支持](https://support.langchain.com)。
+
+## 追踪删除
+
+您可以使用 API 完成追踪删除。该 API 支持两种删除追踪的方法：
+
+1. **通过追踪 ID 和会话 ID**：通过提供追踪 ID 列表及其对应的会话 ID 来删除特定追踪（每次请求最多 1000 条追踪）
+2. **通过元数据**：删除与指定元数据键值对匹配的工作区中的追踪
+
+更多详细信息，请参阅 [API 规范](/langsmith/smith-api/run/delete-runs)。
+
+<Warning>
+所有追踪删除都将删除相关实体，如反馈、聚合和跨所有数据存储的统计数据。
+</Warning>
+
+### 删除时间线
+
+追踪删除在非高峰使用时间处理，并非即时完成。LangChain 在周末运行删除任务。删除后没有确认——您需要再次查询数据以验证它已被删除。
+
+### 删除特定追踪
+
+要从单个会话中按追踪 ID 删除特定追踪：
+
+<Note>
+`session_id` 是您要删除的追踪的项目 ID。您可以在 LangSmith UI 的追踪项目页面上找到它。
+</Note>
+
+```bash
+curl -X POST "https://api.smith.langchain.com/api/v1/runs/delete" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trace_ids": ["trace-id-1", "trace-id-2", "trace-id-3"],
+    "session_id": "session-id-1"
+  }'
+```
+
+## 示例删除
+
+您可以通过我们的 API 自助删除数据集示例，根据数据保留需求支持软删除和硬删除两种方式。
+
+<Warning>
+硬删除将从整个数据集历史记录中永久删除指定示例的所有版本中的输入、输出和元数据。
+</Warning>
+
+### 删除示例是一个两步流程
+
+对于批量操作，示例删除遵循两步流程：
+
+#### 1. 通过元数据搜索示例
+
+查找工作区中所有数据集中具有匹配元数据的所有示例。
+
+[GET /examples](/langsmith/smith-api/examples/read-examples)
+
+- `as_of` 必须显式指定为时间戳。仅返回在 `as_of` 日期之前创建的示例
+
+```bash
+curl -X GET "https://api.smith.langchain.com/api/v1/examples?as_of=2024-01-01T00:00:00Z" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metadata": {
+      "user_id": "user123",
+      "environment": "staging"
+    }
+  }'
+```
+
+这将返回工作区中所有数据集中元数据包含 `user_id: "user123"` **或** `environment: "staging"` 的示例。
+
+#### 2. 硬删除示例
+
+获得示例 ID 后，发送删除请求。这将从该示例的所有数据集版本中清除输入、输出和元数据。
+
+[POST /v1/platform/datasets/examples/delete/](/langsmith/smith-api/examples/hard-delete-examples)
+
+- 在请求正文中指定 `example_ids`（示例 ID 列表）和 `hard_delete`（布尔值）
+
+```bash
+curl -X POST "https://api.smith.langchain.com/v1/platform/datasets/examples/delete/" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "example_ids": ["example-id-1", "example-id-2", "example-id-3"],
+    "hard_delete": true
+  }'
+```
+
+### 删除类型
+
+#### 软删除（默认）
+
+- 在数据集中创建带有 NULL 输入/输出的墓碑条目
+- 保留历史数据并维护数据集版本控制
+- 仅影响数据集的当前版本
+
+#### 硬删除
+
+- 从所有数据集版本中永久删除输入、输出和元数据
+- 当合规要求在所有版本中清零时进行完整数据删除
+- 在请求体中设置 `"hard_delete": true`

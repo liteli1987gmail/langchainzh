@@ -1,0 +1,74 @@
+---
+title: 追踪 Microsoft Agent Framework 应用程序
+sidebarTitle: Microsoft Agent Framework
+---
+
+LangSmith 可以使用其内置的 OpenTelemetry 检测功能来捕获 [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/agent-framework-overview) 生成的追踪。本指南向您展示如何自动从您的 Microsoft Agent Framework 代理捕获追踪并将其发送到 LangSmith 进行监控和分析。
+
+## 安装
+
+安装所需的包：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```bash pip
+pip install agent-framework opentelemetry-exporter-otlp-proto-http
+```
+
+```bash uv
+uv add agent-framework opentelemetry-exporter-otlp-proto-http
+```
+
+</CodeGroup>
+
+## 设置
+
+### 1. 配置环境变量
+
+启用代理的 OpenTelemetry 检测功能，并设置 OpenTelemetry 环境变量以指向 LangSmith OTEL 端点：
+
+```bash
+export ENABLE_INSTRUMENTATION=true
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.smith.langchain.com/otel/v1/traces
+export OTEL_EXPORTER_OTLP_HEADERS="x-api-key=<your_langsmith_api_key>,Langsmith-Project=<your_project_name>"
+```
+
+### 2. 在应用程序中启用 OpenTelemetry
+
+在 Microsoft Agent Framework 应用程序中，使用内置的 `configure_otel_providers` 函数启用 OpenTelemetry 跟踪：
+
+```python
+from agent_framework.observability import configure_otel_providers
+
+# Enable OpenTelemetry tracing
+configure_otel_providers(enable_sensitive_data=True)
+```
+
+<Note>
+将 `enable_sensitive_data=True` 设置为允许在追踪中捕获输入和输出内容。如果您想从追踪中排除敏感数据，请将其设置为 `False`。
+</Note>
+
+### 3. 创建并运行您的 Agent
+
+配置完成后，您的 Microsoft Agent Framework Agent 将自动向 LangSmith 发送追踪：
+
+```python
+from agent_framework import ChatAgent
+from agent_framework.observability import configure_otel_providers
+from agent_framework.openai import OpenAIChatClient
+
+# Enable OpenTelemetry tracing
+configure_otel_providers(enable_sensitive_data=True)
+
+
+agent = ChatAgent(
+    chat_client=OpenAIChatClient(model_id="gpt-4o"),
+)
+
+result = await agent.run("What's the the capital of Bavaria?")
+print(result.text)
+```

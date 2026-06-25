@@ -1,0 +1,99 @@
+---
+title: "Sentence Transformers 与 Hugging Face 集成"
+description: "使用 LangChain Python 与 Sentence Transformers 嵌入模型集成。"
+---
+
+>[Sentence Transformers](https://sbert.net) 是最广泛使用的 Python 框架，用于最前沿的文本和图像嵌入。Hugging Face Hub 托管了数千个预训练的[嵌入](https://huggingface.co/models?library=sentence-transformers&pipeline_tag=feature-extraction)和[重排序](https://huggingface.co/models?pipeline_tag=text-ranking)模型，这些模型可以在本地运行，无需 API 密钥，可通过 `HuggingFaceEmbeddings` 类访问。
+
+## 设置
+
+```shell
+pip install -qU langchain-huggingface
+```
+
+`langchain-huggingface` 拉取了 `sentence-transformers` 作为依赖项，后者又会安装 `transformers` 和 `torch`。
+
+## 基本用法
+
+```python
+from langchain_huggingface import HuggingFaceEmbeddings
+
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+
+query_embedding = embeddings.embed_query("What is a sentence embedding?")
+doc_embeddings = embeddings.embed_documents(
+    [
+        "Sentence embeddings map text to dense vectors.",
+        "LangChain provides a standard Embeddings interface.",
+    ]
+)
+```
+
+## 选择模型
+
+从 [MTEB 排行榜](https://huggingface.co/spaces/mteb/leaderboard) 开始。不同权衡下的最佳起点：
+
+| Model | Size | Notes |
+|---|---|---|
+| `sentence-transformers/all-mpnet-base-v2` | 110M | 经典、小型、CPU 友好、无需 prompt |
+| `BAAI/bge-m3` | 570M | 多语言；一次处理生成密集、稀疏和多向量嵌入 |
+| `mixedbread-ai/mxbai-embed-large-v1` | 335M | 英语性能强，支持 Matryoshka 截断 |
+| `nomic-ai/modernbert-embed-base` | 149M | 8192 token 上下文，现代架构 |
+| `lightonai/DenseOn` | 149M | 现代架构，同尺寸性能出色 |
+| `Qwen/Qwen3-Embedding-0.6B` | 595M | 多语言、指令感知、MTEB 性能最佳 |
+
+另请参阅 [需要权衡的因素](/oss/integrations/embeddings#factors-to-weigh)，深入了解各种权衡。
+
+## 归一化嵌入
+
+使用余弦相似度训练的模型受益于归一化的输出向量。如果你的向量存储使用余弦相似度，请在源头进行归一化：
+
+```python
+embeddings = HuggingFaceEmbeddings(
+    model_name="BAAI/bge-m3",
+    encode_kwargs={"normalize_embeddings": True},
+)
+```
+
+## 设备和吞吐量
+
+Sentence Transformers 会自动选择最佳可用设备（CUDA > MPS > CPU），因此大多数情况下无需显式设置 `device=`。在 GPU 上，提高 `batch_size` 以保持其充分利用：
+
+```python
+embeddings = HuggingFaceEmbeddings(
+    model_name="BAAI/bge-m3",
+    encode_kwargs={"batch_size": 64, "normalize_embeddings": True},
+)
+```
+
+要固定到特定设备，请传递 `model_kwargs={"device": "cpu"}`（或 `"cuda:1"` 等）。对于多个 GPU，请设置 `multi_process=True`。对于 Intel CPU，请在安装 `optimum[ipex]` 后使用 `model_kwargs={"backend": "ipex"}`。
+
+## 查询和文档提示词
+
+某些模型（`intfloat/e5-*`、`Qwen/Qwen3-Embedding-*`、许多 `BAAI/bge-*`）使用不同的查询和文档提示词进行训练。请通过 `encode_kwargs` 和 `query_encode_kwargs` 传递这些提示词：
+
+```python
+embeddings = HuggingFaceEmbeddings(
+    model_name="intfloat/e5-large-v2",
+    encode_kwargs={"prompt": "passage: "},
+    query_encode_kwargs={"prompt": "query: "},
+)
+```
+
+在索引和查询时使用正确的提示词通常能显著提升检索质量。请查看 Hugging Face 上各模型的说明卡，了解推荐的提示词格式。
+
+## 生产环境部署
+
+如需大规模运行 Sentence Transformers 模型进行服务，请使用 [Text Embeddings Inference (TEI)](/oss/integrations/embeddings/text_embeddings_inference)，这是 Hugging Face 提供的专用推理服务器，支持批处理、GPU 加速和 OpenAI 兼容 API。通过 `HuggingFaceEndpointEmbeddings` 将 LangChain 指向 TEI 部署：详见 [Hugging Face 嵌入指南](/oss/integrations/embeddings/huggingfacehub)。
+
+## 重排序
+
+同一生态系统中还有 [cross-encoder 重排序模型](https://huggingface.co/models?pipeline_tag=text-ranking)。如需在向量库之上使用本地重排序器，请参见 [Cross Encoder 重排序指南](/oss/integrations/document_transformers/cross_encoder_reranker)。
+
+## 故障排除
+
+如果缺少 `accelerate` 包或导入失败：
+
+```shell
+pip install -qU accelerate
+```

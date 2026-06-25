@@ -1,0 +1,145 @@
+---
+title: "Azure OpenAI 集成"
+description: "使用 LangChain Python 与 Azure OpenAI LLM 集成。"
+---
+
+<Warning>
+**您当前所在的页面记录了 Azure OpenAI 文本补全模型的使用。最新的也是最受欢迎的 Azure OpenAI 模型是[聊天补全模型](/oss/langchain/models)。**
+
+除非您专门使用 `gpt-3.5-turbo-instruct`，否则您可能应该查看[此页面](/oss/integrations/chat/azure_chat_openai/)。
+</Warning>
+
+本页介绍如何将 LangChain 与 [Azure OpenAI](https://aka.ms/azure-openai) 结合使用。
+
+Azure OpenAI API 与 OpenAI API 兼容。`openai` Python 包让您可以轻松使用 OpenAI 和 Azure OpenAI。您可以用与调用 OpenAI 相同的方式调用 Azure OpenAI，但有以下例外情况。
+
+## API 配置
+
+您可以使用环境变量配置 `openai` 包以使用 Azure OpenAI。以下示例适用于 `bash`：
+
+```bash
+# The API version you want to use: set this to `2023-12-01-preview` for the released version.
+export OPENAI_API_VERSION=2023-12-01-preview
+# The base URL for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource.
+export AZURE_OPENAI_ENDPOINT=https://your-resource-name.openai.azure.com
+# The API key for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource.
+export AZURE_OPENAI_API_KEY=<your Azure OpenAI API key>
+```
+
+或者，你也可以直接在正在运行的 Python 环境中配置 API：
+
+```python
+import os
+os.environ["OPENAI_API_VERSION"] = "2023-12-01-preview"
+```
+
+## Azure Active Directory 身份验证
+
+有两种方式可以向 Azure OpenAI 进行身份验证：
+
+- API 密钥
+- Azure Active Directory (AAD)
+
+使用 API 密钥是最简单的入门方式。您可以在 Azure 门户中 Azure OpenAI 资源下找到您的 API 密钥。
+
+但是，如果您有复杂的安全要求，您可能希望使用 Azure Active Directory。您可以在 [托管标识文档](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/managed-identity) 中找到有关如何将 AAD 与 Azure OpenAI 结合使用的更多信息。
+
+如果您在本地开发，则需要安装 Azure CLI 并登录。您可以从 [Azure CLI 安装指南](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli) 安装 Azure CLI。然后，运行 `az login` 登录。
+
+添加一个 Azure 角色分配 `Cognitive Services OpenAI User`，范围限定为您的 Azure OpenAI 资源。这将允许您从 AAD 获取令牌以用于 Azure OpenAI。您可以将此角色分配给用户、组、服务主体或托管标识。有关 Azure OpenAI RBAC 角色的更多信息，请参阅 [基于角色的访问控制文档](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/role-based-access-control)。
+
+要在 Python 中将 AAD 与 LangChain 一起使用，请安装 `azure-identity` 包。然后将 `OPENAI_API_TYPE` 设置为 `azure_ad`。接下来，使用 `DefaultAzureCredential` 类通过调用 `get_token` 获取 AAD 令牌，如下所示。最后，将 `OPENAI_API_KEY` 环境变量设置为令牌值。
+
+```python
+import os
+from azure.identity import DefaultAzureCredential
+
+# Get the Azure Credential
+credential = DefaultAzureCredential()
+
+# Set the API type to `azure_ad`
+os.environ["OPENAI_API_TYPE"] = "azure_ad"
+# Set the API_KEY to the token from the Azure credential
+os.environ["OPENAI_API_KEY"] = credential.get_token("https://cognitiveservices.azure.com/.default").token
+```
+
+`DefaultAzureCredential` 类是开始使用 AAD 身份验证的一种简单方式。如有需要，你也可以自定义凭据链。在下面的示例中，我们首先尝试使用托管标识，然后回退到 Azure CLI。如果你在 Azure 中运行代码，但想在本地开发，这会很有用。
+
+```python
+from azure.identity import ChainedTokenCredential, ManagedIdentityCredential, AzureCliCredential
+
+credential = ChainedTokenCredential(
+    ManagedIdentityCredential(),
+    AzureCliCredential()
+)
+```
+
+## 部署
+
+使用 Azure OpenAI，您可以设置自己的常见 GPT-3 和 Codex 模型部署。在调用 API 时，需要指定要使用的部署。
+
+_**注意**：这些文档适用于 Azure 文本补全模型。GPT-4 等模型是聊天模型。它们有略微不同的接口，可以通过 @[`AzureChatOpenAI`] 类访问。Azure 聊天文档请参阅 [Azure 聊天 OpenAI 文档](/oss/integrations/chat/azure_chat_openai)。_
+
+假设您的部署名称是 `gpt-35-turbo-instruct-prod`。在 `openai` Python API 中，可以使用 `engine` 参数指定此部署。例如：
+
+```python
+import openai
+
+client = openai.AzureOpenAI(
+    api_version="2023-12-01-preview",
+)
+
+response = client.completions.create(
+    model="gpt-35-turbo-instruct-prod",
+    prompt="Test prompt"
+)
+```
+
+```python
+pip install -qU  langchain-openai
+```
+
+```python
+import os
+
+os.environ["OPENAI_API_VERSION"] = "2023-12-01-preview"
+os.environ["AZURE_OPENAI_ENDPOINT"] = "..."
+os.environ["AZURE_OPENAI_API_KEY"] = "..."
+```
+
+```python
+# Import Azure OpenAI
+from langchain_openai import AzureOpenAI
+```
+
+```python
+# Create an instance of Azure OpenAI
+# Replace the deployment name with your own
+llm = AzureOpenAI(
+    deployment_name="gpt-35-turbo-instruct-0914",
+)
+```
+
+```python
+# Run the LLM
+llm.invoke("Tell me a joke")
+```
+
+```text
+" Why couldn't the bicycle stand up by itself?\n\nBecause it was two-tired!"
+```
+
+我们还可以打印 LLM 并查看其自定义的打印输出。
+
+```python
+print(llm)
+```
+
+```text
+AzureOpenAI
+Params: {'deployment_name': 'gpt-35-turbo-instruct-0914', 'model_name': 'gpt-3.5-turbo-instruct', 'temperature': 0.7, 'top_p': 1, 'frequency_penalty': 0, 'presence_penalty': 0, 'n': 1, 'logit_bias': {}, 'max_tokens': 256}
+```
+
+```python
+
+```

@@ -1,0 +1,116 @@
+---
+title: 追踪 Strands Agents 应用程序
+sidebarTitle: Strands Agents
+description: 使用 LangSmith 追踪 Strands Agents 应用程序。
+---
+
+[Strands Agents](https://strandsagents.com/) 是一个用于构建模型驱动代理的 SDK。LangSmith 提供了一个 Strands Agents 集成，可以导出 LangSmith 兼容格式的 Strands OpenTelemetry span，包括代理运行、模型调用、工具调用、提示、补全和令牌使用情况。
+
+## 安装
+
+安装带有 Strands Agents 支持的 LangSmith：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```bash pip
+pip install "langsmith[strands-agents]"
+```
+
+```bash uv
+uv add "langsmith[strands-agents]"
+```
+
+</CodeGroup>
+
+这将安装 LangSmith、Strands Agents、Strands Agents tools 和 OpenTelemetry OTLP HTTP exporter。
+
+## 设置
+
+### 1. 配置环境变量
+
+设置您的 [LangSmith API key](/langsmith/create-account-api-key) 和项目名称。如果您使用 Amazon Bedrock 作为 Strands Agents 的模型提供商，还需要使用您首选的 AWS 身份验证方法配置 AWS 凭证。
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://api.smith.langchain.com/otel/v1/traces
+export OTEL_EXPORTER_OTLP_HEADERS="x-api-key=<your_langsmith_api_key>,Langsmith-Project=<your_project_name>"
+
+# Required when using Amazon Bedrock.
+export AWS_REGION=<your_aws_region>
+```
+
+<Note>
+Strands Agents 集成使用标准的 OpenTelemetry OTLP 导出器。在调用 `setup_langsmith_telemetry()` 之前，配置 LangSmith 端点和请求头。
+</Note>
+
+### 2. 启用 Strands Agents 遥测
+
+在应用程序启动时调用一次 `setup_langsmith_telemetry()`，之后再创建或调用代理：
+
+```python
+from langsmith.integrations.strands_agents import setup_langsmith_telemetry
+
+setup_langsmith_telemetry()
+```
+
+对于本地调试，传递 `console=True` 以将转换后的跨度也打印到 stdout：
+
+```python
+setup_langsmith_telemetry(console=True)
+```
+
+### 3. 创建并运行你的代理
+
+配置完成后，Strands Agents 追踪会自动导出到 LangSmith：
+
+```python
+from langsmith.integrations.strands_agents import setup_langsmith_telemetry
+from strands import Agent
+
+setup_langsmith_telemetry()
+
+agent = Agent(
+    system_prompt="You are a concise assistant.",
+)
+
+response = agent("Explain what LangSmith tracing is in one sentence.")
+print(response)
+```
+
+## 在 LangSmith 中查看追踪
+
+运行应用程序后，打开您的 LangSmith 项目以查看包含以下内容的追踪：
+
+- Agent 调用跨度
+- 事件循环周期跨度
+- 包含提示、补充和 token 使用情况的 LLM 调用跨度
+- 当代理使用工具时的工具调用跨度，包含工具输入和输出
+
+## 自定义 OTLP 导出器
+
+如果您需要将自定义选项传递给底层 OpenTelemetry 导出器，请使用 `create_langsmith_exporter()` 创建 `LangSmithSpanExporter`，并将其手动附加到 Strands 追踪器提供程序：
+
+```python
+from langsmith.integrations.strands_agents import create_langsmith_exporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from strands.telemetry import StrandsTelemetry
+
+telemetry = StrandsTelemetry()
+exporter = create_langsmith_exporter(
+    endpoint="https://api.smith.langchain.com/otel/v1/traces",
+    headers={
+        "x-api-key": "<your_langsmith_api_key>",
+        "Langsmith-Project": "<your_project_name>",
+    },
+)
+telemetry.tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
+```
+
+当您想要在代码中配置导出器选项而不是使用环境变量时，请使用此方法。
+
+## 资源
+
+- [Strands Agents 文档](https://strandsagents.com/)
+- [LangSmith OpenTelemetry 指南](/langsmith/trace-with-opentelemetry)

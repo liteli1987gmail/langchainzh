@@ -1,0 +1,148 @@
+---
+title: 工具
+description: 将 Deep Agents 连接到自定义函数、API、数据库和任何 MCP 服务器
+---
+
+import CustomizationToolsPy from '/snippets/code-samples/customization-tools-py.mdx';
+import CustomizationToolsJs from '/snippets/code-samples/customization-tools-js.mdx';
+
+Deep Agents 可以调用您定义的任何工具、任何 [LangChain 工具](https://python.langchain.com/docs/concepts/tools/) 以及任何 [MCP 服务器](#mcp-tools) 中的工具。
+通过 `tools=` 参数将它们传递给 `create_deep_agent`，并配合用于规划、文件管理和子代理生成的[内置工具集](/oss/deepagents/harness#execution-environment)一起使用。
+
+```python
+from deepagents import create_deep_agent
+
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-6",
+    tools=[search, fetch_url, run_query],
+)
+```
+
+:::
+
+:::js
+
+```typescript
+import { createDeepAgent } from "deepagents";
+
+const agent = await createDeepAgent({
+  model: "anthropic:claude-sonnet-4-6",
+  tools: [search, fetchUrl, runQuery],
+});
+```
+
+:::
+
+## 自定义工具
+
+将任何可调用对象（普通函数、使用 LangChain `@tool` 装饰的函数或工具字典）直接传递给 `tools=`。
+Deep Agents 会从函数签名和文档字符串推断工具模式，在大多数情况下你无需定义单独的模式。
+
+:::python
+<CustomizationToolsPy />
+:::
+
+:::js
+<CustomizationToolsJs />
+:::
+
+有关定义和使用 LangChain 工具的完整详细信息（工具字典、`StructuredTool`、返回类型、错误处理等），请参阅 [Tools](/oss/langchain/tools)。
+
+## MCP 工具
+
+<Note>
+  Deep Agents 完全支持 [Model Context Protocol (MCP)](/oss/langchain/mcp)——用于将代理连接到外部服务的开放标准。从任何 MCP 服务器加载工具，并将其直接传递给 `create_deep_agent`。
+</Note>
+
+MCP 是一个开放协议，允许代理通过标准接口连接到不断增长的服务器生态系统——数据库、API、文件系统、浏览器等。你无需为每个服务编写自定义集成代码，只需将 Deep Agents 指向一个 MCP 服务器，它就会获取该服务器提供的所有工具。
+
+:::python
+安装 `langchain-mcp-adapters` 以连接到 MCP 服务器：
+
+
+:::
+
+```bash
+pip install langchain-mcp-adapters
+```
+
+```python
+import asyncio
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from deepagents import create_deep_agent
+
+async def main():
+    async with MultiServerMCPClient(
+        {
+            "my_server": {
+                "transport": "http",
+                "url": "http://localhost:8000/mcp",
+            }
+        }
+    ) as client:
+        tools = await client.get_tools()
+
+        agent = create_deep_agent(
+            model="openai:gpt-5.5",
+            tools=tools,
+        )
+
+        result = await agent.ainvoke(
+            {"messages": [{"role": "user", "content": "Use the MCP server to help me."}]},
+            config={"configurable": {"thread_id": "1"}},
+        )
+
+asyncio.run(main())
+```
+:::
+
+:::js
+安装 `@langchain/mcp-adapters` 以连接到 MCP 服务器：
+
+```bash
+npm install @langchain/mcp-adapters
+```
+
+```typescript
+import { MultiServerMCPClient } from "@langchain/mcp-adapters";
+import { createDeepAgent } from "deepagents";
+
+const client = new MultiServerMCPClient({
+  my_server: {
+    transport: "http",
+    url: "http://localhost:8000/mcp",
+  },
+});
+
+const tools = await client.getTools();
+
+const agent = await createDeepAgent({
+  model: "openai:gpt-5.5",
+  tools,
+});
+
+const result = await agent.invoke({
+  messages: [{ role: "user", content: "Use the MCP server to help me." }],
+});
+```
+:::
+
+有关详细配置选项——包括 stdio 服务器、OAuth 认证、工具过滤和状态会话——请参阅完整的 [MCP 指南](/oss/langchain/mcp)。
+
+## 内置 harness 工具
+
+除了您提供的工具之外，每个 Deep Agent 还附带一组来自 harness 的内置工具：
+
+| Tool | Description |
+| ---- | ----------- |
+| `ls` | 列出目录中的文件 |
+| `read_file` | 读取文件内容（支持分页和多模态） |
+| `write_file` | 创建新文件 |
+| `edit_file` | 对文件执行精确的字符串替换 |
+| `glob` | 查找与 glob 模式匹配的文件 |
+| `grep` | 搜索文件内容 |
+| `execute` | 运行 shell 命令（仅限沙盒后端） |
+| `task` | 派生一个子代理来处理委托的任务 |
+| `write_todos` | 管理结构化待办事项列表 |
+
+有关每个内置工具的完整说明，请参阅 [Harness 功能](/oss/deepagents/harness#execution-environment)。

@@ -1,0 +1,167 @@
+---
+title: Upload files with traces
+sidebarTitle: Upload files with traces
+---
+
+当您使用 [`@traceable` 装饰器或 `traceable` 包装器](/langsmith/annotate-code#use-%40traceable-%2F-traceable) 进行追踪时，LangSmith 支持随追踪一起上传二进制文件（如图片、音频、视频、PDF 和 CSV）。这在使用多模态输入或输出的 LLM 流水线时特别有用。
+
+在 [Python](#python) 和 [TypeScript](#typescript) SDK 中，您可以通过指定每个文件的 MIME 类型和二进制内容来向追踪添加附件。本页面说明如何在 Python 中使用 `Attachment` 类型以及在 TypeScript 中使用 `Uint8Array` / `ArrayBuffer` 来定义和追踪附件。
+
+## Python
+
+在 [Python SDK](/langsmith/smith-python-sdk) 中，您可以使用 `Attachment` 类型向追踪添加文件。每个 `Attachment` 需要：
+
+- `mime_type` (str)：文件的 MIME 类型（例如 `"image/png"`）。
+- `data` (bytes | Path)：文件的二进制内容，或文件路径。
+
+您还可以使用形式为 `(mime_type, data)` 的元组来定义附件。
+
+提供文件数据有两种方式：
+
+- 自己加载字节并直接传递（适用于所有环境），或
+- 传递 `Path` 对象，并设置 `@traceable` 装饰器上的 `dangerously_allow_filesystem=True` 来让 SDK 读取文件。
+
+    <Note>
+    `dangerously_allow_filesystem` 标志作为服务器和多租户环境的安全防护措施存在，因为在这种情况下用户控制的输入可能会影响文件路径。在受信任的环境中（本地脚本或您拥有文件路径的受控流水线），可以安全地启用。
+    </Note>
+
+使用 `@traceable` 装饰函数，并将您的 `Attachment` 实例作为参数包含。以下示例演示了两种方法：手动将文件字节加载到 `Attachment`，以及使用 `Path` 对象和 `dangerously_allow_filesystem=True`：
+
+```python Python
+from langsmith import traceable
+from langsmith.schemas import Attachment
+from pathlib import Path
+import os
+
+# Must set dangerously_allow_filesystem to True if you want to use file paths
+@traceable(dangerously_allow_filesystem=True)
+def trace_with_attachments(
+    val: int,
+    text: str,
+    image: Attachment,
+    audio: Attachment,
+    video: Attachment,
+    pdf: Attachment,
+    csv: Attachment,
+):
+    return f"Processed: {val}, {text}, {len(image.data)}, {len(audio.data)}, {len(video.data)}, {len(pdf.data), {len(csv.data)}}"
+
+# Helper function to load files as bytes
+def load_file(file_path: str) -> bytes:
+    with open(file_path, "rb") as f:
+        return f.read()
+
+# Load files and create attachments
+image_data = load_file("my_image.png")
+audio_data = load_file("my_mp3.mp3")
+video_data = load_file("my_video.mp4")
+pdf_data = load_file("my_document.pdf")
+
+image_attachment = Attachment(mime_type="image/png", data=image_data)
+audio_attachment = Attachment(mime_type="audio/mpeg", data=audio_data)
+video_attachment = Attachment(mime_type="video/mp4", data=video_data)
+pdf_attachment = ("application/pdf", pdf_data) # Can just define as tuple of (mime_type, data)
+csv_attachment = Attachment(mime_type="text/csv", data=Path(os.getcwd()) / "my_csv.csv")
+
+# Define other parameters
+val = 42
+text = "Hello, world!"
+
+# Call the function with traced attachments
+result = trace_with_attachments(
+    val=val,
+    text=text,
+    image=image_attachment,
+    audio=audio_attachment,
+    video=video_attachment,
+    pdf=pdf_attachment,
+    csv=csv_attachment,
+)
+```
+
+## TypeScript
+
+在 [TypeScript SDK](/langsmith/smith-js-ts-sdk) 中，您可以通过使用 `Uint8Array` 或 `ArrayBuffer` 作为数据类型来向跟踪添加附件。每个附件的 MIME 类型在 `extractAttachments` 中指定：
+
+- `Uint8Array`：适用于直接处理二进制数据。
+- `ArrayBuffer`：表示固定长度的二进制数据，您可以根据需要将其转换为 `Uint8Array`。
+
+在 TypeScript SDK 中，`extractAttachments` 函数是 `traceable` 配置中的一个可选参数。当调用 traceable 包装的函数时，它会从您的输入中提取二进制数据（例如图像、音频文件），并将其与其他跟踪数据一起记录，同时指定它们的 MIME 类型。
+
+<Note>
+您不能在 TypeScript SDK 中直接传入文件路径，因为在所有运行时环境中都不支持访问本地文件。
+</Note>
+
+使用 `traceable` 包装您的函数，并在 `extractAttachments` 选项中包含您的附件。签名如下：
+
+```typescript TypeScript
+type AttachmentData = Uint8Array | ArrayBuffer;
+type Attachments = Record<string, [string, AttachmentData]>;
+
+extractAttachments?: (
+    ...args: Parameters<Func>
+) => [Attachments | undefined, KVMap];
+```
+
+以下示例展示了完整实现：
+
+```typescript TypeScript
+import { traceable } from "langsmith/traceable";
+
+const traceableWithAttachments = traceable(
+    (
+        val: number,
+        text: string,
+        attachment: Uint8Array,
+        attachment2: ArrayBuffer,
+        attachment3: Uint8Array,
+        attachment4: ArrayBuffer,
+        attachment5: Uint8Array,
+    ) =>
+        `Processed: ${val}, ${text}, ${attachment.length}, ${attachment2.byteLength}, ${attachment3.length}, ${attachment4.byteLength}, ${attachment5.byteLength}`,
+    {
+        name: "traceWithAttachments",
+        extractAttachments: (
+            val: number,
+            text: string,
+            attachment: Uint8Array,
+            attachment2: ArrayBuffer,
+            attachment3: Uint8Array,
+            attachment4: ArrayBuffer,
+            attachment5: Uint8Array,
+        ) => [
+            {
+                "image inputs": ["image/png", attachment],
+                "mp3 inputs": ["audio/mpeg", new Uint8Array(attachment2)],
+                "video inputs": ["video/mp4", attachment3],
+                "pdf inputs": ["application/pdf", new Uint8Array(attachment4)],
+                "csv inputs": ["text/csv", new Uint8Array(attachment5)],
+            },
+            { val, text },
+        ],
+    }
+);
+
+const fs = Deno // or Node.js fs module
+const image = await fs.readFile("my_image.png"); // Uint8Array
+const mp3Buffer = await fs.readFile("my_mp3.mp3");
+const mp3ArrayBuffer = mp3Buffer.buffer; // Convert to ArrayBuffer
+const video = await fs.readFile("my_video.mp4"); // Uint8Array
+const pdfBuffer = await fs.readFile("my_document.pdf");
+const pdfArrayBuffer = pdfBuffer.buffer; // Convert to ArrayBuffer
+const csv = await fs.readFile("test-vals.csv"); // Uint8Array
+
+// Define example parameters
+const val = 42;
+const text = "Hello, world!";
+
+// Call traceableWithAttachments with the files
+const result = await traceableWithAttachments(
+    val, text, image, mp3ArrayBuffer, video, pdfArrayBuffer, csv
+);
+```
+
+## 相关
+
+- [管理数据集](/langsmith/manage-datasets)
+- [设置 LLM 即评判在线评估器](/langsmith/online-evaluations-llm-as-judge)

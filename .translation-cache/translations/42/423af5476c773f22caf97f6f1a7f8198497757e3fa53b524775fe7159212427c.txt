@@ -1,0 +1,87 @@
+---
+title: "Anthropic 集成"
+description: "使用 LangChain JavaScript 与 Anthropic 中间件集成。"
+---
+
+专门为 Anthropic 的 Claude 模型设计的中间件。了解有关[中间件](/oss/langchain/middleware/overview)的更多信息。
+
+| 中间件 | 描述 |
+|------------|-------------|
+| [提示词缓存](#prompt-caching) | 通过缓存重复的提示词前缀来降低成本 |
+
+## 提示词缓存
+
+通过在 Anthropic 的服务器上缓存静态或重复的提示词内容（如系统提示词、工具定义和对话历史）来降低成本和延迟。此中间件实现了一种**对话缓存策略**，它在系统消息、工具定义和最新的用户消息上设置明确的缓存断点，允许将整个对话历史缓存并在后续 API 调用中重复使用。
+
+提示词缓存适用于以下场景：
+
+- 具有长静态系统提示词的应用程序，这些提示词在请求之间不会改变
+- 具有许多工具定义的 Agent，这些工具定义在多次调用中保持不变
+- 早期消息历史需要在多个轮次中重复使用的对话
+- 需要降低 API 成本和延迟的高吞吐量部署
+
+<Tip>
+    对于更简单的使用场景，你也可以通过在调用时传递 `cache_control` 来使用聊天模型上的[提示词缓存](/oss/integrations/chat/anthropic#prompt-caching)，无需使用中间件。当你需要对系统提示词和工具定义上的缓存断点进行显式控制时，推荐使用中间件。
+</Tip>
+
+<Info>
+    了解更多关于 [Anthropic 提示词缓存](https://platform.claude.com/docs/en/build-with-claude/prompt-caching#cache-limitations) 策略和限制。
+</Info>
+
+```typescript
+import { createAgent, anthropicPromptCachingMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "claude-sonnet-4-6",
+  prompt: "<Your long system prompt here>",
+  middleware: [anthropicPromptCachingMiddleware({ ttl: "5m" })],
+});
+```
+
+<Accordion title="配置选项">
+
+<ParamField body="ttl" type="string" default="5m">
+    缓存内容的生存时间。有效值：'5m' 或 '1h'
+</ParamField>
+
+</Accordion>
+
+<Accordion title="完整示例">
+
+中间件会缓存每个请求中包含的最新消息及其之前的所有内容。在 TTL 窗口内（5 分钟或 1 小时）的后续请求中，之前见过的内容会从缓存中检索，而无需重新处理，从而显著降低成本和延迟。
+
+**工作原理：**
+1. 首次请求：系统提示词、工具和用户消息 *"Hi, my name is Bob"* 会发送到 API 并被缓存
+2. 第二次请求：缓存的内容（系统提示词、工具和第一条消息）从缓存中获取。只有新消息 *"What's my name?"* 需要处理，再加上第一次请求中模型的响应
+3. 每个对话轮次都重复这个模式，每次请求都会重用缓存的对话历史
+
+</Accordion>
+
+```typescript
+import { createAgent, HumanMessage, anthropicPromptCachingMiddleware } from "langchain";
+
+const LONG_PROMPT = `
+Please be a helpful assistant.
+
+<Lots more context ...>
+`;
+
+const agent = createAgent({
+  model: "claude-sonnet-4-6",
+  prompt: LONG_PROMPT,
+  middleware: [anthropicPromptCachingMiddleware({ ttl: "5m" })],
+});
+
+// First invocation: Creates cache with system prompt, tools, and "Hi, my name is Bob"
+await agent.invoke({
+  messages: [new HumanMessage("Hi, my name is Bob")]
+});
+
+// Second invocation: Reuses cached system prompt, tools, and previous messages
+// Only processes the new message "What's my name?" and the previous AI response
+const result = await agent.invoke({
+  messages: [new HumanMessage("What's my name?")]
+});
+```
+
+</Accordion>

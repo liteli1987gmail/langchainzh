@@ -1,0 +1,484 @@
+---
+title: "RedisVectorStore 集成"
+description: "使用 LangChain JavaScript 与 RedisVectorStore 集成。"
+---
+
+<Tip>
+**兼容性**：仅在 Node.js 上可用。
+</Tip>
+
+[Redis](https://redis.io/) 是一个快速的开源内存数据存储。作为 [Redis Stack](https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/) 的一部分，[RediSearch](https://redis.io/docs/latest/develop/interact/search-and-query/) 是启用向量相似性语义搜索以及许多其他类型搜索的模块。
+
+本指南提供了开始使用 Redis [向量存储](/oss/integrations/vectorstores) 的快速概述。有关所有 `RedisVectorStore` 功能和配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-redis/RedisVectorStore)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | [PY 支持](https://python.langchain.com/docs/integrations/vectorstores/redis/) | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: | :---: |
+| [`RedisVectorStore`](https://reference.langchain.com/javascript/langchain-redis/RedisVectorStore) | [`@langchain/redis`](https://www.npmjs.com/package/@langchain/redis) | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/redis?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/redis?style=flat-square&label=%20&) |
+
+## 设置
+
+要使用 Redis 向量存储，请设置一个启用 RediSearch 的 Redis Stack 实例，并安装 `@langchain/redis` 和 `@langchain/core`。当您将自己的 `createClient` 实例传递给 `RedisVectorStore` 时，请安装 [`redis`](https://www.npmjs.com/package/redis) Node.js 客户端。
+
+本指南使用 [OpenAI 嵌入](/oss/integrations/embeddings/openai) 作为示例。您也可以使用[其他支持的嵌入模型](/oss/integrations/embeddings)。
+
+<CodeGroup>
+```bash npm
+npm install @langchain/redis @langchain/core redis @langchain/openai
+```
+```bash yarn
+yarn add @langchain/redis @langchain/core redis @langchain/openai
+```
+```bash pnpm
+pnpm add @langchain/redis @langchain/core redis @langchain/openai
+```
+</CodeGroup>
+
+您可以通过遵循[这些说明](https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/docker/#redisredis-stack)在本地使用 Docker 设置 Redis 实例。
+
+### 凭证
+
+设置 `REDIS_URL` 环境变量：
+
+```typescript
+process.env.REDIS_URL = "your-redis-url";
+```
+
+如果您在本指南中使用 OpenAI embeddings，请同时设置您的 OpenAI 密钥：
+
+```typescript
+process.env.OPENAI_API_KEY = "YOUR_API_KEY";
+```
+
+如果您想获取模型调用的自动化跟踪，还可以设置您的 [LangSmith](/langsmith/observability) API 密钥，只需取消下方注释即可：
+
+```typescript
+// process.env.LANGSMITH_TRACING="true"
+// process.env.LANGSMITH_API_KEY="your-api-key"
+```
+
+## 实例化
+
+```typescript
+import { RedisVectorStore } from "@langchain/redis";
+import { OpenAIEmbeddings } from "@langchain/openai";
+
+import { createClient } from "redis";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-small",
+});
+
+const client = createClient({
+  url: process.env.REDIS_URL ?? "redis://localhost:6379",
+});
+await client.connect();
+
+const vectorStore = new RedisVectorStore(embeddings, {
+  redisClient: client,
+  indexName: "langchainjs-testing",
+});
+```
+
+## 管理向量存储
+
+### 向向量存储添加项目
+
+```typescript
+import type { Document } from "@langchain/core/documents";
+
+const document1: Document = {
+  pageContent: "The powerhouse of the cell is the mitochondria",
+  metadata: { type: "example" },
+};
+
+const document2: Document = {
+  pageContent: "Buildings are made out of brick",
+  metadata: { type: "example" },
+};
+
+const document3: Document = {
+  pageContent: "Mitochondria are made out of lipids",
+  metadata: { type: "example" },
+};
+
+const document4: Document = {
+  pageContent: "The 2024 Olympics are in Paris",
+  metadata: { type: "example" },
+};
+
+const documents = [document1, document2, document3, document4];
+
+await vectorStore.addDocuments(documents);
+```
+
+目前不支持顶级文档 ID，但您可以通过直接向向量存储提供其 ID 来删除文档。
+
+## 查询向量存储
+
+一旦您的向量存储创建完成并添加了相关文档，您很可能希望在运行链或代理时对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以如下进行：
+
+```typescript
+const similaritySearchResults = await vectorStore.similaritySearch(
+  "biology",
+  2
+);
+
+for (const doc of similaritySearchResults) {
+  console.log(`* ${doc.pageContent} [${JSON.stringify(doc.metadata, null)}]`);
+}
+```
+
+筛选功能目前会查找包含所提供字符串的任何元数据键。
+
+如果您想执行相似性搜索并接收相应的分数，可以运行：
+
+```typescript
+const similaritySearchWithScoreResults =
+  await vectorStore.similaritySearchWithScore("biology", 2);
+
+for (const [doc, score] of similaritySearchWithScoreResults) {
+  console.log(
+    `* [SIM=${score.toFixed(3)}] ${doc.pageContent} [${JSON.stringify(
+      doc.metadata
+    )}]`
+  );
+}
+```
+
+```text
+* [SIM=0.835] The powerhouse of the cell is the mitochondria [{"type":"example"}]
+* [SIM=0.852] Mitochondria are made out of lipids [{"type":"example"}]
+```
+
+### 通过转换为检索器进行查询
+
+您还可以将向量存储转换为一个[retriever](/oss/langchain/retrieval)，以便于在链中更轻松地使用。
+
+```typescript
+const retriever = vectorStore.asRetriever({
+  k: 2,
+});
+await retriever.invoke("biology");
+```
+
+```javascript
+[
+  Document {
+    pageContent: 'The powerhouse of the cell is the mitochondria',
+    metadata: { type: 'example' },
+    id: undefined
+  },
+  Document {
+    pageContent: 'Mitochondria are made out of lipids',
+    metadata: { type: 'example' },
+    id: undefined
+  }
+]
+```
+
+### 用于检索增强生成的用法
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下部分：
+
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [代理型 RAG](/oss/langgraph/agentic-rag)
+- [检索文档](/oss/langchain/retrieval)
+
+## 删除文档
+
+您可以通过两种方式从向量存储中删除文档：
+
+### 删除所有文档
+
+您可以使用以下命令删除整个索引及其所有文档：
+
+```typescript
+await vectorStore.delete({ deleteAll: true });
+```
+
+### 按 ID 删除特定文档
+
+您也可以通过提供文档 ID 来删除特定文档。请注意，配置的键前缀将自动添加到您提供的 ID 中：
+
+```typescript
+// The key prefix will be automatically added to each ID
+await vectorStore.delete({ ids: ["doc1", "doc2", "doc3"] });
+```
+
+## 关闭连接
+
+确保在完成操作后关闭客户端连接，以避免过多的资源消耗：
+
+```typescript
+await client.disconnect();
+```
+
+## 高级功能
+
+### 自定义架构和元数据过滤
+
+Redis 向量存储支持为元数据字段定义自定义架构，从而实现更高效的过滤和搜索。此功能允许您为元数据定义特定的字段类型和验证规则。
+
+#### 定义自定义架构
+
+您可以在创建向量存储时定义自定义架构，以指定字段类型、验证规则和索引选项：
+
+```typescript
+import { RedisVectorStore } from "@langchain/redis";
+import type { RedisVectorStoreConfig } from "@langchain/redis";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { SchemaFieldTypes } from "redis";
+import { createClient } from "redis";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-small",
+});
+
+const client = createClient({
+  url: process.env.REDIS_URL ?? "redis://localhost:6379",
+});
+await client.connect();
+
+// Define custom schema for metadata fields
+const customSchema:RedisVectorStoreConfig["customSchema"] = {
+  userId: {
+    type: SchemaFieldTypes.TEXT,
+    required: true,
+    SORTABLE: true,
+  },
+  category: {
+    type: SchemaFieldTypes.TAG,
+    SORTABLE: true,
+    SEPARATOR: ",",
+  },
+  score: {
+    type: SchemaFieldTypes.NUMERIC,
+    SORTABLE: true,
+  },
+  tags: {
+    type: SchemaFieldTypes.TAG,
+    SEPARATOR: ",",
+    CASESENSITIVE: true,
+  },
+  description: {
+    type: SchemaFieldTypes.TEXT,
+    NOSTEM: true,
+    WEIGHT: 2.0,
+  },
+};
+
+const vectorStoreWithSchema = new RedisVectorStore(embeddings, {
+  redisClient: client,
+  indexName: "langchainjs-custom-schema",
+  customSchema,
+});
+```
+
+#### Schema 字段类型
+
+自定义 schema 支持三种主要字段类型：
+
+- **TEXT**：支持全文搜索的字段，可选择启用词干提取、加权和排序
+- **TAG**：分类字段用于精确匹配，支持多个值和自定义分隔符
+- **NUMERIC**：支持范围查询和排序的数值字段
+
+#### 字段配置选项
+
+每个字段都可以配置各种选项：
+
+- `required`：该字段是否必须在元数据中存在（默认：false）
+- `SORTABLE`：启用该字段的排序功能（默认：undefined）
+- `SEPARATOR`：对于 TAG 字段，指定多个值的分隔符（默认：","）
+- `CASESENSITIVE`：对于 TAG 字段，启用大小写敏感匹配（Redis 需要 `true`，而非布尔值）
+- `NOSTEM`：对于 TEXT 字段，禁用词干提取（Redis 需要 `true`，而非布尔值）
+- `WEIGHT`：对于 TEXT 字段，指定搜索权重（默认：1.0）
+
+#### 添加带有 schema 验证的文档
+
+使用自定义 schema 时，文档会自动根据定义的 schema 进行验证：
+
+```typescript
+import type { Document } from "@langchain/core/documents";
+
+const documentsWithMetadata: Document[] = [
+  {
+    pageContent: "Advanced JavaScript techniques for modern web development",
+    metadata: {
+      userId: "user123",
+      category: "programming",
+      score: 95,
+      tags: ["javascript", "web-development", "frontend"],
+      description: "Comprehensive guide to JavaScript best practices",
+    },
+  },
+  {
+    pageContent: "Machine learning fundamentals and applications",
+    metadata: {
+      userId: "user456",
+      category: "ai",
+      score: 88,
+      tags: ["machine-learning", "python", "data-science"],
+      description: "Introduction to ML concepts and practical applications",
+    },
+  },
+  {
+    pageContent: "Database optimization strategies for high performance",
+    metadata: {
+      userId: "user789",
+      category: "database",
+      score: 92,
+      tags: ["database", "optimization", "performance"],
+      description: "Advanced techniques for database performance tuning",
+    },
+  },
+];
+
+// This will validate each document's metadata against the custom schema
+await vectorStoreWithSchema.addDocuments(documentsWithMetadata);
+```
+
+#### 使用元数据过滤的高级相似性搜索
+
+自定义 schema 支持使用 `similaritySearchVectorWithScoreAndMetadata` 方法进行强大的元数据过滤功能：
+
+```typescript
+// Search with TAG filtering
+const tagFilterResults =
+  await vectorStoreWithSchema.similaritySearchVectorWithScoreAndMetadata(
+    await embeddings.embedQuery("programming tutorial"),
+    3,
+    {
+      category: "programming", // Exact tag match
+      tags: ["javascript", "frontend"], // Multiple tag OR search
+    }
+  );
+
+console.log("Tag filter results:");
+for (const [doc, score] of tagFilterResults) {
+  console.log(`* [SIM=${score.toFixed(3)}] ${doc.pageContent}`);
+  console.log(`  Metadata: ${JSON.stringify(doc.metadata)}`);
+}
+```
+
+```typescript
+// Search with NUMERIC range filtering
+const numericFilterResults =
+  await vectorStoreWithSchema.similaritySearchVectorWithScoreAndMetadata(
+    await embeddings.embedQuery("high quality content"),
+    5,
+    {
+      score: { min: 90, max: 100 }, // Score between 90 and 100
+      category: ["programming", "ai"], // Multiple categories
+    }
+  );
+
+console.log("Numeric filter results:");
+for (const [doc, score] of numericFilterResults) {
+  console.log(`* [SIM=${score.toFixed(3)}] ${doc.pageContent}`);
+  console.log(
+    `  Score: ${doc.metadata.score}, Category: ${doc.metadata.category}`
+  );
+}
+```
+
+```typescript
+// Search with TEXT field filtering
+const textFilterResults =
+  await vectorStoreWithSchema.similaritySearchVectorWithScoreAndMetadata(
+    await embeddings.embedQuery("development guide"),
+    3,
+    {
+      description: "comprehensive guide", // Text search in description field
+      score: { min: 85 }, // Minimum score of 85
+    }
+  );
+
+console.log("Text filter results:");
+for (const [doc, score] of textFilterResults) {
+  console.log(`* [SIM=${score.toFixed(3)}] ${doc.pageContent}`);
+  console.log(`  Description: ${doc.metadata.description}`);
+}
+```
+
+#### 数值范围查询选项
+
+对于数值字段，您可以指定各种范围查询：
+
+```txt
+// Exact value match
+{ score: 95 }
+
+// Range with both min and max
+{ score: { min: 80, max: 100 } }
+
+// Only minimum value
+{ score: { min: 90 } }
+
+// Only maximum value
+{ score: { max: 95 } }
+```
+
+#### 错误处理与验证
+
+自定义 schema 提供自动验证和有用的错误消息：
+
+```typescript
+try {
+  // This will fail validation - missing required userId field
+  const invalidDoc: Document = {
+    pageContent: "Some content without required metadata",
+    metadata: {
+      category: "test",
+      // Missing required userId field
+    },
+  };
+
+  await vectorStoreWithSchema.addDocuments([invalidDoc]);
+} catch (error) {
+  console.log("Validation error:", error.message);
+  // Output: "Required metadata field 'userId' is missing"
+}
+
+try {
+  // This will fail validation - wrong type for score field
+  const wrongTypeDoc: Document = {
+    pageContent: "Content with wrong metadata type",
+    metadata: {
+      userId: "user123",
+      score: "not-a-number", // Should be number, not string
+    },
+  };
+
+  await vectorStoreWithSchema.addDocuments([wrongTypeDoc]);
+} catch (error) {
+  console.log("Type validation error:", error.message);
+  // Output: "Metadata field 'score' must be a number, got string"
+}
+```
+
+#### 性能优势
+
+使用自定义 schema 可以带来多项性能优势：
+
+1. **索引元数据字段**：单独的元数据字段被分别索引，从而实现快速过滤
+2. **类型优化查询**：数值和标签字段使用优化的查询结构
+3. **减少数据传输**：搜索结果中仅返回相关字段
+4. **更好的查询规划**：Redis 可以根据字段类型和索引优化查询
+
+#### 向后兼容性
+
+自定义 schema 功能完全向后兼容。现有的不带自定义 schema 的 Redis 向量存储将继续像以前一样正常工作。您可以逐步迁移到新索引的自定义 schema，或在重建现有索引时进行迁移。
+
+---
+
+## API 参考
+
+有关所有 `RedisVectorStore` 功能和支持的所有配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-redis/RedisVectorStore)。

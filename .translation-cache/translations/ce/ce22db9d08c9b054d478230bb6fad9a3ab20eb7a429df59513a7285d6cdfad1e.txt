@@ -1,0 +1,174 @@
+---
+title: 追踪 AutoGen 应用
+sidebarTitle: AutoGen
+---
+
+LangSmith 可以使用 OpenTelemetry 检测来捕获 AutoGen 生成的追踪。本指南将展示如何从 AutoGen 多代理对话中自动捕获追踪，并将其发送到 LangSmith 进行监控和分析。
+
+## 安装
+
+使用您喜欢的包管理器安装所需的包：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```bash pip
+pip install langsmith autogen-agentchat autogen-ext opentelemetry-instrumentation-openai
+```
+
+```bash uv
+uv add langsmith autogen-agentchat autogen-ext opentelemetry-instrumentation-openai
+```
+
+</CodeGroup>
+
+## 设置
+
+### 1. 配置环境变量
+
+设置您的 [API 密钥](/langsmith/create-account-api-key) 和项目名称：
+
+```bash
+export LANGSMITH_API_KEY=<your_langsmith_api_key>
+export LANGSMITH_PROJECT=<your_project_name>
+export OPENAI_API_KEY=<your_openai_api_key>
+```
+
+### 2. 配置 OpenTelemetry 集成
+
+在您的 AutoGen 应用程序中，配置 LangSmith OpenTelemetry 集成以及 OpenAI 检测器：
+
+```python
+from langsmith.integrations.otel import OtelSpanProcessor
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+
+# Set up tracer provider
+tracer_provider = TracerProvider()
+tracer_provider.add_span_processor(OtelSpanProcessor())
+trace.set_tracer_provider(tracer_provider)
+
+# Instrument OpenAI calls
+OpenAIInstrumentor().instrument()
+```
+
+### 3. 创建并运行您的 AutoGen 应用程序
+
+配置完成后，您的 AutoGen 应用程序将自动向 LangSmith 发送追踪。将追踪器提供程序传递到运行时，以获得完整的追踪覆盖：
+
+```python
+import asyncio
+from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.conditions import MaxMessageTermination, TextMentionTermination
+from autogen_agentchat.teams import SelectorGroupChat
+from autogen_agentchat.ui import Console
+from autogen_core import SingleThreadedAgentRuntime
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+from langsmith.integrations.otel import OtelSpanProcessor
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+
+# Set up tracing
+tracer_provider = TracerProvider()
+tracer_provider.add_span_processor(OtelSpanProcessor())
+trace.set_tracer_provider(tracer_provider)
+OpenAIInstrumentor().instrument()
+
+# Define a tool
+def percentage_change(start: float, end: float) -> float:
+    """Calculate percentage change between two values."""
+    if start == 0:
+        return float("inf")
+    return ((end - start) / start) * 100
+
+async def main():
+    model_client = OpenAIChatCompletionClient(model="gpt-4o")
+    tracer = trace.get_tracer("autogen-demo")
+
+    with tracer.start_as_current_span("run_team"):
+        planning_agent = AssistantAgent(
+            "PlanningAgent",
+            description="Plans tasks and delegates.",
+            model_client=model_client,
+            system_message=(
+                "You are a planning agent. Plan and delegate tasks.\n"
+                "When assigning tasks, use: 1. <agent> : <task>\n"
+                'After tasks complete, summarize and end with "TERMINATE".'
+            ),
+        )
+
+        data_analyst = AssistantAgent(
+            "DataAnalystAgent",
+            description="Performs calculations.",
+            model_client=model_client,
+            tools=[percentage_change],
+            system_message="You are a data analyst. Use tools to compute results.",
+        )
+
+        termination = TextMentionTermination("TERMINATE") | MaxMessageTermination(max_messages=25)
+
+        # Pass tracer_provider to the runtime
+        runtime = SingleThreadedAgentRuntime(tracer_provider=trace.get_tracer_provider())
+        runtime.start()
+
+        team = SelectorGroupChat(
+            [planning_agent, data_analyst],
+            model_client=model_client,
+            termination_condition=termination,
+            allow_repeated_speaker=True,
+            runtime=runtime,
+        )
+
+        task = "You started with 100 apples, now you have 120 apples. What is the percentage change?"
+        await Console(team.run_stream(task=task))
+
+        await runtime.stop()
+
+    await model_client.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## 高级用法
+
+### 自定义元数据和标签
+
+你可以通过设置 span 属性来为你的追踪添加自定义元数据：
+
+```python
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
+
+async def run_with_metadata():
+    with tracer.start_as_current_span("autogen_workflow") as span:
+        span.set_attribute("langsmith.metadata.session_type", "multi_agent")
+        span.set_attribute("langsmith.metadata.agent_count", "2")
+        span.set_attribute("langsmith.span.tags", "autogen,planning")
+
+        # Your AutoGen code here
+        await Console(team.run_stream(task=task))
+```
+
+### 与其他仪器追踪器结合使用
+
+您可以将 AutoGen 追踪与其他 OpenTelemetry 仪器追踪器结合使用：
+
+```python
+from opentelemetry.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+# Initialize multiple instrumentors
+OpenAIInstrumentor().instrument()
+HTTPXClientInstrumentor().instrument()
+```
+
+## 资源
+
+- [AutoGen 文档](https://microsoft.github.io/autogen/stable/)
+- [LangSmith OpenTelemetry 指南](/langsmith/trace-with-opentelemetry)

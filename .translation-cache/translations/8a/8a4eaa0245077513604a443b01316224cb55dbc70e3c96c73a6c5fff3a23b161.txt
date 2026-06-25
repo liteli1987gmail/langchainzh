@@ -1,0 +1,132 @@
+---
+title: "BasetenEmbeddings 集成"
+description: "使用 LangChain Python 与 BasetenEmbeddings 嵌入模型集成。"
+---
+
+这将帮助您开始使用 LangChain 与 Baseten 嵌入模型。
+
+## 概述
+
+Baseten 提供专为生产应用设计的推理服务。这些 API 构建于 Baseten Inference Stack 之上，为领先的开源或自定义模型提供企业级性能和可靠性：https://www.baseten.co/library/。
+
+### 集成详情
+
+<ItemTable category="embeddings" item="Baseten" />
+
+## 设置
+
+要访问 Baseten 嵌入模型，您需要创建一个 Baseten 账户，获取 API 密钥，并安装 `langchain-baseten` 集成包。
+
+**Baseten 嵌入仅作为专用模型提供。** 使用此集成前，您必须从 [Baseten 模型库](https://www.baseten.co/library/tag/embedding) 部署一个嵌入模型。
+
+嵌入功能使用 Baseten 的 [Performance Client](https://www.baseten.co/blog/introducing-baseten-embeddings-inference-bei/) 以获得优化性能，它已作为依赖项自动包含。
+
+### 凭证
+
+访问 [https://app.baseten.co](https://app.baseten.co) 注册 Baseten 并生成 API 密钥。完成此操作后，设置 BASETEN_API_KEY 环境变量：
+
+```python
+import getpass
+import os
+
+if not os.getenv("BASETEN_API_KEY"):
+    os.environ["BASETEN_API_KEY"] = getpass.getpass("Enter your Baseten API key: ")
+```
+
+要启用模型调用的自动跟踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+```
+
+### 安装
+
+LangChain Baseten 集成位于 `langchain-baseten` 包中：
+
+```python
+pip install -qU langchain-baseten
+```
+
+## 实例化
+
+现在我们可以使用已部署模型的 URL 实例化 embeddings 对象：
+
+```python
+from langchain_baseten import BasetenEmbeddings
+
+embeddings = BasetenEmbeddings(
+    model_url="https://model-<id>.api.baseten.co/environments/production/sync",  # Your model URL
+    api_key="your-api-key",  # Or set BASETEN_API_KEY env var
+)
+```
+
+## 索引和检索
+
+嵌入模型常用于检索增强生成 (RAG) 流程中，既可以作为索引数据的一部分，也可以在之后用于检索数据。如需更详细的说明，请参阅我们的 [RAG 教程](/oss/langchain/rag)。
+
+请参阅下方，了解如何使用我们上面初始化的 `embeddings` 对象索引和检索数据。在此示例中，我们将在 `InMemoryVectorStore` 中索引和检索一个示例文档。
+
+```python
+# Create a vector store with a sample text
+from langchain_core.vectorstores import InMemoryVectorStore
+
+text = "LangChain is the framework for building context-aware reasoning applications"
+
+vectorstore = InMemoryVectorStore.from_texts(
+    [text],
+    embedding=embeddings,
+)
+
+# Use the vectorstore as a retriever
+retriever = vectorstore.as_retriever()
+
+# Retrieve the most similar text
+retrieved_documents = retriever.invoke("What is LangChain?")
+
+# show the retrieved document's content
+retrieved_documents[0].page_content
+```
+
+```text
+'LangChain is the framework for building context-aware reasoning applications'
+```
+
+## 直接使用
+
+在底层，向量存储和检索器的实现正在调用 `embeddings.embed_documents(...)` 和 `embeddings.embed_query(...)` 来为 `from_texts` 和检索 `invoke` 操作中使用的文本创建嵌入。
+
+你可以直接调用这些方法来为你的使用场景获取嵌入。
+
+### 嵌入单个文本
+
+你可以使用 `embed_query` 来嵌入单个文本或文档：
+
+```python
+single_vector = embeddings.embed_query(text)
+print(str(single_vector)[:100])  # Show the first 100 characters of the vector
+```
+
+```text
+[0.013201533816754818, 0.02222288027405739, -0.036066457629203796, 0.027374643832445145, -0.01692997
+```
+
+### 嵌入多个文本
+
+您可以使用 `embed_documents` 嵌入多个文本：
+
+```python
+text2 = (
+    "LangGraph is a library for building stateful, multi-actor applications with LLMs"
+)
+two_vectors = embeddings.embed_documents([text, text2])
+for vector in two_vectors:
+    print(str(vector)[:100])  # Show the first 100 characters of the vector
+```
+
+```text
+[0.013201533816754818, 0.02222288027405739, -0.036066457629203796, 0.027374643832445145, -0.01692997
+[0.018247194588184357, 0.007369577884674072, -0.005529594141989946, 0.022589316591620445, -0.0699259
+```
+
+---

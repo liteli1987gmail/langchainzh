@@ -1,0 +1,151 @@
+---
+title: "Tavily map 集成"
+description: "使用 LangChain Python 与 Tavily map 工具集成。"
+---
+
+[Tavily](https://tavily.com) 是一个专为 AI 代理（LLM）打造的搜索引擎，以速度提供实时、准确且可靠的结果。Tavily 提供了一个 [Map](https://docs.tavily.com/documentation/api-reference/endpoint/map) 端点，可以遍历网站并返回已发现 URL 列表，无需提取页面内容，非常适合了解网站结构或在大规模站点上定位特定页面。
+
+## 概述
+
+### 集成详情
+
+| 类名 | 包 | 可序列化 | [JS 支持](https://js.langchain.com/docs/integrations/tools/tavily_map) | 版本 |
+|:---------------------------------------------------------------|:-----------------------------------------------------------------| :---: | :---: | :---: |
+| @[`TavilyMap`] | @[`langchain-tavily`] | ✅ | ✅  |  ![PyPI - Version](https://img.shields.io/pypi/v/langchain-tavily?style=flat-square&label=%20) |
+
+### 工具特点
+
+| [返回产物](/oss/langchain/tools) | 原生异步 |                       返回数据                        | 定价 |
+| :---: | :---: |:--------------------------------------------------------:| :---: |
+| ❌ | ✅ | 已发现 URL 列表 | 每月 1,000 免费积分 |
+
+## 设置
+
+该集成位于 `langchain-tavily` 包中。
+
+```python
+pip install -qU langchain-tavily
+```
+
+### 凭证
+
+我们还需要设置 Tavily API 密钥。您可以通过访问[此网站](https://app.tavily.com/sign-in)并创建一个账户来获取 API 密钥。
+
+```python
+import getpass
+import os
+
+if not os.environ.get("TAVILY_API_KEY"):
+    os.environ["TAVILY_API_KEY"] = getpass.getpass("Tavily API key:\n")
+```
+
+## 实例化
+
+工具在实例化期间接受以下参数：
+
+- `max_depth`（可选，int）：从起始 URL 开始的最大跳转次数。默认值为 1。
+- `max_breadth`（可选，int）：每层返回的最大 URL 数量。默认值为 20。
+- `limit`（可选，int）：返回的最大 URL 总数。默认值为 50。
+- `instructions`（可选，str）：引导地图遍历的自然语言指令。
+- `select_paths`（可选，list[str]）：仅包含包含这些路径正则表达式的 URL。
+- `select_domains`（可选，list[str]）：仅包含来自这些域名正则表达式的 URL。
+- `exclude_paths`（可选，list[str]）：跳过包含这些路径正则表达式的 URL。
+- `exclude_domains`（可选，list[str]）：跳过来自这些域名正则表达式的 URL。
+- `allow_external`（可选，bool）：允许地图跟随外部链接。
+
+有关可用参数的完整概述，请参阅 [Tavily Map API 文档](https://docs.tavily.com/documentation/api-reference/endpoint/map)。
+
+```python
+from langchain_tavily import TavilyMap
+
+tool = TavilyMap(
+    max_depth=1,
+    max_breadth=20,
+    limit=50,
+    # allow_external=False,
+)
+```
+
+## 调用
+
+### [使用参数直接调用](/oss/langchain/tools)
+
+Tavily 地图工具在调用期间接受以下参数：
+
+- `url`（必需）：要开始映射的基础 URL。
+- 以下参数也可以在调用期间设置：`instructions`、`select_paths`、`select_domains`、`exclude_paths`、`exclude_domains`、`allow_external`。
+
+注意：可选参数可供代理动态设置。如果在实例化期间设置了某个参数，然后使用不同的值调用工具，则工具将使用您在调用期间传递的值。
+
+```python
+tool.invoke({"url": "https://docs.tavily.com"})
+```
+
+```json
+{
+  "base_url": "https://docs.tavily.com",
+  "results": [
+    "https://docs.tavily.com/",
+    "https://docs.tavily.com/changelog",
+    "https://docs.tavily.com/welcome",
+    "https://docs.tavily.com/documentation/mcp",
+    "https://docs.tavily.com/documentation/about",
+  ],
+  "response_time": 0.37
+}
+```
+
+### [使用 ToolCall 调用](/oss/langchain/tools)
+
+我们也可以使用模型生成的 ToolCall 来调用工具，这种情况下会返回 ToolMessage：
+
+```python
+model_generated_tool_call = {
+    "args": {"url": "https://docs.tavily.com", "instructions": "Find API reference pages"},
+    "id": "1",
+    "name": "tavily_map",
+    "type": "tool_call",
+}
+tool_msg = tool.invoke(model_generated_tool_call)
+
+print(tool_msg.content[:400])
+```
+
+## 在代理中使用
+
+我们可以通过将地图工具绑定到模型来直接在代理中使用它。然后，代理可以动态设置指令和过滤器来发现所需的 URL。
+
+<ChatModelTabs customVarName="llm" />
+
+```python
+if not os.environ.get("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = getpass.getpass("OPENAI_API_KEY:\n")
+```
+
+```python
+from langchain.chat_models import init_chat_model
+
+model = init_chat_model(model="gpt-5.5", model_provider="openai", temperature=0)
+```
+
+```python
+from langchain_tavily import TavilyMap
+from langchain.agents import create_agent
+
+
+tavily_map_tool = TavilyMap(max_depth=2, max_breadth=20, limit=30)
+
+agent = create_agent(model, [tavily_map_tool])
+
+user_input = "Map https://docs.tavily.com and list URLs that look like API reference pages."
+
+stream = agent.stream_events({"messages": user_input}, version="v3")
+for snapshot in stream.values:
+    snapshot["messages"][-1].pretty_print()
+```
+
+---
+
+## API 参考
+
+有关所有 Tavily Map API 功能配置的详细文档，请参阅 API 参考：[https://docs.tavily.com/documentation/api-reference/endpoint/map](https://docs.tavily.com/documentation/api-reference/endpoint/map)

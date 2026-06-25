@@ -1,0 +1,140 @@
+---
+title: 追踪 Mastra 应用程序
+sidebarTitle: Mastra
+---
+
+[Mastra](https://mastra.ai/docs) 是一个用于构建 AI 驱动应用程序和智能体的 TypeScript 框架。使用 Mastra 的 [LangSmith 导出器](https://mastra.ai/docs/observability/ai-tracing/exporters/langsmith)，您可以将 Mastra 智能体和工作流的追踪数据发送到 LangSmith，用于调试、评估和可观测性。
+
+本指南展示如何使用 Mastra 的 AI 追踪系统将 Mastra 与 LangSmith 集成。
+
+## 安装
+
+安装 Mastra 和 LangSmith 导出器：
+
+```bash
+npm install @mastra/core @mastra/langsmith @mastra/observability @mastra/libsql
+```
+
+## 设置
+
+1. 设置你的 LangSmith API 密钥以及（可选）一个 LangSmith 项目名称：
+
+    ```bash
+    export LANGSMITH_API_KEY=<your_langsmith_api_key>
+    export LANGCHAIN_PROJECT=<your_project_name> # optional
+    ```
+
+<Tip>
+如果未设置 [`LANGCHAIN_PROJECT`](/langsmith/log-traces-to-project)，则跟踪将发送到默认项目。
+</Tip>
+
+1. 如果您计划使用 OpenAI 模型，还请确保在运行时提供 OpenAI API 密钥：
+
+    ```bash
+    export OPENAI_API_KEY=<your_openai_api_key>
+    ```
+
+1. 在你的项目目录中，创建以下项目结构和文件：
+
+    ```
+    src/
+        mastra.ts
+        agent.ts
+        index.ts
+    ```
+
+## 使用 LangSmith 导出器配置 Mastra
+
+Mastra 追踪直接在 `Mastra` 构造函数上配置。将以下内容添加到 `mastra.ts` 文件中：
+
+```ts
+import { Mastra } from "@mastra/core";
+import { LibSQLStore } from "@mastra/libsql";
+import { LangSmithExporter } from "@mastra/langsmith";
+
+import { echoAgent } from "./agent";
+
+export const mastra = new Mastra({
+  agents: { echoAgent },
+
+  storage: new LibSQLStore({
+    url: "file:./mastra.db",
+  }),
+
+  observability: {
+    configs: {
+      langsmith: {
+        serviceName: "mastra-langsmith-demo",
+        exporters: [
+          new LangSmithExporter({
+            apiKey: process.env.LANGSMITH_API_KEY,
+          }),
+        ],
+      },
+    },
+  },
+
+  // Disable deprecated telemetry system
+  telemetry: {
+    enabled: false,
+  },
+});
+```
+
+- [追踪功能需要存储](https://mastra.ai/docs/observability/ai-tracing/overview#basic-config)（即使将追踪数据导出到外部）。
+- LangSmith 导出器从环境变量中读取凭证。
+- 已禁用[弃用的遥测系统](https://mastra.ai/docs/observability/overview#otel-tracing-deprecated)，以避免警告。
+- 在 Mastra 服务器外部运行 Mastra 时，不需要单独的插桩文件。
+更多详情，请参阅 [Mastra 文档](https://mastra.ai/docs/observability/ai-tracing/overview)。
+
+### 定义智能体
+
+为确保兼容性，请使用[基于字符串的模型标识符](https://mastra.ai/models#basic-usage)。将以下代码添加到 `agent.ts` 文件中：
+
+```ts
+import { Agent } from "@mastra/core/agent";
+
+export const echoAgent = new Agent({
+  name: "echoAgent",
+  instructions: "You are a helpful assistant.",
+  model: "openai/gpt-4o-mini",
+});
+```
+
+Mastra 将自动使用您配置的 API 密钥路由模型调用，并捕获每次调用的追踪。
+
+### 运行智能体
+
+1. 将以下内容添加到 `index.ts` 文件中：
+
+    ```ts
+    import { mastra } from "./mastra";
+
+    async function main() {
+    const agent = mastra.getAgent("echoAgent");
+    const result = await agent.generate("Say hello and explain what Mastra is.");
+    console.log(result.text);
+    }
+
+    main();
+    ```
+
+1. 运行您的应用程序：
+
+    ```bash
+    npx ts-node src/index.ts
+    ```
+
+## 在 LangSmith 中查看追踪
+
+运行 agent 后：
+
+1. 打开 [LangSmith UI](https://smith.langchain.com)。
+1. 选择你的项目。例如，`LANGCHAIN_PROJECT` 的值。
+1. 找到对应于 `echoAgent.generate` 的追踪。
+
+您将能够检查：
+
+- 模型输入和输出
+- Agent 执行步骤
+- 时间和错误信息

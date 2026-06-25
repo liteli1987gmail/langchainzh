@@ -1,0 +1,55 @@
+---
+title: "JSON agent 工具包集成"
+description: "了解如何使用 LangChain JavaScript 与 JSON agent 工具包进行集成。"
+---
+
+本示例展示了如何加载和使用带有 JSON 工具包的 agent。
+
+<提示>
+查看[此部分了解安装 LangChain 软件包的一般说明](/oss/langchain/install)。
+</提示>
+
+```bash npm
+npm install @langchain/openai @langchain/core
+```
+```typescript
+import * as fs from "fs";
+import * as yaml from "js-yaml";
+import { OpenAI } from "@langchain/openai";
+import { JsonSpec, JsonObject } from "@langchain/classic/tools";
+import { JsonToolkit, createJsonAgent } from "@langchain/classic/agents";
+
+export const run = async () => {
+  let data: JsonObject;
+  try {
+    const yamlFile = fs.readFileSync("openai_openapi.yaml", "utf8");
+    data = yaml.load(yamlFile) as JsonObject;
+    if (!data) {
+      throw new Error("Failed to load OpenAPI spec");
+    }
+  } catch (e) {
+    console.error(e);
+    return;
+  }
+
+  const toolkit = new JsonToolkit(new JsonSpec(data));
+  const model = new OpenAI({ temperature: 0 });
+  const executor = createJsonAgent(model, toolkit);
+
+  const input = `What are the required parameters in the request body to the /completions endpoint?`;
+
+  console.log(`Executing with input "${input}"...`);
+
+  const result = await executor.invoke({ input });
+
+  console.log(`Got output ${result.output}`);
+
+  console.log(
+    `Got intermediate steps ${JSON.stringify(
+      result.intermediateSteps,
+      null,
+      2
+    )}`
+  );
+};
+```

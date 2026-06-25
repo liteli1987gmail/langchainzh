@@ -1,0 +1,611 @@
+---
+title: 成本追踪
+sidebarTitle: 成本追踪
+---
+
+import CostTrackingUsageMetadataRunJava from '/snippets/code-samples/cost-tracking-usage-metadata-run-java.mdx';
+import CostTrackingUsageMetadataRunKt from '/snippets/code-samples/cost-tracking-usage-metadata-run-kt.mdx';
+import CostTrackingUsageMetadataOutputJava from '/snippets/code-samples/cost-tracking-usage-metadata-output-java.mdx';
+import CostTrackingUsageMetadataOutputKt from '/snippets/code-samples/cost-tracking-usage-metadata-output-kt.mdx';
+import CostTrackingLlmCostDirectJava from '/snippets/code-samples/cost-tracking-llm-cost-direct-java.mdx';
+import CostTrackingLlmCostDirectKt from '/snippets/code-samples/cost-tracking-llm-cost-direct-kt.mdx';
+import CostTrackingToolCostRunJava from '/snippets/code-samples/cost-tracking-tool-cost-run-java.mdx';
+import CostTrackingToolCostRunKt from '/snippets/code-samples/cost-tracking-tool-cost-run-kt.mdx';
+import CostTrackingToolCostOutputJava from '/snippets/code-samples/cost-tracking-tool-cost-output-java.mdx';
+import CostTrackingToolCostOutputKt from '/snippets/code-samples/cost-tracking-tool-cost-output-kt.mdx';
+
+大规模构建 agent 会引入基于使用量的非平凡成本，这些成本可能难以追踪。LangSmith 会自动记录主要提供商的 LLM token 使用量和成本，同时也允许您为任何其他组件提交自定义成本数据。
+
+这为您提供了整个应用程序成本的单一统一视图，让您可以轻松监控、理解和调试支出。
+
+## 在 LangSmith UI 中查看成本
+
+在 [LangSmith UI](https://smith.langchain.com) 中，您可以通过三种方式探索使用量和支出：作为单个 trace 中的明细分类、作为项目统计中的聚合指标，以及在仪表板中。
+
+### Token 和成本明细
+
+UI 将 token 使用量和成本分为三类：
+
+- **输入**：发送到模型的 prompt 中的 token。子类型包括：缓存读取、文本 token、图像 token 等。
+- **输出**：模型响应中生成的 token。子类型包括：推理 token、文本 token、图像 token 等。
+- **其他**：工具调用、检索步骤或任何自定义运行的成本。
+
+您可以通过将鼠标悬停在 UI 中的成本区域来查看详细明细。在可用的情况下，每个区域还会按子类型进一步分类。
+
+<img
+  className="block dark:hidden"
+  src="/langsmith/images/cost-tooltip-light.png"
+  alt="Cost tooltip"
+/>
+<img
+  className="hidden dark:block"
+  src="/langsmith/images/cost-tooltip-dark.png"
+  alt="Cost tooltip"
+/>
+
+您可以在 LangSmith UI 中随时查看这些明细：
+
+#### 在 trace 树中
+
+trace 树显示 token 使用量和成本的最详细视图（针对单个 trace）。它显示整个 trace 的总使用量、每个父级运行的聚合值，以及每个子级运行的 token 和成本明细。
+
+打开追踪项目中的任何运行即可查看其 trace 树。
+
+<Note>
+跨线程追踪成本时，请确保所有子级运行都包含线程元数据（`session_id`、`thread_id` 或 `conversation_id`）。如果子级运行没有线程元数据，则这些运行的 token 计数和成本不会包含在线程级聚合中。请参阅[配置线程](/langsmith/threads)了解设置线程元数据的详细信息。
+</Note>
+
+#### 在项目统计中
+
+项目统计面板显示项目中所有 trace 的总 token 使用量和成本。
+
+#### 在仪表板中
+
+仪表板帮助您探索成本和 token 使用量随时间变化的趋势。追踪项目的[预构建仪表板](/langsmith/dashboards/#prebuilt-dashboards)显示总成本以及按输入和输出 token 分类的成本明细。
+
+您也可以在[自定义仪表板](https://docs.langchain.com/langsmith/dashboards#custom-dashboards)中配置自定义成本追踪图表。
+
+## 成本追踪
+
+您可以通过两种方式追踪成本：
+
+1. **自动**：根据 LLM 调用的 token 计数和模型价格计算。
+2. **手动**：直接在任意运行上指定，包括非 LLM 类型。
+
+| 方法 | 运行类型：LLM | 运行类型：其他 |
+|--------|---------------|-----------------|
+| **自动** | <ul><li>使用 [LangChain](/oss/langchain/overview) 调用 LLM</li><li>使用 `@traceable` 追踪 OpenAI、Anthropic 或遵循 OpenAI 兼容格式的模型的 LLM 调用</li><li>使用 LangSmith 包装器追踪 [OpenAI](/langsmith/trace-openai) 或 [Anthropic](/langsmith/trace-anthropic)</li><li>对于其他模型提供商，请阅读 [token 和成本信息指南](/langsmith/log-llm-trace#provide-token-and-cost-information)</li></ul> | 不适用。 |
+| **手动** | 如果 LLM 调用成本是非线性的（例如遵循自定义成本函数） | 为任何运行类型发送成本，例如工具调用、检索步骤 |
+
+### LLM 调用：根据 token 计数自动追踪成本
+
+要从 token 使用量自动计算成本，您需要提供 **token 计数**、**模型和提供商**，以及**模型价格**。
+
+<Note>
+如果您正在使用 [LangChain](/oss/langchain/overview) 调用 LLM、使用 `@traceable` 配合 OpenAI 或 Anthropic（或 OpenAI 兼容模型），或使用 LangSmith 包装器追踪 [OpenAI](/langsmith/trace-openai) 或 [Anthropic](/langsmith/trace-anthropic)，请跳过本节。
+</Note>
+
+1. 发送 token 计数。许多模型在响应中包含 token 计数。您必须提取此信息并使用以下方法之一将其包含在运行中：
+    - 在运行的元数据中设置 `usage_metadata` 字段。这种方法的优点是无需更改被追踪函数的运行时输出：
+
+        <CodeGroup>
+
+        ```python Python expandable wrap
+        from langsmith import traceable, get_current_run_tree
+
+        inputs = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "I'd like to book a table for two."},
+        ]
+
+        @traceable(
+            run_type="llm",
+            metadata={"ls_provider": "my_provider", "ls_model_name": "my_model"}
+        )
+        def chat_model(messages: list):
+            # Imagine this is the real model output format your application expects
+            assistant_message = {
+                "role": "assistant",
+                "content": "Sure, what time would you like to book the table for?"
+            }
+
+            # Token usage you compute or receive from the provider
+            token_usage = {
+                "input_tokens": 27,
+                "output_tokens": 13,
+                "total_tokens": 40,
+                "input_token_details": {"cache_read": 10}
+            }
+
+            # Attach token usage to the LangSmith run
+            run = get_current_run_tree()
+            run.set(usage_metadata=token_usage)
+
+            return assistant_message
+
+        chat_model(inputs)
+        ```
+
+        ```typescript TypeScript expandable wrap
+        import { traceable, getCurrentRunTree } from "langsmith/traceable";
+
+        const inputs = [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: "I'd like to book a table for two." },
+        ];
+
+        const chatModel = traceable(
+        async ({ messages }) => {
+            // The output your application expects
+            const assistantMessage = {
+            role: "assistant",
+            content: "Sure, what time would you like to book the table for?",
+            };
+
+            // Token usage you compute or receive from the provider
+            const tokenUsage = {
+            input_tokens: 27,
+            output_tokens: 13,
+            total_tokens: 40,
+            input_token_details: { cache_read: 10 },
+            };
+
+            // Attach usage to the LangSmith run
+            const runTree = getCurrentRunTree();
+            runTree.metadata.usage_metadata = tokenUsage;
+
+            return assistantMessage;
+        },
+        {
+            run_type: "llm",
+            name: "chat_model",
+            metadata: {
+            ls_provider: "my_provider",
+            ls_model_name: "my_model",
+            },
+        }
+        );
+
+        await chatModel({ messages: inputs });
+        ```
+
+<CostTrackingUsageMetadataRunJava />
+        <CostTrackingUsageMetadataRunKt />
+        </CodeGroup>
+
+        Java 和 Kotlin 示例使用专用执行器。关闭执行器并等待终止可确保后台追踪提交在进程退出前完成。
+
+    - 在追踪函数的输出中返回 `usage_metadata` 字段。将 `usage_metadata` 键直接包含在追踪函数返回的对象中。LangSmith 会从输出中提取它：
+
+        <CodeGroup>
+
+        ```python Python expandable wrap
+        from langsmith import traceable
+
+        inputs = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "I'd like to book a table for two."},
+        ]
+        output = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "Sure, what time would you like to book the table for?"
+                    }
+                }
+            ],
+            "usage_metadata": {
+                "input_tokens": 27,
+                "output_tokens": 13,
+                "total_tokens": 40,
+                "input_token_details": {"cache_read": 10}
+            },
+        }
+
+        @traceable(
+            run_type="llm",
+            metadata={"ls_provider": "my_provider", "ls_model_name": "my_model"}
+        )
+        def chat_model(messages: list):
+            return output
+
+        chat_model(inputs)
+        ```
+
+        ```typescript TypeScript expandable wrap
+        import { traceable } from "langsmith/traceable";
+
+        const messages = [
+            { role: "system", content: "You are a helpful assistant." },
+            { role: "user", content: "I'd like to book a table for two." }
+        ];
+        const output = {
+            choices: [
+                {
+                    message: {
+                        role: "assistant",
+                        content: "Sure, what time would you like to book the table for?",
+                    },
+                },
+            ],
+            usage_metadata: {
+                input_tokens: 27,
+                output_tokens: 13,
+                total_tokens: 40,
+            },
+        };
+
+        const chatModel = traceable(
+            async ({
+                messages,
+            }: {
+                messages: { role: string; content: string }[];
+                model: string;
+            }) => {
+                return output;
+            },
+            {
+                run_type: "llm",
+                name: "chat_model",
+                metadata: {
+                    ls_provider: "my_provider",
+                    ls_model_name: "my_model"
+                }
+            }
+        );
+
+        await chatModel({ messages });
+        ```
+
+<CostTrackingUsageMetadataOutputJava />
+
+        <CostTrackingUsageMetadataOutputKt />
+        </CodeGroup>
+
+    在这两种情况下，使用元数据应包含以下 LangSmith 识别的字段的子集：
+
+    <Accordion title="使用元数据架构和成本计算">
+
+    以下 `usage_metadata` 字典中的字段由 LangSmith 识别。您可以直接查看完整的 [Python 类型](https://github.com/langchain-ai/langsmith-sdk/blob/e705fbd362be69dd70229f94bc09651ef8056a61/python/langsmith/schemas.py#L1196-L1227) 或 [TypeScript 接口](https://github.com/langchain-ai/langsmith-sdk/blob/e705fbd362be69dd70229f94bc09651ef8056a61/js/src/schemas.ts#L637-L689)。
+
+
+    <ParamField path="input_tokens" type="number">
+    模型输入中使用的令牌数量。所有输入令牌类型的总和。
+    </ParamField>
+
+    <ParamField path="output_tokens" type="number">
+    模型响应中使用的令牌数量。所有输出令牌类型的总和。
+    </ParamField>
+
+    <ParamField path="total_tokens" type="number">
+    输入和输出中使用的令牌数量。可选，可以推断。input_tokens + output_tokens 的总和。
+    </ParamField>
+
+    <ParamField path="input_token_details" type="object">
+    输入令牌类型的细分。键是令牌类型字符串，值是数量。示例 `{"cache_read": 5}`。
+
+    已知字段包括：`audio`、`text`、`image`、`cache_read`、`cache_creation`、`cache_read_over_200k`（Gemini）、`ephemeral_5m_input_tokens`、`ephemeral_1h_input_tokens`（Anthropic 临时缓存层）。根据模型或提供商的不同，可能还有其他字段。
+    </ParamField>
+
+    <ParamField path="output_token_details" type="object">
+    输出令牌类型的细分。键是令牌类型字符串，值是数量。示例 `{"reasoning": 5}`。
+
+    已知字段包括：`audio`、`text`、`image`、`reasoning`。根据模型或提供商的不同，可能还有其他字段。
+    </ParamField>
+
+    <ParamField path="input_cost" type="number">
+    输入令牌的 cost。
+    </ParamField>
+
+    <ParamField path="output_cost" type="number">
+    输出令牌的 cost。
+    </ParamField>
+
+    <ParamField path="total_cost" type="number">
+    令牌的 cost。可选，可以推断。input_cost + output_cost 的总和。
+    </ParamField>
+
+    <ParamField path="input_cost_details" type="object">
+    输入成本的详细信息。键是令牌类型字符串，值是成本金额。
+    </ParamField>
+
+    <ParamField path="output_cost_details" type="object">
+    输出成本的详细信息。键是令牌类型字符串，值是成本金额。
+    </ParamField>
+
+    **成本计算**
+
+    运行的成本按从最具体到最不具体的令牌类型贪婪计算。假设您设置每 1M 输入令牌的定价为 \$2，详细信息价格为每 1M `cache_read` 输入令牌 \$1，每 1M 输出令牌 \$3。如果您上传了以下使用元数据：
+
+    ```python
+    {
+    "input_tokens": 20,
+    "input_token_details": {"cache_read": 5},
+    "output_tokens": 10,
+    "total_tokens": 30,
+    }
+    ```
+
+然后，代币成本将按如下方式计算：
+
+    ```python
+    # Notice that LangSmith computes the cache_read cost and then for any
+    # remaining input_tokens, the default input price is applied.
+    input_cost = 5 * 1e-6 + (20 - 5) * 2e-6  # 3.5e-5
+    output_cost = 10 * 3e-6  # 3e-5
+    total_cost = input_cost + output_cost  # 6.5e-5
+    ```
+</Accordion>
+
+2. 指定模型名称。使用自定义模型时，需要在[运行的元数据](/langsmith/add-metadata-tags)中指定以下字段，以便将令牌计数与成本关联起来。在查看追踪和进行筛选时，提供这些元数据字段也有助于识别模型。
+
+    - `ls_provider`：模型的提供商，例如 "openai"、"anthropic"
+    - `ls_model_name`：模型的名称，例如 "gpt-5.4-mini"、"claude-3-opus-20240229"
+
+3. 设置模型价格。LangSmith 使用其[模型定价表](https://smith.langchain.com/settings/workspaces/models)将模型名称映射到每令牌价格，从而根据令牌计数计算成本。
+
+    <Note>
+    该表包含大多数 OpenAI、Anthropic 和 Gemini 模型的定价信息。如果您有自定义定价，可以创建新的模型价格条目或覆盖默认模型的定价。
+    </Note>
+
+    对于不同令牌类型有不同定价的模型（例如多模态令牌或缓存令牌），您可以为每种令牌类型指定价格明细。将鼠标悬停在**输入价格**和**输出价格**条目旁边的 **...** 上，可以查看按令牌类型的价格明细。
+
+    <Note>
+    LangSmith 不会反映模型定价映射的更新对**已经**记录的追踪的成本。模型定价变更的回填不受支持。
+    </Note>
+
+#### 创建新的或修改现有的模型价格条目
+
+要修改默认模型价格，请创建与默认条目具有相同模型、提供商和匹配模式的新条目。
+
+要创建模型定价映射中的新条目，请点击右上角的 **+ Model** 按钮。
+
+在这里，您可以指定以下字段：
+
+- **Model Name**：模型的人类可读名称。
+- **Input Price**：模型每 100 万个输入令牌的成本。该数字乘以提示词中的令牌数量来计算提示成本。
+- **Input Price Breakdown**（可选）：每种不同输入令牌类型的价格明细，例如 `cache_read`、`video`、`audio`。
+- **Output Price**：模型每 100 万个输出令牌的成本。该数字乘以补全中的令牌数量来计算补全成本。
+- **Output Price Breakdown**（可选）：每种不同输出令牌类型的价格明细，例如 `reasoning`、`image` 等。
+- **Model Activation Date**（可选）：定价适用的日期。仅在此日期之后的运行会应用此模型价格。
+- **Match Pattern**：用于匹配模型名称的正则表达式模式。这用于匹配运行元数据中 `ls_model_name` 的值。
+- **Provider**（可选）：模型的提供商。如果指定，则与运行元数据中的 `ls_provider` 进行匹配。
+
+设置好模型定价映射后，LangSmith 会根据 LLM 调用中提供的令牌计数自动计算和汇总追踪的基于令牌的成本。
+
+### LLM 调用：直接发送成本
+
+Gemini 2.5 Pro Preview 和 Gemini 2.5 Pro 使用阶梯成本函数，LangSmith 默认支持该函数。对于任何其他具有非线性定价的模型，请在客户端计算成本并将其作为 `usage_metadata` 发送，如以下代码所示：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langsmith import traceable, get_current_run_tree
+
+inputs = [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "I'd like to book a table for two."},
+]
+
+@traceable(
+    run_type="llm",
+    metadata={"ls_provider": "my_provider", "ls_model_name": "my_model"}
+)
+def chat_model(messages: list):
+    llm_output = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "Sure, what time would you like to book the table for?"
+                }
+            }
+        ],
+        "usage_metadata": {
+            # Specify cost (in dollars) for the inputs and outputs
+            "input_cost": 1.1e-6,
+            "input_cost_details": {"cache_read": 2.3e-7},
+            "output_cost": 5.0e-6,
+        },
+    }
+    run = get_current_run_tree()
+    run.set(usage_metadata=llm_output["usage_metadata"])
+    return llm_output["choices"][0]["message"]
+
+chat_model(inputs)
+```
+
+```typescript TypeScript
+import { traceable, getCurrentRunTree } from "langsmith/traceable";
+
+const messages = [
+  { role: "system", content: "You are a helpful assistant." },
+  { role: "user", content: "I'd like to book a table for two." }
+];
+
+const chatModel = traceable(
+  async (messages: { role: string; content: string }[]) => {
+    const llmOutput = {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "Sure, what time would you like to book the table for?",
+          },
+        },
+      ],
+      // Specify cost (in dollars) for the inputs and outputs
+      usage_metadata: {
+        input_cost: 1.1e-6,
+        input_cost_details: { cache_read: 2.3e-7 },
+        output_cost: 5.0e-6,
+      },
+    };
+
+    // Attach usage metadata to the run
+    const runTree = getCurrentRunTree();
+    runTree.metadata.usage_metadata = llmOutput.usage_metadata;
+
+    // Return only the assistant message
+    return llmOutput.choices[0].message;
+  },
+  {
+    run_type: "llm",
+    name: "chat_model",
+    metadata: {
+      ls_provider: "my_provider",
+      ls_model_name: "my_model",
+    },
+  }
+);
+
+await chatModel(messages);
+```
+
+<CostTrackingLlmCostDirectJava />
+
+<CostTrackingLlmCostDirectKt />
+
+</CodeGroup>
+
+### 其他运行：发送成本
+
+您还可以为任何非 LLM 运行发送成本信息，例如工具调用。在运行的 `usage_metadata` 的 `total_cost` 字段中指定成本：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langsmith import traceable, get_current_run_tree
+
+# Example tool: get_weather
+@traceable(run_type="tool", name="get_weather")
+def get_weather(city: str):
+    # Your tool logic goes here
+    result = {
+        "temperature_f": 68,
+        "condition": "sunny",
+        "city": city,
+    }
+
+    # Cost for this tool call (computed however you like)
+    tool_cost = 0.0015
+
+    # Attach usage metadata to the LangSmith run
+    run = get_current_run_tree()
+    run.set(usage_metadata={"total_cost": tool_cost})
+
+    # Return only the actual tool result (no usage info)
+    return result
+
+tool_response = get_weather("San Francisco")
+```
+
+```typescript TypeScript
+import { traceable, getCurrentRunTree } from "langsmith/traceable";
+
+// Example tool: get_weather
+const getWeather = traceable(
+  async ({ city }) => {
+    // Your tool logic goes here
+    const result = {
+      temperature_f: 68,
+      condition: "sunny",
+      city,
+    };
+
+    // Cost for this tool call (computed however you like)
+    const toolCost = 0.0015;
+
+    // Attach usage metadata to the LangSmith run
+    const runTree = getCurrentRunTree();
+    runTree.metadata.usage_metadata = {
+      total_cost: toolCost,
+    };
+
+    // Return only the actual tool result (no usage info)
+    return result;
+  },
+  {
+    run_type: "tool",
+    name: "get_weather",
+  }
+);
+
+const toolResponse = await getWeather({ city: "San Francisco" });
+```
+
+<CostTrackingToolCostRunJava />
+
+<CostTrackingToolCostRunKt />
+</CodeGroup>
+
+或者，直接在追踪函数的返回值中包含 `usage_metadata`：
+
+<CodeGroup>
+
+
+</fragment>
+
+```python Python
+from langsmith import traceable
+
+# Example tool: get_weather
+@traceable(run_type="tool", name="get_weather")
+def get_weather(city: str):
+    # Your tool logic goes here
+    result = {
+        "temperature_f": 68,
+        "condition": "sunny",
+        "city": city,
+    }
+
+    # Attach tool call costs here
+    return {
+        **result,
+        "usage_metadata": {
+            "total_cost": 0.0015,   # <-- cost for this tool call
+        },
+    }
+
+tool_response = get_weather("San Francisco")
+```
+
+```typescript TypeScript
+import { traceable } from "langsmith/traceable";
+
+// Example tool: get_weather
+const getWeather = traceable(
+  async ({ city }) => {
+    // Your tool logic goes here
+    const result = {
+      temperature_f: 68,
+      condition: "sunny",
+      city,
+    };
+
+    // Attach tool call costs here
+    return {
+      ...result,
+      usage_metadata: {
+        total_cost: 0.0015,  // <-- cost for this tool call
+      },
+    };
+  },
+  {
+    run_type: "tool",
+    name: "get_weather",
+  }
+);
+
+const toolResponse = await getWeather({ city: "San Francisco" });
+```
+
+<CostTrackingToolCostOutputJava />
+
+<CostTrackingToolCostOutputKt />
+</CodeGroup>

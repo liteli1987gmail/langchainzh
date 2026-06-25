@@ -1,0 +1,293 @@
+---
+title: SAP HANA Cloud 知识图谱引擎
+---
+
+[SAP HANA Cloud 知识图谱](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/sap-hana-cloud-sap-hana-database-knowledge-graph-engine-guide) 是 SAP HANA Cloud 数据库中完全集成的知识图谱解决方案。
+
+## 设置与安装
+
+前置条件：
+- 启用了三元组存储功能的 SAP HANA Cloud 实例
+- 参见：[启用三元组存储](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/enable-triple-store/)
+
+如需将 SAP HANA 知识图谱引擎与 LangChain 结合使用，请安装 `@sap/hana-langchain` 包及其对等依赖项：
+
+```bash
+npm install @sap/hana-langchain @langchain/core@latest langchain@latest
+```
+
+```typescript
+import * as dotenv from 'dotenv';
+// Load environment variables if needed
+dotenv.config();
+
+import hanaClient from "@sap/hana-client";
+
+const connectionParams = {
+  host: process.env.HANA_DB_ADDRESS,
+  port: process.env.HANA_DB_PORT,
+  user: process.env.HANA_DB_USER,
+  password: process.env.HANA_DB_PASSWORD,
+};
+const client = hanaClient.createConnection(connectionParams);
+
+// connect to hanaDB
+await new Promise<void>((resolve, reject) => {
+  client.connect((err: Error) => {
+    // Use arrow function here
+    if (err) {
+      reject(err);
+    } else {
+      console.log("Connected to SAP HANA successfully.");
+      resolve();
+    }
+  });
+});
+```
+
+然后，导入 `HanaRdfGraph` 类。
+
+```typescript
+import { HanaRdfGraph } from "@sap/hana-langchain";
+// const graph = new HanaRdfGraph({ connection: client, autoExtractOntology: true });
+```
+
+## 创建 `HanaRdfGraph` 实例
+
+构造函数需要以下参数：
+
+* **`connection`**：一个活跃的 `@sap/hana-client Connection` 实例
+* **`graphUri`**：包含 RDF 数据的有名图（named graph）或 `"DEFAULT"`
+* **以下任选其一**：
+  1. **`ontologyQuery`**：用于提取模式三元组的 SPARQL CONSTRUCT 查询
+  2. **`ontologyUri`**：托管本体图（ontology graph）的 URI
+  3. **`ontologyLocalFile`** + **`ontologyLocalFileFormat`**：本地 Turtle/RDF 文件
+  4. **`autoExtractOntology: true`**（不推荐在生产环境中使用——请参阅注释）
+
+`graphUri` 与本体
+
+* **`graphUri`**：
+  SAP HANA Cloud 实例中包含实例数据（有时超过 100k+ 三元组）的有名图。
+  如果未提供 `graphUri`、为空字符串 `""` 或为 `"DEFAULT"`，则使用默认图。
+* **本体（Ontology）**：一个精简的模式（通常约 50-100 个三元组），用于描述类、属性、域、范围、标签、注释和子类关系。本体指导 SPARQL 生成和结果解释。
+
+### 使用 **DEFAULT** 图创建图实例
+
+有关 DEFAULT 图的更多信息，请参阅 [DEFAULT Graph and Named Graphs](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/default-graph-and-named-graphs)。
+
+```typescript
+const graphOptions = {
+    connection: client,
+    autoExtractOntology: true
+};
+const graph = new HanaRdfGraph(graphOptions);
+
+// need to initialize once an instance is created.
+await graph.initialize(graphOptions);
+
+// const graphOptions = {
+//     connection: client,
+//     graphUri: "DEFAULT",
+//     autoExtractOntology: true
+// };
+
+// const graph = new HanaRdfGraph(graphOptions);
+// await graph.initialize(graphOptions);
+
+// const graphOptions = {
+//     connection: client,
+//     graphUri: "",
+//     autoExtractOntology: true
+// };
+
+// const graph = new HanaRdfGraph(graphOptions);
+// await graph.initialize(graphOptions);
+```
+
+### 使用 `graph_uri` 创建图实例
+
+```typescript
+const graphOptions = {
+  connection: client,
+  graphUri: "http://example.org/movies",
+  autoExtractOntology: true,
+};
+const graph = new HanaRdfGraph(graphOptions);
+await graph.initialize(graphOptions);
+```
+
+### 使用远程 `ontology_uri` 创建图实例
+
+```typescript
+const graphOptions = {
+    connection: client,
+    ontologyUri: "<your_ontology_graph_uri>"
+};
+const graph = new HanaRdfGraph(graphOptions);
+await graph.initialize(graphOptions);
+```
+
+### 使用自定义 `ontology_query` 创建图实例
+
+使用自定义 `CONSTRUCT` 查询来有选择性地提取模式三元组。
+
+```typescript
+const ontologyQuery = `
+  PPREFIX owl: <http://www.w3.org/2002/07/owl#>
+  PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+  PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+  CONSTRUCT {?cls rdf:type owl:Class . ?cls rdfs:label ?clsLabel . ?rel rdf:type ?propertyType . ?rel rdfs:label ?relLabel . ?rel rdfs:domain ?domain . ?rel rdfs:range ?range .}
+  FROM <kgdocu_movies>
+  WHERE { # get properties
+    {SELECT DISTINCT ?domain ?rel ?relLabel ?propertyType ?range
+      WHERE {
+        ?subj ?rel ?obj .
+        ?subj a ?domain .
+        OPTIONAL{?obj a ?rangeClass .}
+        FILTER(?rel != rdf:type)
+        BIND(IF(isIRI(?obj) = true, owl:ObjectProperty, owl:DatatypeProperty) AS ?propertyType)
+        BIND(COALESCE(?rangeClass, DATATYPE(?obj)) AS ?range)
+        BIND(STR(?rel) AS ?uriStr)       # Convert URI to string
+        BIND(REPLACE(?uriStr, "^.*[/#]", "") AS ?relLabel)
+      }}
+      UNION { # get classes
+        SELECT DISTINCT ?cls ?clsLabel
+        WHERE {
+            ?instance a/rdfs:subClassOf* ?cls .
+            FILTER (isIRI(?cls)) .
+            BIND(STR(?cls) AS ?uriStr)       # Convert URI to string
+            BIND(REPLACE(?uriStr, "^.*[/#]", "") AS ?clsLabel)
+        }
+      }
+   }
+`;
+
+// can provide the graph_uri param as well if needed
+const graphOptions = {
+    connection: client,
+    ontologyQuery
+};
+const graph = new HanaRdfGraph(graphOptions);
+await graph.initialize(graphOptions);
+```
+
+### 从本地 RDF 文件加载本体
+
+支持的 RDF 格式：`Turtle`、`N-Triples`、`Notation-3`、`Trig`、`N-Quads`。
+
+```typescript
+const graphOptions = {
+  connection: client,
+  ontologyLocalFile: "<your_ontology_file_path>", // e.g., "ontology.ttl"
+  ontologyLocalFileFormat: "<your_ontology_file_format>", // e.g., "Turtle", "N-Triples", "Notation-3", "Trig", "N-Quads"
+};
+const graph = new HanaRdfGraph(graphOptions);
+await graph.initialize(graphOptions);
+```
+
+### 本体自动提取
+
+(`auto_extract_ontology=True`)：直接从实例数据中推断模式信息。
+
+```typescript
+const graphOptions = {
+  connection: client,
+  graphUri: "<your_graph_uri>",
+  autoExtractOntology: true,
+};
+const graph = new HanaRdfGraph(graphOptions);
+await graph.initialize(graphOptions);
+```
+
+> **注意**：自动提取**不建议**用于生产环境——它会忽略重要的三元组，如 `rdfs:label`、`rdfs:comment` 和 `rdfs:subClassOf`。
+
+## 执行 SPARQL 查询
+
+您可以使用 `query()` 方法对数据图执行任意 SPARQL 查询（`SELECT`、`ASK`、`CONSTRUCT` 等）。
+
+该函数具有以下参数：
+
+* **query**：SPARQL 查询字符串。
+* **content_type**：输出的响应格式（默认为 CSV）
+
+请使用以下字符串指定相应的格式：
+
+* CSV：`"sparql-results+xml"`
+* JSON：`"sparql-results+json"`
+* XML：`"sparql-results+csv"`
+* TSV：`"sparql-results+tsv"`
+
+> **注意**：CONSTRUCT 和 ASK 查询分别返回 `turtle` 和 `boolean` 格式。
+
+让我们向 `Puppets` 图插入一些数据。
+
+```typescript
+await new Promise<void>((resolve, reject) => {
+  const sparqlQuery = `CALL SYS.SPARQL_EXECUTE(?, ?, ?, ?)`;
+  client.prepare(sparqlQuery, (err: Error, stmt) => {
+    if (err) {
+      reject(err);
+    } else {
+      const query = `
+      INSERT DATA {
+        GRAPH <Puppets> {
+            <P1> a <Puppet>; <name> "Ernie"; <show> "Sesame Street".
+            <P2> a <Puppet>; <name> "Bert"; <show> "Sesame Street" .
+            }
+        }`;
+      const params: HanaParameterList = {
+        REQUEST: query,
+        PARAMETER: "",
+      };
+      stmt?.exec(params, (err: Error) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(stmt.getParameterValue(2));
+        }
+      });
+    }
+  });
+});
+```
+
+然后，我们为 `Puppets` 图创建一个图实例。
+
+```typescript
+const graphOptions = {
+  connection: client,
+  graphUri: "Puppets",
+  autoExtractOntology: true,
+};
+
+// create a Graph instance from a source URI
+const graph = new HanaRdfGraph(graphOptions);
+
+// need to initialize once an instance is created.
+await graph.initialize(graphOptions);
+```
+
+给定的查询列出了 `Puppets` 图中的所有元组。
+
+```typescript
+const results = await graph.query(`
+SELECT ?s ?p ?o
+WHERE {
+    GRAPH <Puppets> {
+        ?s ?p ?o .
+    }
+}
+ORDER BY ?s`);
+console.log(results);
+```
+
+```text
+s,p,o
+P1,name,Ernie
+P1,show,Sesame Street
+P1,http://www.w3.org/1999/02/22-rdf-syntax-ns#type,Puppet
+P2,name,Bert
+P2,show,Sesame Street
+P2,http://www.w3.org/1999/02/22-rdf-syntax-ns#type,Puppet
+```

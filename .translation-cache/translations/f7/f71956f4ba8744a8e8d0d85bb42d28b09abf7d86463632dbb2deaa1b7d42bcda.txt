@@ -1,0 +1,589 @@
+---
+title: 使用 LangChain 构建语义搜索引擎
+sidebarTitle: 语义搜索
+---
+
+import EmbeddingsTabsPy from '/snippets/embeddings-tabs-py.mdx';
+import EmbeddingsTabsJS from '/snippets/embeddings-tabs-js.mdx';
+import VectorstoreTabsPy from '/snippets/vectorstore-tabs-py.mdx';
+import VectorstoreTabsJS from '/snippets/vectorstore-tabs-js.mdx';
+
+## 概述
+
+本教程将帮助您熟悉 LangChain 的[嵌入](/oss/integrations/embeddings)和[向量存储](/oss/integrations/vectorstores)抽象。这些抽象旨在支持从（向量）数据库和其他来源检索数据，以便与 LLM 工作流集成。它们对于以下应用程序很重要：在模型推理过程中获取数据以进行推理（如检索增强生成或 [RAG](/oss/langchain/retrieval)）。
+
+我们将在此构建一个基于 PDF 文档的搜索引擎。这将使我们能够检索与输入查询相似的 PDF 段落。本指南还包括基于搜索引擎的最小化 RAG 实现。
+
+### 概念
+
+本指南重点介绍文本数据检索。我们将涵盖以下概念：
+
+- [文档](https://reference.langchain.com/python/langchain-core/documents);
+- [文本分割器](/oss/integrations/splitters);
+- [嵌入](/oss/integrations/embeddings);
+- [向量存储](/oss/integrations/vectorstores)和[检索器](/oss/integrations/retrievers)。
+
+## 设置
+
+### 安装
+
+:::python
+
+本教程使用 `pypdf` 包读取 PDF：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install pypdf
+```
+```bash conda
+conda install pypdf -c conda-forge
+```
+```bash uv
+uv add pypdf
+```
+</CodeGroup>
+
+:::
+
+:::js
+
+本指南使用 `pdf-parse` 包来读取 PDF 文件：
+
+<CodeGroup>
+```bash npm
+npm i pdf-parse
+```
+```bash yarn
+yarn add pdf-parse
+```
+```bash pnpm
+pnpm add pdf-parse
+```
+</CodeGroup>
+
+:::
+
+更多详细信息，请参阅我们的[安装指南](/oss/langchain/install)。
+
+### LangSmith
+
+您使用 LangChain 构建的许多应用程序将包含多个步骤以及多次 LLM 调用。随着这些应用程序变得越来越复杂，能够检查链或代理内部正在发生的事情变得至关重要。最好的方法是使用 [LangSmith](https://smith.langchain.com)。
+
+在上述链接注册后，请确保设置环境变量以开始记录跟踪：
+
+```shell
+export LANGSMITH_TRACING="true"
+export LANGSMITH_API_KEY="..."
+```
+
+:::python
+
+或者，如果在 notebook 中，你可以用以下方式设置它们：
+
+:::
+
+```python
+import getpass
+import os
+
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
+```
+
+:::
+
+## 1. 文档
+
+LangChain 实现了一个 @[Document] 抽象，旨在表示一个文本单元及其关联的元数据。它有三个属性：
+
+:::python
+- `page_content`：一个表示内容的字符串；
+- `metadata`：一个包含任意元数据的字典；
+- `id`：（可选）文档的字符串标识符。
+:::
+:::js
+- `pageContent`：一个表示内容的字符串；
+- `metadata`：一个包含任意元数据的字典；
+- `id`：（可选）文档的字符串标识符。
+:::
+
+`metadata` 属性可以捕获关于文档来源、与其他文档的关系以及其他信息。请注意，单独的 @[`Document`] 对象通常表示一个更大文档的块。
+
+我们可以根据需要生成示例文档：
+
+:::python
+```python
+from langchain_core.documents import Document
+
+documents = [
+    Document(
+        page_content="Dogs are great companions, known for their loyalty and friendliness.",
+        metadata={"source": "mammal-pets-doc"},
+    ),
+    Document(
+        page_content="Cats are independent pets that often enjoy their own space.",
+        metadata={"source": "mammal-pets-doc"},
+    ),
+]
+```
+:::
+:::js
+```typescript
+import { Document } from "@langchain/core/documents";
+
+const documents = [
+  new Document({
+    pageContent:
+      "Dogs are great companions, known for their loyalty and friendliness.",
+    metadata: { source: "mammal-pets-doc" },
+  }),
+  new Document({
+    pageContent: "Cats are independent pets that often enjoy their own space.",
+    metadata: { source: "mammal-pets-doc" },
+  }),
+];
+```
+:::
+
+## 2. 向量化
+
+向量搜索是一种存储和搜索非结构化数据（如非结构化文本）的常用方法。其核心思想是存储与文本相关联的数值向量。给定一个查询，我们可以将其[嵌入](/oss/integrations/embeddings)为相同维度的向量，并使用向量相似度度量（如余弦相似度）来识别相关文本。
+
+LangChain 支持来自[众多提供商](/oss/integrations/embeddings/)的嵌入模型。这些模型指定了文本应如何转换为数值向量。让我们选择一个模型：
+
+:::python
+<EmbeddingsTabsPy />
+
+```python
+vector_1 = embeddings.embed_query(documents[0].page_content)
+vector_2 = embeddings.embed_query(documents[1].page_content)
+
+assert len(vector_1) == len(vector_2)
+print(f"Generated vectors of length {len(vector_1)}\n")
+print(vector_1[:10])
+```
+:::
+:::js
+<EmbeddingsTabsJS />
+
+
+</fragment>
+
+```typescript
+const vector1 = await embeddings.embedQuery(documents[0].pageContent);
+const vector2 = await embeddings.embedQuery(documents[1].pageContent);
+
+assert vector1.length === vector2.length;
+console.log(`Generated vectors of length ${vector1.length}\n`);
+console.log(vector1.slice(0, 10));
+```
+:::
+
+```text
+Generated vectors of length 1536
+
+[-0.008586574345827103, -0.03341241180896759, -0.008936782367527485, -0.0036674530711025, 0.010564599186182022, 0.009598285891115665, -0.028587326407432556, -0.015824200585484505, 0.0030416189692914486, -0.012899317778646946]
+```
+
+```python
+import pypdf
+from langchain_core.documents import Document
+
+
+# Below is a minimal helper for demonstration purposes.
+def load_pdf_pages(file_path: str) -> list[Document]:
+    reader = pypdf.PdfReader(file_path)
+    return [
+        Document(
+            page_content=page.extract_text() or "",
+            metadata={"source": file_path, "page": i},
+        )
+        for i, page in enumerate(reader.pages)
+    ]
+
+
+file_path = "../example_data/nke-10k-2023.pdf"
+docs = load_pdf_pages(file_path)
+print(len(docs))
+```
+:::
+:::js
+```typescript
+import { readFileSync } from "node:fs";
+import { Document } from "@langchain/core/documents";
+import { PDFParse } from "pdf-parse";
+
+// Below is a minimal helper for demonstration purposes.
+async function loadPdfPages(filePath: string): Promise<Document[]> {
+  const parser = new PDFParse({
+    data: new Uint8Array(readFileSync(filePath)),
+  });
+  try {
+    const { pages } = await parser.getText();
+    return pages.map(
+      (page) =>
+        new Document({
+          pageContent: page.text,
+          metadata: { source: filePath, page: page.num - 1 },
+        })
+    );
+  } finally {
+    await parser.destroy();
+  }
+}
+
+const filePath = "../../data/nke-10k-2023.pdf";
+const docs = await loadPdfPages(filePath);
+console.log(docs.length);
+```
+:::
+
+```text
+107
+```
+
+页面可能过于粗粒度，不适合检索和下游问答。进一步拆分有助于确保文档相关部分的含义不会被周围文本"冲淡"。我们使用 [`RecursiveCharacterTextSplitter`](/oss/integrations/splitters)，它使用常见的分隔符（如换行符）递归拆分文档，直到每个块达到适当的大小。这是用于通用文本用例的推荐文本拆分器。
+
+:::python
+我们设置 `add_start_index=True`，以便每个拆分后的 Document 在原始 Document 中开始的字符索引作为元数据属性 `start_index` 被保留。
+
+:::
+
+```python
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000, chunk_overlap=200, add_start_index=True
+)
+all_splits = text_splitter.split_documents(docs)
+
+print(len(all_splits))
+```
+:::
+:::js
+```typescript
+import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+
+const textSplitter = new RecursiveCharacterTextSplitter({
+  chunkSize: 1000,
+  chunkOverlap: 200,
+});
+
+const allSplits = await textSplitter.splitDocuments(docs);
+
+console.log(allSplits.length);
+```
+:::
+
+```text
+516
+```
+
+我们现在可以将块索引到向量存储中。
+
+:::python
+```python
+ids = vector_store.add_documents(documents=all_splits)
+```
+:::
+:::js
+```typescript
+await vectorStore.addDocuments(allSplits);
+```
+:::
+
+请注意，大多数向量存储实现都允许您连接现有的向量存储——例如，通过提供客户端、索引名称或其他信息。请参阅特定[集成](/oss/integrations/vectorstores)的文档以了解更多详情。
+
+:::python
+
+一旦我们实例化了一个包含文档的 @[`VectorStore`]，我们就可以查询它。@[VectorStore] 包含以下查询方法：
+- 同步和异步；
+- 通过字符串查询和向量；
+- 是否返回相似度分数；
+- 通过相似度和 @[最大边际相关性][VectorStore.max_marginal_relevance_search]（以平衡检索结果中的相似性与多样性）。
+
+:::
+
+:::js
+
+一旦我们实例化了一个包含文档的 @[`VectorStore`]，我们就可以查询它。@[VectorStore] 包含以下查询方法：
+- 同步和异步；
+- 通过字符串查询和向量；
+- 是否返回相似度分数；
+- 通过相似度和 @[最大边际相关性][VectorStore.maxMarginalRelevanceSearch]（以平衡检索结果中的相似性与多样性）。
+
+:::
+
+这些方法通常会在其输出中包含 @[Document] 对象列表。
+
+**用法**
+
+嵌入（Embeddings）通常将文本表示为"密集"向量，使得含义相似的文本在几何上接近。这使得我们无需了解文档中使用的任何特定关键词，只需传入一个问题就能检索相关信息。
+
+根据与字符串查询的相似度返回文档：
+
+:::python
+```python
+results = vector_store.similarity_search(
+    "How many distribution centers does Nike have in the US?"
+)
+
+print(results[0])
+```
+```python
+page_content='direct to consumer operations sell products through the following number of retail stores in the United States:
+U.S. RETAIL STORES NUMBER
+NIKE Brand factory stores 213
+NIKE Brand in-line stores (including employee-only stores) 74
+Converse stores (including factory stores) 82
+TOTAL 369
+In the United States, NIKE has eight significant distribution centers. Refer to Item 2. Properties for further information.
+2023 FORM 10-K 2' metadata={'page': 4, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 3125}
+```
+:::
+:::js
+```typescript
+const results1 = await vectorStore.similaritySearch(
+  "When was Nike incorporated?"
+);
+
+console.log(results1[0]);
+```
+```javascript
+Document {
+    pageContent: 'direct to consumer operations sell products...',
+    metadata: {'page': 4, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 3125}
+}
+```
+:::
+:::python
+异步查询：
+
+```python
+results = await vector_store.asimilarity_search("When was Nike incorporated?")
+
+print(results[0])
+```
+```python
+page_content='Table of Contents
+PART I
+ITEM 1. BUSINESS
+GENERAL
+NIKE, Inc. was incorporated in 1967 under the laws of the State of Oregon. As used in this Annual Report on Form 10-K (this "Annual Report"), the terms "we," "us," "our,"
+"NIKE" and the "Company" refer to NIKE, Inc. and its predecessors, subsidiaries and affiliates, collectively, unless the context indicates otherwise.
+Our principal business activity is the design, development and worldwide marketing and selling of athletic footwear, apparel, equipment, accessories and services. NIKE is
+the largest seller of athletic footwear and apparel in the world. We sell our products through NIKE Direct operations, which are comprised of both NIKE-owned retail stores
+and sales through our digital platforms (also referred to as "NIKE Brand Digital"), to retail accounts and to a mix of independent distributors, licensees and sales' metadata={'page': 3, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0}
+```
+:::
+
+返回分数：
+
+:::python
+```python
+# Note that providers implement different scores; the score here
+# is a distance metric that varies inversely with similarity.
+
+results = vector_store.similarity_search_with_score("What was Nike's revenue in 2023?")
+doc, score = results[0]
+print(f"Score: {score}\n")
+print(doc)
+```
+```python
+Score: 0.23699893057346344
+
+page_content='Table of Contents
+FISCAL 2023 NIKE BRAND REVENUE HIGHLIGHTS
+The following tables present NIKE Brand revenues disaggregated by reportable operating segment, distribution channel and major product line:
+FISCAL 2023 COMPARED TO FISCAL 2022
+•NIKE, Inc. Revenues were $51.2 billion in fiscal 2023, which increased 10% and 16% compared to fiscal 2022 on a reported and currency-neutral basis, respectively.
+The increase was due to higher revenues in North America, Europe, Middle East & Africa ("EMEA"), APLA and Greater China, which contributed approximately 7, 6,
+2 and 1 percentage points to NIKE, Inc. Revenues, respectively.
+•NIKE Brand revenues, which represented over 90% of NIKE, Inc. Revenues, increased 10% and 16% on a reported and currency-neutral basis, respectively. This
+increase was primarily due to higher revenues in Men's, the Jordan Brand, Women's and Kids' which grew 17%, 35%,11% and 10%, respectively, on a wholesale
+equivalent basis.' metadata={'page': 35, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0}
+```
+:::
+:::js
+```typescript
+const results2 = await vectorStore.similaritySearchWithScore(
+  "What was Nike's revenue in 2023?"
+);
+
+console.log(results2[0]);
+```
+```javascript
+Score: 0.23699893057346344
+
+Document {
+    pageContent: 'Table of Contents...',
+    metadata: {'page': 35, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0}
+}
+```
+:::
+
+根据嵌入查询的相似度返回文档：
+
+:::python
+
+```
+```python
+embedding = embeddings.embed_query("How were Nike's margins impacted in 2023?")
+
+results = vector_store.similarity_search_by_vector(embedding)
+print(results[0])
+```
+```python
+page_content='Table of Contents
+GROSS MARGIN
+FISCAL 2023 COMPARED TO FISCAL 2022
+For fiscal 2023, our consolidated gross profit increased 4% to $22,292 million compared to $21,479 million for fiscal 2022. Gross margin decreased 250 basis points to
+43.5% for fiscal 2023 compared to 46.0% for fiscal 2022 due to the following:
+*Wholesale equivalent
+The decrease in gross margin for fiscal 2023 was primarily due to:
+•Higher NIKE Brand product costs, on a wholesale equivalent basis, primarily due to higher input costs and elevated inbound freight and logistics costs as well as
+product mix;
+•Lower margin in our NIKE Direct business, driven by higher promotional activity to liquidate inventory in the current period compared to lower promotional activity in
+the prior period resulting from lower available inventory supply;
+•Unfavorable changes in net foreign currency exchange rates, including hedges; and
+•Lower off-price margin, on a wholesale equivalent basis.
+This was partially offset by:' metadata={'page': 36, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0}
+```
+:::
+:::js
+```typescript
+const embedding = await embeddings.embedQuery(
+  "How were Nike's margins impacted in 2023?"
+);
+
+const results3 = await vectorStore.similaritySearchVectorWithScore(
+  embedding,
+  1
+);
+
+console.log(results3[0]);
+```
+```javascript
+Document {
+    pageContent: 'FISCAL 2023 COMPARED TO FISCAL 2022...',
+    metadata: {
+        'page': 36,
+        'source': '../example_data/nke-10k-2023.pdf',
+        'start_index': 0
+    }
+}
+```
+:::
+
+了解更多：
+
+- @[API Reference][VectorStore]
+- [集成特定文档](/oss/integrations/vectorstores)
+
+## 4. 检索器
+
+LangChain @[`VectorStore`] 对象不继承 @[Runnable]。LangChain @[Retrievers] 是 Runnable，因此它们实现了一组标准方法（例如同步和异步的 `invoke` 和 `batch` 操作）。虽然我们可以从向量存储中构建检索器，但检索器也可以与非向量存储数据源（例如外部 API）进行交互。
+
+:::python
+我们可以创建一个简单的版本，而无需继承 `Retriever`。如果我们选择想要用来检索文档的方法，就可以轻松地创建一个 runnable。下面我们将围绕 `similarity_search` 方法构建一个检索器：
+
+
+```python
+from typing import List
+
+from langchain_core.documents import Document
+from langchain_core.runnables import chain
+
+
+@chain
+def retriever(query: str) -> List[Document]:
+    return vector_store.similarity_search(query, k=1)
+
+
+retriever.batch(
+    [
+        "How many distribution centers does Nike have in the US?",
+        "When was Nike incorporated?",
+    ],
+)
+```
+
+
+```text
+[[Document(metadata={'page': 4, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 3125}, page_content='direct to consumer operations sell products through the following number of retail stores in the United States:\nU.S. RETAIL STORES NUMBER\nNIKE Brand factory stores 213 \nNIKE Brand in-line stores (including employee-only stores) 74 \nConverse stores (including factory stores) 82 \nTOTAL 369 \nIn the United States, NIKE has eight significant distribution centers. Refer to Item 2. Properties for further information.\n2023 FORM 10-K 2')],
+ [Document(metadata={'page': 3, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0}, page_content='Table of Contents\nPART I\nITEM 1. BUSINESS\nGENERAL\nNIKE, Inc. was incorporated in 1967 under the laws of the State of Oregon. As used in this Annual Report on Form 10-K (this "Annual Report"), the terms "we," "us," "our,"\n"NIKE" and the "Company" refer to NIKE, Inc. and its predecessors, subsidiaries and affiliates, collectively, unless the context indicates otherwise.\nOur principal business activity is the design, development and worldwide marketing and selling of athletic footwear, apparel, equipment, accessories and services. NIKE is\nthe largest seller of athletic footwear and apparel in the world. We sell our products through NIKE Direct operations, which are comprised of both NIKE-owned retail stores\nand sales through our digital platforms (also referred to as "NIKE Brand Digital"), to retail accounts and to a mix of independent distributors, licensees and sales')]]
+```
+向量存储（Vectorstores）实现了 `as_retriever` 方法，该方法会生成一个检索器（Retriever），具体来说是 [`VectorStoreRetriever`](https://reference.langchain.com/python/langchain-core/vectorstores/base/VectorStoreRetriever)。这些检索器包含特定的 `search_type` 和 `search_kwargs` 属性，用于标识要调用底层向量存储的哪些方法，以及如何对其进行参数化。例如，我们可以使用以下方式复制上述功能：
+
+:::python
+```python
+retriever = vector_store.as_retriever(
+    search_type="similarity",
+    search_kwargs={"k": 1},
+)
+
+retriever.batch(
+    [
+        "How many distribution centers does Nike have in the US?",
+        "When was Nike incorporated?",
+    ],
+)
+```
+```text
+[[Document(metadata={'page': 4, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 3125}, page_content='direct to consumer operations sell products through the following number of retail stores in the United States:\nU.S. RETAIL STORES NUMBER\nNIKE Brand factory stores 213 \nNIKE Brand in-line stores (including employee-only stores) 74 \nConverse stores (including factory stores) 82 \nTOTAL 369 \nIn the United States, NIKE has eight significant distribution centers. Refer to Item 2. Properties for further information.\n2023 FORM 10-K 2')],
+ [Document(metadata={'page': 3, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0}, page_content='Table of Contents\nPART I\nITEM 1. BUSINESS\nGENERAL\nNIKE, Inc. was incorporated in 1967 under the laws of the State of Oregon. As used in this Annual Report on Form 10-K (this "Annual Report"), the terms "we," "us," "our,"\n"NIKE" and the "Company" refer to NIKE, Inc. and its predecessors, subsidiaries and affiliates, collectively, unless the context indicates otherwise.\nOur principal business activity is the design, development and worldwide marketing and selling of athletic footwear, apparel, equipment, accessories and services. NIKE is\nthe largest seller of athletic footwear and apparel in the world. We sell our products through NIKE Direct operations, which are comprised of both NIKE-owned retail stores\nand sales through our digital platforms (also referred to as "NIKE Brand Digital"), to retail accounts and to a mix of independent distributors, licensees and sales')]]
+```
+
+`VectorStoreRetriever` 支持以下搜索类型：`"similarity"`（默认）、`"mmr"`（最大边际相关性，如上所述）和 `"similarity_score_threshold"`。我们可以使用后者通过相似度分数来筛选检索器输出的文档。
+:::
+:::js
+```typescript
+const retriever = vectorStore.asRetriever({
+  searchType: "mmr",
+  searchKwargs: {
+    fetchK: 1,
+  },
+});
+
+await retriever.batch([
+  "When was Nike incorporated?",
+  "What was Nike's revenue in 2023?",
+]);
+```
+```javascript
+[
+    [Document {
+        metadata: {'page': 4, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 3125},
+        pageContent: 'direct to consumer operations sell products...',
+    }],
+    [Document {
+        metadata: {'page': 3, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0},
+        pageContent: 'Table of Contents...',
+    }],
+]
+```
+:::
+
+
+检索器可以轻松集成到更复杂的应用中，例如将给定问题与检索到的上下文组合成提示词发送给 LLM 的[检索增强生成 (RAG)](/oss/langchain/retrieval) 应用。要了解如何构建此类应用，请查看 [RAG 教程](/oss/langchain/rag)。
+
+
+## 下一步
+
+您已经了解了如何基于 PDF 文档构建语义搜索引擎。
+
+了解更多关于嵌入模型的信息：
+
+- [概述](/oss/langchain/retrieval)
+- [可用集成](/oss/integrations/embeddings/)
+
+了解更多关于向量存储的信息：
+
+- [概述](/oss/langchain/retrieval)
+- [可用集成](/oss/integrations/vectorstores/)
+
+了解更多关于 RAG 的信息，请参阅：
+
+- [构建检索增强生成 (RAG) 应用](/oss/langchain/rag/)

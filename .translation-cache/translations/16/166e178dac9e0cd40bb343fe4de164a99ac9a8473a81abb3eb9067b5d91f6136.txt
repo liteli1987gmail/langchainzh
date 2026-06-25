@@ -1,0 +1,86 @@
+---
+title: "Open agent spec 集成"
+description: "使用 LangChain Python 与 Open agent spec 集成。"
+---
+
+本页面涵盖所有 LangChain 与 [Open Agent Specification](https://oracle.github.io/agent-spec) 的集成。
+
+Open Agent Spec 是 Oracle 提供的一种框架无关的声明式语言，用于定义代理系统。它允许以可移植的 JSON/YAML 格式定义代理和工作流，这些格式可以在不同的运行时中执行。
+
+## 安装和设置
+
+您可以参阅安装指南来安装 `pyagentspec`。
+
+您随后可以通过其额外依赖项安装 LangGraph Adapter：
+```bash
+pip install "pyagentspec[langgraph]"
+```
+
+## LangGraph 适配器
+
+**LangGraph 适配器**允许使用 LangGraph 实例化和执行 Open Agent Spec 配置。
+`AgentSpecLoader` 类负责加载 Agent Spec 配置（JSON 或 YAML 格式）并将其作为可运行代理在 LangGraph 环境中实例化。它还支持将声明的工具映射到相应的 Python 函数。
+
+以下示例展示了如何创建简单的 Agent Spec Agent 并将其转换为 LangGraph 助手。
+首先从创建 Agent Spec Agent 开始：
+
+```python
+# Create a Agent Spec agent
+from pyagentspec.agent import Agent
+from pyagentspec.llms.openaicompatibleconfig import OpenAiCompatibleConfig
+from pyagentspec.property import FloatProperty
+from pyagentspec.tools import ServerTool
+
+subtraction_tool = ServerTool(
+    name="subtraction-tool",
+    description="subtract two numbers together",
+    inputs=[FloatProperty(title="a"), FloatProperty(title="b")],
+    outputs=[FloatProperty(title="difference")],
+)
+
+agentspec_llm_config = OpenAiCompatibleConfig(
+    name="llama-3.3-70b-instruct",
+    model_id="/storage/models/Llama-3.3-70B-Instruct",
+    url="url.to.my.llm",
+)
+
+agentspec_agent = Agent(
+    name="agentspec_tools_test",
+    description="agentspec_tools_test",
+    llm_config=agentspec_llm_config,
+    system_prompt="Perform subtraction with the given tool.",
+    tools=[subtraction_tool],
+)
+```
+
+代理随后可以导出为 JSON：
+```python
+# Export the Agent Spec configuration
+from pyagentspec.serialization import AgentSpecSerializer
+
+agentspec_config = AgentSpecSerializer().to_json(agentspec_agent)
+```
+
+并使用 `AgentSpecLoader` 转换为 LangGraph 助手。
+此示例还展示了工具的映射和对话的执行。
+
+```python
+# Load and run the Agent Spec configuration with LangGraph
+from pyagentspec.adapters.langgraph import AgentSpecLoader
+
+def subtract(a: float, b: float) -> float:
+    return a - b
+
+async def main():
+    loader = AgentSpecLoader(tool_registry={"subtraction-tool": subtract})
+    assistant = loader.load_json(agentspec_config)
+
+    while True:
+        user_input = input("USER >> ")
+        if user_input == "exit":
+            break
+        result = await assistant.ainvoke(
+            input={"messages": [{"role": "user", "content": user_input}]},
+        )
+        print(f"AGENT >> {result['messages'][-1].content}")
+```

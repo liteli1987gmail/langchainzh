@@ -1,0 +1,197 @@
+---
+title: EgnyteRetriever
+---
+
+这将帮助您开始使用 Egnyte [检索器](/oss/langchain/retrieval)。有关 `EgnyteRetriever` 所有功能和配置的详细文档，请前往 [API 参考](https://github.com/egnyte/egnyte-langchain-connector)。
+
+# 概述
+
+`EgnyteRetriever` 类帮助您使用结合语义搜索和关键词搜索的混合搜索功能从 Egnyte 搜索和检索文档。该检索器完全符合 LangChain 标准，支持同步和异步操作。
+
+### 集成详情
+
+自带数据（即为文档的自定义语料库建立索引和搜索）：
+
+| 检索器 | 自托管 | 云服务 | 包 |
+| :--- | :--- | :---: | :---: |
+| [EgnyteRetriever](https://github.com/egnyte/egnyte-langchain-connector) | ❌ | ✅ | egnyte-langchain-connector |
+
+## 设置
+
+要使用 Egnyte 包，您需要具备：
+
+* 一个 Egnyte 账户 — 如果您不是当前的 Egnyte 客户或想在生产环境外的 Egnyte 实例中进行测试，您可以使用[免费开发者账户](https://developers.egnyte.com/member/register)。
+* 一个 Egnyte 应用 — 这在[开发者控制台](https://developers.egnyte.com/)中配置，必须启用相应的权限范围。
+* 该应用必须由管理员启用。对于免费开发者账户，由注册该账户的人员负责。
+
+### 凭证
+
+在这些示例中，我们将使用带有 Egnyte 用户 token 的 Bearer token 认证。要生成用户 token：
+
+1. 在 [https://developers.egnyte.com/member/register](https://developers.egnyte.com/member/register) 注册开发者账户
+2. 按照 [Public API Authentication 指南](https://developers.egnyte.com/docs/read/Public_API_Authentication) 生成用户 token
+3. **重要**：生成 token 时使用作用域 `Egnyte.ai`
+
+```python
+import getpass
+import os
+
+egnyte_user_token = getpass.getpass("Enter your Egnyte User Token: ")
+domain = input("Enter your Egnyte domain (e.g., company.egnyte.com): ")
+```
+
+如果你想从单个查询中获得自动追踪，你也可以通过取消下面的注释来设置你的 LangSmith API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+此检索器位于 `egnyte-langchain-connector` 包中:
+
+```bash
+pip install -qU egnyte-langchain-connector
+```
+
+```output
+Note: you may need to restart the kernel to use updated packages.
+```
+
+## 实例化
+
+现在我们可以实例化我们的检索器：
+
+```python
+from langchain_egnyte import EgnyteRetriever
+
+retriever = EgnyteRetriever(domain=domain, k=100)
+```
+
+## 使用方法
+
+### 基本搜索
+
+```python
+query = "machine learning policies"
+
+documents = retriever.invoke(query, egnyte_user_token=egnyte_user_token)
+
+for doc in documents:
+    print(f"Title: {doc.metadata.get('title', 'N/A')}")
+    print(f"Content: {doc.page_content[:200]}...")
+    print("---")
+```
+
+### 高级搜索选项
+
+要进行更精细的搜索，您可以使用 `EgnyteSearchOptions` 按文件夹路径、日期范围等条件过滤结果：
+
+```python
+from langchain_egnyte import EgnyteRetriever, EgnyteSearchOptions
+
+search_options = EgnyteSearchOptions(
+    limit=50,
+    folderPath="/policies",
+    excludeFolderPaths=["/temp", "/archive"],
+    createdAfter=1640995200000,  # Unix timestamp in milliseconds (Jan 1, 2022)
+    createdBefore=1672531200000  # Unix timestamp in milliseconds (Jan 1, 2023)
+)
+
+retriever = EgnyteRetriever(
+    domain=domain,
+    k=50,
+    search_options=search_options
+)
+
+documents = retriever.invoke(
+    "compliance requirements",
+    egnyte_user_token=egnyte_user_token
+)
+```
+
+### 异步用法
+
+该检索器支持异步操作：
+
+```python
+import asyncio
+
+async def search_async():
+    documents = await retriever.ainvoke(
+        "data privacy guidelines",
+        egnyte_user_token=egnyte_user_token
+    )
+    return documents
+
+# Run async search
+documents = asyncio.run(search_async())
+```
+
+### 批量操作
+
+您可以批量处理多个查询：
+
+```python
+queries = [
+    "security policies",
+    "employee handbook",
+    "compliance guidelines"
+]
+
+# Synchronous batch
+results = retriever.batch(
+    queries,
+    config={"configurable": {"egnyte_user_token": egnyte_user_token}}
+)
+
+# Asynchronous batch
+results = await retriever.abatch(
+    queries,
+    config={"configurable": {"egnyte_user_token": egnyte_user_token}}
+)
+```
+
+## 作为代理工具使用
+
+与其他检索器一样，EgnyteRetriever 可以作为工具添加到 LangGraph 代理中。
+
+```python
+from langchain import hub
+from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain.tools.retriever import create_retriever_tool
+from langchain_openai import ChatOpenAI
+
+retriever = EgnyteRetriever(domain=domain, k=50)
+
+egnyte_search_tool = create_retriever_tool(
+    retriever,
+    "egnyte_search_tool",
+    "This tool searches Egnyte and retrieves documents that match the search criteria using hybrid search"
+)
+
+tools = [egnyte_search_tool]
+
+prompt = hub.pull("hwchase17/openai-tools-agent")
+llm = ChatOpenAI(temperature=0)
+
+agent = create_openai_tools_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+
+result = agent_executor.invoke({
+    "input": "Find all documents related to data privacy policies"
+})
+
+print(result['output'])
+```
+
+---
+
+## API 参考
+
+如需获取所有 `EgnyteRetriever` 功能和配置的详细文档，请访问 [GitHub 仓库](https://github.com/egnyte/egnyte-langchain-connector)。
+
+## 帮助
+
+如有疑问，请查阅 [Egnyte 开发者文档](https://developers.egnyte.com/) 或联系 Egnyte 开发者社区。

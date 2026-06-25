@@ -1,0 +1,144 @@
+---
+title: 托管深度代理
+sidebarTitle: 概述
+description: 托管深度代理私有测试版功能、工作流程和限制概述。
+---
+
+托管深度代理是一个托管运行时，用于在 LangSmith 中创建、运行和操作深度代理。使用它来运行持久的长期运行的代理，而无需搭建自己的代理服务器。
+
+它将[深度代理](/oss/deepagents/overview)框架与托管基础设施相结合：持久运行、[LangSmith 沙箱](/langsmith/sandboxes)、线程状态、MCP 工具、文件树、追踪和代理版本。
+
+<Note>
+托管深度代理处于 **私有测试版**，仅在美国地区的 [LangSmith Cloud](/langsmith/cloud) 上可用。[加入等待列表](https://www.langchain.com/langsmith-managed-deep-agents-waitlist) 以申请访问。
+</Note>
+
+推荐的工作流程如下：
+
+1. 创建或编辑本地托管深度代理项目。
+2. 保留默认后端或选择使用 LangSmith 沙箱后端。
+3. 当代理需要外部能力时连接 MCP 工具。
+4. 将项目部署到托管深度代理。
+5. 使用 Python 或 TypeScript SDK 运行代理。
+6. 在 LangSmith 中检查追踪、文件、工具调用、运行时状态和版本。
+
+## 遵循工作流程
+
+<CardGroup cols={2}>
+  <Card title="快速入门" icon="rocket" href="/langsmith/managed-deep-agents-quickstart">
+    使用 CLI 部署第一个代理，然后从代码中运行它。
+  </Card>
+  <Card title="连接工具" icon="plug" href="/langsmith/managed-deep-agents-mcp">
+    注册静态头部或 OAuth MCP 服务器，并从代理中引用它们的工具。
+  </Card>
+  <Card title="部署代理" icon="upload" href="/langsmith/managed-deep-agents-deploy">
+    使用 CLI、SDK 或 REST API 创建或更新托管深度代理。
+  </Card>
+  <Card title="运行代理" icon="player-play" href="/langsmith/managed-deep-agents-invoke">
+    使用 SDK 或 REST API 创建线程并流式传输托管深度代理运行。
+  </Card>
+  <Card title="SDK" icon="code" href="/langsmith/managed-deep-agents-sdk">
+    使用托管深度代理的 Python、TypeScript 和 React SDK。
+  </Card>
+  <Card title="CLI 参考" icon="terminal" href="/langsmith/managed-deep-agents-cli">
+    查看所有部署命令、项目文件、标志和验证规则。
+  </Card>
+  <Card title="API 参考" icon="api" href="/langsmith/managed-deep-agents-api">
+    查看常见 REST 命令和生成的端点参考页面。
+  </Card>
+</CardGroup>
+
+## 使用托管深度代理
+
+使用托管深度代理可以：
+
+- 从本地项目文件创建和管理深度代理。
+- 运行长期运行的代理，而无需搭建自定义代理服务器。
+- 为每个线程或代理提供隔离的 LangSmith 沙箱资源，用于代码执行、文件系统工作和长期运行的任务。
+- 流式传输运行并持久化线程状态。
+- 使用托管文件树存储指令、技能、子代理、工具和运行时文件。
+- 注册工作区级别的 MCP 服务器，包括 OAuth MCP 服务器，并列出其可用工具。
+- 在 LangSmith 中检查追踪和代理行为。
+
+<Tip>
+您还可以使用标准的 [LangSmith 部署](/langsmith/deployment-quickstart) 部署深度代理。当您需要自定义应用程序代码、自定义路由、高级身份验证、完整的代理服务器 API、更强的隔离控制或最大可扩展性时，请使用该路径。
+</Tip>
+
+## 创建的资源
+
+当您创建托管深度代理时，LangSmith 会配置：
+
+- 一个托管深度代理资源。
+- 一个单独的[LangSmith 追踪项目](/langsmith/observability-concepts#projects)用于该代理。
+- 一个[上下文中心](/langsmith/use-the-context-hub)代理仓库，用于存储托管文件树。
+
+它不会创建 LangSmith 部署。
+
+托管深度代理运行会在为代理创建的单独追踪项目中进行追踪。在 LangSmith 中打开追踪，检查运行期间创建的用户输入、最终响应、模型调用、工具调用、子代理活动、文件和运行时状态。
+
+上下文中心代理仓库存储代理的托管文件树，包括指令、技能、子代理和工具配置。
+
+## LangSmith 沙箱后端
+
+由 `deepagents-cli>=0.2.2` 生成的托管深度代理项目使用 `state` 后端：
+
+```json
+{
+  "backend": {
+    "type": "state"
+  }
+}
+```
+
+LangSmith 沙箱是隔离的环境，用于运行代码和与文件系统交互等操作，而不会影响您的主基础设施。在托管深度代理中，它们为代理提供托管运行时用于长时间运行的工作，而 LangSmith 处理底层沙箱生命周期。
+
+选择与您的范围匹配的 backend：
+
+- `state`：不应用任何沙箱特定的 backend 行为。
+- `sandbox`，`sandbox_config.scope: "thread"`：将沙箱资源限制到每个线程。
+- `sandbox`，`sandbox_config.scope: "agent"`：将沙箱限制到代理而非单个线程。
+
+有关独立沙箱概念，请参阅 [LangSmith 沙箱概述](/langsmith/sandboxes)。有关托管深度代理配置字段和验证规则，请参阅 [部署代理](/langsmith/managed-deep-agents-deploy#choose-a-backend) 和 [CLI 参考](/langsmith/managed-deep-agents-cli#project-file-reference)。
+
+## 限制和说明
+
+适用于私人测试版期间的操作说明。行为可能在正式发布前发生变化。
+
+### 稳定部署体验
+
+托管深度代理部署在私人测试版期间可通过 beta CLI 版本获得。稳定的深度代理部署体验将继续工作，直到托管深度代理达到公开测试版且部署命令切换到新行为。
+
+### 支持的模型
+
+以 `{provider}:{model_id}` 形式传递模型标识符。例如，`openai:gpt-5.5`。运行时使用 `init_chat_model` 解析模型，因此 `init_chat_model` 支持的任何提供方都可用于托管深度代理。当前列表请参阅[支持的提供方和模型](/oss/langchain/models#supported-providers-and-models)。
+
+不带冒号的值被解释为对保存的 Playground 配置的引用，而非模型标识符。在直接配置模型时，请始终提供完整的 `{provider}:{model_id}` 形式。
+
+### 线程保留
+
+在线私人测试版期间，线程没有保留窗口或每个工作区的上限。根据需要创建任意数量。现有线程在整个测试版期间都可访问。
+
+### 速率限制和配额
+
+在线私人测试版期间，托管深度代理端点不会强制执行按密钥、按工作区或按代理的请求速率限制。
+
+### 代理限制
+
+免费 LangSmith 工作区限制使用一个托管深度代理。付费 LangSmith 计划可以创建无限代理。当免费工作区已达到其限制时，`deepagents deploy` 和 `POST /v1/deepagents/agents` 将失败，并返回 `HTTP 409` 和一条消息，提示删除现有代理或升级您的计划。
+
+### 删除代理
+
+`DELETE /v1/deepagents/agents/{agent_id}` 不会级联到线程。针对已删除代理创建的线程仍可查询，但无法启动新运行。当您想要清理时，请明确跟踪并删除线程。
+
+### API 稳定性
+
+路由位于 `/v1/deepagents` 下，但接口处于私人测试版，可能在正式发布前发生变化。破坏性变更会通过授予访问权限时提供的联系方式直接传达给测试版客户。
+
+### 支持和反馈
+
+测试版访问包括直接支持。错误报告和功能请求的联系方式包含在授予访问权限时收到的电子邮件中。
+
+## 私人测试版范围
+
+托管深度代理在私人测试版期间仅在 LangSmith Cloud 美国区域可用。不支持自托管和混合部署，欧盟及其他区域计划在正式发布后提供。
+
+API 也不会在私人测试版中镜像每个 LangSmith 部署端点。托管深度代理不是 LangSmith 部署。

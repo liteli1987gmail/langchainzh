@@ -1,0 +1,87 @@
+---
+title: 云平台功能
+sidebarTitle: 平台功能
+icon: "list-check"
+description: 云端专用平台功能，适用于 LangSmith 部署，包括数据中心区域、固定 IP 地址、负载限制和部署类型。
+---
+
+本页面介绍仅适用于[云端](/langsmith/cloud)部署的平台功能。关于自托管等效功能，请参阅[部署到自托管](/langsmith/deploy-to-self-hosted-overview)。
+
+## 数据中心区域
+
+部署可在两个数据中心区域创建：美国和欧盟。
+
+部署的数据中心区域由创建部署的 LangSmith 组织的数据中心区域决定。部署及其底层数据库无法在不同数据中心区域之间迁移。
+
+## 固定 IP 地址
+
+2025 年 1 月 6 日之后创建的所有部署流量都通过 NAT 网关。该 NAT 网关根据数据中心区域有多个固定 IP 地址。有关固定 IP 地址列表，请参阅[允许列表 IP 地址表](/langsmith/deploy-to-cloud#allowlist-ip-addresses)。
+
+## 负载大小
+
+发送到云端部署的所有请求的最大负载大小为 25 MB。负载大于 25 MB 的请求会返回 `413 Payload Too Large` 错误。
+
+## 部署类型
+
+为简化起见，控制平面提供两种具有不同资源分配的部署类型：`Development` 和 `Production`。
+
+| **部署类型** | **CPU/内存**       | **扩展**            | **数据库**                                                                                  |
+|---------------------|-------------------|---------------------|------------------------------------------------------------------------------------------|
+| Development         | 1 CPU，1 GB RAM   | 最多 1 个副本       | 10 GB 磁盘，无备份                                                                        |
+| Production          | 2 CPU，2 GB RAM   | 最多 10 个副本      | 自动扩展磁盘、自动备份、高可用（多区域配置）                                              |
+
+CPU 和内存资源按副本计算。
+
+<Warning>
+**不可变的部署类型**
+部署创建后，部署类型无法更改。
+</Warning>
+
+### Production
+
+`Production` 类型部署适用于生产工作负载。例如，为关键路径中的面向客户的应用程序选择 `Production`。
+
+可根据用例和容量限制逐案手动增加 `Production` 类型部署的资源。如需增加资源，请通过 [support.langchain.com](https://support.langchain.com) 联系支持团队。
+
+### Development
+
+`Development` 类型部署适用于开发和测试。例如，为内部测试环境选择 `Development`。`Development` 类型部署不适合生产工作负载。
+
+<Danger>
+**可抢占的计算基础设施**
+`Development` 类型部署（API 服务器、队列服务器和数据库）在可抢占的计算基础设施上配置。这意味着计算基础设施**可能随时终止，恕不另行通知**。这可能导致间歇性：
+
+* Redis 连接超时/错误
+* Postgres 连接超时/错误
+* 失败或重试后台运行
+
+此行为是预期的。可抢占的计算基础设施**显著降低了配置 `Development` 类型部署的成本**。Agent Server 设计为容错。实现会自动尝试从 Redis/Postgres 连接错误中恢复并重试失败的后台运行。
+
+`Production` 类型部署在持久计算基础设施上配置，而非可抢占的计算基础设施。
+</Danger>
+
+可根据用例和容量限制逐案手动增加 `Development` 类型部署的数据库磁盘大小。对于大多数用例，应配置 [TTL](/langsmith/configure-ttl) 来管理磁盘使用。如需增加资源，请通过 [support.langchain.com](https://support.langchain.com) 联系支持团队。
+
+## 数据库配置
+
+控制平面和[数据平面](/langsmith/data-plane) 监听器应用程序协调为每个云端部署自动创建 Postgres 数据库。该数据库作为部署的[持久层](/oss/langgraph/persistence#memory-store)。
+
+在实现 LangGraph 应用程序时，不需要配置 [checkpointer](/oss/langgraph/persistence#checkpointer-libraries)。会自动为图配置 checkpointer。为图配置的任何 checkpointer 都会被自动配置的 checkpointer 替换。
+
+无法直接访问数据库。所有数据库访问都通过 [Agent Server](/langsmith/agent-server) 进行。
+
+在删除部署本身之前，数据库永远不会被删除。
+
+关于自托管部署，请参阅[自定义 PostgreSQL 配置](/langsmith/self-hosted-platform-features#custom-postgresql)。
+
+## 扩展
+
+云端部署自动扩展；您无需直接配置队列工作器、副本或池大小。`Production` 部署根据三个指标扩展至最多 10 个副本：
+
+- **CPU 利用率** — 自动扩缩器目标为 75%。
+- **内存利用率** — 自动扩缩器目标为 75%。
+- **待处理运行** — 自动扩缩器目标为每个容器 10 个待处理运行。
+
+每个指标独立计算，扩展操作遵循需要最多容器的指标。缩减操作等待 30 分钟后生效，以避免在突发负载下出现波动。[队列工作器](/langsmith/agent-server#runtime-architecture) 根据待处理运行数扩展，而 [API 服务器](/langsmith/agent-server#runtime-architecture) 根据 CPU 和内存扩展，因此读取流量不会减慢运行提交，反之亦然。
+
+应用级扩展杠杆（持久性模式、异步模式、避免同步阻塞、使用 `/join` 代替轮询）适用于云端，与适用于自托管的方式相同。请参阅[在自托管上扩展](/langsmith/agent-server-scale) 了解底层概念；其中 Helm 和资源配置不适用于云端。

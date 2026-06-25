@@ -1,0 +1,430 @@
+---
+title: 管理助手
+sidebarTitle: 管理助手
+---
+
+此页面描述了如何创建、配置和管理[助手](/langsmith/assistants)。助手允许您通过配置（如模型选择、提示词和工具可用性）自定义已[部署](/langsmith/deployment)的图行为，而无需更改底层图代码。
+
+您可以使用 [SDK](https://reference.langchain.com/python/langsmith/deployment/sdk/) 或在 [LangSmith UI](https://smith.langchain.com) 中进行操作。
+
+## 了解助手配置
+
+助手存储在运行时自定义图行为的*上下文*值。您需要在图代码中定义上下文架构，然后通过 @[`context` 参数][AssistantsClient.create] 创建助手时提供特定的上下文值。
+
+请看下面这个示例，其中 `call_model` 节点从上下文中读取 `model_name`：
+
+<CodeGroup>
+```python Python
+class ContextSchema(TypedDict):
+    model_name: str
+
+builder = StateGraph(AgentState, context_schema=ContextSchema)
+
+def call_model(state, runtime: Runtime[ContextSchema]):
+    messages = state["messages"]
+    model = _get_model(runtime.context.get("model_name", "anthropic"))
+    response = model.invoke(messages)
+    return {"messages": [response]}
+```
+
+```javascript JavaScript
+import { Annotation } from "@langchain/langgraph";
+
+const ContextSchema = Annotation.Root({
+    model_name: Annotation<string>,
+    system_prompt: Annotation<string>,
+});
+
+const builder = new StateGraph(AgentState, ContextSchema)
+
+function callModel(state: State, runtime: Runtime[ContextSchema]) {
+  const messages = state.messages;
+  const model = _getModel(runtime.context.model_name ?? "anthropic");
+  const response = model.invoke(messages);
+  return { messages: [response] };
+}
+```
+</CodeGroup>
+
+创建助手时，您需要为这些配置字段提供特定值。助手会存储此配置，并在图形运行时应用它。
+
+有关 [LangGraph](/oss/langgraph/overview) 中配置的更多信息，请参阅[运行时上下文文档](/oss/langgraph/graph-api#runtime-context)。
+
+**选择 SDK 或 UI 作为您的工作流程：**
+
+<Tabs>
+    <Tab title="SDK">
+
+## 创建助手
+
+使用 @[AssistantsClient.create][AssistantsClient.create] 方法创建新助手。此方法需要：
+- **图形 ID**：此助手将使用的已部署图形名称（例如 `"agent"`）。
+- **上下文**：与图形的上下文架构匹配的配置值。
+- **名称**：助手的描述性名称。
+
+以下示例创建一个将 `model_name` 设置为 `openai` 的助手：
+
+<CodeGroup>
+```python Python
+from langgraph_sdk import get_client
+
+# Initialize the client with your deployment URL
+client = get_client(url=<DEPLOYMENT_URL>)
+
+# Create an assistant for the "agent" graph
+# The first parameter is the graph ID (also called graph name)
+openai_assistant = await client.assistants.create(
+    "agent",  # Graph ID of the deployed graph
+    context={"model_name": "openai"},
+    name="Open AI Assistant"
+)
+
+print(openai_assistant)
+# Output includes the assistant_id (UUID) that uniquely identifies this assistant
+```
+
+```javascript JavaScript
+import { Client } from "@langchain/langgraph-sdk";
+
+// Initialize the client with your deployment URL
+const client = new Client({ apiUrl: <DEPLOYMENT_URL> });
+
+// Create an assistant for the "agent" graph
+const openAIAssistant = await client.assistants.create({
+    graphId: 'agent',  // Graph ID of the deployed graph
+    name: "Open AI Assistant",
+    context: { "model_name": "openai" },
+});
+
+console.log(openAIAssistant);
+// Output includes the assistant_id (UUID) that uniquely identifies this assistant
+```
+
+```bash cURL
+curl --request POST \
+    --url <DEPLOYMENT_URL>/assistants \
+    --header 'Content-Type: application/json' \
+    --data '{"graph_id":"agent", "context":{"model_name":"openai"}, "name": "Open AI Assistant"}'
+```
+</CodeGroup>
+
+**响应：**
+
+API 返回一个 assistant 对象，包含：
+- `assistant_id`：唯一标识此 assistant 的 UUID
+- `graph_id`：此 assistant 配置的图谱
+- `context`：你提供的配置值
+- `name`、`metadata`、时间戳和其他字段
+
+```json
+{
+  "assistant_id": "62e209ca-9154-432a-b9e9-2d75c7a9219b",
+  "graph_id": "agent",
+  "name": "Open AI Assistant",
+  "context": {
+    "model_name": "openai"
+  },
+  "metadata": {},
+  "created_at": "2024-08-31T03:09:10.230718+00:00",
+  "updated_at": "2024-08-31T03:09:10.230718+00:00"
+}
+```
+
+`assistant_id`（一个类似 `"62e209ca-9154-432a-b9e9-2d75c7a9219b"` 的 UUID）唯一标识此助手配置。在运行图时，你将使用此 ID 来指定要应用的配置。
+
+<Note>
+**Graph ID 与 Assistant ID**
+
+创建助手时，你需要指定一个 **graph ID**（图名称，如 `"agent"`）。这会返回一个 **assistant ID**（UUID，如 `"62e209ca..."`）。在运行图时，你可以使用其中任意一个：
+
+- **Graph ID**（例如 `"agent"`）：使用该图的默认助手
+- **Assistant ID**（UUID）：使用特定的助手配置
+
+有关示例，请参阅[使用助手](#use-an-assistant)。
+</Note>
+
+## 使用助手
+
+要使用助手，请在创建运行时传递其 `assistant_id`。下面的示例使用了我们上面创建的助手：
+
+<CodeGroup>
+
+</CodeGroup>
+```python Python
+# Create a thread for the conversation
+thread = await client.threads.create()
+
+# Prepare the input
+input = {"messages": [{"role": "user", "content": "who made you?"}]}
+
+# Run the graph using the assistant's configuration
+# Pass the assistant_id (UUID) as the second parameter
+async for event in client.runs.stream(
+    thread["thread_id"],
+    openai_assistant["assistant_id"],  # Assistant ID (UUID)
+    input=input,
+    stream_mode="updates",
+):
+    print(f"Receiving event of type: {event.event}")
+    print(event.data)
+    print("\n\n")
+```
+
+```javascript JavaScript
+// Create a thread for the conversation
+const thread = await client.threads.create();
+
+// Prepare the input
+const input = { "messages": [{ "role": "user", "content": "who made you?" }] };
+
+// Run the graph using the assistant's configuration
+// Pass the assistant_id (UUID) as the second parameter
+const streamResponse = client.runs.stream(
+  thread["thread_id"],
+  openAIAssistant["assistant_id"],  // Assistant ID (UUID)
+  {
+    input,
+    streamMode: "updates"
+  }
+);
+
+for await (const event of streamResponse) {
+  console.log(`Receiving event of type: ${event.event}`);
+  console.log(event.data);
+  console.log("\n\n");
+}
+```
+
+```bash cURL
+# First, create a thread
+thread_id=$(curl --request POST \
+    --url <DEPLOYMENT_URL>/threads \
+    --header 'Content-Type: application/json' \
+    --data '{}' | jq -r '.thread_id')
+
+# Run the graph with the assistant ID (UUID)
+curl --request POST \
+    --url "<DEPLOYMENT_URL>/threads/${thread_id}/runs/stream" \
+    --header 'Content-Type: application/json' \
+    --data '{
+        "assistant_id": "<ASSISTANT_ID>",
+        "input": {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "who made you?"
+                }
+            ]
+        },
+        "stream_mode": ["updates"]
+    }' | \
+    sed 's/\r$//' | \
+    awk '
+    /^event:/ {
+        if (data_content != "") {
+            print data_content "\n"
+        }
+        sub(/^event: /, "Receiving event of type: ", $0)
+        printf "%s...\n", $0
+        data_content = ""
+    }
+    /^data:/ {
+        sub(/^data: /, "", $0)
+        data_content = $0
+    }
+    END {
+        if (data_content != "") {
+            print data_content "\n\n"
+        }
+    }
+'
+```
+</CodeGroup>
+
+**响应：**
+
+流式返回图形执行时的事件，包含您助手的配置信息：
+
+```
+Receiving event of type: metadata
+{'run_id': '1ef6746e-5893-67b1-978a-0f1cd4060e16'}
+
+Receiving event of type: updates
+{'agent': {'messages': [{'content': 'I was created by OpenAI...', ...}]}}
+```
+
+<Note>
+**使用 graph ID 与 assistant ID**
+
+在运行图时，您可以传递 **graph ID** 或 **assistant ID**：
+
+</Note>
+
+```python
+# Option 1: Use graph ID to get the default assistant
+client.runs.stream(thread_id, "agent", input=input)
+
+# Option 2: Use assistant ID (UUID) for a specific configuration
+client.runs.stream(thread_id, "62e209ca-9154-432a-b9e9-2d75c7a9219b", input=input)
+```
+</Note>
+
+## 为您的助手创建新版本
+
+使用 @[AssistantsClient.update][AssistantsClient.update] 方法为助手创建新版本。
+
+<Warning>
+**更新需要完整配置**
+
+更新时必须提供**整个**配置。更新端点会从头创建新版本，不会与之前的版本合并。请包含您希望保留的所有配置字段。
+</Warning>
+
+例如，为助手添加系统提示词：
+
+<CodeGroup>
+```python Python
+# Update the assistant with a new configuration
+# IMPORTANT: Include ALL configuration fields, not just the ones you're changing
+openai_assistant_v2 = await client.assistants.update(
+    openai_assistant["assistant_id"],  # Assistant ID (UUID)
+    context={
+          "model_name": "openai",  # Must include existing fields
+          "system_prompt": "You are a mindful assistant!",  # New field
+    },
+)
+
+# This creates version 2 and sets it as the active version
+# Future runs using this assistant_id will use version 2
+```
+
+```javascript JavaScript
+// Update the assistant with a new configuration
+// IMPORTANT: Include ALL configuration fields, not just the ones you're changing
+const openaiAssistantV2 = await client.assistants.update(
+    openAIAssistant["assistant_id"],  // Assistant ID (UUID)
+    {
+        context: {
+            model_name: 'openai',  // Must include existing fields
+            system_prompt: 'You are a mindful assistant!',  // New field
+        },
+    },
+);
+
+// This creates version 2 and sets it as the active version
+// Future runs using this assistant_id will use version 2
+```
+
+```bash cURL
+curl --request PATCH \
+--url <DEPLOYMENT_URL>/assistants/<ASSISTANT_ID> \
+--header 'Content-Type: application/json' \
+--data '{
+"context": {"model_name": "openai", "system_prompt": "You are a mindful assistant!"}
+}'
+```
+</CodeGroup>
+
+此更新会创建一个新版本，并自动将其设为活跃版本。所有未来使用此助手 ID 的运行都将使用新配置。
+
+## 使用之前的助手版本
+
+使用 `setLatest` 方法来更改哪个版本处于活跃状态：
+
+<CodeGroup>
+```python Python
+# Roll back to version 1 of the assistant
+await client.assistants.set_latest(
+    openai_assistant['assistant_id'],  # Assistant ID (UUID)
+    1  # Version number
+)
+
+# All future runs using this assistant_id will now use version 1
+```
+
+```javascript JavaScript
+// Roll back to version 1 of the assistant
+await client.assistants.setLatest(
+    openaiAssistant['assistant_id'],  // Assistant ID (UUID)
+    1  // Version number
+);
+
+// All future runs using this assistant_id will now use version 1
+```
+
+```bash cURL
+curl --request POST \
+--url <DEPLOYMENT_URL>/assistants/<ASSISTANT_ID>/latest \
+--header 'Content-Type: application/json' \
+--data '{
+"version": 1
+}'
+```
+</CodeGroup>
+
+更改活动版本后，使用此助手 ID 的所有运行都将使用指定版本的配置。
+
+</Tab>
+<Tab title="UI">
+
+## 创建助手
+
+您可以从 [LangSmith UI](https://smith.langchain.com) 创建助手：
+
+1. 导航到您的部署并选择 **Assistants** 选项卡。
+1. 点击 **+ 新建助手**。
+1. 在打开的表单中：
+   - 选择此助手对应的图。
+   - 提供名称和描述。
+   - 使用该图的配置架构配置助手。
+1. 点击 **创建助手**。
+
+这将带您进入 [Studio](/langsmith/studio)，您可以在其中测试助手。返回 **Assistants** 选项卡以在表中查看新创建的助手。
+
+## 使用助手
+
+要在 LangSmith UI 中使用助手：
+
+1. 导航到您的部署并选择 **Assistants** 选项卡。
+1. 找到您想要使用的助手。
+1. 点击该助手的 **Studio**。
+
+这将使用选定的助手打开 [Studio](/langsmith/studio)。当您提交输入时（在 **Graph** 或 **Chat** 模式下），助手的配置将被应用到运行中。
+
+## 为助手创建新版本
+
+要从 UI 更新助手并创建新版本，您可以使用 Assistants 选项卡或 Studio。任一方法都会创建新版本并将其设置为活动版本：
+
+<Tabs>
+<Tab title="Assistants 选项卡">
+1. 导航到您的部署并选择 **Assistants** 选项卡。
+1. 找到您想要编辑的助手。
+1. 点击 **编辑**。
+1. 修改助手的名称、描述或配置。
+1. 保存您的更改。
+</Tab>
+
+<Tab title="Studio">
+1. 打开助手的 Studio。
+1. 点击 **管理助手**。
+1. 编辑助手的配置。
+1. 保存您的更改。
+</Tab>
+</Tabs>
+
+## 使用之前的助手版本
+
+要从 Studio 将之前的版本设置为活动版本：
+
+1. 打开助手的 Studio。
+2. 点击 **管理助手**。
+3. 找到助手并选择您想要使用的版本。
+4. 切换该版本的 **Active** 开关。
+
+这会更新助手以对所有未来的运行使用选定的版本。
+
+<Warning>
+删除助手会删除其所有版本。目前无法删除单个版本。要跳过某个版本，只需将不同的版本设置为活动版本即可。
+</Warning>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,582 @@
+---
+title: 事件流
+description: 从 LangChain 代理运行中流式传输实时更新
+---
+
+LangChain 代理基于 LangGraph 构建，因此支持相同的流式处理堆栈，并提供针对消息、工具调用、状态和自定义更新的代理聚焦投影。
+
+对于大多数应用和前端用例，请使用 **事件流**（Event Streaming）通过 `stream_events(..., version="v3")`。事件流返回一个带有类型化投影的运行对象，因此每个投影可以独立使用，而无需解析流模式元组。
+
+:::python
+```py
+from langchain.agents import create_agent
+
+
+def get_weather(city: str) -> str:
+    """Get weather for a city."""
+    return f"It's always sunny in {city}!"
+
+
+agent = create_agent(
+    model="gpt-5-nano",
+    tools=[get_weather],
+)
+
+stream = agent.stream_events({
+    "messages": [{"role": "user", "content": "What is the weather in SF?"}],
+}, version="v3")
+
+for message in stream.messages:
+    for delta in message.text:
+        print(delta, end="", flush=True)
+
+final_state = stream.output
+```
+:::
+
+:::js
+```ts
+import { createAgent, tool } from "langchain";
+import * as z from "zod";
+
+const getWeather = tool(
+  async ({ city }) => `It's always sunny in ${city}!`,
+  {
+    name: "get_weather",
+    description: "Get weather for a city.",
+    schema: z.object({ city: z.string() }),
+  }
+);
+
+const agent = createAgent({
+  model: "gpt-5-nano",
+  tools: [getWeather],
+});
+
+const stream = await agent.streamEvents(
+  { messages: [{ role: "user", content: "What is the weather in SF?" }] },
+  { version: "v3" }
+);
+
+for await (const message of stream.messages) {
+  for await (const delta of message.text) {
+    process.stdout.write(delta);
+  }
+}
+
+const finalState = await stream.output;
+```
+## 你可以流式传输的内容
+
+:::python
+| 投影 | 用途 |
+| ---------- | --- |
+| `for event in stream` | 包含完整信封的原始协议事件，可访问每个通道。 |
+| `stream.messages` | 模型消息流，每个 LLM 调用一个。 |
+| `message.text` | 消息的文本增量内容和最终文本。 |
+| `message.reasoning` | 对于暴露推理内容的模型，提供推理增量内容。 |
+| `message.tool_calls` | 工具调用参数块和最终确定的工具调用。 |
+| `message.output` | 模型调用完成后的最终消息对象。 |
+| `stream.values` | Agent 状态快照。 |
+| `stream.output` | 最终 Agent 状态。 |
+| `stream.subgraphs` | 嵌套图运行（子 Agent 和普通子图）。 |
+| `stream.extensions` | 自定义转换器投影。 |
+| `stream.tool_calls` | 工具执行生命周期、输入、输出增量、最终输出和错误。 |
+:::
+
+:::js
+| 投影 | 用途 |
+| ---------- | --- |
+| `for event in stream` | 包含完整信封的原始协议事件，可访问每个通道。 |
+| `stream.messages` | 模型消息流，每个 LLM 调用一个。 |
+| `message.text` | 消息的文本增量内容和最终文本。 |
+| `message.reasoning` | 对于暴露推理内容的模型，提供推理增量内容。 |
+| `message.toolCalls` | 工具调用参数块和最终确定的工具调用。 |
+| `message.output` | 模型调用完成后的最终消息对象。 |
+| `message.usage` | 提供商返回时的令牌使用元数据。 |
+| `stream.values` | Agent 状态快照。 |
+| `stream.output` | 最终 Agent 状态。 |
+| `stream.subgraphs` | 嵌套图运行（子 Agent 和普通子图）。 |
+| `stream.extensions` | 自定义转换器投影。 |
+| `stream.toolCalls` | 工具执行生命周期、输入、输出增量、最终输出和错误。 |
+:::
+
+:::python
+`stream.messages` 生成 `ChatModelStream` 对象。每个消息流都暴露 `.text`、`.reasoning`、`.tool_calls` 和 `.output`。同步投影可迭代以获取实时增量，也可排空以获取最终值：使用 `str(message.text)` 获取最终文本，使用 `message.tool_calls.get()` 获取最终确定的工具调用。
+:::
+
+:::js
+`stream.messages` 生成消息流。每个消息流都暴露 `.text`、`.reasoning`、`.toolCalls`、`.output` 和 `.usage`。异步投影可以迭代以获取实时增量，也可以等待以获取最终值。
+:::
+
+## Agent 消息
+
+当你想从每个 LLM 调用获取模型输出时，使用 `stream.messages`。
+
+:::python
+```py
+stream = agent.stream_events(input, version="v3")
+
+for message in stream.messages:
+    print(f"[{message.node}] ", end="")
+    for delta in message.text:
+        print(delta, end="", flush=True)
+
+    full_message = message.output
+    usage = full_message.usage_metadata
+    if usage:
+        print(usage)
+```
+:::
+
+:::js
+```ts
+const stream = await agent.streamEvents(input, { version: "v3" });
+
+for await (const message of stream.messages) {
+  process.stdout.write(`[${message.node}] `);
+  for await (const delta of message.text) {
+    process.stdout.write(delta);
+  }
+
+  const fullMessage = await message.output;
+  console.log(fullMessage.content);
+
+  const usage = await message.usage;
+  if (usage) {
+    console.log(usage);
+  }
+}
+```
+`message.output` 为你提供最终确定的 AI 消息，包括特定提供商的内容块。在 TypeScript 中，仅需要 token 计数或其他使用量元数据时，请使用 `message.usage`；在 Python 中，从 `message.output.usage_metadata` 读取使用量。
+
+## 推理内容
+
+推理内容使用与文本内容相同的结构，但仅在所选模型发出推理块时可用。
+
+:::python
+```py
+stream = agent.stream_events(input, version="v3")
+
+for message in stream.messages:
+    for delta in message.reasoning:
+        print(f"[thinking] {delta}", end="", flush=True)
+
+    for delta in message.text:
+        print(delta, end="", flush=True)
+```
+:::
+
+:::js
+```ts
+const stream = await agent.streamEvents(input, { version: "v3" });
+
+for await (const message of stream.messages) {
+  for await (const delta of message.reasoning) {
+    process.stdout.write(`[thinking] ${delta}`);
+  }
+
+  for await (const delta of message.text) {
+    process.stdout.write(delta);
+  }
+}
+```
+请参阅[推理指南](/oss/langchain/models#reasoning)和您提供商的集成页面以获取模型配置详情。
+
+## 工具调用
+
+有两个有用的工具调用投影：
+
+- `message.tool_calls` 在模型生成工具调用时流式传输工具调用参数块。
+- `stream.tool_calls` 在工具调用开始后流式传输工具执行的完整生命周期。
+
+:::python
+```py
+stream = agent.stream_events(input, version="v3")
+
+for message in stream.messages:
+    for chunk in message.tool_calls:
+        print(f"tool call chunk: {chunk}")
+
+    finalized = message.tool_calls.get()
+    if finalized:
+        print(f"finalized tool calls: {finalized}")
+
+for call in stream.tool_calls:
+    print(f"{call.tool_name}({call.input})")
+    for delta in call.output_deltas:
+        print(delta, end="", flush=True)
+    print(call.output, call.error)
+```
+:::
+
+:::js
+```ts
+const stream = await agent.streamEvents(input, { version: "v3" });
+
+await Promise.all([
+  (async () => {
+    for await (const message of stream.messages) {
+      for await (const chunk of message.toolCalls) {
+        console.log("tool call chunk", chunk);
+      }
+    }
+  })(),
+  (async () => {
+    for await (const call of stream.toolCalls) {
+      console.log(call.name, call.input);
+      console.log(await call.output, await call.error);
+    }
+  })(),
+]);
+```
+:::
+
+## 流式子代理
+
+当 `create_agent` 调用触发另一个命名的 `create_agent`（通常通过包装工具）时，内部代理的事件会在嵌套的命名空间中流动。您传递给 `create_agent` 的 `name=` 标识该内部代理，以便您可以按代理进行过滤和标记。
+
+:::python
+命名子代理会出现在专用的 `stream.subagents` 投影上。每个句柄都暴露内部代理自己的 `.messages`、`.values`、`.tool_calls` 和 `.output`，以及 `.name`（您传递的 `name=`）和 `.cause`（调度子代理的工具调用）。由于只有命名的 `create_agent` 运行会出现在这里，因此您无需过滤普通子图。
+
+:::
+
+```py
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
+
+
+def get_weather(city: str) -> str:
+    """Get weather for a given city."""
+    return f"It's always sunny in {city}!"
+
+
+weather_agent = create_agent(
+    model=init_chat_model("openai:gpt-5.5"),
+    tools=[get_weather],
+    name="weather_agent",
+)
+
+
+def call_weather(query: str) -> str:
+    """Query the weather agent."""
+    result = weather_agent.invoke({"messages": [{"role": "user", "content": query}]})
+    return result["messages"][-1].text
+
+
+supervisor = create_agent(
+    model=init_chat_model("openai:gpt-5.5"),
+    tools=[call_weather],
+    name="supervisor",
+)
+
+stream = supervisor.stream_events(
+    {"messages": [{"role": "user", "content": "What's the weather in Boston?"}]},
+    version="v3",
+)
+
+for subagent in stream.subagents:
+    print(f"{subagent.name}: ", end="")
+    for message in subagent.messages:
+        for token in message.text:
+            print(token, end="", flush=True)
+    print()
+```
+:::
+
+:::js
+命名子代理作为句柄出现在 `stream.subgraphs` 上，以及任何普通子图。每个句柄都公开内部代理的 `.messages`、`.values`、`.toolCalls` 和 `.output`；根据 `subagent.name`（你传入的 `name=`）进行筛选，以便对特定代理进行操作。
+
+</fragment>
+
+```ts
+import { createAgent, tool } from "langchain";
+import { z } from "zod";
+
+const getWeather = tool(
+  async ({ city }) => `It's always sunny in ${city}!`,
+  { name: "get_weather", schema: z.object({ city: z.string() }) }
+);
+
+const weatherAgent = createAgent({
+  model: "openai:gpt-5.5",
+  tools: [getWeather],
+  name: "weather_agent",
+});
+
+const callWeather = tool(
+  async ({ query }) => {
+    const result = await weatherAgent.invoke({
+      messages: [{ role: "user", content: query }],
+    });
+    return result.messages.at(-1)?.text ?? "";
+  },
+  { name: "call_weather", schema: z.object({ query: z.string() }) }
+);
+
+const supervisor = createAgent({
+  model: "openai:gpt-5.5",
+  tools: [callWeather],
+  name: "supervisor",
+});
+
+const stream = await supervisor.streamEvents(
+  { messages: [{ role: "user", content: "What's the weather in Boston?" }] },
+  { version: "v3" }
+);
+
+for await (const subagent of stream.subgraphs) {
+  if (subagent.name !== "weather_agent") continue;
+  process.stdout.write(`${subagent.name}: `);
+  for await (const message of subagent.messages) {
+    for await (const token of message.text) {
+      process.stdout.write(token);
+    }
+  }
+  process.stdout.write("\n");
+}
+```
+:::
+
+普通的 `StateGraph` 子图从工具调用时也会出现在 `stream.subgraphs` 上——在 `.compile(name=...)` 上设置 `name=` 以在 `subagent.graph_name` 中获取标签。
+
+:::python
+`stream.subagents` 是命名的 `create_agent` 子代理的聚焦视图，而 `stream.subgraphs` 覆盖每个嵌套图。使用与您的 UI 匹配的。
+:::
+
+:::js
+命名的子代理与普通子图共享 `stream.subgraphs` 投影；您在循环中编写的过滤器将它们区分开来。
+:::
+
+## 状态和最终输出
+
+使用 `stream.values` 获取状态快照，使用 `stream.output` 获取最终代理状态。
+
+:::python
+```py
+stream = agent.stream_events(input, version="v3")
+
+for snapshot in stream.values:
+    print(snapshot)
+
+final_state = stream.output
+```
+:::
+
+:::js
+```ts
+const stream = await agent.streamEvents(input, { version: "v3" });
+
+for await (const snapshot of stream.values) {
+  console.log(snapshot);
+}
+
+const finalState = await stream.output;
+```
+:::
+
+## 多个投影
+
+:::python
+对于异步代码中的并发消费，请使用 `astream_events` 配合 `asyncio.gather`：
+
+:::
+
+```py
+import asyncio
+
+stream = await agent.astream_events(input, version="v3")
+
+async def consume_messages():
+    async for message in stream.messages:
+        print(await message.text)
+
+async def consume_tool_calls():
+    async for call in stream.tool_calls:
+        print(call.tool_name, call.input)
+
+await asyncio.gather(consume_messages(), consume_tool_calls())
+```
+
+对于同步代码，使用 `stream.interleave(...)` 代替：
+
+```py
+stream = agent.stream_events(input, version="v3")
+
+for name, item in stream.interleave("messages", "tool_calls", "values"):
+    if name == "messages":
+        print(item.text)
+    elif name == "tool_calls":
+        print(item.tool_name, item.input)
+    elif name == "values":
+        print(item)
+```
+:::
+
+:::js
+当您想在 JavaScript 中运行多个投影时，请使用并发消费者：
+
+::
+
+```ts
+const stream = await agent.streamEvents(input, { version: "v3" });
+
+await Promise.all([
+  (async () => {
+    for await (const message of stream.messages) {
+      console.log(await message.text);
+    }
+  })(),
+  (async () => {
+    for await (const call of stream.toolCalls) {
+      console.log(call.name, call.input);
+    }
+  })(),
+]);
+```
+:::
+
+要访问未作为类型化投影公开的通道，或要检查完整的事件信封，请迭代原始协议事件：
+
+:::python
+```py
+for event in stream:
+    print(event["method"], event["params"]["namespace"], event["params"]["data"])
+```
+:::
+
+:::js
+```ts
+for await (const event of stream) {
+  console.log(event.method, event.params.namespace, event.params.data);
+}
+```
+:::
+
+## 自定义更新
+
+当您的应用程序需要一个非内置的投影时，可以使用自定义流转换器，例如检索进度、制品或特定领域的事件。
+
+:::python
+```py
+stream = agent.stream_events(
+    input,
+    version="v3",
+    transformers=[ToolActivityTransformer],
+)
+
+for activity in stream.extensions["tool_activity"]:
+    print(activity)
+```
+:::
+
+:::js
+```ts
+const stream = await agent.streamEvents(input, {
+  version: "v3",
+  transformers: [toolActivityTransformer],
+});
+
+for await (const activity of stream.extensions.toolActivity) {
+  console.log(activity);
+}
+```
+:::
+
+### 在中间件上注册转换器
+
+:::python
+<Note>中间件注册的转换器需要 `langchain>=1.3.2`。</Note>
+:::
+
+:::js
+<Note>中间件注册的转换器需要 `langchain@1.4.3` 或更高版本。</Note>
+:::
+
+中间件可以与其钩子和工具一起声明流转换器工厂。工厂的形状因语言而异：
+
+:::python
+将 `transformers` 属性设置在 `AgentMiddleware` 子类上，指向一系列工厂。每个工厂的形状为 `Callable[[tuple[str, ...]], StreamTransformer]`，并以 `factory(scope)` 的方式调用，其中 `scope` 是 mini-mux 作用域元组（根 mux 为 `()`，子图则非空）。每次调用返回一个全新的转换器，以保持每个子图的隔离性。
+
+:::
+
+```py
+from langchain.agents import create_agent
+from langchain.agents.middleware import AgentMiddleware
+
+
+class ToolActivityMiddleware(AgentMiddleware):
+    transformers = (ToolActivityTransformer,)
+
+
+agent = create_agent(
+    model="gpt-5-nano",
+    tools=[get_weather],
+    middleware=[ToolActivityMiddleware()],
+)
+```
+:::
+
+:::js
+将 `streamTransformers` 作为工厂函数元组传递给 `createMiddleware`。每个工厂的签名为 `() => StreamTransformer<any>`（零参数），并在每个作用域中调用一次。每次调用返回一个新的转换器可以保持每个子图相互隔离。
+
+
+</fragment>
+
+```ts
+import { createAgent, createMiddleware } from "langchain";
+
+const toolActivityMiddleware = createMiddleware({
+  name: "ToolActivityMiddleware",
+  streamTransformers: [toolActivityTransformer],
+});
+
+const agent = createAgent({
+  model: "gpt-5-nano",
+  tools: [getWeather],
+  middleware: [toolActivityMiddleware],
+});
+```
+在编译时，`create_agent` 会将中间件注册的工厂与传入其自身 `transformers=` 参数的内容合并。编译后图上的最终顺序为：
+
+1. 内置的 `ToolCallTransformer`。
+2. 中间件注册的工厂，按中间件顺序排列。
+3. 调用方通过 `create_agent` 提供的 `transformers=`。
+
+这确保了内置的工具调用投影位于消费者转换器之前，并让调用方提供的条目拥有最终决定权。
+
+内置的 `PIIMiddleware` 使用此钩子从流式传输的线缆输出中删除 PII。启用 `apply_to_output=True` 后，其注册的转换器会在内容离开运行之前，从文本增量、工具调用参数、工具输出和状态快照中清除检测到的 PII，从而缩小了 `after_model` 状态级删除本应让原始 PII 通过到 `stream_events(version="v3")` 实时读取器的窗口。
+
+```py
+from langchain.agents import create_agent
+from langchain.agents.middleware import PIIMiddleware
+
+agent = create_agent(
+    model="gpt-5-nano",
+    tools=[],
+    middleware=[
+        PIIMiddleware("email", strategy="redact", apply_to_output=True),
+    ],
+)
+```
+
+请参阅 [PII 检测](/oss/langchain/middleware/built-in#pii-detection) 了解完整的配置界面。
+:::
+
+:::js
+在编译时，`createAgent` 将中间件注册的工厂与传入其自身 `streamTransformers` 选项的内容合并。最终编译图的顺序为：
+
+1. 内置的 `ToolCallTransformer`。
+2. 按中间件顺序排列的中间件注册工厂。
+3. 调用者通过 `createAgent` 提供的 `streamTransformers`。
+
+这样可以将内置的工具调用投影保持在消费者转换器之前，并让调用者提供的条目拥有最终决定权。
+:::
+
+请参阅 [构建您自己的投影](/oss/langgraph/event-streaming#build-your-own-projection) 了解转换器契约。
+
+## 相关内容
+
+- [流式处理](/oss/langchain/streaming) 涵盖了低级 Pregel 流模式。
+- [构建您自己的投影](/oss/langgraph/event-streaming#build-your-own-projection) 涵盖了编写特定应用程序的投影。
+- [前端流式处理模式](/oss/langchain/frontend/overview) 展示了基于流式状态构建的 UI 用例。

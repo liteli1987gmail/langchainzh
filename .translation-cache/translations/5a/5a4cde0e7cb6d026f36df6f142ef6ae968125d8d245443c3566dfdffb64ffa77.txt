@@ -1,0 +1,487 @@
+---
+title: "Memgraph 集成"
+description: "使用 LangChain Python 与 Memgraph 集成。"
+---
+
+import LangchainExperimentalUnmaintained from '/snippets/oss/langchain-experimental-unmaintained.mdx';
+
+Memgraph 是一个开源图数据库，针对动态分析环境进行了优化，并与 Neo4j 兼容。要查询数据库，Memgraph 使用 Cypher——属性图数据库中采用最广泛、最完整规范的开源查询语言。
+
+本笔记本将向您展示如何[使用自然语言查询 Memgraph](#natural-language-querying)以及如何从非结构化数据中[构建知识图谱](#constructing-knowledge-graph)。
+
+首先，确保[完成所有设置](#setting-up)。
+
+## 设置
+
+要学习本指南，您需要安装 [Docker](https://www.docker.com/get-started/) 和 [Python 3.x](https://www.python.org/)。
+
+要快速首次运行 **Memgraph Platform**（Memgraph 数据库 + MAGE 库 + Memgraph Lab），请执行以下操作：
+
+在 Linux/MacOS 上：
+
+```
+curl https://install.memgraph.com | sh
+```
+
+在 Windows 上：
+
+```
+iwr https://windows.memgraph.com | iex
+```
+
+两条命令都会运行一个脚本，该脚本将 Docker Compose 文件下载到您的系统，构建并启动 `memgraph-mage` 和 `memgraph-lab` Docker 服务，分别位于两个独立的容器中。现在您已经启动并运行了 Memgraph！了解更多关于安装过程的信息，请参阅 [Memgraph 文档](https://memgraph.com/docs/getting-started/install-memgraph)。
+
+要使用 LangChain，请安装并导入所有必要的包。我们将使用包管理器 [pip](https://pip.pypa.io/en/stable/installation/) 以及 `--user` 标志来确保正确的权限。如果您已安装 Python 3.4 或更高版本，`pip` 默认包含在内。您可以使用以下命令安装所有必需的包：
+
+```
+pip install langchain langchain-openai langchain-memgraph --user
+```
+
+可以运行本笔记本中提供的代码块，也可以使用单独的 Python 文件来实验 Memgraph 和 LangChain。
+
+## 自然语言查询
+
+Memgraph 与 LangChain 的集成包括自然语言查询功能。要使用该功能，首先完成所有必要的导入。我们将在代码中逐一讨论它们。
+
+首先，实例化 `MemgraphGraph`。该对象保存与正在运行的 Memgraph 实例的连接。请确保正确设置所有环境变量。
+
+```python
+import os
+
+from langchain_core.prompts import PromptTemplate
+from langchain_memgraph.chains.graph_qa import MemgraphQAChain
+from langchain_memgraph.graphs.memgraph import MemgraphLangChain
+from langchain_openai import ChatOpenAI
+
+url = os.environ.get("MEMGRAPH_URI", "bolt://localhost:7687")
+username = os.environ.get("MEMGRAPH_USERNAME", "")
+password = os.environ.get("MEMGRAPH_PASSWORD", "")
+
+graph = MemgraphLangChain(
+    url=url, username=username, password=password, refresh_schema=False
+)
+```
+
+`refresh_schema` 最初设置为 `False`，因为数据库中尚无数据，我们希望避免不必要的数据库调用。
+
+### 填充数据库
+
+要填充数据库，首先确保其为空。最有效的方法是切换到内存分析存储模式，删除图，然后返回内存事务模式。了解更多关于 Memgraph 的[存储模式](https://memgraph.com/docs/fundamentals/storage-memory-usage#storage-modes)。
+
+我们将添加到数据库的数据是关于不同类型的视频游戏，这些游戏可在各种平台上使用，并与发行商相关。
+
+```python
+# Drop graph
+graph.query("STORAGE MODE IN_MEMORY_ANALYTICAL")
+graph.query("DROP GRAPH")
+graph.query("STORAGE MODE IN_MEMORY_TRANSACTIONAL")
+
+# Creating and executing the seeding query
+query = """
+    MERGE (g:Game {name: "Baldur's Gate 3"})
+    WITH g, ["PlayStation 5", "Mac OS", "Windows", "Xbox Series X/S"] AS platforms,
+            ["Adventure", "Role-Playing Game", "Strategy"] AS genres
+    FOREACH (platform IN platforms |
+        MERGE (p:Platform {name: platform})
+        MERGE (g)-[:AVAILABLE_ON]->(p)
+    )
+    FOREACH (genre IN genres |
+        MERGE (gn:Genre {name: genre})
+        MERGE (g)-[:HAS_GENRE]->(gn)
+    )
+    MERGE (p:Publisher {name: "Larian Studios"})
+    MERGE (g)-[:PUBLISHED_BY]->(p);
+"""
+
+graph.query(query)
+```
+
+```text
+[]
+```
+
+注意看 `graph` 对象如何持有 `query` 方法。该方法在 Memgraph 中执行查询，同时也被 `MemgraphQAChain` 用于查询数据库。
+
+### 刷新图谱结构
+
+由于新数据在 Memgraph 中被创建，有必要刷新结构。生成的结构将被 `MemgraphQAChain` 用于指导 LLM 更好地生成 Cypher 查询。
+
+```python
+graph.refresh_schema()
+```
+
+要熟悉数据并验证更新后的图谱结构，可以使用以下语句打印：
+
+```python
+print(graph.get_schema)
+```
+
+```text
+Node labels and properties (name and type) are:
+- labels: (:Platform)
+  properties:
+    - name: string
+- labels: (:Genre)
+  properties:
+    - name: string
+- labels: (:Game)
+  properties:
+    - name: string
+- labels: (:Publisher)
+  properties:
+    - name: string
+
+Nodes are connected with the following relationships:
+(:Game)-[:HAS_GENRE]->(:Genre)
+(:Game)-[:PUBLISHED_BY]->(:Publisher)
+(:Game)-[:AVAILABLE_ON]->(:Platform)
+```
+
+### 查询数据库
+
+要与 OpenAI API 进行交互，必须将您的 API 密钥配置为环境变量。这确保了您的请求能够正确获得授权。您可以在 [OpenAI 帮助中心](https://help.openai.com/en/articles/4936850-where-do-i-find-my-secret-api-key) 找到有关获取 API 密钥的更多信息。要配置 API 密钥，您可以使用 Python [os](https://docs.python.org/3/library/os.html) 包：
+
+```
+os.environ["OPENAI_API_KEY"] = "your-key-here"
+```
+
+在 Jupyter notebook 中运行代码时，请运行上面的代码片段。
+
+接下来，创建 `MemgraphQAChain`，它将用于基于图数据的问题回答过程。`temperature 参数`设置为零，以确保获得可预测且一致的答案。您可以将 `verbose` 参数设置为 `True`，以接收有关查询生成的更详细消息。
+
+```python
+chain = MemgraphQAChain.from_llm(
+    ChatOpenAI(temperature=0),
+    graph=graph,
+    model_name="gpt-4-turbo",
+    allow_dangerous_requests=True,
+)
+```
+
+现在你可以开始提问了！
+
+```python
+response = chain.invoke("Which platforms is Baldur's Gate 3 available on?")
+print(response["result"])
+```
+
+```text
+MATCH (:Game{name: "Baldur's Gate 3"})-[:AVAILABLE_ON]->(platform:Platform)
+RETURN platform.name
+Baldur's Gate 3 is available on PlayStation 5, Mac OS, Windows, and Xbox Series X/S.
+```
+
+```python
+response = chain.invoke("Is Baldur's Gate 3 available on Windows?")
+print(response["result"])
+```
+
+```text
+MATCH (:Game{name: "Baldur's Gate 3"})-[:AVAILABLE_ON]->(:Platform{name: "Windows"})
+RETURN "Yes"
+Yes, Baldur's Gate 3 is available on Windows.
+```
+
+### 链修饰符
+
+要修改链的行为并获取更多上下文或附加信息，您可以修改链的参数。
+
+#### 返回直接查询结果
+
+`return_direct` 修饰符指定是返回执行的 Cypher 查询的直接结果，还是返回处理后的自然语言响应。
+
+```python
+# Return the result of querying the graph directly
+chain = MemgraphQAChain.from_llm(
+    ChatOpenAI(temperature=0),
+    graph=graph,
+    return_direct=True,
+    allow_dangerous_requests=True,
+    model_name="gpt-4-turbo",
+)
+
+response = chain.invoke("Which studio published Baldur's Gate 3?")
+print(response["result"])
+```
+
+```text
+MATCH (g:Game {name: "Baldur's Gate 3"})-[:PUBLISHED_BY]->(p:Publisher)
+RETURN p.name
+[{'p.name': 'Larian Studios'}]
+```
+
+#### 返回查询中间步骤
+
+`return_intermediate_steps` 链修改器通过在初始查询结果之外包含查询的中间步骤来增强返回的响应。
+
+```python
+# Return all the intermediate steps of query execution
+chain = MemgraphQAChain.from_llm(
+    ChatOpenAI(temperature=0),
+    graph=graph,
+    allow_dangerous_requests=True,
+    return_intermediate_steps=True,
+    model_name="gpt-4-turbo",
+)
+
+response = chain.invoke("Is Baldur's Gate 3 an Adventure game?")
+print(f"Intermediate steps: {response['intermediate_steps']}")
+print(f"Final response: {response['result']}")
+```
+
+```text
+MATCH (:Game {name: "Baldur's Gate 3"})-[:HAS_GENRE]->(:Genre {name: "Adventure"})
+RETURN "Yes"
+Intermediate steps: [{'query': 'MATCH (:Game {name: "Baldur\'s Gate 3"})-[:HAS_GENRE]->(:Genre {name: "Adventure"})\nRETURN "Yes"'}, {'context': [{'"Yes"': 'Yes'}]}]
+Final response: Yes.
+```
+
+#### 限制查询结果数量
+
+`top_k` 修饰符可用于限制查询结果的最大数量。
+
+```python
+# Limit the maximum number of results returned by query
+chain = MemgraphQAChain.from_llm(
+    ChatOpenAI(temperature=0),
+    graph=graph,
+    top_k=2,
+    allow_dangerous_requests=True,
+    model_name="gpt-4-turbo",
+)
+
+response = chain.invoke("What genres are associated with Baldur's Gate 3?")
+print(response["result"])
+```
+
+```text
+MATCH (:Game {name: "Baldur's Gate 3"})-[:HAS_GENRE]->(g:Genre)
+RETURN g.name;
+Adventure, Role-Playing Game
+```
+
+### 高级查询
+
+随着解决方案的复杂度增长，您可能会遇到需要谨慎处理的各种用例。确保应用程序的可扩展性对于维持流畅的用户体验至关重要，不容任何纰漏。
+
+让我们再次实例化链，并尝试提出一些用户可能会问的问题。
+
+```python
+chain = MemgraphQAChain.from_llm(
+    ChatOpenAI(temperature=0),
+    graph=graph,
+    model_name="gpt-4-turbo",
+    allow_dangerous_requests=True,
+)
+
+response = chain.invoke("Is Baldur's Gate 3 available on PS5?")
+print(response["result"])
+```
+
+```text
+MATCH (:Game{name: "Baldur's Gate 3"})-[:AVAILABLE_ON]->(:Platform{name: "PS5"})
+RETURN "Yes"
+I don't know the answer.
+```
+
+生成的 Cypher 查询看起来没有问题，但我们没有收到任何响应信息。这说明在使用 LLM 时的一个常见挑战——用户提问方式与数据存储方式之间的不对齐。在这种情况下，用户感知与实际数据存储之间的差异可能导致不匹配。提示词优化（prompt refinement），即打磨模型提示词以更好地理解这些差异的过程，是一种有效解决此问题的方法。通过提示词优化，模型在生成精确且相关查询方面的能力得到了提升，从而成功检索到所需的数据。
+
+#### 提示词优化
+
+为了解决这个问题，我们可以调整 QA 链的初始 Cypher 提示词。这涉及向 LLM 添加关于用户如何引用特定平台（例如本例中的 PS5）的指导。我们使用 LangChain 的 PromptTemplate 来实现这一点，创建一个修改后的初始提示词。然后将这个修改后的提示词作为参数提供给优化后的 `MemgraphQAChain` 实例。
+
+```python
+MEMGRAPH_GENERATION_TEMPLATE = """Your task is to directly translate natural language inquiry into precise and executable Cypher query for Memgraph database.
+You will utilize a provided database schema to understand the structure, nodes and relationships within the Memgraph database.
+Instructions:
+- Use provided node and relationship labels and property names from the
+schema which describes the database's structure. Upon receiving a user
+question, synthesize the schema to craft a precise Cypher query that
+directly corresponds to the user's intent.
+- Generate valid executable Cypher queries on top of Memgraph database.
+Any explanation, context, or additional information that is not a part
+of the Cypher query syntax should be omitted entirely.
+- Use Memgraph MAGE procedures instead of Neo4j APOC procedures.
+- Do not include any explanations or apologies in your responses.
+- Do not include any text except the generated Cypher statement.
+- For queries that ask for information or functionalities outside the direct
+generation of Cypher queries, use the Cypher query format to communicate
+limitations or capabilities. For example: RETURN "I am designed to generate
+Cypher queries based on the provided schema only."
+Schema:
+{schema}
+
+With all the above information and instructions, generate Cypher query for the
+user question.
+If the user asks about PS5, Play Station 5 or PS 5, that is the platform called PlayStation 5.
+
+The question is:
+{question}"""
+
+MEMGRAPH_GENERATION_PROMPT = PromptTemplate(
+    input_variables=["schema", "question"], template=MEMGRAPH_GENERATION_TEMPLATE
+)
+
+chain = MemgraphQAChain.from_llm(
+    ChatOpenAI(temperature=0),
+    cypher_prompt=MEMGRAPH_GENERATION_PROMPT,
+    graph=graph,
+    model_name="gpt-4-turbo",
+    allow_dangerous_requests=True,
+)
+
+response = chain.invoke("Is Baldur's Gate 3 available on PS5?")
+print(response["result"])
+```
+
+```text
+MATCH (:Game{name: "Baldur's Gate 3"})-[:AVAILABLE_ON]->(:Platform{name: "PlayStation 5"})
+RETURN "Yes"
+Yes, Baldur's Gate 3 is available on PS5.
+```
+
+现在，通过包含平台命名指导的修订初始 Cypher 提示，我们获得了更准确、更符合用户查询的相关结果。
+
+这种方法允许进一步改进您的问答链。您可以轻松地将额外的提示优化数据集成到您的链中，从而增强应用的整体用户体验。
+
+## 构建知识图谱
+
+将非结构化数据转换为结构化数据并非易事或直接的任务。本指南将展示如何利用 LLM 来帮助我们完成这一任务，以及如何在 Memgraph 中构建知识图谱。创建知识图谱后，您可以将其用于您的 GraphRAG 应用。
+
+从文本构建知识图谱的步骤包括：
+
+- [从文本中提取结构化信息](#extracting-structured-information-from-text)：使用 LLM 以节点和关系的形式从文本中提取结构化图信息。
+- [存储到 Memgraph](#storing-into-memgraph)：将提取的结构化图信息存储到 Memgraph。
+
+### 从文本中提取结构化信息
+
+除了[设置部分](#setting-up)中的所有导入外，还需要导入 `LLMGraphTransformer` 和 @[`Document`]，它们将用于从文本中提取结构化信息。
+
+<LangchainExperimentalUnmaintained />
+
+```python
+from langchain_core.documents import Document
+from langchain_experimental.graph_transformers import LLMGraphTransformer
+```
+
+以下是关于查尔斯·达尔文的示例文本（[来源](https://en.wikipedia.org/wiki/Charles_Darwin)），将从该文本构建知识图谱。
+
+```python
+text = """
+    Charles Robert Darwin was an English naturalist, geologist, and biologist,
+    widely known for his contributions to evolutionary biology. His proposition that
+    all species of life have descended from a common ancestor is now generally
+    accepted and considered a fundamental scientific concept. In a joint
+    publication with Alfred Russel Wallace, he introduced his scientific theory that
+    this branching pattern of evolution resulted from a process he called natural
+    selection, in which the struggle for existence has a similar effect to the
+    artificial selection involved in selective breeding. Darwin has been
+    described as one of the most influential figures in human history and was
+    honoured by burial in Westminster Abbey.
+"""
+```
+
+下一步是从所需的 LLM 初始化 `LLMGraphTransformer`，并将文档转换为图结构。
+
+```python
+llm = ChatOpenAI(temperature=0, model_name="gpt-4-turbo")
+llm_transformer = LLMGraphTransformer(llm=llm)
+documents = [Document(page_content=text)]
+graph_documents = llm_transformer.convert_to_graph_documents(documents)
+```
+
+在底层，LLM 会从文本中提取重要实体，并将其作为节点和关系列表返回。效果如下：
+
+```python
+print(graph_documents)
+```
+
+```text
+[GraphDocument(nodes=[Node(id='Charles Robert Darwin', type='Person', properties={}), Node(id='English', type='Nationality', properties={}), Node(id='Naturalist', type='Profession', properties={}), Node(id='Geologist', type='Profession', properties={}), Node(id='Biologist', type='Profession', properties={}), Node(id='Evolutionary Biology', type='Field', properties={}), Node(id='Common Ancestor', type='Concept', properties={}), Node(id='Scientific Concept', type='Concept', properties={}), Node(id='Alfred Russel Wallace', type='Person', properties={}), Node(id='Natural Selection', type='Concept', properties={}), Node(id='Selective Breeding', type='Concept', properties={}), Node(id='Westminster Abbey', type='Location', properties={})], relationships=[Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='English', type='Nationality', properties={}), type='NATIONALITY', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Naturalist', type='Profession', properties={}), type='PROFESSION', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Geologist', type='Profession', properties={}), type='PROFESSION', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Biologist', type='Profession', properties={}), type='PROFESSION', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Evolutionary Biology', type='Field', properties={}), type='CONTRIBUTION', properties={}), Relationship(source=Node(id='Common Ancestor', type='Concept', properties={}), target=Node(id='Scientific Concept', type='Concept', properties={}), type='BASIS', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Alfred Russel Wallace', type='Person', properties={}), type='COLLABORATION', properties={}), Relationship(source=Node(id='Natural Selection', type='Concept', properties={}), target=Node(id='Selective Breeding', type='Concept', properties={}), type='COMPARISON', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Westminster Abbey', type='Location', properties={}), type='BURIAL', properties={})], source=Document(metadata={}, page_content='\n    Charles Robert Darwin was an English naturalist, geologist, and biologist,\n    widely known for his contributions to evolutionary biology. His proposition that\n    all species of life have descended from a common ancestor is now generally\n    accepted and considered a fundamental scientific concept. In a joint\n    publication with Alfred Russel Wallace, he introduced his scientific theory that\n    this branching pattern of evolution resulted from a process he called natural\n    selection, in which the struggle for existence has a similar effect to the\n    artificial selection involved in selective breeding. Darwin has been\n    described as one of the most influential figures in human history and was\n    honoured by burial in Westminster Abbey.\n'))]
+```
+
+### 存储到 Memgraph
+
+一旦您准备好了格式为 `GraphDocument` 的数据（即节点和关系），您可以使用 `add_graph_documents` 方法将其导入到 Memgraph。该方法会将 `graph_documents` 列表转换为适当的 Cypher 查询，这些查询需要在 Memgraph 中执行。完成后，知识图谱将存储在 Memgraph 中。
+
+```python
+# Empty the database
+graph.query("STORAGE MODE IN_MEMORY_ANALYTICAL")
+graph.query("DROP GRAPH")
+graph.query("STORAGE MODE IN_MEMORY_TRANSACTIONAL")
+
+# Create KG
+graph.add_graph_documents(graph_documents)
+```
+
+<Note>
+图构建过程是非确定性的，因为用于从非结构化数据生成节点和关系的 LLM 是非确定性的。
+</Note>
+
+### 附加选项
+
+此外，您还可以灵活地根据需求定义特定类型的节点和关系进行提取。
+
+```python
+llm_transformer_filtered = LLMGraphTransformer(
+    llm=llm,
+    allowed_nodes=["Person", "Nationality", "Concept"],
+    allowed_relationships=["NATIONALITY", "INVOLVED_IN", "COLLABORATES_WITH"],
+)
+graph_documents_filtered = llm_transformer_filtered.convert_to_graph_documents(
+    documents
+)
+
+print(f"Nodes:{graph_documents_filtered[0].nodes}")
+print(f"Relationships:{graph_documents_filtered[0].relationships}")
+```
+
+```text
+Nodes:[Node(id='Charles Robert Darwin', type='Person', properties={}), Node(id='English', type='Nationality', properties={}), Node(id='Evolutionary Biology', type='Concept', properties={}), Node(id='Natural Selection', type='Concept', properties={}), Node(id='Alfred Russel Wallace', type='Person', properties={})]
+Relationships:[Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='English', type='Nationality', properties={}), type='NATIONALITY', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Evolutionary Biology', type='Concept', properties={}), type='INVOLVED_IN', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Natural Selection', type='Concept', properties={}), type='INVOLVED_IN', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Alfred Russel Wallace', type='Person', properties={}), type='COLLABORATES_WITH', properties={})]
+```
+
+你的图也可以有 `__Entity__` 标签在所有节点上，这些标签会被索引以便更快地检索。
+
+```python
+# Drop graph
+graph.query("STORAGE MODE IN_MEMORY_ANALYTICAL")
+graph.query("DROP GRAPH")
+graph.query("STORAGE MODE IN_MEMORY_TRANSACTIONAL")
+
+# Store to Memgraph with Entity label
+graph.add_graph_documents(graph_documents, baseEntityLabel=True)
+```
+
+还有一个选项可以包含在图中获取的信息的来源。为此，将 `include_source` 设置为 `True`，然后源文档会被存储，并且它会通过 `MENTIONS` 关系与图中的节点关联。
+
+```python
+# Drop graph
+graph.query("STORAGE MODE IN_MEMORY_ANALYTICAL")
+graph.query("DROP GRAPH")
+graph.query("STORAGE MODE IN_MEMORY_TRANSACTIONAL")
+
+# Store to Memgraph with source included
+graph.add_graph_documents(graph_documents, include_source=True)
+```
+
+请注意源内容是如何存储的，以及 `id` 属性是如何生成的（因为文档原本没有任何 `id`）。
+你可以同时拥有 `__Entity__` 标签和文档源。但请注意，两者都会占用内存，特别是包含源内容时，由于内容是长字符串。
+
+最后，你可以查询知识图谱，如前一节所述。
+
+```python
+chain = MemgraphQAChain.from_llm(
+    ChatOpenAI(temperature=0),
+    graph=graph,
+    model_name="gpt-4-turbo",
+    allow_dangerous_requests=True,
+)
+print(chain.invoke("Who Charles Robert Darwin collaborated with?")["result"])
+```
+
+```text
+MATCH (:Person {id: "Charles Robert Darwin"})-[:COLLABORATION]->(collaborator)
+RETURN collaborator;
+Alfred Russel Wallace
+```

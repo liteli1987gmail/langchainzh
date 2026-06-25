@@ -1,0 +1,2166 @@
+---
+title: 模型
+---
+
+import ChatModelTabsPy from '/snippets/chat-model-tabs.mdx';
+import ChatModelTabsJS from '/snippets/chat-model-tabs-js.mdx';
+
+[LLM](https://en.wikipedia.org/wiki/Large_language_model) 是强大的 AI 工具，能够像人类一样理解和生成文本。它们用途广泛，可以撰写内容、翻译语言、总结摘要和回答问题，而无需针对每项任务进行专门训练。
+
+除了文本生成之外，许多模型还支持：
+
+* <Icon icon="hammer" size={16} /> [工具调用](#tool-calling) - 调用外部工具（如数据库查询或 API 调用），并在响应中使用结果。
+* <Icon icon="layout-grid" size={16} /> [结构化输出](#structured-output) - 即模型的响应被限制为遵循预定义的格式。
+* <Icon icon="photo" size={16} /> [多模态](#multimodal) - 处理和返回文本之外的数据，如图像、音频和视频。
+* <Icon icon="brain" size={16} /> [推理](#reasoning) - 模型执行多步骤推理以得出结论。
+
+模型是[代理](/oss/langchain/agents)的推理引擎。它们驱动代理的决策过程，决定调用哪些工具、如何解释结果以及何时提供最终答案。
+
+所选模型的质量和能力直接影响代理的基线可靠性和性能。不同的模型擅长不同的任务——有些更擅长遵循复杂指令，有些更擅长结构化推理，有些则支持更大的上下文窗口以处理更多信息。
+
+LangChain 的标准模型接口让您能够访问许多不同的提供商集成，这使您可以轻松尝试和切换不同的模型，以找到最适合您用例的方案。
+
+有关特定提供商的集成信息和功能，请参阅提供商的[聊天模型页面](/oss/integrations/chat)。
+
+<Tip>
+[LangSmith](/langsmith/observability) 追踪每个模型调用，以便您可以比较提供商、检查工具路由并调试故障。按照[追踪快速入门](/langsmith/trace-with-langchain)进行设置。
+
+我们还建议您设置 [LangSmith Engine](/langsmith/engine)，它可以监控您的追踪、检测问题并提出修复建议。
+</Tip>
+
+## 基本用法
+
+模型可以通过两种方式使用：
+
+1. **与代理配合使用** - 可以在创建[代理](/oss/langchain/agents#model)时动态指定模型。
+2. **独立使用** - 可以直接调用模型（在代理循环之外），用于执行文本生成、分类或提取等任务，而无需使用代理框架。
+
+相同的模型接口在两种场景下都能使用，这为您提供了灵活性，可以从简单开始，然后根据需要扩展到更复杂的基于代理的工作流程。
+
+### 初始化模型
+
+:::python
+在 LangChain 中开始使用独立模型最简单的方式是使用 @[`init_chat_model`] 从您选择的聊天模型提供商初始化一个（示例如下）：
+
+<ChatModelTabsPy />
+```python
+response = model.invoke("Why do parrots talk?")
+```
+
+有关更多详细信息，包括如何传递模型[参数](#parameters)，请参阅 @[`init_chat_model`][init_chat_model]。
+:::
+:::js
+在 LangChain 中开始使用独立模型最简单的方式是使用 `initChatModel` 从你选择的[聊天模型提供商](/oss/integrations/chat)初始化一个模型（示例如下）：
+
+<ChatModelTabsJS />
+
+</fragment>
+```typescript
+const response = await model.invoke("Why do parrots talk?");
+```
+请参阅 @[`initChatModel`][initChatModel] 了解更多详情，包括如何传递模型[参数](#parameters)的信息。
+:::
+
+### 支持的提供商和模型
+
+LangChain 通过专用集成包支持所有主流模型提供商。每个提供商包都实现相同的标准接口，因此您可以交换提供商而无需重写应用程序逻辑。新的模型名称会立即生效——无需 LangChain 更新——因为提供商包直接将模型名称传递给提供商的 API。
+
+浏览[支持的提供商完整列表](/oss/integrations/providers/overview)，或参阅[提供商和模型](/oss/concepts/providers-and-models)了解提供商、包和模型名称如何在 LangChain 中协同工作的概念概述。
+
+### 关键方法
+
+<Card title="调用" href="#invoke" icon="send" arrow="true" horizontal>
+    模型将消息作为输入，在生成完整响应后输出消息。
+</Card>
+<Card title="流式" href="#stream" icon="broadcast" arrow="true" horizontal>
+    调用模型，但实时流式传输输出内容。
+</Card>
+<Card title="批量" href="#batch" icon="grip-vertical" arrow="true" horizontal>
+    批量发送多个请求到模型，以实现更高效的处理。
+</Card>
+
+<Info>
+    除了聊天模型之外，LangChain 还支持其他相关技术，例如嵌入模型和向量存储。详情请参阅[集成页面](/oss/integrations/providers/overview)。
+</Info>
+
+## 参数
+
+聊天模型接受可用于配置其行为的参数。支持的完整参数集因模型和提供商而异，但标准参数包括：
+
+<ParamField body="model" type="string" required>
+   要与提供商一起使用的特定模型的名称或标识符。您还可以使用 '{model_provider}:{model}' 格式在单个参数中同时指定模型及其提供商，例如 'openai:o1'。
+</ParamField>
+
+:::python
+<ParamField body="api_key" type="string">
+    与模型提供商进行身份验证所需的密钥。这通常在您注册访问模型时发放。通常通过设置<Tooltip tip="在程序外部设置其值的变量，通常通过操作系统或微服务的内置功能来设置。">环境变量</Tooltip>来访问。
+</ParamField>
+:::
+:::js
+<ParamField body="apiKey" type="string">
+    与模型提供商进行身份验证所需的密钥。这通常在您注册访问模型时发放。通常通过设置<Tooltip tip="在程序外部设置其值的变量，通常通过操作系统或微服务的内置功能来设置。">环境变量</Tooltip>来访问。
+</ParamField>
+:::
+
+<ParamField body="temperature" type="number">
+    控制模型输出的随机性。数值越高，响应越有创意；数值越低，响应越有确定性。
+</ParamField>
+
+:::python
+<ParamField body="max_tokens" type="number">
+    限制响应中<Tooltip tip="模型读取和生成的基本单元。提供商可能有不同的定义，但通常可以表示一个完整的单词或单词的一部分。">token</Tooltip>总数，有效控制输出的长度。
+</ParamField>
+:::
+:::js
+<ParamField body="maxTokens" type="number">
+    限制响应中<Tooltip tip="模型读取和生成的基本单元。提供商可能有不同的定义，但通常可以表示一个完整的单词或单词的一部分。">token</Tooltip>总数，有效控制输出的长度。
+</ParamField>
+:::
+
+<ParamField body="timeout" type="number">
+    等待模型响应以取消请求前的最长时间（以秒为单位）。
+</ParamField>
+
+:::python
+<ParamField body="max_retries" type="number" default="6">
+    系统在请求因网络超时或速率限制等问题失败时重新发送请求的最大尝试次数。重试使用带抖动的指数退避策略。网络错误、速率限制（429）和服务器错误（5xx）会自动重试。401（未授权）或 404 等客户端错误不会重试。对于在不可靠网络上长时间运行的[代理](/oss/deepagents/overview)任务，请考虑将此值增加到 10-15。
+</ParamField>
+:::
+:::js
+<ParamField body="maxRetries" type="number" default="6">
+    系统在请求因网络超时或速率限制等问题失败时重新发送请求的最大尝试次数。重试使用带抖动的指数退避策略。网络错误、速率限制（429）和服务器错误（5xx）会自动重试。401（未授权）或 404 等客户端错误不会重试。对于在不可靠网络上长时间运行的[代理](/oss/deepagents/overview)任务，请考虑将此值增加到 10-15。
+</ParamField>
+:::
+
+:::python
+使用 @[`init_chat_model`]，将这些参数作为内联 <Tooltip tip="任意关键字参数" cta="了解更多" href="https://www.w3schools.com/python/python_args_kwargs.asp">`**kwargs`</Tooltip> 传递：
+
+
+</fragment>
+
+```python Initialize using model parameters
+model = init_chat_model(
+    "claude-sonnet-4-6",
+    # Kwargs passed to the model:
+    temperature=0.7,
+    timeout=30,
+    max_tokens=1000,
+    max_retries=6,  # Default; increase for unreliable networks
+)
+```
+:::
+:::js
+使用 `initChatModel`，将这些参数作为内联参数传递：
+
+```typescript Initialize using model parameters
+const model = await initChatModel(
+    "claude-sonnet-4-6",
+    { temperature: 0.7, timeout: 30, maxTokens: 1000, maxRetries: 6 }
+)
+```
+:::
+
+### 连接韧性
+
+LangChain 聊天模型会自动使用指数退避策略重试失败的 API 请求。默认情况下，模型最多重试 **6 次**，适用于网络错误、速率限制 (429) 和服务器错误 (5xx)。客户端错误（如 401（未授权）或 404）不会重试。
+
+:::python
+You can adjust `max_retries` and `timeout` when creating a model, then pass that instance to `create_agent`, `create_deep_agent`, or call it standalone:
+
+
+:::
+
+```python
+from langchain.chat_models import init_chat_model
+
+model = init_chat_model(
+    "google_genai:gemini-3.5-flash",
+    max_retries=10,  # Increase for unreliable networks (default: 6)
+    timeout=120,  # Seconds; increase for slow connections
+)
+```
+:::
+
+:::js
+您可以在创建模型时调整 `maxRetries` 和 `timeout`，然后将该实例传递给 `createAgent`、`createDeepAgent`，或独立调用：
+
+```typescript
+import { ChatAnthropic } from "@langchain/anthropic";
+
+const model = new ChatAnthropic({
+  model: "google_genai:gemini-3.5-flash",
+  maxRetries: 10, // Increase for unreliable networks (default: 6)
+  timeout: 120_000, // Milliseconds; increase for slow connections
+});
+```
+:::
+
+<Tip>
+    对于在不可靠网络上长时间运行的 agent 图，建议设置更高的 `max_retries`（例如 10–15）和一个[检查点器](/oss/langgraph/persistence)，以便在故障后保留进度。
+</Tip>
+
+<Info>
+    每个聊天模型集成可能有额外的参数，用于控制提供商特定的功能。
+
+    例如，@[`ChatOpenAI`] 有 `use_responses_api` 参数，用于决定使用 OpenAI Responses API 还是 Completions API。
+
+    要查找给定聊天模型支持的所有参数，请前往[聊天模型集成](/oss/integrations/chat)页面。
+</Info>
+
+---
+
+## 调用
+
+聊天模型必须被调用才能生成输出。主要有三种调用方法，每种方法适用于不同的使用场景。
+
+### Invoke
+
+调用模型最直接的方式是使用 @[`invoke()`][BaseChatModel.invoke]，传入单个消息或消息列表。
+
+:::python
+```python Single message
+response = model.invoke("Why do parrots have colorful feathers?")
+print(response)
+```
+:::
+
+:::js
+```typescript Single message
+const response = await model.invoke("Why do parrots have colorful feathers?");
+console.log(response);
+```
+:::可以向聊天模型提供一系列消息来表示对话历史。每条消息都有一个角色，模型使用该角色来表示对话中谁发送了消息。
+
+有关角色、类型和内容的更多详细信息，请参阅 [messages](/oss/langchain/messages) 指南。
+
+:::python
+```python Dictionary format
+conversation = [
+    {"role": "system", "content": "You are a helpful assistant that translates English to French."},
+    {"role": "user", "content": "Translate: I love programming."},
+    {"role": "assistant", "content": "J'adore la programmation."},
+    {"role": "user", "content": "Translate: I love building applications."}
+]
+
+response = model.invoke(conversation)
+print(response)  # AIMessage("J'adore créer des applications.")
+```
+```python Message objects
+from langchain.messages import HumanMessage, AIMessage, SystemMessage
+
+conversation = [
+    SystemMessage("You are a helpful assistant that translates English to French."),
+    HumanMessage("Translate: I love programming."),
+    AIMessage("J'adore la programmation."),
+    HumanMessage("Translate: I love building applications.")
+]
+
+response = model.invoke(conversation)
+print(response)  # AIMessage("J'adore créer des applications.")
+```
+:::
+
+:::js
+```typescript Object format
+const conversation = [
+  { role: "system", content: "You are a helpful assistant that translates English to French." },
+  { role: "user", content: "Translate: I love programming." },
+  { role: "assistant", content: "J'adore la programmation." },
+  { role: "user", content: "Translate: I love building applications." },
+];
+
+const response = await model.invoke(conversation);
+console.log(response);  // AIMessage("J'adore créer des applications.")
+```
+```typescript Message objects
+import { HumanMessage, AIMessage, SystemMessage } from "langchain";
+
+const conversation = [
+  new SystemMessage("You are a helpful assistant that translates English to French."),
+  new HumanMessage("Translate: I love programming."),
+  new AIMessage("J'adore la programmation."),
+  new HumanMessage("Translate: I love building applications."),
+];
+
+const response = await model.invoke(conversation);
+console.log(response);  // AIMessage("J'adore créer des applications.")
+```
+:::
+
+<Info>
+    如果调用的返回类型是字符串，请确保您使用的是聊天模型而非 LLM。传统的文本补全 LLM 直接返回字符串。LangChain 聊天模型的名称以"Chat"开头，例如 @[`ChatOpenAI`](/oss/integrations/chat/openai)。
+</Info>
+
+### 流式输出
+
+大多数模型可以在生成输出的同时流式传输其内容。通过渐进式显示输出，流式传输显著改善了用户体验，尤其是对于较长的响应。
+
+调用 @[`stream()`][BaseChatModel.stream] 返回一个 <Tooltip tip="一个按顺序渐进式提供对集合中每个元素访问的对象。">迭代器</Tooltip>，它会在生成时产生输出块。您可以使用循环来实时处理每个块：
+
+:::python
+<CodeGroup>
+    ```python Basic text streaming
+    for chunk in model.stream("Why do parrots have colorful feathers?"):
+        print(chunk.text, end="|", flush=True)
+    ```
+
+    ```python Stream tool calls, reasoning, and other content
+    for chunk in model.stream("What color is the sky?"):
+        for block in chunk.content_blocks:
+            if block["type"] == "reasoning" and (reasoning := block.get("reasoning")):
+                print(f"Reasoning: {reasoning}")
+            elif block["type"] == "tool_call_chunk":
+                print(f"Tool call chunk: {block}")
+            elif block["type"] == "text":
+                print(block["text"])
+            else:
+                ...
+    ```
+</CodeGroup>
+:::
+:::js
+<CodeGroup>
+
+</CodeGroup>
+    ```typescript Basic text streaming
+    const stream = await model.stream("Why do parrots have colorful feathers?");
+    for await (const chunk of stream) {
+      console.log(chunk.text)
+    }
+    ```
+
+    ```typescript Stream tool calls, reasoning, and other content
+    const stream = await model.stream("What color is the sky?");
+    for await (const chunk of stream) {
+      for (const block of chunk.contentBlocks) {
+        if (block.type === "reasoning") {
+          console.log(`Reasoning: ${block.reasoning}`);
+        } else if (block.type === "tool_call_chunk") {
+          console.log(`Tool call chunk: ${block}`);
+        } else if (block.type === "text") {
+          console.log(block.text);
+        } else {
+          ...
+        }
+      }
+    }
+    ```
+<CodeGroup>
+:::
+
+与 [`invoke()`](#invoke)（它在模型完成生成完整响应之后返回单个 @[`AIMessage`][AIMessage]）相反，`stream()` 返回多个 @[`AIMessageChunk`][AIMessageChunk] 对象，每个对象包含输出文本的一部分。重要的是，流中的每个块都设计为通过求和聚合成完整消息：
+
+:::python
+```python Construct an AIMessage
+full = None  # None | AIMessageChunk
+for chunk in model.stream("What color is the sky?"):
+    full = chunk if full is None else full + chunk
+    print(full.text)
+
+# The
+# The sky
+# The sky is
+# The sky is typically
+# The sky is typically blue
+# ...
+
+print(full.content_blocks)
+# [{"type": "text", "text": "The sky is typically blue..."}]
+```
+:::
+
+:::js
+```typescript Construct AIMessage
+let full: AIMessageChunk | null = null;
+for await (const chunk of stream) {
+  full = full ? full.concat(chunk) : chunk;
+  console.log(full.text);
+}
+
+// The
+// The sky
+// The sky is
+// The sky is typically
+// The sky is typically blue
+// ...
+
+console.log(full.contentBlocks);
+// [{"type": "text", "text": "The sky is typically blue..."}]
+```
+生成的消息可以与使用 [`invoke()`](#invoke) 生成的消息同样对待——例如，它可以聚合到消息历史中，并作为对话上下文传递回模型。
+
+<Warning>
+    只有当程序中的所有步骤都知道如何处理流式数据块时，流式传输才能正常工作。例如，一个不支持流式传输的应用程序需要将整个输出存储在内存中后才能处理。
+</Warning>
+
+<Accordion title="高级流式传输主题">
+    <Accordion title="流式事件">
+        :::python
+        LangChain 聊天模型也可以使用 `astream_events()` 流式传输语义事件。
+
+        这简化了基于事件类型和其他元数据进行过滤的操作，并将在后台聚合完整消息。请参阅下面的示例。
+
+    </Accordion>
+</Accordion>
+
+        ```python
+        async for event in model.astream_events("Hello"):
+
+            if event["event"] == "on_chat_model_start":
+                print(f"Input: {event['data']['input']}")
+
+            elif event["event"] == "on_chat_model_stream":
+                print(f"Token: {event['data']['chunk'].text}")
+
+            elif event["event"] == "on_chat_model_end":
+                print(f"Full message: {event['data']['output'].text}")
+
+            else:
+                pass
+        ```
+        ```txt
+        Input: Hello
+        Token: Hi
+        Token:  there
+        Token: !
+        Token:  How
+        Token:  can
+        Token:  I
+        ...
+        Full message: Hi there! How can I help today?
+        ```
+
+<Tip>
+请参阅 @[`astream_events()`][BaseChatModel.astream_events] 参考文档以了解事件类型和其他详细信息。
+</Tip>
+:::
+
+:::js
+LangChain 聊天模型还可以使用
+[`streamEvents()`][BaseChatModel.streamEvents] 来流式传输语义事件。
+
+这简化了基于事件类型和其他元数据进行筛选的操作，并会在后台聚合完整消息。请参阅下面的示例。
+:::
+
+        ```typescript
+        const stream = await model.streamEvents("Hello");
+        for await (const event of stream) {
+            if (event.event === "on_chat_model_start") {
+                console.log(`Input: ${event.data.input}`);
+            }
+            if (event.event === "on_chat_model_stream") {
+                console.log(`Token: ${event.data.chunk.text}`);
+            }
+            if (event.event === "on_chat_model_end") {
+                console.log(`Full message: ${event.data.output.text}`);
+            }
+        }
+        ```
+        ```txt
+        Input: Hello
+        Token: Hi
+        Token:  there
+        Token: !
+        Token:  How
+        Token:  can
+        Token:  I
+        ...
+        Full message: Hi there! How can I help today?
+        ```
+
+<fragment>
+
+        请参阅 @[`streamEvents()`][BaseChatModel.streamEvents] 参考文档，了解事件类型和其他详细信息。
+        :::
+    </Accordion>
+    <Accordion title='"自动流式传输"聊天模型'>
+        LangChain 通过在某些情况下自动启用流式传输模式来简化聊天模型的流式传输，即使你没有显式调用流式传输方法。这在你使用非流式传输的 invoke 方法但仍希望流式传输整个应用程序（包括聊天模型的中间结果）时特别有用。
+
+        例如，在 [LangGraph agents](/oss/langchain/agents) 中，你可以在节点内调用 `model.invoke()`，但如果以流式传输模式运行，LangChain 将自动委托给流式传输。
+
+        #### 工作原理
+
+        当你调用 chat model 的 `invoke()` 时，如果 LangChain 检测到你试图流式传输整个应用程序，它将自动切换到内部流式传输模式。从使用 invoke 的代码角度来看，调用结果保持不变；但是，当 chat model 被流式传输时，LangChain 会负责调用 LangChain 回调系统中的 @[`on_llm_new_token`] 事件。
+
+        :::python
+        回调事件允许 LangGraph `stream()` 和 `astream_events()` 实时显示 chat model 的输出。
+        :::
+        :::js
+        回调事件允许 LangGraph `stream()` 和 `streamEvents()` 实时显示 chat model 的输出。
+        :::
+    </Accordion>
+</Accordion>
+
+### 批量处理
+
+将一组独立的请求批量发送到模型可以显著提高性能并降低成本，因为处理可以并行进行：
+
+:::python
+
+</fragment>
+```python Batch
+responses = model.batch([
+    "Why do parrots have colorful feathers?",
+    "How do airplanes fly?",
+    "What is quantum computing?"
+])
+for response in responses:
+    print(response)
+```
+
+<Note>
+    本节介绍聊天模型方法 @[`batch()`][BaseChatModel.batch]，它在客户端并行化模型调用。
+
+    它**不同于**推理服务提供商支持的批处理 API，例如 [OpenAI](https://platform.openai.com/docs/guides/batch) 或 [Anthropic](https://platform.claude.com/docs/en/build-with-claude/batch-processing#message-batches-api)。
+</Note>
+
+默认情况下，@[`batch()`][BaseChatModel.batch] 仅返回整个批次的最终输出。如果希望在每个输入完成生成时立即接收其输出，可以使用 @[`batch_as_completed()`][BaseChatModel.batch_as_completed] 进行流式处理：
+
+```python Yield batch responses upon completion
+for response in model.batch_as_completed([
+    "Why do parrots have colorful feathers?",
+    "How do airplanes fly?",
+    "What is quantum computing?"
+]):
+    print(response)
+```
+<Note>
+    使用 @[`batch_as_completed()`][BaseChatModel.batch_as_completed] 时，结果可能会乱序返回。每个结果都包含输入索引，以便在需要时重建原始顺序。
+</Note>
+
+<Tip>
+    使用 @[`batch()`][BaseChatModel.batch] 或 @[`batch_as_completed()`][BaseChatModel.batch_as_completed] 处理大量输入时，你可能需要控制最大并行调用数。可以通过在 @[`RunnableConfig`] 字典中设置 @[`max_concurrency`][RunnableConfig(max_concurrency)] 属性来实现。
+</Tip>
+
+    ```python Batch with max concurrency
+    model.batch(
+        list_of_inputs,
+        config={
+            'max_concurrency': 5,  # Limit to 5 parallel calls
+        }
+    )
+    ```
+
+请参阅 @[`RunnableConfig`] 参考文档以获取支持的完整属性列表。
+:::
+
+有关批处理的更多详细信息，请参阅 @[参考文档][BaseChatModel.batch]。
+:::
+
+:::js
+```typescript Batch
+const responses = await model.batch([
+  "Why do parrots have colorful feathers?",
+  "How do airplanes fly?",
+  "What is quantum computing?",
+  "Why do parrots have colorful feathers?",
+  "How do airplanes fly?",
+  "What is quantum computing?",
+]);
+for (const response of responses) {
+  console.log(response);
+}
+```
+
+<Tip>
+    在处理大量输入时使用 `batch()`，您可能希望控制最大并发调用数。可以通过在 @[`RunnableConfig`] 字典中设置 `maxConcurrency` 属性来实现。
+
+</Tip>
+
+    ```typescript Batch with max concurrency
+    model.batch(
+      listOfInputs,
+      {
+        maxConcurrency: 5,  // Limit to 5 parallel calls
+      }
+    )
+    ```
+
+请参阅 @[`RunnableConfig`] 参考文档以获取支持的完整属性列表。
+</Tip>
+
+有关批处理的更多详细信息，请参阅 @[参考文档][BaseChatModel.batch]。
+:::
+
+---
+
+## 工具调用
+
+模型可以请求调用工具来执行任务，例如从数据库获取数据、搜索网络或运行代码。工具由以下两部分组成：
+
+1. 一个模式（schema），包括工具名称、描述和/或参数定义（通常为 JSON schema）
+2. 一个函数或 <Tooltip tip="一种可以暂停执行并在稍后恢复的方法">协程</Tooltip> 来执行。
+
+<Note>
+    您可能听说过“函数调用”这个术语。我们将其与“工具调用”互换使用。
+</Note>
+
+以下是用户与模型之间的基本工具调用流程：
+
+:::python
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant M as Model
+    participant T as Tools
+
+    U->>M: "What's the weather in SF and NYC?"
+    M->>M: Analyze request & decide tools needed
+
+    par Parallel Tool Calls
+        M->>T: get_weather("San Francisco")
+        M->>T: get_weather("New York")
+    end
+
+    par Tool Execution
+        T-->>M: SF weather data
+        T-->>M: NYC weather data
+    end
+
+    M->>M: Process results & generate response
+    M->>U: "SF: 72°F sunny, NYC: 68°F cloudy"
+```
+:::
+
+:::js
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant M as Model
+    participant T as Tools
+
+    U->>M: "What's the weather in SF and NYC?"
+    M->>M: Analyze request & decide tools needed
+
+    par Parallel Tool Calls
+        M->>T: getWeather("San Francisco")
+        M->>T: getWeather("New York")
+    end
+
+    par Tool Execution
+        T-->>M: SF weather data
+        T-->>M: NYC weather data
+    end
+
+    M->>M: Process results & generate response
+    M->>U: "SF: 72°F sunny, NYC: 68°F cloudy"
+```
+:::
+
+:::python
+要使你定义的工具可供模型使用，必须使用 @[`bind_tools`][BaseChatModel.bind_tools] 将它们绑定。在后续调用中，模型可以选择根据需要调用任何已绑定的工具。
+:::
+
+:::js
+要使你定义的工具可供模型使用，必须使用 @[`bindTools`][BaseChatModel.bindTools] 将它们绑定。在后续调用中，模型可以选择根据需要调用任何已绑定的工具。
+:::
+
+某些模型提供商提供 <Tooltip tip="在服务器端执行的工具，例如网络搜索和代码解释器">内置工具</Tooltip>，可以通过模型或调用参数启用（例如 [`ChatOpenAI`](/oss/integrations/chat/openai)、[`ChatAnthropic`](/oss/integrations/chat/anthropic)）。有关详细信息，请参阅相应的[提供商参考](/oss/integrations/providers/overview)。
+
+<Tip>
+    有关创建工具的详细信息和其他选项，请参阅[工具指南](/oss/langchain/tools)。
+</Tip>
+
+:::python
+
+:::
+```python Binding user tools
+from langchain.tools import tool
+
+@tool
+def get_weather(location: str) -> str:
+    """Get the weather at a location."""
+    return f"It's sunny in {location}."
+
+
+model_with_tools = model.bind_tools([get_weather])  # [!code highlight]
+
+response = model_with_tools.invoke("What's the weather like in Boston?")
+for tool_call in response.tool_calls:
+    # View tool calls made by the model
+    print(f"Tool: {tool_call['name']}")
+    print(f"Args: {tool_call['args']}")
+```
+:::
+
+:::js
+```typescript Binding user tools
+import { tool } from "langchain";
+import * as z from "zod";
+import { ChatOpenAI } from "@langchain/openai";
+
+const getWeather = tool(
+  (input) => `It's sunny in ${input.location}.`,
+  {
+    name: "get_weather",
+    description: "Get the weather at a location.",
+    schema: z.object({
+      location: z.string().describe("The location to get the weather for"),
+    }),
+  },
+);
+
+const model = new ChatOpenAI({ model: "gpt-5.5" });
+const modelWithTools = model.bindTools([getWeather]);  // [!code highlight]
+
+const response = await modelWithTools.invoke("What's the weather like in Boston?");
+const toolCalls = response.tool_calls || [];
+for (const tool_call of toolCalls) {
+  // View tool calls made by the model
+  console.log(`Tool: ${tool_call.name}`);
+  console.log(`Args: ${tool_call.args}`);
+}
+```
+绑定用户定义的工具时，模型的响应包含一个执行工具的**请求**。当单独使用模型而不是使用[代理](/oss/langchain/agents)时，需要由你来执行请求的工具并将结果返回给模型，以便在后续推理中使用。当使用[代理](/oss/langchain/agents)时，代理循环会为你处理工具执行循环。
+
+下面，我们展示一些使用工具调用的常见方式。
+
+<AccordionGroup>
+    <Accordion title="工具执行循环" icon="refresh">
+        当模型返回工具调用时，你需要执行这些工具并将结果传回给模型。这创建了一个对话循环，模型可以使用工具结果来生成最终响应。LangChain 包含[代理](/oss/langchain/agents)抽象来处理这种编排。
+
+        以下是实现这一点的简单示例：
+
+        :::python
+
+        ```python Tool execution loop
+        # Bind (potentially multiple) tools to the model
+        model_with_tools = model.bind_tools([get_weather])
+
+        # Step 1: Model generates tool calls
+        messages = [{"role": "user", "content": "What's the weather in Boston?"}]
+        ai_msg = model_with_tools.invoke(messages)
+        messages.append(ai_msg)
+
+        # Step 2: Execute tools and collect results
+        for tool_call in ai_msg.tool_calls:
+            # Execute the tool with the generated arguments
+            tool_result = get_weather.invoke(tool_call)
+            messages.append(tool_result)
+
+        # Step 3: Pass results back to model for final response
+        final_response = model_with_tools.invoke(messages)
+        print(final_response.text)
+        # "The current weather in Boston is 72°F and sunny."
+        ```
+
+        :::
+        :::js
+
+        ```typescript Tool execution loop
+        // Bind (potentially multiple) tools to the model
+        const modelWithTools = model.bindTools([get_weather])
+
+        // Step 1: Model generates tool calls
+        const messages = [{"role": "user", "content": "What's the weather in Boston?"}]
+        const ai_msg = await modelWithTools.invoke(messages)
+        messages.push(ai_msg)
+
+        // Step 2: Execute tools and collect results
+        for (const tool_call of ai_msg.tool_calls) {
+            // Execute the tool with the generated arguments
+            const tool_result = await get_weather.invoke(tool_call)
+            messages.push(tool_result)
+        }
+
+        // Step 3: Pass results back to model for final response
+        const final_response = await modelWithTools.invoke(messages)
+        console.log(final_response.text)
+        // "The current weather in Boston is 72°F and sunny."
+        ```
+
+:::
+
+        工具返回的每个 @[`ToolMessage`] 都包含一个与原始工具调用相匹配的 `tool_call_id`，帮助模型将结果与请求关联起来。
+    </Accordion>
+    <Accordion title="强制工具调用" icon="asterisk">
+        默认情况下，模型可以根据用户输入自由选择要使用的绑定工具。但是，你可能希望强制选择工具，确保模型使用特定工具或给定列表中的**任意**工具：
+
+        :::python
+
+        <CodeGroup>
+
+</fragment>
+            ```python Force use of any tool
+            model_with_tools = model.bind_tools([tool_1], tool_choice="any")
+            ```
+            ```python Force use of specific tools
+            model_with_tools = model.bind_tools([tool_1], tool_choice="tool_1")
+            ```
+</CodeGroup>
+
+        :::
+        :::js
+
+        <CodeGroup>
+
+</fragment>
+            ```typescript Force use of any tool
+            const modelWithTools = model.bindTools([tool_1], { toolChoice: "any" })
+            ```
+            ```typescript Force use of specific tools
+            const modelWithTools = model.bindTools([tool_1], { toolChoice: "tool_1" })
+            ```
+</CodeGroup>
+        :::
+    </Accordion>
+    <Accordion title="Parallel tool calls" icon="stack-2">
+        许多模型支持在适当时并行调用多个工具。这使得模型能够同时从不同来源收集信息。
+
+        :::python
+
+
+</fragment>
+
+        ```python Parallel tool calls
+        model_with_tools = model.bind_tools([get_weather])
+
+        response = model_with_tools.invoke(
+            "What's the weather in Boston and Tokyo?"
+        )
+
+
+        # The model may generate multiple tool calls
+        print(response.tool_calls)
+        # [
+        #   {'name': 'get_weather', 'args': {'location': 'Boston'}, 'id': 'call_1'},
+        #   {'name': 'get_weather', 'args': {'location': 'Tokyo'}, 'id': 'call_2'},
+        # ]
+
+
+        # Execute all tools (can be done in parallel with async)
+        results = []
+        for tool_call in response.tool_calls:
+            if tool_call['name'] == 'get_weather':
+                result = get_weather.invoke(tool_call)
+            ...
+            results.append(result)
+        ```
+
+        :::
+        :::js
+
+        ```typescript Parallel tool calls
+        const modelWithTools = model.bind_tools([get_weather])
+
+        const response = await modelWithTools.invoke(
+            "What's the weather in Boston and Tokyo?"
+        )
+
+
+        // The model may generate multiple tool calls
+        console.log(response.tool_calls)
+        // [
+        //   { name: 'get_weather', args: { location: 'Boston' }, id: 'call_1' },
+        //   { name: 'get_time', args: { location: 'Tokyo' }, id: 'call_2' }
+        // ]
+
+
+        // Execute all tools (can be done in parallel with async)
+        const results = []
+        for (const tool_call of response.tool_calls || []) {
+            if (tool_call.name === 'get_weather') {
+                const result = await get_weather.invoke(tool_call)
+                results.push(result)
+            }
+        }
+        ```
+
+:::
+
+模型能够智能判断何时适合并行执行，这取决于请求操作的独立性。
+
+<Tip>
+大多数支持工具调用的模型默认启用并行工具调用。一些模型（包括 [OpenAI](/oss/integrations/chat/openai) 和 [Anthropic](/oss/integrations/chat/anthropic)）允许您禁用此功能。要禁用，请设置 `parallel_tool_calls=False`：
+        ```python
+        model.bind_tools([get_weather], parallel_tool_calls=False)
+        ```
+</Tip>
+</Accordion>
+<Accordion title="流式工具调用" icon="rss">
+    在流式传输响应时，工具调用通过 @[`ToolCallChunk`] 逐步构建。这允许您查看正在生成的工具调用，而无需等待完整响应。
+
+    :::python
+
+        ```python Streaming tool calls
+        for chunk in model_with_tools.stream(
+            "What's the weather in Boston and Tokyo?"
+        ):
+            # Tool call chunks arrive progressively
+            for tool_chunk in chunk.tool_call_chunks:
+                if name := tool_chunk.get("name"):
+                    print(f"Tool: {name}")
+                if id_ := tool_chunk.get("id"):
+                    print(f"ID: {id_}")
+                if args := tool_chunk.get("args"):
+                    print(f"Args: {args}")
+
+        # Output:
+        # Tool: get_weather
+        # ID: call_SvMlU1TVIZugrFLckFE2ceRE
+        # Args: {"lo
+        # Args: catio
+        # Args: n": "B
+        # Args: osto
+        # Args: n"}
+        # Tool: get_weather
+        # ID: call_QMZdy6qInx13oWKE7KhuhOLR
+        # Args: {"lo
+        # Args: catio
+        # Args: n": "T
+        # Args: okyo
+        # Args: "}
+        ```
+
+你可以累积块来构建完整的工具调用：
+
+        ```python Accumulate tool calls
+        gathered = None
+        for chunk in model_with_tools.stream("What's the weather in Boston?"):
+            gathered = chunk if gathered is None else gathered + chunk
+            print(gathered.tool_calls)
+        ```
+
+        :::
+        :::js
+
+        ```typescript Streaming tool calls
+        const stream = await modelWithTools.stream(
+            "What's the weather in Boston and Tokyo?"
+        )
+        for await (const chunk of stream) {
+            // Tool call chunks arrive progressively
+            if (chunk.tool_call_chunks) {
+                for (const tool_chunk of chunk.tool_call_chunks) {
+                console.log(`Tool: ${tool_chunk.get('name', '')}`)
+                console.log(`Args: ${tool_chunk.get('args', '')}`)
+                }
+            }
+        }
+
+        // Output:
+        // Tool: get_weather
+        // Args:
+        // Tool:
+        // Args: {"loc
+        // Tool:
+        // Args: ation": "BOS"}
+        // Tool: get_time
+        // Args:
+        // Tool:
+        // Args: {"timezone": "Tokyo"}
+        ```
+
+你可以累积块来构建完整的工具调用：
+
+        ```typescript Accumulate tool calls
+        let full: AIMessageChunk | null = null
+        const stream = await modelWithTools.stream("What's the weather in Boston?")
+        for await (const chunk of stream) {
+            full = full ? full.concat(chunk) : chunk
+            console.log(full.contentBlocks)
+        }
+        ```
+
+::::
+    </Accordion>
+</AccordionGroup>
+
+---
+
+## 结构化输出
+
+可以请求模型以符合给定模式的格式提供响应。这对于确保输出能够被轻松解析并用于后续处理非常有用。LangChain 支持多种模式类型和强制结构化输出的方法。
+
+<Tip>
+    要了解结构化输出，请参阅[结构化输出](/oss/langchain/structured-output)。
+</Tip>
+
+:::python
+<Tabs>
+    <Tab title="Pydantic">
+        [Pydantic 模型](https://docs.pydantic.dev/latest/concepts/models/#basic-model-usage) 提供最丰富的功能集，包括字段验证、描述和嵌套结构。
+
+</fragment>
+
+        ```python
+        from pydantic import BaseModel, Field
+
+        class Movie(BaseModel):
+            """A movie with details."""
+            title: str = Field(description="The title of the movie")
+            year: int = Field(description="The year the movie was released")
+            director: str = Field(description="The director of the movie")
+            rating: float = Field(description="The movie's rating out of 10")
+
+        model_with_structure = model.with_structured_output(Movie)
+        response = model_with_structure.invoke("Provide details about the movie Inception")
+        print(response)  # Movie(title="Inception", year=2010, director="Christopher Nolan", rating=8.8)
+        ```
+</Tab>
+    <Tab title="TypedDict">
+        Python 的 `TypedDict` 提供了一种比 Pydantic 模型更简单的替代方案，非常适合你不需要运行时验证的场景。
+
+</fragment>
+
+        ```python
+        from typing_extensions import TypedDict, Annotated
+
+        class MovieDict(TypedDict):
+            """A movie with details."""
+            title: Annotated[str, ..., "The title of the movie"]
+            year: Annotated[int, ..., "The year the movie was released"]
+            director: Annotated[str, ..., "The director of the movie"]
+            rating: Annotated[float, ..., "The movie's rating out of 10"]
+
+        model_with_structure = model.with_structured_output(MovieDict)
+        response = model_with_structure.invoke("Provide details about the movie Inception")
+        print(response)  # {'title': 'Inception', 'year': 2010, 'director': 'Christopher Nolan', 'rating': 8.8}
+        ```
+</Tab>
+    <Tab title="JSON Schema">
+        提供 [JSON Schema](https://json-schema.org/understanding-json-schema/about) 以实现最大程度的控制和互操作性。
+</Tab>
+
+        ```python
+        import json
+
+        json_schema = {
+            "title": "Movie",
+            "description": "A movie with details",
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "The title of the movie"
+                },
+                "year": {
+                    "type": "integer",
+                    "description": "The year the movie was released"
+                },
+                "director": {
+                    "type": "string",
+                    "description": "The director of the movie"
+                },
+                "rating": {
+                    "type": "number",
+                    "description": "The movie's rating out of 10"
+                }
+            },
+            "required": ["title", "year", "director", "rating"]
+        }
+
+        model_with_structure = model.with_structured_output(
+            json_schema,
+            method="json_schema",
+        )
+        response = model_with_structure.invoke("Provide details about the movie Inception")
+        print(response)  # {'title': 'Inception', 'year': 2010, ...}
+        ```
+<Tabs>
+    <Tab title="Zod">
+        [zod schema](https://zod.dev/) 是定义输出模式的首选方法。请注意，当提供 zod schema 时，模型输出也将使用 zod 的 parse 方法根据 schema 进行验证。
+
+        ```typescript
+        import * as z from "zod";
+
+        const Movie = z.object({
+          title: z.string().describe("The title of the movie"),
+          year: z.number().describe("The year the movie was released"),
+          director: z.string().describe("The director of the movie"),
+          rating: z.number().describe("The movie's rating out of 10"),
+        });
+
+        const modelWithStructure = model.withStructuredOutput(Movie);
+
+        const response = await modelWithStructure.invoke("Provide details about the movie Inception");
+        console.log(response);
+        // {
+        //   title: "Inception",
+        //   year: 2010,
+        //   director: "Christopher Nolan",
+        //   rating: 8.8,
+        // }
+        ```
+</Tab>
+    <Tab title="JSON Schema">
+        为了实现最大程度的控制或互操作性，您可以提供原始的 JSON Schema。
+
+</fragment>
+
+        ```typescript
+        const jsonSchema = {
+          "title": "Movie",
+          "description": "A movie with details",
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "The title of the movie",
+            },
+            "year": {
+              "type": "integer",
+              "description": "The year the movie was released",
+            },
+            "director": {
+              "type": "string",
+              "description": "The director of the movie",
+            },
+            "rating": {
+              "type": "number",
+              "description": "The movie's rating out of 10",
+            },
+          },
+          "required": ["title", "year", "director", "rating"],
+        }
+
+        const modelWithStructure = model.withStructuredOutput(
+          jsonSchema,
+          { method: "jsonSchema" },
+        )
+
+        const response = await modelWithStructure.invoke("Provide details about the movie Inception")
+        console.log(response)  // {'title': 'Inception', 'year': 2010, ...}
+        ```
+</Tab>
+    <Tab title="Standard Schema">
+        任何实现了 [Standard Schema](https://standardschema.dev/) 规范且来自库的模式也都受支持。Standard Schema 对象在运行时通过模式的 `~standard.validate()` 方法进行验证。
+
+</Tab>
+
+        ```typescript
+        import * as v from "valibot";
+        import { toStandardJsonSchema } from "@valibot/to-json-schema";
+
+        const Movie = toStandardJsonSchema(
+          v.object({
+            title: v.pipe(v.string(), v.description("The title of the movie")),
+            year: v.pipe(v.number(), v.description("The year the movie was released")),
+            director: v.pipe(v.string(), v.description("The director of the movie")),
+            rating: v.pipe(v.number(), v.description("The movie's rating out of 10")),
+          })
+        );
+
+        const modelWithStructure = model.withStructuredOutput(Movie);
+
+        const response = await modelWithStructure.invoke("Provide details about the movie Inception");
+        console.log(response);
+        // {
+        //   title: "Inception",
+        //   year: 2010,
+        //   director: "Christopher Nolan",
+        //   rating: 8.8,
+        // }
+        ```
+</Tab>
+</Tabs>
+:::
+
+:::python
+<Note>
+    **结构化输出的关键注意事项**
+
+    - **方法参数**：某些提供商支持不同的结构化输出方法：
+        - `'json_schema'`：使用提供商提供的专用结构化输出功能。
+        - `'function_calling`：通过强制执行遵循给定模式的[工具调用](#tool-calling)来派生结构化输出。
+        - `'json_mode'`：某些提供商提供的 `'json_schema'` 前身。生成有效的 JSON，但必须在提示词中描述模式。
+    - **包含原始内容**：设置 `include_raw=True` 以获取解析后的输出和原始 AI 消息。
+    - **验证**：Pydantic 模型提供自动验证。`TypedDict` 和 JSON Schema 需要手动验证。
+
+    请参阅您的[提供商集成页面](/oss/integrations/providers/overview)以获取支持的方法和配置选项。
+</Note>
+:::
+
+:::js
+<Note>
+    **结构化输出的关键注意事项：**
+
+    - **方法参数**：某些提供商支持不同的方法（`'jsonSchema'`、`'functionCalling'`、`'jsonMode'`）
+    - **包含原始内容**：使用 @[`includeRaw: true`][BaseChatModel.with_structured_output(include_raw)] 来获取解析后的输出和原始的 @[`AIMessage`]
+    - **验证**：Zod 和标准 Schema 对象提供自动验证，而 JSON Schema 需要手动验证
+    - **标准 Schema**：任何实现 [Standard Schema](https://standardschema.dev/) 规范的 Schema 库都受支持，并在运行时进行验证
+
+    请参阅您的[提供商集成页面](/oss/integrations/providers/overview)以获取支持的方法和配置选项。
+</Note>
+:::
+
+<Accordion title="示例：与解析结构一起输出消息">
+
+返回原始 @[`AIMessage`] 对象以及解析后的表示形式可能很有用，这样可以访问响应元数据，如[令牌使用量](#token-usage)。为此，在调用 @[`with_structured_output`][BaseChatModel.with_structured_output] 时设置 @[`include_raw=True`][BaseChatModel.with_structured_output(include_raw)]：
+
+    :::python
+    ```python
+    from pydantic import BaseModel, Field
+
+    class Movie(BaseModel):
+        """A movie with details."""
+        title: str = Field(description="The title of the movie")
+        year: int = Field(description="The year the movie was released")
+        director: str = Field(description="The director of the movie")
+        rating: float = Field(description="The movie's rating out of 10")
+
+    model_with_structure = model.with_structured_output(Movie, include_raw=True)  # [!code highlight]
+    response = model_with_structure.invoke("Provide details about the movie Inception")
+    response
+    # {
+    #     "raw": AIMessage(...),
+    #     "parsed": Movie(title=..., year=..., ...),
+    #     "parsing_error": None,
+    # }
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import * as z from "zod";
+
+    const Movie = z.object({
+      title: z.string().describe("The title of the movie"),
+      year: z.number().describe("The year the movie was released"),
+      director: z.string().describe("The director of the movie"),
+      rating: z.number().describe("The movie's rating out of 10"),
+      title: z.string().describe("The title of the movie"),
+      year: z.number().describe("The year the movie was released"),
+      director: z.string().describe("The director of the movie"),  // [!code highlight]
+      rating: z.number().describe("The movie's rating out of 10"),
+    });
+
+    const modelWithStructure = model.withStructuredOutput(Movie, { includeRaw: true });
+
+    const response = await modelWithStructure.invoke("Provide details about the movie Inception");
+    console.log(response);
+    // {
+    //   raw: AIMessage { ... },
+    //   parsed: { title: "Inception", ... }
+    // }
+    ```
+:::
+</Accordion>
+<Accordion title="示例：嵌套结构">
+    Schema 可以嵌套：
+    :::python
+    <CodeGroup>
+        ```python Pydantic BaseModel
+        from pydantic import BaseModel, Field
+
+        class Actor(BaseModel):
+            name: str
+            role: str
+
+        class MovieDetails(BaseModel):
+            title: str
+            year: int
+            cast: list[Actor]
+            genres: list[str]
+            budget: float | None = Field(None, description="Budget in millions USD")
+
+        model_with_structure = model.with_structured_output(MovieDetails)
+        ```
+
+        ```python TypedDict
+        from typing_extensions import Annotated, TypedDict
+
+        class Actor(TypedDict):
+            name: str
+            role: str
+
+        class MovieDetails(TypedDict):
+            title: str
+            year: int
+            cast: list[Actor]
+            genres: list[str]
+            budget: Annotated[float | None, ..., "Budget in millions USD"]
+
+        model_with_structure = model.with_structured_output(MovieDetails)
+        ```
+</CodeGroup>
+    :::
+
+    :::js
+    ```typescript
+    import * as z from "zod";
+
+    const Actor = z.object({
+      name: z.string(),
+      role: z.string(),
+    });
+
+    const MovieDetails = z.object({
+      title: z.string(),
+      year: z.number(),
+      cast: z.array(Actor),
+      genres: z.array(z.string()),
+      budget: z.number().nullable().describe("Budget in millions USD"),
+    });
+
+    const modelWithStructure = model.withStructuredOutput(MovieDetails);
+    ```
+:::
+
+---
+
+## 高级主题
+
+### 模型简介
+
+<Info>
+    模型简介需要 `langchain>=1.1`。
+</Info>
+
+:::python
+LangChain 聊天模型可以通过 `profile` 属性公开支持的特性和功能字典：
+
+
+:::
+
+```python
+model.profile
+# {
+#   "max_input_tokens": 400000,
+#   "image_inputs": True,
+#   "reasoning_output": True,
+#   "tool_calling": True,
+#   ...
+# }
+```
+
+有关完整字段集，请参阅 [API 参考](https://reference.langchain.com/python/langchain-core/language_models/model_profile/ModelProfile)。
+
+大部分模型配置数据由 [models.dev](https://github.com/sst/models.dev) 项目提供支持，这是一个提供模型能力数据的开源计划。这些数据增加了额外的字段，以便与 LangChain 配合使用。这些增强功能会随着上游项目的发展而保持同步。
+
+模型配置数据允许应用程序动态处理模型能力。例如：
+
+1. [摘要中间件](/oss/langchain/middleware/built-in#summarization) 可以根据模型的上下文窗口大小触发摘要。
+2. `create_agent` 中的[结构化输出](/oss/langchain/structured-output)策略可以自动推断（例如，通过检查对原生结构化输出功能的支持）。
+3. 模型输入可以根据支持的[模态](#multimodal)和最大输入 token 进行限制。
+4. [Deep Agents Code](/oss/deepagents/code) 会过滤[交互式模型切换器](/oss/deepagents/code/providers#which-models-appear-in-the-switcher)，只显示配置文件中报告了 `tool_calling` 支持和文本 I/O 的模型，并在选择器详情视图中显示上下文窗口大小和能力标志。
+
+<Accordion title="更新或覆盖配置数据">
+    如果模型配置数据缺失、过时或不正确，可以进行更改。
+
+    **选项 1（快速修复）**
+
+    你可以使用任何有效的配置来实例化聊天模型：
+
+</Accordion>
+
+    ```python
+    custom_profile = {
+        "max_input_tokens": 100_000,
+        "tool_calling": True,
+        "structured_output": True,
+        # ...
+    }
+    model = init_chat_model("...", profile=custom_profile)
+    ```
+
+`profile` 也是一个常规的 `dict`，可以就地更新。如果模型实例是共享的，考虑使用 `model_copy` 以避免修改共享状态。
+
+    ```python
+    new_profile = model.profile | {"key": "value"}
+    model.model_copy(update={"profile": new_profile})
+    ```
+
+**选项 2（在上游修复数据）**
+
+数据的主要来源是 [models.dev](https://models.dev/) 项目。这些数据与 LangChain [集成包](/oss/integrations/providers/overview) 中的附加字段和覆盖项合并，并随这些包一起发布。
+
+模型配置文件数据可以通过以下流程更新：
+
+1. （如需要）通过向其在 GitHub 上的[仓库](https://github.com/sst/models.dev)提交拉取请求来更新 [models.dev](https://models.dev/) 的源数据。
+2. （如需要）通过向 LangChain [集成包](/oss/integrations/providers/overview)提交拉取请求来更新 `langchain_<package>/data/profile_augmentations.toml` 中的附加字段和覆盖项。
+3. 使用 [`langchain-model-profiles`](https://pypi.org/project/langchain-model-profiles/) CLI 工具从 [models.dev](https://models.dev/) 拉取最新数据，合并增强内容，并更新配置文件数据：
+
+    ```bash
+    pip install langchain-model-profiles
+    ```
+
+    ```bash
+    langchain-profiles refresh --provider <provider> --data-dir <data_dir>
+    ```
+
+此命令：
+
+- 从 models.dev 下载 `<provider>` 的最新数据
+- 合并 `<data_dir>` 中 `profile_augmentations.toml` 的增强配置
+- 将合并后的配置文件写入 `<data_dir>` 中的 `profiles.py`
+
+例如：从 [LangChain monorepo](https://github.com/langchain-ai/langchain) 中的 [`libs/partners/anthropic`](https://github.com/langchain-ai/langchain/tree/master/libs/partners/anthropic)：
+
+    ```bash
+    uv run --with langchain-model-profiles --provider anthropic --data-dir langchain_anthropic/data
+    ```
+</Accordion>
+
+:::
+
+:::js
+LangChain 聊天模型可以通过 `profile` 属性公开支持的特性和功能的字典：
+
+```typescript
+model.profile;
+// {
+//   maxInputTokens: 400000,
+//   imageInputs: true,
+//   reasoningOutput: true,
+//   toolCalling: true,
+//   ...
+// }
+```
+
+请参阅 [API 参考文档](https://reference.langchain.com/javascript/langchain-core/language_models/profile/ModelProfile) 中的完整字段集。
+
+大部分模型配置数据由 [models.dev](https://github.com/sst/models.dev) 项目提供支持，这是一个提供模型能力数据的开源项目。这些数据添加了额外的字段，以便与 LangChain 配合使用。这些补充内容会随着上游项目的演进而保持同步。
+
+模型配置数据允许应用程序动态处理模型能力。例如：
+
+1. [摘要中间件](/oss/langchain/middleware/built-in#summarization) 可以根据模型的上下文窗口大小触发摘要。
+2. `createAgent` 中的[结构化输出](/oss/langchain/structured-output)策略可以自动推断（例如，通过检查是否支持原生结构化输出功能）。
+3. 可以根据支持的[模态](#multimodal)和最大输入 token 对模型输入进行限制。
+4. [Deep Agents Code](/oss/deepagents/code) 过滤[交互式模型切换器](/oss/deepagents/code/providers#which-models-appear-in-the-switcher)，仅显示报告支持 `tool_calling` 且具有文本输入/输出的模型，并在选择器详情视图中显示上下文窗口大小和功能标志。
+
+<Accordion title="修改配置数据">
+    如果模型配置数据缺失、过时或不正确，可以对其进行修改。
+
+    **选项 1（快速修复）**
+
+    您可以使用任意有效的配置实例化聊天模型：
+
+
+</Accordion>
+
+    ```typescript
+    const customProfile = {
+    maxInputTokens: 100_000,
+    toolCalling: true,
+    structuredOutput: true,
+    // ...
+    };
+    const model = initChatModel("...", { profile: customProfile });
+    ```
+
+**选项 2（上游修复数据）**
+
+数据的主要来源是 [models.dev](https://models.dev/) 项目。这些数据与 LangChain [集成包](/oss/integrations/providers/overview) 中的附加字段和覆盖合并，并随这些包一起发布。
+
+模型配置文件数据可以通过以下流程更新：
+
+1. （如需要）通过向 GitHub 上的 [models.dev 仓库](https://github.com/sst/models.dev) 提交 pull 请求来更新 [models.dev](https://models.dev/) 的源数据。
+2. （如需要）通过向 LangChain [集成包](/oss/integrations/providers/overview) 提交 pull 请求来更新 `langchain-<package>/profiles.toml` 中的附加字段和覆盖。
+</Accordion>
+
+:::
+
+<Warning>
+    模型配置文件是一项测试功能。配置文件的格式可能会发生变化。
+</Warning>
+
+### 多模态
+
+某些模型可以处理并返回图像、音频和视频等非文本数据。您可以通过提供[内容块](/oss/langchain/messages#message-content)将非文本数据传递给模型。
+
+<Tip>
+    所有具有底层多模态功能的 LangChain 聊天模型都支持：
+
+    1. 跨提供商标准格式的数据（请参阅[我们的消息指南](/oss/langchain/messages)）
+    2. OpenAI [聊天补全](https://platform.openai.com/docs/api-reference/chat) 格式
+    3. 该特定提供商的原生格式（例如，Anthropic 模型接受 Anthropic 原生格式）
+</Tip>
+
+详细信息请参阅消息指南中的[多模态部分](/oss/langchain/messages#multimodal)。
+
+<Tooltip tip="并非所有 LLM 都一样！" cta="查看参考" href="https://models.dev/">某些模型</Tooltip>可以作为响应的一部分返回多模态数据。如果调用这些模型返回多模态数据，生成的 @[`AIMessage`] 将包含具有多模态类型的内容块。
+
+:::python
+```python Multimodal output
+response = model.invoke("Create a picture of a cat")
+print(response.content_blocks)
+# [
+#     {"type": "text", "text": "Here's a picture of a cat"},
+#     {"type": "image", "base64": "...", "mime_type": "image/jpeg"},
+# ]
+```
+:::
+
+:::js
+```typescript Multimodal output
+const response = await model.invoke("Create a picture of a cat");
+console.log(response.contentBlocks);
+// [
+//   { type: "text", text: "Here's a picture of a cat" },
+//   { type: "image", data: "...", mimeType: "image/jpeg" },
+// ]
+```
+:::
+
+有关特定提供商的详细信息，请参阅[集成页面](/oss/integrations/providers/overview)。
+
+### 推理
+
+许多模型能够执行多步骤推理以得出结论。这涉及将复杂问题分解为更小、更易管理的步骤。
+
+**如果底层模型支持此功能，**您可以展示此推理过程，以便更好地理解模型如何得出最终答案。
+
+:::python
+<CodeGroup>
+    ```python Stream reasoning output
+    for chunk in model.stream("Why do parrots have colorful feathers?"):
+        reasoning_steps = [r for r in chunk.content_blocks if r["type"] == "reasoning"]
+        print(reasoning_steps if reasoning_steps else chunk.text)
+    ```
+
+    ```python Complete reasoning output
+    response = model.invoke("Why do parrots have colorful feathers?")
+    reasoning_steps = [b for b in response.content_blocks if b["type"] == "reasoning"]
+    print(" ".join(step["reasoning"] for step in reasoning_steps))
+    ```
+</CodeGroup>
+:::
+
+:::js
+<CodeGroup>
+
+</fragment>
+    ```typescript Stream reasoning output
+    const stream = model.stream("Why do parrots have colorful feathers?");
+    for await (const chunk of stream) {
+        const reasoningSteps = chunk.contentBlocks.filter(b => b.type === "reasoning");
+        console.log(reasoningSteps.length > 0 ? reasoningSteps : chunk.text);
+    }
+    ```
+
+    ```typescript Complete reasoning output
+    const response = await model.invoke("Why do parrots have colorful feathers?");
+    const reasoningSteps = response.contentBlocks.filter(b => b.type === "reasoning");
+    console.log(reasoningSteps.map(step => step.reasoning).join(" "));
+    ```
+</CodeGroup>
+:::
+
+根据模型的不同，你有时可以指定它应该在推理方面投入多少努力。同样，你也可以请求模型完全关闭推理功能。这可能以分类的推理"层级"（例如 `'low'` 或 `'high'`）或整数令牌预算的形式出现。
+
+有关详细信息，请参阅你的聊天模型的[集成页面](/oss/integrations/providers/overview)或[参考文档](https://reference.langchain.com/python/integrations/)。
+
+
+### 本地模型
+
+LangChain 支持在你自己的硬件上本地运行模型。这对于数据隐私至关重要、你想要调用自定义模型，或者希望避免使用云模型产生成本等场景非常有用。
+
+[Ollama](/oss/integrations/chat/ollama) 是在本地运行聊天和嵌入模型最简单的方法之一。
+
+{/* TODO: whenever we have a better integrations directory, x-ref to that page with a local query filter */}
+
+### 提示词缓存
+
+许多提供商提供提示词缓存功能，以降低重复处理相同令牌时的延迟和成本。你可以在三个级别上启用缓存：
+
+- **隐式提供商缓存：** 如果请求命中缓存，提供商会自动将成本节省转嫁给你，无需任何配置。示例：[OpenAI](/oss/integrations/chat/openai) 和 [Gemini](/oss/integrations/chat/google_generative_ai)。
+- **提供商级显式控制：** 提供商允许你手动指定缓存点，以获得更大控制或保证成本节省。这些功能镜像底层提供商/API 的行为。示例：
+    - @[`ChatOpenAI`]（通过 `prompt_cache_key`）
+    - Anthropic content-block [`cache_control`](/oss/integrations/chat/anthropic#prompt-caching)
+    - [Gemini](https://reference.langchain.com/python/integrations/langchain_google_genai/)。
+:::python
+    - AWS Bedrock [`cachePoint`](/oss/integrations/chat/bedrock#prompt-caching) 块
+- **LangChain 中间件：** 对于代理，中间件允许 LangChain 优化稳定系统提示和工具内容的缓存。示例：
+    - Anthropic 的 [`AnthropicPromptCachingMiddleware`](/oss/integrations/middleware/anthropic#prompt-caching)
+    - AWS Bedrock 的 [`BedrockPromptCachingMiddleware`](/oss/integrations/middleware/aws#prompt-caching)
+:::
+
+<Warning>
+    提示词缓存通常只有在输入令牌数量超过最小阈值时才会启用。请参阅[提供商页面](/oss/integrations/chat)了解详细信息。
+</Warning>
+
+缓存使用情况将反映在模型响应的[使用元数据](/oss/langchain/messages#token-usage)中。
+
+### 服务端工具使用
+
+某些提供商支持服务端[工具调用](#tool-calling)循环：模型可以在单次对话轮次中与网络搜索、代码解释器和其他工具交互，并分析结果。
+
+如果模型在服务端调用工具，响应消息的内容将包含代表工具调用及其结果的内容。访问响应的[内容块](/oss/langchain/messages#standard-content-blocks)将以提供商无关的格式返回服务端工具调用和结果：
+
+:::python
+
+</fragment>
+```python Invoke with server-side tool use
+from langchain.chat_models import init_chat_model
+
+model = init_chat_model("gpt-5.4-mini")
+
+tool = {"type": "web_search"}
+model_with_tools = model.bind_tools([tool])
+
+response = model_with_tools.invoke("What was a positive news story from today?")
+print(response.content_blocks)
+```
+```python Result expandable
+[
+    {
+        "type": "server_tool_call",
+        "name": "web_search",
+        "args": {
+            "query": "positive news stories today",
+            "type": "search"
+        },
+        "id": "ws_abc123"
+    },
+    {
+        "type": "server_tool_result",
+        "tool_call_id": "ws_abc123",
+        "status": "success"
+    },
+    {
+        "type": "text",
+        "text": "Here are some positive news stories from today...",
+        "annotations": [
+            {
+                "end_index": 410,
+                "start_index": 337,
+                "title": "article title",
+                "type": "citation",
+                "url": "..."
+            }
+        ]
+    }
+]
+```
+:::
+:::js
+```typescript
+import { initChatModel } from "langchain";
+
+const model = await initChatModel("gpt-5.4-mini");
+const modelWithTools = model.bindTools([{ type: "web_search" }])
+
+const message = await modelWithTools.invoke("What was a positive news story from today?");
+console.log(message.contentBlocks);
+```
+:::
+这代表一个单独的对话回合；如客户端 [tool-calling](#tool-calling) 中所述，没有需要传入的相关 [ToolMessage](/oss/langchain/messages#tool-message) 对象。
+
+请参阅您提供商的[集成页面](/oss/integrations/chat)以获取可用工具和使用详情。
+
+:::python
+### 速率限制
+
+许多聊天模型提供商会限制在特定时间段内可以进行的调用次数。如果您遇到速率限制，您通常会收到提供商返回的速率限制错误响应，并且需要等待一段时间后再发出更多请求。
+
+为了帮助管理速率限制，聊天模型集成接受一个 `rate_limiter` 参数，该参数可以在初始化时提供，以控制请求的发送速率。
+
+<Accordion title="初始化并使用速率限制器" icon="gauge">
+    LangChain 包含一个可选的内置 @[`InMemoryRateLimiter`]。此限制器是线程安全的，可以在同一进程中的多个线程之间共享。
+
+</Accordion>
+
+    ```python Define a rate limiter
+    from langchain_core.rate_limiters import InMemoryRateLimiter
+
+    rate_limiter = InMemoryRateLimiter(
+        requests_per_second=0.1,  # 1 request every 10s
+        check_every_n_seconds=0.1,  # Check every 100ms whether allowed to make a request
+        max_bucket_size=10,  # Controls the maximum burst size.
+    )
+
+    model = init_chat_model(
+        model="gpt-5.5",
+        model_provider="openai",
+        rate_limiter=rate_limiter  # [!code highlight]
+    )
+    ```
+
+<Warning>
+        提供的速率限制器只能限制单位时间内的请求数量。如果您还需要根据请求大小进行限制，它将无法帮助您。
+    </Warning>
+</Accordion>
+:::
+
+### Base URL 和代理设置
+
+您可以为实现 OpenAI Chat Completions API 的提供程序配置自定义 base URL。
+
+<Warning>
+    `model_provider="openai"`（或直接使用 `ChatOpenAI`）针对官方 OpenAI API 规范。路由器和代理中的提供程序特定字段可能不会被提取或保留。
+
+    对于 OpenRouter 和 LiteLLM，请使用专用集成：
+    - [通过 `ChatOpenRouter` 使用 OpenRouter](/oss/integrations/chat/openrouter)（`langchain-openrouter`）
+    - [通过 `ChatLiteLLM` / `ChatLiteLLMRouter` 使用 LiteLLM](/oss/integrations/chat)（`langchain-litellm`）
+</Warning>
+
+<Accordion title="自定义 base URL" icon="link">
+    :::python
+    Many model providers offer OpenAI-compatible APIs (e.g., [Together AI](https://www.together.ai/), [vLLM](https://github.com/vllm-project/vllm)). You can use @[`init_chat_model`] with these providers by specifying the appropriate `base_url` parameter:
+
+
+</fragment>
+
+    ```python
+    model = init_chat_model(
+        model="MODEL_NAME",
+        model_provider="openai",
+        base_url="BASE_URL",
+        api_key="YOUR_API_KEY",
+    )
+    ```
+:::
+
+:::js
+许多模型提供商提供 OpenAI 兼容的 API（例如 [Together AI](https://www.together.ai/)、[vLLM](https://github.com/vllm-project/vllm)）。你可以通过指定相应的 `base_url` 参数来使用 `initChatModel` 与这些提供商：
+
+    ```python
+    model = initChatModel(
+        "MODEL_NAME",
+        {
+            modelProvider: "openai",
+            baseUrl: "BASE_URL",
+            apiKey: "YOUR_API_KEY",
+        }
+    )
+    ```
+:::python
+<Accordion title="HTTP proxy configuration" icon="shield">
+    对于需要 HTTP 代理的部署，某些模型集成支持代理配置：
+
+</Accordion>
+</Note>
+</fragment>
+
+    ```python
+    from langchain_openai import ChatOpenAI
+
+    model = ChatOpenAI(
+        model="gpt-5.5",
+        openai_proxy="http://proxy.example.com:8080"
+    )
+    ```
+
+<Note>
+    代理支持因集成而异。请查看特定模型提供商的[参考文档](/oss/integrations/providers/overview)了解代理配置选项。
+</Note>
+
+</Accordion>
+:::
+
+
+### 对数概率
+
+某些模型可以配置为通过在初始化模型时设置 `logprobs` 参数来返回表示给定 token 似然性的 token 级别对数概率：
+
+:::python
+```python
+model = init_chat_model(
+    model="gpt-5.5",
+    model_provider="openai"
+).bind(logprobs=True)
+
+response = model.invoke("Why do parrots talk?")
+print(response.response_metadata["logprobs"])
+```
+:::
+
+:::js
+```typescript
+const model = new ChatOpenAI({
+    model: "gpt-5.5",
+    logprobs: true,
+});
+
+const responseMessage = await model.invoke("Why do parrots talk?");
+
+responseMessage.response_metadata.logprobs.content.slice(0, 5);
+```
+### Token 使用量
+
+许多模型提供商会在调用响应中返回 token 使用量信息。当该信息可用时，它将包含在相应模型生成的 @[`AIMessage`] 对象上。更多详情，请参阅 [messages](/oss/langchain/messages) 指南。
+
+:::python
+<Note>
+    某些提供商 API（尤其是 OpenAI 和 Azure OpenAI 聊天补全）要求用户选择加入才能在流式上下文中接收 token 使用量数据。详情请参阅集成指南中的 [streaming usage metadata](/oss/integrations/chat/openai#streaming-usage-metadata) 部分。
+</Note>
+:::
+
+:::python
+您可以使用回调或上下文管理器来跟踪应用程序中跨模型的聚合 token 数量，如下所示：
+
+<Tabs>
+    <Tab title="回调处理器">
+        ```python
+        from langchain.chat_models import init_chat_model
+        from langchain_core.callbacks import UsageMetadataCallbackHandler
+
+        model_1 = init_chat_model(model="gpt-5.4-mini")
+        model_2 = init_chat_model(model="claude-haiku-4-5-20251001")
+
+        callback = UsageMetadataCallbackHandler()
+        result_1 = model_1.invoke("Hello", config={"callbacks": [callback]})
+        result_2 = model_2.invoke("Hello", config={"callbacks": [callback]})
+        print(callback.usage_metadata)
+        ```
+        ```python
+        {
+            'gpt-5.4-mini': {
+                'input_tokens': 8,
+                'output_tokens': 10,
+                'total_tokens': 18,
+                'input_token_details': {'audio': 0, 'cache_read': 0},
+                'output_token_details': {'audio': 0, 'reasoning': 0}
+            },
+            'claude-haiku-4-5-20251001': {
+                'input_tokens': 8,
+                'output_tokens': 21,
+                'total_tokens': 29,
+                'input_token_details': {'cache_read': 0, 'cache_creation': 0}
+            }
+        }
+        ```
+</Tab>
+    <Tab title="上下文管理器">
+
+</Tab>
+        ```python
+        from langchain.chat_models import init_chat_model
+        from langchain_core.callbacks import get_usage_metadata_callback
+
+        model_1 = init_chat_model(model="gpt-5.4-mini")
+        model_2 = init_chat_model(model="claude-haiku-4-5-20251001")
+
+        with get_usage_metadata_callback() as cb:
+            model_1.invoke("Hello")
+            model_2.invoke("Hello")
+            print(cb.usage_metadata)
+        ```
+        ```python
+        {
+            'gpt-5.4-mini': {
+                'input_tokens': 8,
+                'output_tokens': 10,
+                'total_tokens': 18,
+                'input_token_details': {'audio': 0, 'cache_read': 0},
+                'output_token_details': {'audio': 0, 'reasoning': 0}
+            },
+            'claude-haiku-4-5-20251001': {
+                'input_tokens': 8,
+                'output_tokens': 21,
+                'total_tokens': 29,
+                'input_token_details': {'cache_read': 0, 'cache_creation': 0}
+            }
+        }
+        ```
+</Tab>
+</Tabs>
+:::
+
+### 调用配置
+
+:::python
+调用模型时，可以通过 `config` 参数传递额外配置，使用 @[`RunnableConfig`] 字典。这提供了对执行行为、回调和元数据跟踪的运行时控制。
+:::
+
+:::js
+调用模型时，可以通过 `config` 参数传递额外配置，使用 @[`RunnableConfig`] 对象。这提供了对执行行为、回调和元数据跟踪的运行时控制。
+:::
+
+常见配置选项包括：
+
+:::python
+```python Invocation with config
+response = model.invoke(
+    "Tell me a joke",
+    config={
+        "run_name": "joke_generation",      # Custom name for this run
+        "tags": ["humor", "demo"],          # Tags for categorization
+        "metadata": {"user_id": "123"},     # Custom metadata
+        "callbacks": [my_callback_handler], # Callback handlers
+    }
+)
+```
+:::
+
+:::js
+```typescript Invocation with config
+const response = await model.invoke(
+    "Tell me a joke",
+    {
+        runName: "joke_generation",      // Custom name for this run
+        tags: ["humor", "demo"],          // Tags for categorization
+        metadata: {"user_id": "123"},     // Custom metadata
+        callbacks: [my_callback_handler], // Callback handlers
+    }
+)
+```
+:::
+
+这些配置值在以下情况下特别有用：
+- 使用 [LangSmith](/langsmith/observability) 跟踪进行调试
+- 实现自定义日志记录或监控
+- 控制生产环境中的资源使用
+- 跟踪复杂管道中的调用
+
+:::python
+<Accordion title="关键配置属性">
+    <ParamField body="run_name" type="string">
+        在日志和跟踪中标识此特定调用。不会被子调用继承。
+    </ParamField>
+
+    <ParamField body="tags" type="string[]">
+        所有子调用继承的标签，用于在调试工具中进行筛选和组织。
+    </ParamField>
+
+    <ParamField body="metadata" type="object">
+        用于跟踪额外上下文的自定义键值对，被所有子调用继承。
+    </ParamField>
+
+    <ParamField body="max_concurrency" type="number">
+        使用 @[`batch()`][BaseChatModel.batch] 或 @[`batch_as_completed()`][BaseChatModel.batch_as_completed] 时控制最大并行调用数。
+    </ParamField>
+
+    <ParamField body="callbacks" type="array">
+        用于在执行过程中监控和响应事件的处理器。
+    </ParamField>
+
+    <ParamField body="recursion_limit" type="number">
+        链的最大递归深度，用于防止复杂管道中的无限循环。
+    </ParamField>
+</Accordion>
+:::
+
+:::js
+<Accordion title="关键配置属性">
+    <ParamField body="runName" type="string">
+        在日志和跟踪中标识此特定调用。不会被子调用继承。
+    </ParamField>
+
+    <ParamField body="tags" type="string[]">
+        所有子调用继承的标签，用于在调试工具中进行筛选和组织。
+    </ParamField>
+
+    <ParamField body="metadata" type="object">
+        用于跟踪额外上下文的自定义键值对，被所有子调用继承。
+    </ParamField>
+
+    <ParamField body="maxConcurrency" type="number">
+        使用 `batch()` 时控制最大并行调用数。
+    </ParamField>
+
+    <ParamField body="callbacks" type="CallbackHandler[]">
+        用于在执行过程中监控和响应事件的处理器。
+    </ParamField>
+
+    <ParamField body="recursion_limit" type="number">
+        链的最大递归深度，用于防止复杂管道中的无限循环。
+    </ParamField>
+</Accordion>
+:::
+
+<Tip>
+    请参阅完整的 @[`RunnableConfig`] 参考以了解所有支持的属性。
+</Tip>
+
+:::python
+### 可配置模型
+
+你还可以通过指定 @[`configurable_fields`][BaseChatModel.configurable_fields] 创建一个运行时可配置的模型。如果不指定模型值，则 `'model'` 和 `'model_provider'` 将默认可配置。
+
+:::
+
+```python
+from langchain.chat_models import init_chat_model
+
+configurable_model = init_chat_model(temperature=0)
+
+configurable_model.invoke(
+    "what's your name",
+    config={"configurable": {"model": "gpt-5-nano"}},  # Run with GPT-5-Nano
+)
+configurable_model.invoke(
+    "what's your name",
+    config={"configurable": {"model": "claude-sonnet-4-6"}},  # Run with Claude
+)
+```
+
+<Accordion title="带有默认值的可配置模型">
+    我们可以创建一个带有默认模型值的可配置模型，指定哪些参数是可配置的，并为可配置参数添加前缀：
+
+
+</Accordion>
+
+    ```python
+    first_model = init_chat_model(
+            model="gpt-5.4-mini",
+            temperature=0,
+            configurable_fields=("model", "model_provider", "temperature", "max_tokens"),
+            config_prefix="first",  # Useful when you have a chain with multiple models
+    )
+
+    first_model.invoke("what's your name")
+    ```
+
+    ```python
+    first_model.invoke(
+        "what's your name",
+        config={
+            "configurable": {
+                "first_model": "claude-sonnet-4-6",
+                "first_temperature": 0.5,
+                "first_max_tokens": 100,
+            }
+        },
+    )
+    ```
+
+请参阅 @[`init_chat_model`] 参考资料以获取有关 `configurable_fields` 和 `config_prefix` 的更多详细信息。
+</Accordion>
+
+<Accordion title="以声明方式使用可配置模型">
+    我们可以像调用常规实例化的聊天模型对象一样，在可配置模型上调用 `bind_tools`、`with_structured_output`、`with_configurable` 等声明式操作，也可以链接可配置模型。
+
+</fragment>
+
+    ```python
+    from pydantic import BaseModel, Field
+
+
+    class GetWeather(BaseModel):
+        """Get the current weather in a given location"""
+
+            location: str = Field(description="The city and state, e.g. San Francisco, CA")
+
+
+    class GetPopulation(BaseModel):
+        """Get the current population in a given location"""
+
+            location: str = Field(description="The city and state, e.g. San Francisco, CA")
+
+
+    model = init_chat_model(temperature=0)
+    model_with_tools = model.bind_tools([GetWeather, GetPopulation])
+
+    model_with_tools.invoke(
+        "what's bigger in 2024 LA or NYC", config={"configurable": {"model": "gpt-5.4-mini"}}
+    ).tool_calls
+    ```
+    ```
+    [
+        {
+            'name': 'GetPopulation',
+            'args': {'location': 'Los Angeles, CA'},
+            'id': 'call_Ga9m8FAArIyEjItHmztPYA22',
+            'type': 'tool_call'
+        },
+        {
+            'name': 'GetPopulation',
+            'args': {'location': 'New York, NY'},
+            'id': 'call_jh2dEvBaAHRaw5JUDthOs7rt',
+            'type': 'tool_call'
+        }
+    ]
+    ```
+    ```python
+    model_with_tools.invoke(
+        "what's bigger in 2024 LA or NYC",
+        config={"configurable": {"model": "claude-sonnet-4-6"}},
+    ).tool_calls
+    ```
+    ```
+    [
+        {
+            'name': 'GetPopulation',
+            'args': {'location': 'Los Angeles, CA'},
+            'id': 'toolu_01JMufPf4F4t2zLj7miFeqXp',
+            'type': 'tool_call'
+        },
+        {
+            'name': 'GetPopulation',
+            'args': {'location': 'New York City, NY'},
+            'id': 'toolu_01RQBHcE8kEEbYTuuS8WqY1u',
+            'type': 'tool_call'
+        }
+    ]
+    ```
+</Accordion>
+:::
+
+### 动态模型选择
+
+动态模型在<Tooltip tip="代理的执行环境，包含不可变的配置和在代理执行过程中持续存在的上下文数据（例如，用户ID、会话详情或应用特定配置）。">运行时</Tooltip>基于当前<Tooltip tip="在代理执行过程中流动的数据，包括消息、自定义字段以及在处理过程中需要跟踪和可能修改的任何信息（例如，用户偏好或工具使用统计）。">状态</Tooltip>和上下文进行选择。这使得复杂的路由逻辑和成本优化成为可能。
+
+:::python
+
+要使用动态模型，请使用 @[`@wrap_model_call`] 装饰器创建中间件来修改请求中的模型：
+
+</fragment>
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+
+
+basic_model = ChatOpenAI(model="gpt-5.4-mini")
+advanced_model = ChatOpenAI(model="gpt-5.5")
+
+@wrap_model_call
+def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
+    """Choose model based on conversation complexity."""
+    message_count = len(request.state["messages"])
+
+    if message_count > 10:
+        # Use an advanced model for longer conversations
+        model = advanced_model
+    else:
+        model = basic_model
+
+    return handler(request.override(model=model))
+
+agent = create_agent(
+    model=basic_model,  # Default model
+    tools=tools,
+    middleware=[dynamic_model_selection]
+)
+```
+
+<Warning>
+预绑定模型（已经调用过 @[`bind_tools`][BaseChatModel.bind_tools] 的模型）在使用结构化输出时不受支持。如果您需要使用结构化输出进行动态模型选择，请确保传递给中间件的模型不是预绑定的。
+</Warning>
+
+:::
+:::js
+
+To use a dynamic model, create middleware with `wrapModelCall` that modifies the model in the request:
+
+要使用动态模型，请创建使用 `wrapModelCall` 的中间件来修改请求中的模型：
+
+</fragment>
+
+```ts
+import { ChatOpenAI } from "@langchain/openai";
+import { createAgent, createMiddleware } from "langchain";
+
+const basicModel = new ChatOpenAI({ model: "gpt-5.4-mini" });
+const advancedModel = new ChatOpenAI({ model: "gpt-5.5" });
+
+const dynamicModelSelection = createMiddleware({
+  name: "DynamicModelSelection",
+  wrapModelCall: (request, handler) => {
+    // Choose model based on conversation complexity
+    const messageCount = request.messages.length;
+
+    return handler({
+        ...request,
+        model: messageCount > 10 ? advancedModel : basicModel,
+    });
+  },
+});
+
+const agent = createAgent({
+  model: "gpt-5.4-mini", // Base model (used when messageCount ≤ 10)
+  tools,
+  middleware: [dynamicModelSelection],
+});
+```
+
+:::tip
+有关中间件和高级模式的更多详细信息，请参阅[中间件文档](/oss/langchain/middleware)。
+:::
+
+<Tip>
+有关模型配置的详细信息，请参阅[模型](/oss/langchain/models)。有关动态模型选择模式，请参阅[中间件中的动态模型](/oss/langchain/middleware#dynamic-model)。
+</Tip>

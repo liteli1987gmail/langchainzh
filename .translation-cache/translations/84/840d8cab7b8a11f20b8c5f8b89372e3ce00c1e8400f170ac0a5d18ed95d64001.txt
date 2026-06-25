@@ -1,0 +1,159 @@
+---
+title: "OCI Generative AI 与 LangChain 的集成"
+description: "使用 LangChain Python 与 OCI Generative AI 嵌入进行集成。"
+---
+
+import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
+
+本文档将帮助您开始使用 OCI Generative AI [embedding models](/oss/integrations/embeddings)。Oracle Cloud Infrastructure (OCI) Generative AI 提供前沿的文本和图像 embedding 模型，支持语义搜索、RAG、聚类和跨模态应用。
+
+有关详细文档，请参阅 [OCI Generative AI 文档](https://docs.oracle.com/en-us/iaas/Content/generative-ai/home.htm) 和 [API 参考](https://docs.oracle.com/en-us/iaas/api/#/en/generative-ai/20231130/)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | 缓存参数 | 异步 | 下载 | 版本 |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| [`OCIGenAIEmbeddings`](https://github.com/oracle/langchain-oracle/tree/main/libs/oci) | [`langchain-oci`](https://pypi.org/project/langchain-oci/) | beta | ✅ | ✅ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-oci?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-oci?style=flat-square&label=%20) |
+
+### 模型特性
+
+| 文本 embedding | 图像 embedding | 多模态 | 批处理操作 | 异步 |
+| :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ✅ | ✅ |
+
+## 设置
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install -qU langchain-oci oci
+```
+
+```bash uv
+uv add langchain-oci oci
+```
+</CodeGroup>
+
+设置身份验证：
+
+```bash
+oci setup config
+```
+
+## 实例化
+
+```python
+from langchain_oci import OCIGenAIEmbeddings
+
+embeddings = OCIGenAIEmbeddings(
+    model_id="cohere.embed-english-v3.0",
+    service_endpoint="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+    compartment_id="ocid1.compartment.oc1..your-compartment-id",
+)
+```
+
+## 使用方法
+
+在技术文档上构建语义搜索：
+
+```python
+# Index code documentation
+docs = [
+    "authenticate() validates JWT tokens and returns user object",
+    "authorize() checks user permissions for resource access",
+    "audit_log() records user actions for compliance tracking"
+]
+doc_vectors = embeddings.embed_documents(docs)
+
+# Search with natural language query
+query = "How do I verify user identity?"
+query_vector = embeddings.embed_query(query)
+
+# Find most relevant documentation
+import numpy as np
+similarities = [
+    np.dot(query_vector, doc_vec) /
+    (np.linalg.norm(query_vector) * np.linalg.norm(doc_vec))
+    for doc_vec in doc_vectors
+]
+best_match = docs[np.argmax(similarities)]
+# Returns: "authenticate() validates JWT tokens..."
+```
+
+**使用场景：**代码搜索、文档问答、日志分析、重复检测
+
+## 图像嵌入
+
+使用多模态嵌入通过文本查询来搜索视觉资产：
+
+```python
+import numpy as np
+from langchain_oci import OCIGenAIEmbeddings
+
+embeddings = OCIGenAIEmbeddings(
+    model_id="cohere.embed-v4.0",
+    service_endpoint="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com",
+    compartment_id="ocid1.compartment.oc1..your-compartment-id",
+)
+
+# Index architecture diagrams
+diagrams = ["microservices.png", "database_schema.png", "network.png"]
+image_vectors = embeddings.embed_image_batch(diagrams)
+
+# Search with text query
+query_vector = embeddings.embed_query("database relationships")
+
+# Find best match
+similarities = [np.dot(query_vector, v) / (np.linalg.norm(query_vector) * np.linalg.norm(v))
+                for v in image_vectors]
+print(diagrams[np.argmax(similarities)])  # "database_schema.png"
+```
+
+**用例：** 技术图表搜索、资产管理、可视化文档检索
+
+## 可用模型
+
+| Model | Dimensions | Type |
+|-------|------------|------|
+| `cohere.embed-english-v3.0` | 1024 | Text only |
+| `cohere.embed-multilingual-v3.0` | 1024 | Text only |
+| `cohere.embed-v4.0` | 256-1536 | Text + Image |
+
+查看 [OCI 模型目录](https://docs.oracle.com/en-us/iaas/Content/generative-ai/pretrained-models.htm) 了解所有模型。
+
+## RAG 示例
+
+<LangchainCommunityUnmaintained />
+
+```python
+from langchain_community.vectorstores import FAISS
+
+# Create vector store
+vectorstore = FAISS.from_documents(documents, embeddings)
+
+# Search
+results = vectorstore.similarity_search("your query", k=3)
+```
+
+## 异步
+
+用于生产环境的异步操作：
+
+```python
+query_vector = await embeddings.aembed_query("What is AI?")
+doc_vectors = await embeddings.aembed_documents(["Doc 1", "Doc 2"])
+```
+
+## API 参考
+
+有关 `OCIGenAIEmbeddings` 所有功能和配置的详细文档，请访问 [API 参考](https://github.com/oracle/langchain-oracle/tree/main/libs/oci)。
+
+## 相关
+
+- [OCI 提供商概述](/oss/integrations/providers/oci)
+- [`ChatOCIGenAI`](/oss/integrations/chat/oci_generative_ai)
+- [嵌入指南](/oss/integrations/embeddings)
+- [RAG 教程](/oss/langchain/rag)

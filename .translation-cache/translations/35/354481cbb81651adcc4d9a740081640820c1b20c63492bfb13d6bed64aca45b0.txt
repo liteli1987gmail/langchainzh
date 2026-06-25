@@ -1,0 +1,142 @@
+---
+title: 自定义输出渲染
+sidebarTitle: 自定义输出渲染
+---
+
+自定义输出渲染允许您使用自己的自定义 HTML 页面来可视化运行输出和数据集引用输出。这对于以下场景特别有用：
+
+-   **领域特定格式**：以原生格式显示医疗记录、法律文档或其他专业数据类型。
+-   **自定义可视化**：从数值或结构化输出数据创建图表、图形或示意图。
+
+在本页面中，您将学习如何：
+
+-   **[在 LangSmith UI 中配置自定义渲染](#configure-custom-output-rendering)**。
+-   **[构建自定义渲染器](#build-a-custom-renderer)** 以显示输出数据。
+-   **[了解自定义渲染出现的位置](#where-custom-rendering-appears)**。
+
+## 配置自定义输出渲染
+
+在两个级别配置自定义渲染：
+
+-   **对于数据集**：将自定义渲染应用到与该数据集关联的所有运行，无论它们出现在实验、运行详情窗格还是标注队列中。
+-   **对于标注队列**：将自定义渲染应用到特定标注队列内的所有运行，无论它们来自哪个数据集。这优先于数据集级别的配置。
+
+### 对于跟踪项目
+
+要为跟踪项目配置自定义输出渲染：
+
+![显示自定义输出渲染配置的跟踪项目设置](/langsmith/images/tracing-project-custom-output-rendering-settings.png)
+
+1. 导航到 **跟踪项目** 页面。
+2. 点击现有的跟踪项目或创建一个新的。
+3. 在编辑跟踪项目窗格中，向下滚动到 **自定义输出渲染** 部分。
+4. 切换 **启用自定义输出渲染**。
+5. 在 **URL** 字段中输入网页 URL。
+6. 点击 **保存**。
+
+### 对于数据集
+
+要为数据集配置自定义输出渲染：
+
+![显示三点菜单和自定义输出渲染选项的数据集页面](/langsmith/images/custom-output-rendering-menu.png)
+
+1. 在 **数据集和实验** 页面中导航到您的数据集。
+2. 点击右上角的 **⋮**（三点菜单）。
+3. 选择 **自定义输出渲染**。
+4. 切换 **启用自定义输出渲染**。
+5. 在 **URL** 字段中输入网页 URL。
+6. 点击 **保存**。
+
+![填写了字段的自定义输出渲染模态框](/langsmith/images/custom-output-rendering-modal.png)
+
+### 对于标注队列
+
+要为标注队列配置自定义输出渲染：
+
+![显示自定义输出渲染配置的标注队列设置](/langsmith/images/annotation-queue-custom-output-rendering-settings.png)
+
+1. 导航到 **标注队列** 页面。
+2. 点击现有的标注队列或创建一个新的。
+3. 在标注队列设置窗格中，向下滚动到 **自定义输出渲染** 部分。
+4. 切换 **启用自定义输出渲染**。
+5. 在 **URL** 字段中输入网页 URL。
+6. 点击 **保存** 或 **创建**。
+
+<Info>当多个级别应用自定义渲染设置时，优先级顺序如下：标注队列 > 数据集 > 跟踪项目。</Info>
+
+## 构建自定义渲染器
+
+### 了解消息格式
+
+您的 HTML 页面将通过 [postMessage API](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage) 接收输出数据。LangSmith 发送的消息具有以下结构：
+
+```typescript
+{
+  type: "output" | "reference",
+  data: {
+    // The outputs (actual output or reference output)
+    // Structure varies based on your application
+  },
+  metadata: {
+    inputs: {
+      // The inputs that generated this output
+      // Structure varies based on your application
+    }
+  }
+}
+```
+
+-   `type`：指示这是实际输出（`"output"`）还是引用输出（`"reference"`）。
+-   `data`：输出数据本身。
+-   `metadata.inputs`：生成此输出的输入数据，为提供上下文。
+
+<Note>**消息传递时间**：LangSmith 使用指数退避重试机制，以确保您的页面接收数据，即使页面加载缓慢。消息最多发送 6 次，递增延迟（100ms、200ms、400ms、800ms、1600ms、3200ms）。</Note>
+
+### 示例实现
+
+此示例监听传入的 postMessage 事件，并在页面上显示它们。每条消息都带有编号并格式化为 JSON，便于检查 LangSmith 发送到渲染器的数据结构。
+
+```html
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>PostMessage Echo</title>
+        <link rel="stylesheet" href="https://unpkg.com/sakura.css/css/sakura.css" />
+    </head>
+    <body>
+        <h1>PostMessage Messages</h1>
+        <div id="messages"></div>
+        <script>
+            let count = 0;
+            window.addEventListener("message", (event) => {
+                count++;
+                const header = document.createElement("h3");
+                header.appendChild(document.createTextNode(`Message ${count}`));
+                const code = document.createElement("code");
+                code.appendChild(document.createTextNode(JSON.stringify(event.data, null, 2)));
+                const pre = document.createElement("pre");
+                pre.appendChild(code);
+                document.getElementById("messages").appendChild(header);
+                document.getElementById("messages").appendChild(pre);
+            });
+        </script>
+    </body>
+</html>
+```
+
+## 自定义渲染的出现位置
+
+启用后，您的自定义渲染将替换以下位置的默认输出视图：
+
+-   **实验对比视图**：在多个实验之间比较输出时：
+
+![显示自定义渲染的实验对比视图](/langsmith/images/custom-output-rendering-experiment-comparison.png)
+
+-   **运行详情窗格**：在查看与数据集关联的运行时：
+
+![显示自定义渲染的运行详情窗格](/langsmith/images/custom-output-rendering-run-details.png)
+
+-   **标注队列**：在标注队列中审阅运行时：
+
+![显示自定义渲染的标注队列](/langsmith/images/custom-output-rendering-annotation-queue.png)

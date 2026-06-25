@@ -1,0 +1,126 @@
+---
+title: 对 PostgreSQL 运行支持查询
+sidebarTitle: 对 PostgreSQL 运行支持查询
+---
+
+此 Helm 仓库包含用于生成 LangSmith UI 当前不支持直接输出的查询（例如，在单个查询中获取多个组织的 trace 计数）。
+
+此命令接受包含嵌入式用户名和密码的 postgres 连接字符串（可以从密钥管理器的调用中传入），并执行输入文件中的查询。在下面的示例中，我们使用 `support_queries/postgres` 目录中的 `pg_get_trace_counts_daily.sql` 输入文件。
+
+## 前置条件
+
+确保已准备好以下工具/项目。
+
+1. kubectl
+
+   * [https://kubernetes.io/docs/tasks/tools/](https://kubernetes.io/docs/tasks/tools/)
+
+2. PostgreSQL 客户端
+
+   * [https://www.postgresql.org/download/](https://www.postgresql.org/download/)
+
+3. PostgreSQL 数据库连接：
+
+   * 主机
+   * 端口
+   * 用户名
+     * 如果使用捆绑版本，则为 `postgres`
+   * 密码
+     * 如果使用捆绑版本，则为 `postgres`
+   * 数据库名称
+     * 如果使用捆绑版本，则为 `postgres`
+
+4. 从运行迁移脚本的机器到 PostgreSQL 数据库的连接。
+
+   * 如果使用捆绑版本，可能需要将 postgresql 服务端口转发到本地机器。
+   * 运行 `kubectl port-forward svc/langsmith-postgres 5432:5432` 将 postgresql 服务端口转发到本地机器。
+
+5. 用于运行支持查询的脚本
+
+   * 下载 [PostgreSQL 支持查询脚本](https://github.com/langchain-ai/helm/blob/main/charts/langsmith/scripts/run_support_query_pg.sh)
+
+## 运行查询脚本
+
+运行以下命令以运行所需的查询：
+
+```bash
+sh run_support_query_pg.sh <postgres_url> --input path/to/query.sql
+```
+
+例如，如果您正在使用带有端口转发功能的捆绑版本，命令可能类似于：
+
+```bash
+sh run_support_query_pg.sh "postgres://postgres:postgres@localhost:5432/postgres" --input support_queries/pg_get_trace_counts_daily.sql
+```
+
+将按工作区 ID 和组织 ID 输出每日追踪数量。要将结果提取到文件，请添加标志 `--output path/to/file.csv`
+
+## 导出使用数据
+
+所有导出方法生成相同的数据：所有工作区和组织的 LangSmith 追踪数量、LangSmith Deployments 节点使用量以及 Fleet 运行次数。
+
+<Note>
+UI 和 API 导出需要满足以下两个条件：
+
+- 需要 `organization:manage` 权限。
+- 调用者的邮箱必须列在 `USAGE_EXPORT_ADMIN_EMAILS` 中，或者 `ORG_ADMINS_INSTALLATION_USAGE_EXPORT_ENABLED` 必须设置为 `true`。
+
+</Note>
+
+```env
+USAGE_EXPORT_ADMIN_EMAILS='["admin@example.com", "admin2@example.com"]'
+ORG_ADMINS_INSTALLATION_USAGE_EXPORT_ENABLED=true
+```
+</Note>
+
+### 从 UI 导出（推荐）
+
+1. 导航到 **Settings** > **Usage and billing** > **Usage export**。
+2. 点击 **Export usage data**。
+3. 包含所有使用数据的 ZIP 文件将开始下载。
+
+### 通过 API 导出
+
+如果您更喜欢以编程方式导出使用数据，可以直接调用导出 API 端点。
+
+```bash
+curl -OJ \
+  -H "X-API-Key: <your_api_key>" \
+  https://<langsmith_url>/api/v1/orgs/current/usage/backfill-export
+```
+
+### 通过 SQL 脚本导出
+
+您还可以直接对 PostgreSQL 数据库运行 SQL 脚本来导出使用数据。这需要数据库访问凭证 — 不适用应用程序级权限。
+
+要导出追踪使用情况（需要 Helm chart 0.11.4 或更高版本）：
+
+```bash
+sh run_support_query_pg.sh <postgres_url> \
+  --input support_queries/postgres/pg_usage_traces_full_export.sql \
+  --output ls_export.csv
+```
+
+导出节点使用情况（需要 Helm chart 版本 0.11.4 或更高版本）：
+
+```bash
+sh run_support_query_pg.sh <postgres_url> \
+  --input support_queries/postgres/pg_usage_nodes_full_export.sql \
+  --output lgp_export.csv
+```
+
+要导出 Fleet 运行计数（需要 Helm chart 版本 0.13.25 或更高版本）：
+
+```bash
+sh run_support_query_pg.sh <postgres_url> \
+  --input support_queries/postgres/pg_usage_agent_builder_full_export.sql \
+  --output ab_export.csv
+```
+
+要导出会话快照（每日实体计数，包括工作空间、项目、数据集、提示词和活跃用户）：
+
+```bash
+sh run_support_query_pg.sh <postgres_url> \
+  --input support_queries/postgres/pg_usage_snapshots_full_export.sql \
+  --output usage_snapshots_export.csv
+```

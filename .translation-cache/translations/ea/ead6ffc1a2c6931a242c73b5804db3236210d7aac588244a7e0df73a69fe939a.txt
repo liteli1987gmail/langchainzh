@@ -1,0 +1,212 @@
+---
+title: "Greennode 集成"
+description: "使用 LangChain Python 与 Greennode 检索器集成。"
+---
+
+import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
+
+>[GreenNode](https://greennode.ai/) 是一家全球性 AI 解决方案提供商，也是 **NVIDIA 优选合作伙伴**，为企业提供从基础设施到应用的全栈 AI 能力，服务范围覆盖美国、中东及北非和亚太地区。GreenNode 在**世界级基础设施**（LEED 金牌、TIA‑942、Uptime Tier III）上运营，为企业、初创公司和研究人员提供全面的 AI 服务套件
+
+本指南提供 `GreenNodeRerank` 检索器的入门教程。通过内置连接器或集成您自己的数据源，它能让您执行文档搜索，并利用 GreenNode 的重排序能力来提升相关性。
+
+### 集成详情
+
+- **提供商**：[GreenNode Serverless AI](https://aiplatform.console.greennode.ai/playground)
+- **模型类型**：重排序模型
+- **主要用例**：基于语义相关性对搜索结果进行重排序
+- **可用模型**：包括 [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) 及其他高性能重排序模型
+- **评分**：返回相关性评分，用于根据查询匹配度对候选文档进行重新排序
+
+## 设置
+
+要访问 GreenNode 模型，您需要创建一个 GreenNode 账户、获取 API 密钥，并安装 `langchain-greennode` 集成包。
+
+### 凭证
+
+访问[此页面](https://aiplatform.console.greennode.ai/api-keys) 注册 GreenNode AI Platform 并生成 API 密钥。完成此操作后，设置 GREENNODE_API_KEY 环境变量：
+
+```python
+import getpass
+import os
+
+if not os.getenv("GREENNODE_API_KEY"):
+    os.environ["GREENNODE_API_KEY"] = getpass.getpass("Enter your GreenNode API key: ")
+```
+
+如果您想从单个查询获取自动追踪，您也可以通过取消下面的注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+此检索器位于 `langchain-greennode` 包中：
+
+```python
+pip install -qU langchain-greennode
+```
+
+## 实例化
+
+`GreenNodeRerank` 类可以使用 API 密钥和模型名称等可选参数进行实例化：
+
+```python
+from langchain_greennode import GreenNodeRerank
+
+# Initialize the embeddings model
+reranker = GreenNodeRerank(
+    # api_key="YOUR_API_KEY",  # You can pass the API key directly
+    model="BAAI/bge-reranker-v2-m3",  # The default embedding model
+    top_n=3,
+)
+```
+
+## 用法
+
+### 重新排序搜索结果
+
+重新排序模型通过基于语义相关性细化和重新排序初始搜索结果来增强检索增强生成（RAG）工作流程。下面的示例演示了如何将 GreenNodeRerank 与基础检索器集成以提高检索文档的质量。
+
+<LangchainCommunityUnmaintained />
+
+```python
+from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+from langchain_greennode import GreenNodeEmbeddings
+
+# Initialize the embeddings model
+embeddings = GreenNodeEmbeddings(
+    # api_key="YOUR_API_KEY",  # You can pass the API key directly
+    model="BAAI/bge-m3"  # The default embedding model
+)
+
+# Prepare documents (finance/economics domain)
+docs = [
+    Document(
+        page_content="Inflation represents the rate at which the general level of prices for goods and services rises"
+    ),
+    Document(
+        page_content="Central banks use interest rates to control inflation and stabilize the economy"
+    ),
+    Document(
+        page_content="Cryptocurrencies like Bitcoin operate on decentralized blockchain networks"
+    ),
+    Document(
+        page_content="Stock markets are influenced by corporate earnings, investor sentiment, and economic indicators"
+    ),
+]
+
+# Create a vector store and a base retriever
+vector_store = FAISS.from_documents(docs, embeddings)
+base_retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+
+
+rerank_retriever = ContextualCompressionRetriever(
+    base_compressor=reranker, base_retriever=base_retriever
+)
+
+# Perform retrieval with reranking
+query = "How do central banks fight rising prices?"
+results = rerank_retriever.get_relevant_documents(query)
+
+results
+```
+
+```text
+/var/folders/bs/g52lln652z11zjp98qf9wcy40000gn/T/ipykernel_96362/2544494776.py:41: LangChainDeprecationWarning: The method `BaseRetriever.get_relevant_documents` was deprecated in langchain-core 0.1.46 and will be removed in 1.0. Use :meth:`~invoke` instead.
+  results = rerank_retriever.get_relevant_documents(query)
+```
+
+```text
+[Document(metadata={'relevance_score': 0.125}, page_content='Central banks use interest rates to control inflation and stabilize the economy'),
+ Document(metadata={'relevance_score': 0.004913330078125}, page_content='Inflation represents the rate at which the general level of prices for goods and services rises'),
+ Document(metadata={'relevance_score': 1.6689300537109375e-05}, page_content='Cryptocurrencies like Bitcoin operate on decentralized blockchain networks')]
+```
+
+### 直接使用
+
+`GreenNodeRerank` 类可以独立使用，根据相关性分数对检索到的文档进行重新排序。此功能在以下场景中特别有用：主检索步骤（如关键词搜索或向量搜索）返回大量候选结果，需要使用二级模型通过更复杂的语义理解来优化结果。该类接受一个查询和一组候选文档，并基于预测的相关性返回重新排序后的列表。
+
+```python
+test_documents = [
+    Document(
+        page_content="Carson City is the capital city of the American state of Nevada."
+    ),
+    Document(
+        page_content="Washington, D.C. (also known as simply Washington or D.C.) is the capital of the United States."
+    ),
+    Document(
+        page_content="Capital punishment has existed in the United States since beforethe United States was a country."
+    ),
+    Document(
+        page_content="The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan."
+    ),
+]
+
+test_query = "What is the capital of the United States?"
+results = reranker.rerank(test_documents, test_query)
+results
+```
+
+```text
+[{'index': 1, 'relevance_score': 1.0},
+ {'index': 0, 'relevance_score': 0.01165771484375},
+ {'index': 3, 'relevance_score': 0.0012054443359375}]
+```
+
+## 在链中使用
+
+GreenNodeRerank 可以与 LangChain RAG 管道无缝协作。以下是使用 GreenNodeRerank 创建简单 RAG 链的示例：
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_greennode import ChatGreenNode
+
+# Initialize LLM
+llm = ChatGreenNode(model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B")
+
+# Create a prompt template
+prompt = ChatPromptTemplate.from_template(
+    """
+Answer the question based only on the following context:
+
+Context:
+{context}
+
+Question: {question}
+"""
+)
+
+
+# Format documents function
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+
+# Create RAG chain
+rag_chain = (
+    {"context": rerank_retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+
+# Run the chain
+answer = rag_chain.invoke("How do central banks fight rising prices?")
+answer
+```
+
+```text
+'\n\nCentral banks combat rising prices, or inflation, by adjusting interest rates. By raising interest rates, they increase the cost of borrowing, which discourages spending and investment. This reduction in demand helps slow down the rate of price increases, thereby controlling inflation and contributing to economic stability.'
+```
+
+---
+
+## API 参考
+
+有关 GreenNode Serverless AI API 的更多详细信息，请访问 [GreenNode Serverless AI 文档](https://aiplatform.console.greennode.ai/api-docs/maas)。

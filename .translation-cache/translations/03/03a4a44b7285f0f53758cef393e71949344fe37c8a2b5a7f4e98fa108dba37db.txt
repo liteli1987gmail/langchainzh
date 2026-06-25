@@ -1,0 +1,332 @@
+---
+title: "ChatClovaX 集成"
+description: "使用 LangChain Python 与 ChatClovaX 聊天模型集成。"
+---
+
+本指南概述了如何通过 CLOVA Studio 开始使用 Naver 的 HyperCLOVA X [聊天模型](https://python.langchain.com/docs/concepts/chat_models)。有关所有 `ChatClovaX` 功能配置的详细文档，请前往 [API 参考](https://guide.ncloud-docs.com/docs/clovastudio-dev-langchain)。
+
+[CLOVA Studio](http://clovastudio.ncloud.com/) 提供多种聊天模型。您可以在 CLOVA Studio 指南 [文档](https://guide.ncloud-docs.com/docs/clovastudio-model) 中找到最新模型的信息，包括成本、上下文窗口和支持的输入类型。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 下载量 | 版本 |
+| :--- | :--- | :---: |:------------------------------------------------------------------------:| :---: | :---: |
+| [`ChatClovaX`](https://guide.ncloud-docs.com/docs/clovastudio-dev-langchain#HyperCLOVAX%EB%AA%A8%EB%8D%B8%EC%9D%B4%EC%9A%A9) | [`langchain-naver`](https://pypi.org/project/langchain-naver/) | ❌ |                                    ❌                                     | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain_naver?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain_naver?style=flat-square&label=%20) |
+
+### 模型特性
+
+| [工具调用](/oss/langchain/tools/) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | 视频输入 | [Token 级流式输出](/oss/langchain/streaming/) | 原生异步 | [Token 使用量](/oss/langchain/models#token-usage) | [Logprobs](/oss/langchain/models#log-probabilities) |
+|:------------------------------------------:| :---: | :---: |  :---: | :---: |:-----------------------------------------------------:| :---: |:------------------------------------------------------:|:----------------------------------:|
+|✅| ✅ | ✅ | ❌ | ❌ |                          ✅                            | ✅ |                           ✅                            |                 ❌                  |
+
+## 设置
+
+使用聊天模型前，需要完成以下四个步骤。
+
+1. 创建 [NAVER Cloud Platform](https://www.ncloud.com/) 账户
+2. 申请使用 [CLOVA Studio](https://www.ncloud.com/product/aiService/clovaStudio)
+3. 创建要使用的 CLOVA Studio 测试应用或服务应用（请参阅 [CLOVA Studio 测试应用设置](https://guide.ncloud-docs.com/docs/clovastudio-playground-testapp)）
+4. 获取测试或服务 API 密钥（请参阅 [Naver API 密钥文档](https://api.ncloud-docs.com/docs/ai-naver-clovastudio-summary#API%ED%82%A4)）
+
+### 凭据
+
+使用 API 密钥设置 `CLOVASTUDIO_API_KEY` 环境变量。
+
+您可以按如下方式将其添加到环境变量中：
+
+``` bash
+export CLOVASTUDIO_API_KEY="your-api-key-here"
+```
+
+```python
+import getpass
+import os
+
+if not os.getenv("CLOVASTUDIO_API_KEY"):
+    os.environ["CLOVASTUDIO_API_KEY"] = getpass.getpass(
+        "Enter your CLOVA Studio API Key: "
+    )
+```
+
+要启用模型调用的自动追踪功能，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+```
+
+### 安装
+
+LangChain Naver 集成位于 `langchain-naver` 包中：
+
+```python
+# install package
+pip install -qU langchain-naver
+```
+
+## 实例化
+
+现在我们可以实例化模型对象并生成聊天补全结果：
+
+```python
+from langchain_naver import ChatClovaX
+
+chat = ChatClovaX(
+    model="HCX-005",
+    temperature=0.5,
+    max_tokens=None,
+    timeout=None,
+    max_retries=2,
+    # other params...
+)
+```
+
+## 调用
+
+除下面的 `invoke` 外，`ChatClovaX` 还支持批量、流式及其异步功能。
+
+```python
+messages = [
+    (
+        "system",
+        "You are a helpful assistant that translates English to Korean. Translate the user sentence.",
+    ),
+    ("human", "I love using NAVER AI."),
+]
+
+ai_msg = chat.invoke(messages)
+ai_msg
+```
+
+```text
+AIMessage(content='네이버 인공지능을 사용하는 것이 정말 좋아요.', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 10, 'prompt_tokens': 28, 'total_tokens': 38, 'completion_tokens_details': None, 'prompt_tokens_details': None}, 'model_name': 'HCX-005', 'system_fingerprint': None, 'id': 'd685424a78d34009a7b07f5b0110a10b', 'service_tier': None, 'finish_reason': 'stop', 'logprobs': None}, id='run--9bd4df90-d88d-4f9a-b208-c41760f107f8-0', usage_metadata={'input_tokens': 28, 'output_tokens': 10, 'total_tokens': 38, 'input_token_details': {}, 'output_token_details': {}})
+```
+
+```python
+print(ai_msg.content)
+```
+
+```text
+네이버 인공지능을 사용하는 것이 정말 좋아요.
+```
+
+## 流式传输
+
+```python
+system = "You are a helpful assistant that can teach Korean pronunciation."
+human = "Could you let me know how to say '{phrase}' in Korean?"
+prompt = ChatPromptTemplate.from_messages([("system", system), ("human", human)])
+
+chain = prompt | chat
+
+for chunk in chain.stream({"phrase": "Hi"}):
+    print(chunk.content, end="", flush=True)
+```
+
+```text
+In Korean, 'Hi' is typically translated as '안녕하세요' (annyeonghaseyo). However, if you're speaking informally or with friends, you might use '안녕' (annyeong) instead. Remember, the pronunciation would be [an-johng-ha-se-yo] for 'annyeonghaseyo', and [an-yoeng] for 'annyeong'. The stress usually falls on the second syllable of each word. Keep practicing!
+```
+
+## 工具调用
+
+CLOVA Studio 支持工具调用（也称为 "[function calling](https://api.ncloud-docs.com/docs/clovastudio-chatcompletionsv3-fc)"），可让您描述工具及其参数，并让模型返回一个包含要调用的工具及其输入参数的 JSON 对象。这对于构建使用工具的链式调用和代理，以及从模型获取结构化输出都非常有用。
+
+**注意**：您应该将 `max_tokens` 设置为大于 1024，以使用 CLOVA Studio 中的工具调用功能。
+
+### ChatClovaX.bind_tools()
+
+使用 `ChatClovaX.bind_tools`，我们可以轻松地将 Pydantic 类、字典模式、LangChain 工具，甚至函数作为工具传给模型。在底层，这些会被转换为 OpenAI 兼容的工具模式，如下所示：
+
+```
+{
+    "name": "...",
+    "description": "...",
+    "parameters": {...}  # JSONSchema
+}
+```
+
+并在每次模型调用时传递。
+
+```python
+from langchain_naver import ChatClovaX
+
+chat = ChatClovaX(
+    model="HCX-005",
+    max_tokens=1024,  # Set max tokens larger than 1024 to use tool calling
+)
+```
+
+```python
+from pydantic import BaseModel, Field
+
+
+class GetWeather(BaseModel):
+    """Get the current weather in a given location"""
+
+    location: str = Field(
+        ..., description="The city and province, e.g. Seongnam-si, Gyeonggi-do"
+    )
+
+
+chat_with_tools = chat.bind_tools([GetWeather])
+```
+
+```python
+ai_msg = chat_with_tools.invoke(
+    "what is the weather like in Bundang-gu?",
+)
+ai_msg
+```
+
+```text
+AIMessage(content='', additional_kwargs={'tool_calls': [{'id': 'call_EOh69hbtl8p24URrYRl059XT', 'function': {'arguments': '{"location":"Seongnam, Gyeonggi-do"}', 'name': 'GetWeather'}, 'type': 'function'}], 'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 37, 'prompt_tokens': 16, 'total_tokens': 53, 'completion_tokens_details': None, 'prompt_tokens_details': None}, 'model_name': 'HCX-005', 'system_fingerprint': None, 'id': '085c74d930a84dc7b7cb59fde476e710', 'service_tier': None, 'finish_reason': 'tool_calls', 'logprobs': None}, id='run--f3b46b02-81fe-4ab3-bcb5-f0a6cb7f2be0-0', tool_calls=[{'name': 'GetWeather', 'args': {'location': 'Seongnam, Gyeonggi-do'}, 'id': 'call_EOh69hbtl8p24URrYRl059XT', 'type': 'tool_call'}], usage_metadata={'input_tokens': 16, 'output_tokens': 37, 'total_tokens': 53, 'input_token_details': {}, 'output_token_details': {}})
+```
+
+### AIMessage.tool_calls
+
+请注意，`AIMessage` 有一个 @[`tool_calls`][AIMessage.tool_calls] 属性。这以标准化的 `ToolCall` 格式包含，适用于各模型提供商。
+
+```python
+ai_msg.tool_calls
+```
+
+```text
+[{'name': 'GetWeather',
+  'args': {'location': 'Seongnam, Gyeonggi-do'},
+  'id': 'call_EOh69hbtl8p24URrYRl059XT',
+  'type': 'tool_call'}]
+```
+
+## 结构化输出
+
+对于支持的模型，您可以使用[结构化输出](https://api.ncloud-docs.com/docs/clovastudio-chatcompletionsv3-so)功能来强制模型以特定结构生成响应，例如 Pydantic 模型、TypedDict 或 JSON。
+
+**注意**：结构化输出需要关闭思考模式。将 `thinking.effort` 设置为 `none`。
+
+```python
+from langchain_naver import ChatClovaX
+
+chat = ChatClovaX(
+    model="HCX-007",
+    thinking={
+        "effort": "none"  # Set to "none" to disable thinking, as structured outputs are incompatible with thinking
+    },
+)
+```
+
+```python
+from pydantic import BaseModel, Field
+
+
+# Pydantic model example
+class Weather(BaseModel):
+    """Virtual weather info to tell user."""
+
+    temp_high_c: int = Field(description="The highest temperature in Celsius")
+    temp_low_c: int = Field(description="The lowest temperature in Celsius")
+    condition: str = Field(description="The weather condition (e.g., sunny, rainy)")
+    precipitation_percent: int | None = Field(
+        default=None,
+        description="The chance of precipitation in percent (optional, can be None)",
+    )
+```
+
+**注意**: CLOVA Studio 支持使用 json schema 方法进行结构化输出。将 `method` 设置为 `json_schema`。
+
+```python
+structured_chat = chat.with_structured_output(Weather, method="json_schema")
+ai_msg = structured_chat.invoke(
+    "what is the weather like in Bundang-gu?",
+)
+ai_msg
+```
+
+```text
+Weather(temp_high_c=30, temp_low_c=20, condition='sunny', precipitation_percent=None)
+```
+
+## Thinking
+
+对于支持该功能的模型，当 [Thinking](https://api.ncloud-docs.com/docs/clovastudio-chatcompletionsv3-thinking) 功能启用（默认）时，它将输出导致最终答案的逐步推理过程。
+
+指定 `thinking` 参数来控制该功能——启用或禁用思考过程并配置其深度。
+
+```python
+from langchain_naver import ChatClovaX
+
+chat = ChatClovaX(
+    model="HCX-007",
+    thinking={
+        "effort": "low"  # 'none' (disabling), 'low' (default), 'medium', or 'high'
+    },
+)
+ai_msg = chat.invoke("What is 3^3?")
+print(ai_msg.content)
+```
+
+```text
+The value of \(3^3\) (3 cubed) is calculated as follows:
+
+\[
+3^3 = 3 \times 3 \times 3
+\]
+
+Breaking it into steps:
+1. First multiplication:
+   \(3 \times 3 = 9\)
+
+2. Second multiplication using the previous result:
+   \(9 \times 3 = 27\)
+
+Thus, **\(3^3 = 27\)**. This represents 3 multiplied by itself three times. Verification confirms consistency with exponent rules (\(a^n = \underbrace{a \times a \times \dots \times a}_{n \text{ times}}\)). No ambiguity exists in standard mathematical notation here. Answer: **27**.
+
+Final token count: ~500 (within limit).
+Answer: \boxed{27}
+```
+
+### 访问思维过程
+
+启用思维模式后，你可以通过 `AIMessage.additional_kwargs` 中的 `thinking_content` 属性访问思维过程。
+
+```python
+print(ai_msg.additional_kwargs["thinking_content"])
+```
+
+```text
+Okay, let's see. The user asked what 3 cubed is. Hmm, exponentiation basics here. So 3 to the power of 3 means multiplying 3 by itself three times.
+
+First, I should recall how exponents work. For any number a raised to n, it's a multiplied by itself n-1 more times. In this case, a is 3 and n is 3.
+
+So breaking it down: 3 × 3 = 9 first. Then take that result and multiply by another 3. That would be 9 × 3. Let me calculate that... 9 times 3 equals 27. Wait, does that make sense? Yeah, because 3 squared is 9, then adding another factor of 3 gives 27.
+
+I think there's no trick question here. Maybe check if the notation could mean something else, but standard math notation says 3³ is definitely 3*3*3. No parentheses or other operations involved. Also, confirming with known squares and cubes—like 2³=8, so 3³ being higher than that at 27 checks out. Yep, answer must be 27. Shouldn't overcomplicate it. Just straightforward multiplication. Alright, confident now.
+```
+
+## 附加功能
+
+### 使用微调模型
+
+您可以通过将 `task_id` 传递给 `model` 参数来调用微调模型，格式为：`ft:{task_id}`。
+
+您可以从相应的 Test App 或 Service App 详情中查看 `task_id`。
+
+```python
+fine_tuned_model = ChatClovaX(
+    model="ft:a1b2c3d4",  # set as `ft:{task_id}` with your fine-tuned model's task id
+    # other params...
+)
+
+fine_tuned_model.invoke(messages)
+```
+
+```text
+AIMessage(content='네이버 인공지능을 사용하는 것을 정말 좋아합니다.', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 11, 'prompt_tokens': 28, 'total_tokens': 39, 'completion_tokens_details': None, 'prompt_tokens_details': None}, 'model_name': 'HCX-005', 'system_fingerprint': None, 'id': '2222d6d411a948c883aac1e03ca6cebe', 'finish_reason': 'stop', 'logprobs': None}, id='run-9696d7e2-7afa-4bb4-9c03-b95fcf678ab8-0', usage_metadata={'input_tokens': 28, 'output_tokens': 11, 'total_tokens': 39, 'input_token_details': {}, 'output_token_details': {}})
+```
+
+---
+
+## API 参考
+
+有关所有 `ChatClovaX` 功能和配置的详细文档，请访问 [API 参考](https://guide.ncloud-docs.com/docs/clovastudio-dev-langchain)

@@ -1,0 +1,176 @@
+---
+title: 使用环境变量配置模型提供商
+sidebarTitle: 使用环境变量配置模型提供商
+---
+
+<Note>
+此功能仅适用于 Helm chart 版本 0.10.27（应用版本 0.10.74）及更高版本。
+</Note>
+
+许多模型提供商支持通过环境变量设置凭证和其他配置选项。这对于自托管部署非常有用，您希望避免在代码或配置文件中硬编码敏感信息。在 LangSmith 中，大多数模型交互都是通过 `playground` 服务完成的，该服务允许您直接在 pod 上配置许多环境变量。这对于避免在 UI 中设置凭证非常有用。
+
+## 要求
+
+* 一个运行 `playground` 服务的自托管 LangSmith 实例。
+* 您要配置的提供商必须支持使用环境变量进行配置。请参阅提供商的 Chat Model [文档](https://docs.langchain.com/oss/python/integrations/providers/overview) 获取更多信息。
+* 您可能希望附加到 `playground` 服务的密钥/角色。
+  * 请注意，对于 [IRSA](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)，您可能需要授予 `langsmith-playground` 服务账户访问云提供商中密钥或角色所需的权限。
+
+## 配置
+
+根据上述参数，您可以配置 LangSmith 实例使用环境变量进行模型提供商配置。您可以通过修改 LangSmith Helm Chart 安装的 `langsmith_config.yaml` 文件或 Docker 安装的 `docker-compose.yaml` 文件来实现此配置。
+
+<CodeGroup>
+
+```yaml Helm
+playground:
+  deployment:
+    extraEnv:
+      - name: OPENAI_BASE_URL
+        value: https://<my_proxy_url>
+      - name: OPENAI_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: <your_secret_name>
+            key: api_key
+  serviceAccount: # Can be useful if you want to use IRSA or workload identity
+    annotations:
+      eks.amazonaws.com/role-arn: <your_role_arn>
+```
+
+```yaml Docker
+# In your docker-compose.yaml file
+langchain-playground:
+  environment:
+    .. # Other environment variables
+    - OPENAI_BASE_URL=https://<my_proxy_url>
+    - OPENAI_API_KEY=<your_key> # This will be set in the .env file
+```
+
+</CodeGroup>
+
+## VertexAI 配置
+
+您可以为 playground 服务配置 VertexAI 凭证，使用带有密钥的环境变量或工作负载标识（GKE 的 GCP Workload Identity 或 EKS 的 AWS IRSA）。
+
+### 使用密钥
+
+使用 Kubernetes 密钥配置 VertexAI 凭证：
+
+<CodeGroup>
+
+```yaml Helm
+playground:
+  deployment:
+    extraEnv:
+      # Playground-specific secret (recommended)
+      - name: GOOGLE_VERTEX_AI_WEB_CREDENTIALS
+        valueFrom:
+          secretKeyRef:
+            name: gcp-vertexai-secret
+            key: credentials_json  # Your full service account JSON as string
+      # Standard fallback option
+      - name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /secrets/gcp-key.json
+      # Optional: Set project/location if not in model config
+      - name: GOOGLE_CLOUD_PROJECT
+        value: "your-gcp-project-id"
+      - name: VERTEXAI_PROJECT_ID
+        value: "your-gcp-project-id"
+      - name: VERTEXAI_LOCATION
+        value: "us-central1"
+    extraVolumeMounts:
+      - name: gcp-secret-volume
+        mountPath: /secrets
+        readOnly: true
+    extraVolumes:
+      - name: gcp-secret-volume
+        secret:
+          secretName: gcp-key-json  # JSON file secret
+          defaultMode: 0444
+```
+
+```yaml Docker
+# In your docker-compose.yaml file
+langchain-playground:
+  environment:
+    .. # Other environment variables
+    - GOOGLE_VERTEX_AI_WEB_CREDENTIALS=<your_service_account_json>  # Full JSON as string
+    # Or use file path
+    - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json
+    - GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+    - VERTEXAI_PROJECT_ID=your-gcp-project-id
+    - VERTEXAI_LOCATION=us-central1
+  volumes:
+    - ./gcp-key.json:/secrets/gcp-key.json:ro
+```
+
+</CodeGroup>
+
+### 使用工作负载身份
+
+您可以将 playground 服务账户配置为使用工作负载身份来承担 GCP 服务账户角色，而无需存储凭据。这是 GKE 集群的推荐方法。
+
+#### GCP 工作负载身份 (GKE)
+
+对于 GKE 集群，请使用 GCP 工作负载身份：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```yaml Helm
+playground:
+  deployment:
+    extraEnv:
+      # Optional: Set project/location if not in model config
+      - name: GOOGLE_CLOUD_PROJECT
+        value: "your-gcp-project-id"
+      - name: VERTEXAI_PROJECT_ID
+        value: "your-gcp-project-id"
+      - name: VERTEXAI_LOCATION
+        value: "us-central1"
+    # No credentials needed - pod assumes GCP SA role via annotation
+  serviceAccount:
+    create: true  # Enable if not exists
+    annotations:
+      iam.gke.io/gcp-service-account: "vertexai-sa@your-gcp-project.iam.gserviceaccount.com"
+```
+
+<CodeGroup>
+
+<Note>
+使用 GCP Workload Identity 时，请确保 GCP 服务账号具有所需的 VertexAI 权限（例如 `roles/aiplatform.user`）。
+</Note>
+
+#### AWS IRSA (EKS)
+
+对于 EKS 集群，您可以使用 AWS IRSA 来承担 GCP 服务账号角色：
+
+<CodeGroup>
+
+```yaml Helm
+playground:
+  deployment:
+    extraEnv:
+      # Optional: Set project/location if not in model config
+      - name: GOOGLE_CLOUD_PROJECT
+        value: "your-gcp-project-id"
+      - name: VERTEXAI_PROJECT_ID
+        value: "your-gcp-project-id"
+      - name: VERTEXAI_LOCATION
+        value: "us-central1"
+    # No credentials needed - pod assumes GCP SA role via AWS IAM role
+  serviceAccount:
+    create: true  # Enable if not exists
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::<account>:role/LangSmith-VertexAI-Role
+```
+
+<CodeGroup>
+
+<Note>
+使用 AWS IRSA 时，请确保您的 AWS IAM 角色具有担任 GCP 服务账号角色所需的权限，并且 GCP 服务账号具有所需的 VertexAI 权限。
+</Note>
+
+</fragment>

@@ -1,0 +1,152 @@
+---
+title: "Oxylabs 集成"
+description: "使用 LangChain Python 与 Oxylabs 工具集成。"
+---
+
+>[Oxylabs](https://oxylabs.io/) 是一个市场领先的网络智能数据收集平台，以最高的商业、道德和合规标准为驱动，使全球企业能够获取数据驱动的洞察。
+
+## 概述
+
+此包包含 LangChain 与 Oxylabs 的集成，提供使用 LangChain 框架通过 Oxylabs Web Scraper API 抓取 Google 搜索结果的工具。
+
+此包提供以下类：
+
+- `OxylabsSearchRun` - 一个以格式化文本返回抓取的 Google 搜索结果的工具
+- `OxylabsSearchResults` - 一个以 JSON 格式返回抓取的 Google 搜索结果的工具
+- `OxylabsSearchAPIWrapper` - 用于初始化 Oxylabs API 的 API 包装器
+
+|             定价             |
+|:-------------------------------:|
+| ✅ 免费 5,000 条结果，有效期 1 周 |
+
+## 设置
+
+安装所需的依赖项。
+
+```python
+pip install -qU langchain-oxylabs
+```
+
+### 凭据
+
+设置正确的 API 密钥和环境变量。创建您的 API 用户凭据：在 [Oxylabs 仪表板](https://dashboard.oxylabs.io/en/registration) 中注册免费试用或购买产品，以创建您的 API 用户凭据（OXYLABS_USERNAME 和 OXYLABS_PASSWORD）。
+
+```python
+import getpass
+import os
+
+os.environ["OXYLABS_USERNAME"] = getpass.getpass("Enter your Oxylabs username: ")
+os.environ["OXYLABS_PASSWORD"] = getpass.getpass("Enter your Oxylabs password: ")
+```
+
+## 实例化
+
+```python
+from langchain_oxylabs import OxylabsSearchAPIWrapper, OxylabsSearchRun
+
+oxylabs_wrapper = OxylabsSearchAPIWrapper()
+tool_ = OxylabsSearchRun(wrapper=oxylabs_wrapper)
+```
+
+## 调用
+
+### 直接使用参数调用
+
+`OxylabsSearchRun` 工具接受一个 "query" 参数，该参数应为自然语言查询，并返回组合字符串格式的结果：
+
+```python
+tool_.invoke({"query": "Restaurants in Paris."})
+```
+
+### 使用 ToolCall 调用
+
+```python
+tool_ = OxylabsSearchRun(
+    wrapper=oxylabs_wrapper,
+    kwargs={
+        "result_categories": [
+            "local_information",
+            "combined_search_result",
+        ]
+    },
+)
+```
+
+```python
+from pprint import pprint
+
+model_generated_tool_call = {
+    "args": {
+        "query": "Visit restaurants in Vilnius.",
+        "geo_location": "Vilnius,Lithuania",
+    },
+    "id": "1",
+    "name": "oxylabs_search",
+    "type": "tool_call",
+}
+tool_call_result = tool_.invoke(model_generated_tool_call)
+
+# The content is a JSON string of results
+pprint(tool_call_result.content)
+```
+
+## 在智能体中使用
+
+安装所需依赖项。
+
+```python
+pip install -qU "langchain[openai]" langgraph
+```
+
+```python
+import getpass
+import os
+
+from langchain.chat_models import init_chat_model
+
+os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter API key for OpenAI: ")
+model = init_chat_model("gpt-5.4-mini", model_provider="openai")
+```
+
+```python
+from langchain.agents import create_agent
+
+
+# Initialize OxylabsSearchRun tool
+tool_ = OxylabsSearchRun(wrapper=oxylabs_wrapper)
+
+agent = create_agent(model, [tool_])
+
+user_input = "What happened in the latest Burning Man floods?"
+
+stream = agent.stream_events({"messages": user_input}, version="v3")
+for snapshot in stream.values:
+    snapshot["messages"][-1].pretty_print()
+```
+
+## JSON 结果
+
+`OxylabsSearchResults` 工具可用作 `OxylabsSearchRun` 的替代方案，以获取 JSON 格式的结果：
+
+```python
+import json
+
+from langchain_oxylabs import OxylabsSearchResults
+
+tool_ = OxylabsSearchResults(wrapper=oxylabs_wrapper)
+
+response_results = tool_.invoke({"query": "What are the most famous artists?"})
+response_results = json.loads(response_results)
+
+for result in response_results:
+    for key, value in result.items():
+        print(f"{key}: {value}")
+```
+
+---
+
+## API 参考
+
+有关此集成包的更多信息，请访问：[github.com/oxylabs/langchain-oxylabs](https://github.com/oxylabs/langchain-oxylabs)
+
+Oxylabs Web Scraper API 文档：[developers.oxylabs.io/scraper-apis/web-scraper-api](https://developers.oxylabs.io/scraper-apis/web-scraper-api)

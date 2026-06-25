@@ -1,0 +1,171 @@
+---
+title: "OracleEmbeddings 集成"
+sidebarTitle: "Embeddings"
+description: "使用 LangChain JavaScript 与 OracleEmbeddings 嵌入模型集成。"
+---
+
+<Tip>
+**兼容性**：仅适用于 Node.js。
+</Tip>
+
+Oracle AI Database 支持 AI 工作负载，您可以通过**含义**（语义）而非仅通过关键词来查询数据。它将**非结构化内容的语义搜索**与**业务数据的关系过滤**结合在单一系统中——因此您可以构建检索工作流（如 RAG），而无需引入独立的向量数据库，也不会导致数据分散在多个平台上。
+
+本指南演示了如何使用 `OracleEmbeddings` 为您的内容生成嵌入向量。
+
+> **为什么要在 Oracle 中（或通过 Oracle）生成嵌入向量？**
+> 您可以在靠近 AI 工作流的地方保持数据治理和运维保证（安全性、事务处理、可用性），同时选择适合您环境的嵌入提供程序模型。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 本地 | [PY 支持](https://python.langchain.com/docs/integrations/embeddings/oracleai/) |
+| :--- | :--- | :---: :--- |
+| `OracleEmbeddings` | [`@oracle/langchain-oracledb`](https://www.npmjs.com/package/@oracle/langchain-oracledb) | ✅ | ✅ |
+
+## 设置
+
+要使用 OracleEmbeddings，请安装 `@oracle/langchain-oracledb` 辅助工具（以及 `@langchain/core`），并确保满足系统对 Oracle Database 驱动程序的先决条件。
+
+### 凭据
+
+导出 Oracle 用户的凭据（或从密钥管理器加载），该用户拥有您的向量表和 ONNX 模型。
+
+```bash
+export ORACLE_USER=testuser
+export ORACLE_PASSWORD=testuser
+export ORACLE_DSN="localhost:1521/free"
+```
+
+如果您计划调用第三方提供商（例如 OCI Generative AI 或 Hugging Face），则必须首先在 Oracle Database 中创建凭据。请参阅 [Oracle AI Vector Search 指南](https://www.oracle.com/pls/topic/lookup?ctx=dblatest&id=GUID-C6439E94-4E86-4ECD-954E-4B73D53579DE) 了解 PL/SQL 辅助过程。
+
+### 安装
+
+<CodeGroup>
+
+</CodeGroup>
+```bash npm
+npm install @oracle/langchain-oracledb @langchain/core
+```
+```bash yarn
+yarn add @oracle/langchain-oracledb @langchain/core
+```
+```bash pnpm
+pnpm add @oracle/langchain-oracledb @langchain/core
+```
+</CodeGroup>
+
+## 实例化嵌入
+
+```typescript
+import oracledb from "oracledb";
+import { OracleEmbeddings } from "@oracle/langchain-oracledb";
+
+const connection = await oracledb.getConnection({
+  user: process.env.ORACLE_USER,
+  password: process.env.ORACLE_PASSWORD,
+  connectionString: process.env.ORACLE_DSN,
+});
+
+const embeddings = new OracleEmbeddings(connection, {
+  provider: "database",
+  model: "DEMO_MODEL",
+});
+
+// Close the connection (or pool) when you are done to avoid leaking resources.
+// await connection.close();
+```
+
+构造函数的第三个参数是一个可选的 `proxy` 字符串。当出站请求必须通过 HTTP 代理时使用它（例如，从私有网络内调用 Hugging Face 时）。
+
+## 在 Oracle 数据库中运行 ONNX 模型
+
+Oracle Database 支持多种嵌入提供商，使用户能够在专有数据库解决方案和 OCIGENAI、HuggingFace 等第三方服务之间进行选择。这一选择决定了生成和管理嵌入的方法。
+
+***重要***：如果用户选择数据库选项，则必须将 ONNX 模型上传到 Oracle Database。相反，如果选择第三方提供商来生成嵌入，则不需要将 ONNX 模型上传到 Oracle Database。
+
+直接在 Oracle 内使用 ONNX 模型的一个显著优势是提高了安全性和性能，因为无需将数据发送到外部方。此外，这种方法避免了通常与网络或 REST API 调用相关的延迟。
+
+以下是上传 ONNX 模型到 Oracle Database 的示例代码：
+
+```typescript
+import { OracleEmbeddings } from "@oracle/langchain-oracledb";
+
+await OracleEmbeddings.loadOnnxModel(
+  connection,
+  "/path/to/model",
+  "all-minilm-l12-v2.onnx",
+  "DEMO_MODEL",
+);
+
+const dbEmbeddings = new OracleEmbeddings(connection, {
+  provider: "database",
+  model: "DEMO_MODEL",
+});
+
+const singleVector = await dbEmbeddings.embedQuery(
+  "Summarize hybrid search patterns in Oracle Database.",
+);
+console.log(singleVector.length);
+```
+
+## 调用托管嵌入提供程序
+
+将 `provider` 切换为通过 OCI Generative AI 或 Hugging Face 路由嵌入请求。提供您使用 Oracle 的 `DBMS_VECTOR_CHAIN` 助手创建的凭证名称，以及需要时的代理设置。
+
+```typescript
+const ociEmbeddings = new OracleEmbeddings(connection, {
+  provider: "ocigenai",
+  credential_name: "OCI_CRED",
+  url: "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/20231130/actions/embedText",
+  model: "cohere.embed-english-light-v3.0",
+}, process.env.HTTP_PROXY);
+
+const hfEmbeddings = new OracleEmbeddings(connection, {
+  provider: "huggingface",
+  credential_name: "HF_CRED",
+  url: "https://api-inference.huggingface.co/pipeline/feature-extraction/",
+  model: "sentence-transformers/all-MiniLM-L6-v2",
+});
+
+// Clean up when finished:
+// await connection.close();
+```
+
+## 嵌入文档以供检索
+
+使用相同的嵌入实例为 Oracle Database 中的向量存储或混合检索准备内容。
+
+```typescript
+import { OracleDocLoader, OracleTextSplitter } from "@oracle/langchain-oracledb";
+
+const loader = new OracleDocLoader(connection, {
+  owner: "TESTUSER",
+  tablename: "DEMO_TAB",
+  colname: "DATA",
+});
+
+const docs = await loader.load();
+
+const splitter = new OracleTextSplitter(connection, {
+  split: "chars",
+  max: 500,
+  normalize: "all",
+});
+
+const chunks = await splitter.splitText(docs[0].pageContent);
+const vectors = await embeddings.embedDocuments(chunks);
+
+console.log(`Generated ${vectors.length} vectors`);
+```
+
+## 后续步骤
+
+- 使用 [`OracleVS`](/oss/integrations/vectorstores/oracleai) 存储向量以进行混合搜索
+- 使用 [`OracleSummary`](/oss/integrations/tools/oracleai) 总结文档
+
+---
+
+## API 参考
+
+有关所有 `OracleEmbeddings` 选项的详细文档，请参阅 [Oracle LangChain Oracle DB 仓库](https://github.com/oracle/langchain-oracle/tree/main/libs/js/langchain-oracledb)。

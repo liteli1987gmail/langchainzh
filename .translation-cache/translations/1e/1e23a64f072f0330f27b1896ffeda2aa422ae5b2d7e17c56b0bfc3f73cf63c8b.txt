@@ -1,0 +1,265 @@
+---
+title: "ChatMoonshot 集成"
+description: "使用 LangChain Python 与 ChatMoonshot 聊天模型集成。"
+---
+
+本指南提供了快速上手 Moonshot AI [聊天模型](/oss/langchain/models) 的概览。关于最新的包详情、示例和源代码，请参阅 [`langchain-moonshot` 仓库](https://github.com/ArcadiaLin/langchain-moonshot)。
+
+<Tip>
+    功能支持因 Moonshot 模型而异。下面的示例使用 `kimi-k2.5` 进行推理和工具调用，使用 `moonshot-v1-32k-vision-preview` 处理图像输入。
+</Tip>
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | JS 支持 | 下载量 | 版本 |
+| :--- | :--- | :---: |  :---: | :---: | :---: |
+| `ChatMoonshot` | [`langchain-moonshot`](https://github.com/ArcadiaLin/langchain-moonshot) | beta | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-moonshot?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-moonshot?style=flat-square&label=%20) |
+
+### 模型特性
+
+| [工具调用](/oss/langchain/tools) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | [视频输入](/oss/langchain/messages#multimodal)（仅 `kimi-k2.5`）| [Token 级流式传输](/oss/langchain/streaming/) | 原生异步 | [Token 使用量](/oss/langchain/models#token-usage) | [Logprobs](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: |  :---: | :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ |
+
+## 设置
+
+要访问 Moonshot 模型，你需要拥有 Moonshot 账户、API 密钥和 `langchain-moonshot` 集成包。
+
+### 凭证
+
+前往 [Moonshot 控制台](https://platform.moonshot.ai/console/api-keys) 创建 API 密钥。创建完成后，设置 `MOONSHOT_API_KEY` 环境变量。
+
+```python
+import getpass
+import os
+
+if not os.getenv("MOONSHOT_API_KEY"):
+    os.environ["MOONSHOT_API_KEY"] = getpass.getpass("Enter your Moonshot API key: ")
+```
+
+默认情况下，该包使用 Moonshot 的国际端点（`https://api.moonshot.ai/v1`）。要改用中国端点，请设置：
+
+```python
+import os
+
+os.environ["MOONSHOT_API_BASE"] = "https://api.moonshot.cn/v1"
+```
+
+要启用对模型调用的自动追踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+import getpass
+import os
+
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+LangChain Moonshot 集成位于 `langchain-moonshot` 包中：
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install -U langchain-moonshot
+    ```
+    ```bash uv
+    uv add langchain-moonshot
+    ```
+## 实例化
+
+现在我们可以实例化模型对象并生成响应：
+
+```python
+from langchain_moonshot import ChatMoonshot
+
+llm = ChatMoonshot(
+    model="kimi-k2.5",
+    thinking=False,
+    temperature=0.6,
+    max_retries=2,
+    # prompt_cache_key="docs-example-cache",
+    # safety_identifier="docs-example-user",
+    # max_completion_tokens=1024,
+)
+```
+
+<Note>
+    对于 `kimi-k2.5`，如果设置了 `temperature`，则在 `thinking=True` 时必须为 `1.0`，且在 `thinking=False` 时必须为 `0.6`。省略 `thinking`（或将其设置为 `None`）在验证时被视为启用思考。要使用 `temperature=0.6`，请显式设置 `thinking=False`。
+</Note>
+
+## 调用
+
+```python
+messages = [
+    ("system", "You are a concise bilingual assistant."),
+    ("human", "Summarize why Moonshot reasoning models are useful in two bullet points."),
+]
+
+ai_msg = llm.invoke(messages)
+
+print(ai_msg.text)
+print(ai_msg.usage_metadata)
+```
+
+
+## 推理输出
+
+`ChatMoonshot` 在流式响应和非流式响应中都保留了 Moonshot 的 `reasoning_content` 字段。
+
+```python
+reasoning_llm = ChatMoonshot(
+    model="kimi-k2.5",
+    thinking=True,
+    temperature=1.0,
+)
+
+ai_msg = reasoning_llm.invoke(
+    "Explain in two bullet points why reasoning models are useful."
+)
+
+print(ai_msg.text)
+print(ai_msg.additional_kwargs.get("reasoning_content"))
+```
+
+## 流式传输
+
+要在流式传输时恢复使用元数据，请设置 `stream_usage=True`：
+
+```python
+streaming_llm = ChatMoonshot(
+    model="kimi-k2.5",
+    thinking=True,
+    temperature=1.0,
+    stream_usage=True,
+)
+
+stream = streaming_llm.stream_events(
+    "Explain streaming output in two short bullet points.", version="v3"
+)
+for token in stream.text:
+    print(token, end="", flush=True)
+for reasoning_token in stream.reasoning:
+    print(f"\n[reasoning] {reasoning_token}", end="", flush=True)
+print()
+print(stream.output.usage_metadata)
+```
+
+## 工具调用
+
+Moonshot 支持通过 `bind_tools` 使用 LangChain 工具调用：
+
+```python
+from langchain.messages import ToolMessage
+from langchain.tools import tool
+
+
+@tool
+def add(a: int, b: int) -> int:
+    """Add two integers."""
+    return a + b
+
+
+@tool
+def multiply(a: int, b: int) -> int:
+    """Multiply two integers."""
+    return a * b
+
+
+llm_with_tools = ChatMoonshot(
+    model="kimi-k2.5",
+    thinking=False,
+    temperature=0.6,
+).bind_tools([add, multiply])
+
+messages = [
+    ("system", "Use the provided math tools before answering."),
+    ("human", "Add 17 and 25, multiply 12 by 13, then summarize the results."),
+]
+
+response = llm_with_tools.invoke(messages)
+print(response.tool_calls)
+
+if response.tool_calls:
+    tools_map = {"add": add, "multiply": multiply}
+    tool_results = []
+    for tool_call in response.tool_calls:
+        result = tools_map[tool_call["name"]].invoke(tool_call["args"])
+        tool_results.append(
+            ToolMessage(content=str(result), tool_call_id=tool_call["id"])
+        )
+
+    final_response = llm_with_tools.invoke([*messages, response, *tool_results])
+    print(final_response.text)
+```
+
+<Note>
+    对于 `kimi-k2.5` 配合 `thinking=True` 的情况，`tool_choice` 必须为 `"auto"` 或 `"none"`。强制工具调用（指定函数名称）不受支持。
+</Note>
+
+## 结构化输出
+
+Moonshot 支持通过 LangChain 的 `with_structured_output(...)` 实现结构化输出。Moonshot 在此包中不提供独立的 `json_schema` 引导路径，因此 `method="json_schema"` 会降级为 `function_calling`。
+
+```python
+from pydantic import BaseModel, Field
+
+
+class WeatherAnswer(BaseModel):
+    city: str = Field(description="City name")
+    summary: str = Field(description="One-sentence weather summary")
+
+
+structured_llm = ChatMoonshot(
+    model="kimi-k2.5",
+    thinking=False,
+    temperature=0.6,
+).with_structured_output(WeatherAnswer)
+
+result = structured_llm.invoke("Summarize today's weather in Shanghai.")
+print(result)
+```
+
+## 多模态输入
+
+支持视觉的 Moonshot 模型接受 OpenAI 风格的 `image_url` 内容块：
+
+```python
+from langchain.messages import HumanMessage
+
+vision_llm = ChatMoonshot(
+    model="moonshot-v1-32k-vision-preview",
+)
+
+message = HumanMessage(
+    content=[
+        {"type": "text", "text": "Describe the image and mention one concrete detail."},
+        {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,<your-base64-image>"},
+        },
+    ]
+)
+
+response = vision_llm.invoke([message])
+print(response.text)
+```
+
+## Moonshot 特定说明
+
+- `ChatMoonshot` 是一个独立的 LangChain 集成包，用于构建在 `langchain-openai` 之上的 Moonshot AI 聊天模型。
+- 该包公开的 Moonshot 特定请求控制项包括 `thinking`、`prompt_cache_key`、`safety_identifier` 和 `max_completion_tokens`。
+- `kimi-k2.5` 的验证比通用 OpenAI 兼容聊天模型更为严格。
+- 对于 `kimi-k2.5`，`top_p` 必须保持为 `0.95`，`n` 必须保持为 `1`，并且 `presence_penalty` 和 `frequency_penalty` 都必须保持为 `0.0`。
+- 当 `thinking=True` 时，Moonshot 内置的 `$web_search` 对于 `kimi-k2.5` 会被拒绝。
+
+## 仓库
+
+如需获取最新的包代码、README 示例、发布说明和安装元数据，请参阅：
+
+- [GitHub 上的 `langchain-moonshot`](https://github.com/ArcadiaLin/langchain-moonshot)
+- [PyPI 上的 `langchain-moonshot`](https://pypi.org/project/langchain-moonshot/)

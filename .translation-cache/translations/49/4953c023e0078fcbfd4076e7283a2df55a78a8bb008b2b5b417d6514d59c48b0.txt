@@ -1,0 +1,164 @@
+---
+title: AI Elements
+description: 基于 shadcn/ui 的可组合组件库，专为 AI 聊天界面打造，配套 useStream
+---
+
+[AI Elements](https://elements.ai-sdk.dev/) 是一个基于 shadcn/ui 的可组合组件库，专为 AI 聊天界面打造。`Conversation`、`Message`、`Tool`、`Reasoning` 和 `PromptInput` 等组件可直接集成到任何 React 项目中，通过最少的胶水代码即可与 `stream.messages` 连接。
+
+import { ExampleEmbed } from "/snippets/example-embed.jsx"
+
+<ExampleEmbed example="ai-elements" minHeight={700} />
+
+<Tip>
+  克隆并运行 [完整的 AI Elements 示例](https://github.com/langchain-ai/langgraphjs/tree/main/examples/ai-elements)，查看工作中的工具调用渲染、推理显示、流式消息等功能。
+</Tip>
+
+## 工作原理
+
+1. **将组件安装为源文件：** AI Elements 通过 CLI 交付，直接将组件添加到您的项目中（shadcn/ui 注册表风格）
+2. **将消息映射到组件：** 遍历 `stream.messages`，将 `HumanMessage` 实例渲染为用户气泡，将 `AIMessage` 实例渲染为助手回复
+3. **组合更丰富的 UI：** 将工具调用包装在 `<Tool>` 中，将推理包装在 `<Reasoning>` 中，并将所有内容包装在 `<Conversation>` 中进行滚动管理
+
+## 安装
+
+通过 CLI 安装 AI Elements 组件。它们作为可编辑的源文件添加到您的项目中：
+
+```bash
+npm install @langchain/react
+npx ai-elements@latest add conversation message prompt-input tool reasoning suggestion
+```
+
+## 连接 useStream
+
+直接从 `stream.messages` 渲染 AI Elements 组件。每个 LangChain `BaseMessage` 对应一个组件：
+
+```tsx
+import { useStream } from "@langchain/react";
+import { HumanMessage, AIMessage } from "langchain";
+
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+  Tool,
+  ToolHeader,
+  ToolContent,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool";
+import {
+  Reasoning,
+  ReasoningTrigger,
+  ReasoningContent,
+} from "@/components/ai-elements/reasoning";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputTextarea,
+  PromptInputFooter,
+  PromptInputSubmit,
+} from "@/components/ai-elements/prompt-input";
+
+function getReasoningText(msg: AIMessage) {
+  return msg.contentBlocks.find((block) => block.type === "reasoning")?.reasoning ?? "";
+}
+
+function getTextContent(msg: AIMessage) {
+  return msg.text;
+}
+
+function getToolCalls(msg: AIMessage) {
+  return (msg.tool_calls ?? []).map((tc) => ({
+    id: tc.id,
+    name: tc.name,
+    args: tc.args,
+    state: "input-available" as const,
+  }));
+}
+
+export function Chat() {
+  const stream = useStream({
+    apiUrl: "http://localhost:2024",
+    assistantId: "ai_elements",
+  });
+
+  return (
+    <div className="flex flex-col h-dvh">
+      <Conversation className="flex-1">
+        <ConversationContent>
+          {stream.messages.map((msg, i) => {
+            if (HumanMessage.isInstance(msg)) {
+              return (
+                <Message key={i} from="user">
+                  <MessageContent>{msg.text}</MessageContent>
+                </Message>
+              );
+            }
+            if (AIMessage.isInstance(msg)) {
+              return (
+                <div key={i}>
+                  {/* Reasoning block (shows when model emits thinking tokens) */}
+                  <Reasoning>
+                    <ReasoningTrigger />
+                    <ReasoningContent>{getReasoningText(msg)}</ReasoningContent>
+                  </Reasoning>
+
+                  {/* Inline tool calls with input/output display */}
+                  {getToolCalls(msg).map((tc) => (
+                    <Tool key={tc.id} defaultOpen>
+                      <ToolHeader type={`tool-${tc.name}`} state={tc.state} />
+                      <ToolContent>
+                        <ToolInput input={tc.args} />
+                        {tc.output && (
+                          <ToolOutput output={tc.output} errorText={undefined} />
+                        )}
+                      </ToolContent>
+                    </Tool>
+                  ))}
+
+                  {/* Streamed text response */}
+                  <Message from="assistant">
+                    <MessageContent>
+                      <MessageResponse>{getTextContent(msg)}</MessageResponse>
+                    </MessageContent>
+                  </Message>
+                </div>
+              );
+            }
+          })}
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+
+      <PromptInput
+        onSubmit={({ text }) =>
+          stream.submit({ messages: [{ type: "human", content: text }] })
+        }
+      >
+        <PromptInputBody>
+          <PromptInputTextarea placeholder="Ask me something..." />
+        </PromptInputBody>
+        <PromptInputFooter>
+          <PromptInputSubmit
+            status={stream.isLoading ? "streaming" : "ready"}
+          />
+        </PromptInputFooter>
+      </PromptInput>
+    </div>
+  );
+}
+```
+
+## 最佳实践
+
+- **自由编辑源文件：**组件在你的项目中提供，而不是作为外部包依赖，因此你可以在不进行 fork 的情况下随意更改任何内容
+- **使用 `MessageResponse` 进行流式处理：**它能正确处理流式部分 token；在流式传输期间避免直接渲染原始消息内容
+- **包装在 `Conversation` 中：**`Conversation` 组件管理滚动行为，使新消息自动滚动到视图中
+- **使用 `isInstance` 进行类型检查：**使用 `HumanMessage.isInstance(msg)` 和 `AIMessage.isInstance(msg)`，而不是检查 `msg.getType()`，以实现正确的 TypeScript 类型收窄

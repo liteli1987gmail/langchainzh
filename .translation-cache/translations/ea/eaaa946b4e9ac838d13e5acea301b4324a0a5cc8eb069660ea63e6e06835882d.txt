@@ -1,0 +1,72 @@
+---
+title: "AgentCoreSandbox 集成"
+description: "使用 LangChain Python 与 AgentCoreSandbox 沙箱后端集成。"
+---
+
+[Amazon Bedrock AgentCore Code Interpreter](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html) 是 [Deep Agents](https://github.com/langchain-ai/deepagents) 的沙箱后端，支持在隔离的 MicroVM 环境中进行安全的代码执行。
+
+## 安装
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install langchain-agentcore-codeinterpreter
+```
+
+```bash uv
+uv add langchain-agentcore-codeinterpreter
+```
+</CodeGroup>
+
+## 创建沙箱后端
+
+请参阅[沙箱指南](/oss/deepagents/sandboxes)了解使用方式、文件操作和生命周期详情。
+
+```python
+from bedrock_agentcore.tools.code_interpreter_client import CodeInterpreter
+from langchain_agentcore_codeinterpreter import AgentCoreSandbox
+
+interpreter = CodeInterpreter(region="us-west-2")
+interpreter.start()
+
+backend = AgentCoreSandbox(interpreter=interpreter)
+result = backend.execute("echo hello")
+print(result.output)
+
+interpreter.stop()
+```
+
+## 与 Deep Agents 配合使用
+
+```python
+from bedrock_agentcore.tools.code_interpreter_client import CodeInterpreter
+from langchain_agentcore_codeinterpreter import AgentCoreSandbox
+from langchain_anthropic import ChatAnthropic
+
+from deepagents import create_deep_agent
+
+interpreter = CodeInterpreter(region="us-west-2")
+interpreter.start()
+
+backend = AgentCoreSandbox(interpreter=interpreter)
+
+agent = create_deep_agent(
+    model=ChatAnthropic(model="claude-sonnet-4-20250514"),
+    system_prompt="You are a coding assistant with sandbox access.",
+    backend=backend,
+)
+
+try:
+    result = agent.invoke(
+        {"messages": [{"role": "user", "content": "Write and run a Python script"}]}
+    )
+finally:
+    interpreter.stop()
+```
+
+## 清理
+
+使用完毕后请务必停止解释器以释放资源。
+
+另请参阅：[沙箱](/oss/deepagents/sandboxes)

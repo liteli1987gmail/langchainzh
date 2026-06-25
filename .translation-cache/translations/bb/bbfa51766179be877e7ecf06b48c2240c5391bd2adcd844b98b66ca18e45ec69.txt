@@ -1,0 +1,228 @@
+---
+title: 模型
+description: 配置 Deep Agents 的模型提供商和参数
+---
+
+import EvalCategoryMatrix from '/snippets/deepagents-eval-category-matrix.mdx';
+
+Deep Agents 可与任何支持[工具调用](/oss/langchain/models#tool-calling)的 [LangChain 聊天模型](/oss/langchain/models)配合使用。
+
+## 支持的模型
+
+使用 `provider:model` 格式指定模型（例如 `google_genai:gemini-3.5-flash`、`openai:gpt-5.4` 或 `anthropic:claude-sonnet-4-6`）。provider 前缀用于选择 LangChain 集成，冒号后的所有内容将作为模型标识符传递给该 provider。若要获取有效的 provider 字符串，请参阅 @[`init_chat_model`] 的 `model_provider` 参数。如需特定于 provider 的配置，请参阅[聊天模型集成](/oss/integrations/chat)。
+
+模型标识符必须与 provider 期望的格式匹配。某些 provider 使用简单的名称（如 `gpt-5.5`）；其他 provider 使用命名空间 ID 或部署路径（如 `zai-org/GLM-5.2`），因此完整的 Deep Agents 字符串为 `baseten:zai-org/GLM-5.2`。请查看 provider 的模型目录或集成文档以获取当前标识符。
+
+### 推荐的模型
+
+这些模型在 [Deep Agents 评估套件](https://github.com/langchain-ai/deepagents/tree/main/libs/evals#readme) 上表现良好，该套件用于测试基本代理操作。通过这些评估是必要条件，但对于更长、更复杂的任务来说还不够充分。
+
+| Provider | Models |
+|----------|--------|
+| [Google](/oss/integrations/providers/google) | `gemini-3.1-pro-preview`, `gemini-3.5-flash` |
+| [OpenAI](/oss/integrations/providers/openai) | `gpt-5.5`, `gpt-5.4` |
+| [Anthropic](/oss/integrations/providers/anthropic) | `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6` |
+| Open-weight | `GLM-5.2`, `Kimi-K2.7 Code`, `MiniMax-M3` |
+
+:::python
+开源模型可通过 [Baseten](/oss/integrations/providers/baseten)、[Fireworks](/oss/integrations/chat/fireworks)、[OpenRouter](/oss/integrations/providers/openrouter) 和 [Ollama](/oss/integrations/providers/ollama) 等 provider 获取。
+:::
+
+:::js
+开源模型可通过 [OpenRouter](/oss/integrations/chat/openrouter) 和 [Ollama](/oss/integrations/chat/ollama) 等 provider 获取。
+:::
+
+### 模型评估
+
+[Deep Agents 评估套件](https://github.com/langchain-ai/deepagents/tree/main/libs/evals#readme) 测试流行模型：
+
+<div className="deepagents-eval-category-matrix">
+
+<EvalCategoryMatrix />
+
+</div>
+
+如需更多信息，请参阅 [Eval runs](https://github.com/langchain-ai/deepagents/actions/workflows/evals.yml)。
+
+## 配置模型参数
+
+:::python
+在 `provider:model` 格式下将模型字符串传递给 @[`create_deep_agent`]，或传递已配置的模型实例以获得完全控制。在底层，模型字符串通过 @[`init_chat_model`] 解析。
+:::
+
+:::js
+在 `provider:model` 格式下将模型字符串传递给 @[`createDeepAgent`]，或传递已配置的模型实例以获得完全控制。在底层，模型字符串通过 @[`init_chat_model`] 解析。
+:::
+
+要配置特定于模型的参数，请使用 @[`init_chat_model`] 或直接实例化 provider 模型类：
+
+:::python
+<CodeGroup>
+    ```python init_chat_model
+    from langchain.chat_models import init_chat_model
+    from deepagents import create_deep_agent
+
+    model = init_chat_model(
+        model="google_genai:gemini-3.5-flash",
+        thinking_level="medium",  # [!code highlight]
+    )
+    agent = create_deep_agent(model=model)
+    ```
+
+    ```python Provider package
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from deepagents import create_deep_agent
+
+    model = ChatGoogleGenerativeAI(
+        model="gemini-3.1-pro-preview",
+        thinking_level="medium",  # [!code highlight]
+    )
+    agent = create_deep_agent(model=model)
+    ```
+</CodeGroup>
+:::
+
+:::js
+<CodeGroup>
+    ```typescript initChatModel
+    import { initChatModel } from "langchain/chat_models/universal";
+    import { createDeepAgent } from "deepagents";
+
+    const model = await initChatModel("google_genai:gemini-3.5-flash", {
+        reasoningEffort: "medium",  // [!code highlight]
+    });
+    const agent = createDeepAgent({ model });
+    ```
+
+    ```typescript Provider package
+    import { ChatGoogle } from "@langchain/google";
+    import { createDeepAgent } from "deepagents";
+
+    const model = new ChatGoogle({
+        model: "gemini-3.1-pro-preview",
+        reasoningEffort: "medium",  // [!code highlight]
+    });
+    const agent = createDeepAgent({ model });
+    ```
+</CodeGroup>
+:::
+
+<Note>
+    可用参数因提供商而异。参见[聊天模型集成](/oss/integrations/chat)页面了解特定提供商的配置选项。
+</Note>
+
+### 提供商配置
+
+[`ProviderProfile`](/oss/deepagents/profiles#provider-profiles) 将初始化参数打包，在创建深度智能体时提供 `provider:model` 字符串的情况下应用。当使用 @[`init_chat_model`] 传递预配置模型时不适用。
+
+您可以在两个级别注册，两种方式可以共存：
+
+- **提供商级别** — 裸提供商密钥（如 `"openai"`）适用于来自该提供商的所有模型。
+- **模型级别** — `provider:model` 密钥（如 `"openai:gpt-5.4"`）仅适用于该特定模型，并在提供商级别配置的基础上进行合并。
+
+```python
+from deepagents import ProviderProfile, register_provider_profile
+
+# Provider-wide default: every openai model gets temperature=0.
+register_provider_profile(
+    "openai",
+    ProviderProfile(init_kwargs={"temperature": 0}),
+)
+
+# Model-level override: gpt-5.4 additionally gets a specific reasoning effort.
+# Inherits temperature=0 from the provider-level profile above.
+register_provider_profile(
+    "openai:gpt-5.5",
+    ProviderProfile(init_kwargs={"reasoning_effort": "medium"}),
+)
+```
+
+请参阅 [Profiles](/oss/deepagents/profiles) 了解完整字段列表、合并语义和插件打包。
+
+<Tip>
+    要塑造模型构建后 *agent* 的行为方式，请使用 [harness profile](/oss/deepagents/profiles#harness-profiles)。
+</Tip>
+
+## 在运行时选择模型
+
+如果您的应用程序允许用户选择模型（例如在 UI 中使用下拉菜单），请使用 [middleware](/oss/langchain/middleware) 在运行时更换模型，而无需重新构建 agent。
+
+:::python
+
+通过 [runtime context](/oss/langchain/models#dynamic-model-selection) 传递用户选择的模型，然后使用 `wrap_model_call` middleware 通过 @[`@wrap_model_call`] decorator 在每次调用时覆盖模型：
+
+```python
+from dataclasses import dataclass
+from langchain.chat_models import init_chat_model
+from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+from deepagents import create_deep_agent
+from typing import Callable
+
+
+@dataclass
+class Context:
+    model: str
+
+@wrap_model_call
+def configurable_model(
+    request: ModelRequest,
+    handler: Callable[[ModelRequest], ModelResponse],
+) -> ModelResponse:
+    model_name = request.runtime.context.model
+    model = init_chat_model(model_name)
+    return handler(request.override(model=model))
+
+agent = create_deep_agent(
+    model="google_genai:gemini-3.5-flash",
+    middleware=[configurable_model],
+    context_schema=Context,
+)
+
+# Invoke with the user's model selection
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Hello!"}]},
+    context=Context(model="openai:gpt-5.5"),
+)
+```
+:::
+
+:::js
+```typescript
+import { initChatModel, createMiddleware } from "langchain";
+import { createDeepAgent } from "deepagents";
+import * as z from "zod";
+
+const contextSchema = z.object({
+  model: z.string(),
+});
+
+const configurableModel = createMiddleware({
+  name: "ConfigurableModel",
+  wrapModelCall: async (request, handler) => {
+    const modelName = request.runtime.context.model;
+    const model = await initChatModel(modelName);
+    return handler({ ...request, model });
+  },
+});
+
+const agent = await createDeepAgent({
+  model: "google_genai:gemini-3.5-flash",
+  middleware: [configurableModel],
+  contextSchema,
+});
+
+// Invoke with the user's model selection
+const result = await agent.invoke(
+  { messages: [{ role: "user", content: "Hello!" }] },
+  { context: { model: "openai:gpt-5.5" } },
+);
+```
+:::
+
+<Tip>
+    有关更多动态模型模式（例如基于对话复杂性或成本优化的路由），请参阅 LangChain 代理指南中的[动态模型](/oss/langchain/models#dynamic-model-selection)。
+</Tip>
+
+## 了解更多
+
+- [LangChain 中的模型](/oss/langchain/models)：聊天模型功能，包括工具调用、结构化输出和多模态

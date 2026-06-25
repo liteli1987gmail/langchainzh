@@ -1,0 +1,141 @@
+---
+title: "交叉编码器重排序集成"
+description: "使用 LangChain Python 和开源交叉编码器模型对检索到的文档进行重排序。"
+---
+
+import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
+
+交叉编码器直接对每个`(query, document)`对进行评分，而不是比较独立的嵌入向量，这会产生更准确的排序结果，但每个文档需要额外一次推理。在向量搜索之上应用重排序器（通过嵌入向量检索前20条，然后重排序至前5条）是RAG管道中影响最大的质量改进之一，而且当你使用Hugging Face的小型交叉编码器时，它可以在本地CPU上免费运行。
+
+本指南展示了如何将`HuggingFaceCrossEncoder`与LangChain的`CrossEncoderReranker`和`ContextualCompressionRetriever`结合使用。该模式适用于Hugging Face上的任何交叉编码器模型，包括`BAAI/bge-reranker-*`、`mixedbread-ai/mxbai-rerank-*`、`Alibaba-NLP/gte-multilingual-reranker-*`、`Qwen/Qwen3-Reranker-*`以及经典的`cross-encoder/ms-marco-*`系列。
+
+## 设置
+
+```shell
+pip install -qU langchain-huggingface langchain-community langchain-classic faiss-cpu
+```
+
+## 构建基础检索器
+
+从一个标准的向量存储检索器开始。检索一个相对较大的 `k`；重排序器会将其缩小。
+
+<LangchainCommunityUnmaintained />
+
+```python
+from langchain_community.document_loaders import TextLoader
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+documents = TextLoader("../../how_to/state_of_the_union.txt").load()
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+texts = text_splitter.split_documents(documents)
+
+embeddings = HuggingFaceEmbeddings(
+    model_name="BAAI/bge-m3",
+    encode_kwargs={"normalize_embeddings": True},
+)
+retriever = FAISS.from_documents(texts, embeddings).as_retriever(
+    search_kwargs={"k": 20}
+)
+```
+
+## 使用交叉编码器重新排序
+
+`CrossEncoderReranker` 封装任意交叉编码器并插入到 `ContextualCompressionRetriever`。
+
+```python
+from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
+from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+
+cross_encoder = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3")
+reranker = CrossEncoderReranker(model=cross_encoder, top_n=3)
+
+compression_retriever = ContextualCompressionRetriever(
+    base_compressor=reranker,
+    base_retriever=retriever,
+)
+
+compressed_docs = compression_retriever.invoke("What is the plan for the economy?")
+for i, doc in enumerate(compressed_docs, 1):
+    print(f"Document {i}:\n{doc.page_content}\n")
+```
+
+## 选择交叉编码器
+
+| 模型 | 参数量 | 备注 |
+|---|---|---|
+| `cross-encoder/ms-marco-MiniLM-L6-v2` | 22M | 最快；仅英语，2022时代的基线模型 |
+| `BAAI/bge-reranker-v2-m3` | 568M | 多语言，大多数工作负载的强力默认选择 |
+| `mixedbread-ai/mxbai-rerank-large-v2` | 1.5B | 顶级英语质量，建议使用GPU |
+| `Alibaba-NLP/gte-multilingual-reranker-base` | 306M | 多语言，8192-token上下文 |
+| `Qwen/Qwen3-Reranker-0.6B` | 595M | 指令感知，多语言 |
+
+`HuggingFaceCrossEncoder` 自动选择最佳可用设备（CUDA > MPS > CPU）。若要固定到特定设备，请传入 `model_kwargs={"device": "cpu"}` 或类似参数。
+
+## 部署到 SageMaker
+
+您也可以在 SageMaker 端点上托管交叉编码器，并使用 `SagemakerEndpointCrossEncoder`。以下是一个示例 `inference.py`，在运行时动态加载模型（无需 `model.tar.gz` 工件）。参见[本教程](https://huggingface.co/blog/kchoe/deploy-any-huggingface-model-to-sagemaker)获取分步指导。
+
+```python
+import json
+import logging
+from typing import List
+
+import torch
+from sagemaker_inference import encoder
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+PAIRS = "pairs"
+SCORES = "scores"
+
+
+class CrossEncoder:
+    def __init__(self) -> None:
+        self.device = (
+            torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        )
+        logging.info(f"Using device: {self.device}")
+        model_name = "BAAI/bge-reranker-v2-m3"
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+        self.model = self.model.to(self.device)
+
+    def __call__(self, pairs: List[List[str]]) -> List[float]:
+        with torch.inference_mode():
+            inputs = self.tokenizer(
+                pairs,
+                padding=True,
+                truncation=True,
+                return_tensors="pt",
+                max_length=512,
+            )
+            inputs = inputs.to(self.device)
+            scores = (
+                self.model(**inputs, return_dict=True)
+                .logits.view(
+                    -1,
+                )
+                .float()
+            )
+
+        return scores.detach().cpu().tolist()
+
+
+def model_fn(model_dir: str) -> CrossEncoder:
+    try:
+        return CrossEncoder()
+    except Exception:
+        logging.exception(f"Failed to load model from: {model_dir}")
+        raise
+
+
+def transform_fn(
+    cross_encoder: CrossEncoder, input_data: bytes, content_type: str, accept: str
+) -> bytes:
+    payload = json.loads(input_data)
+    model_output = cross_encoder(**payload)
+    output = {SCORES: model_output}
+    return encoder.encode(output, accept)
+```

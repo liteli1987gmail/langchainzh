@@ -1,0 +1,101 @@
+---
+title: INVALID_CONCURRENT_GRAPH_UPDATE
+---
+
+LangGraph [`StateGraph`](https://langchain-ai.github.io/langgraph/reference/graphs/#langgraph.graph.state.StateGraph) 收到了来自多个节点对某个状态属性的并发更新，而该属性不支持并发更新。
+
+造成此问题的一种常见情况是：您在图中使用了 [fanout](/oss/langgraph/use-graph-api#map-reduce-and-the-send-api) 或其他并行执行方式，并且定义了如下结构的图：
+
+:::python
+```python
+class State(TypedDict):
+    some_key: str  # [!code highlight]
+
+def node(state: State):
+    return {"some_key": "some_string_value"}
+
+def other_node(state: State):
+    return {"some_key": "some_string_value"}
+
+
+builder = StateGraph(State)
+builder.add_node(node)
+builder.add_node(other_node)
+builder.add_edge(START, "node")
+builder.add_edge(START, "other_node")
+graph = builder.compile()
+```
+:::
+
+:::js
+```typescript
+import { StateGraph, StateSchema, START } from "@langchain/langgraph";
+import { z } from "zod/v4";  // [!code highlight]
+
+const State = new StateSchema({
+  someKey: z.string(),
+});
+
+const builder = new StateGraph(State)
+  .addNode("node", (state) => {
+    return { someKey: "some_string_value" };
+  })
+  .addNode("otherNode", (state) => {
+    return { someKey: "some_string_value" };
+  })
+  .addEdge(START, "node")
+  .addEdge(START, "otherNode");
+
+const graph = builder.compile();
+```
+:::
+
+:::python
+如果上述图表中的节点返回 `{ "some_key": "some_string_value" }`，这将使用 `"some_string_value"` 覆盖 `"some_key"` 的状态值。
+但是，如果在单个步骤中（例如扇出）有多个节点返回 `"some_key"` 的值，图表将抛出此错误，因为
+存在如何更新内部状态的不确定性。
+:::
+
+:::js
+如果上述图表中的节点返回 `{ someKey: "some_string_value" }`，这将使用 `"some_string_value"` 覆盖 `someKey` 的状态值。
+但是，如果在单个步骤中（例如扇出）有多个节点返回 `someKey` 的值，图表将抛出此错误，因为
+存在如何更新内部状态的不确定性。
+:::
+
+要解决此问题，您可以定义一个 reducer 来组合多个值：
+
+:::python
+```python
+import operator
+from typing import Annotated
+
+class State(TypedDict):
+    # The operator.add reducer fn makes this append-only  # [!code highlight]
+    some_key: Annotated[list, operator.add]  # [!code highlight]
+```
+:::
+
+:::js
+```typescript
+import { StateSchema, ReducedValue } from "@langchain/langgraph";
+import { z } from "zod/v4";
+
+const State = new StateSchema({  // [!code highlight]
+  someKey: new ReducedValue(  // [!code highlight]
+    z.array(z.string()).default(() => []),  // [!code highlight]
+    {
+      inputSchema: z.array(z.string()),
+      reducer: (existing, update) => existing.concat(update),  // [!code highlight]
+    }
+  ),
+});
+```
+:::
+
+这将允许你定义逻辑来处理从并行执行的多个节点返回的相同键。
+
+## 故障排除
+
+以下内容可能有助于解决此错误：
+
+* 如果你的图并行执行节点，请确保你已使用 reducer 定义了相关的状态键。

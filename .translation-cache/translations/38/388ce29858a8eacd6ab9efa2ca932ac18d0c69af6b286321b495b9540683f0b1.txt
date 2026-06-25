@@ -1,0 +1,223 @@
+---
+title: LangSmith 可观测性
+---
+
+追踪是应用程序从输入到输出所执行的一系列步骤。每个单独的步骤都称为一次运行。您可以使用 [LangSmith](https://smith.langchain.com) 可视化这些执行步骤。要使用它，请[为您的应用程序启用追踪功能](/langsmith/trace-with-langgraph)。这使您能够：
+
+- [调试本地运行的应用程序](/langsmith/observability-studio#debug-langsmith-traces)。
+- [评估应用程序性能](/oss/langchain/test/evals)。
+- [监控应用程序](/langsmith/dashboards)。
+
+## 前提条件
+
+在开始之前，请确保您具备以下条件：
+
+- **LangSmith 账户**：在 [smith.langchain.com](https://smith.langchain.com) 免费注册或登录。
+- **LangSmith API 密钥**：请按照[创建 API 密钥](/langsmith/create-account-api-key)指南操作。
+
+## 启用追踪
+
+要为您的应用程序启用追踪功能，请设置以下环境变量：
+
+```python
+export LANGSMITH_TRACING=true
+export LANGSMITH_API_KEY=<your-api-key>
+```
+
+默认情况下，跟踪将被记录到名为 `default` 的项目中。要配置自定义项目名称，请参阅[记录到项目](#log-to-a-project)。
+
+有关更多信息，请参阅[使用 LangGraph 进行跟踪](/langsmith/trace-with-langgraph)。
+
+## 选择性跟踪
+
+您可以使用 LangSmith 的 `tracing_context` 上下文管理器来选择性地跟踪应用程序的特定调用或部分：
+
+:::python
+```python
+import langsmith as ls
+
+# This WILL be traced
+with ls.tracing_context(enabled=True):
+    agent.invoke({"messages": [{"role": "user", "content": "Send a test email to alice@example.com"}]})
+
+# This will NOT be traced (if LANGSMITH_TRACING is not set)
+agent.invoke({"messages": [{"role": "user", "content": "Send another email"}]})
+```
+:::
+
+:::js
+```ts
+import { LangChainTracer } from "@langchain/core/tracers/tracer_langchain";
+
+// This WILL be traced
+const tracer = new LangChainTracer();
+await agent.invoke(
+  {
+    messages: [{role: "user", content: "Send a test email to alice@example.com"}]
+  },
+  { callbacks: [tracer] }
+);
+
+// This will NOT be traced (if LANGSMITH_TRACING is not set)
+await agent.invoke(
+  {
+    messages: [{role: "user", content: "Send another email"}]
+  }
+);
+```
+:::
+
+## 记录到项目
+
+<Accordion title="Statically">
+
+您可以通过设置 `LANGSMITH_PROJECT` 环境变量为整个应用程序设置自定义项目名称：
+
+```bash
+export LANGSMITH_PROJECT=my-agent-project
+```
+</Accordion>
+
+<Accordion title="动态地">
+
+您可以为特定操作以编程方式设置项目名称：
+
+:::python
+```python
+import langsmith as ls
+
+with ls.tracing_context(project_name="email-agent-test", enabled=True):
+    response = agent.invoke({
+        "messages": [{"role": "user", "content": "Send a welcome email"}]
+    })
+```
+:::
+
+:::js
+```ts
+import { LangChainTracer } from "@langchain/core/tracers/tracer_langchain";
+
+const tracer = new LangChainTracer({ projectName: "email-agent-test" });
+await agent.invoke(
+  {
+    messages: [{role: "user", content: "Send a test email to alice@example.com"}]
+  },
+  { callbacks: [tracer] }
+);
+```
+:::
+</Accordion>
+
+## 为跟踪添加元数据
+
+您可以使用自定义元数据和标签为您的跟踪添加注释：
+
+:::python
+```python
+response = agent.invoke(
+    {"messages": [{"role": "user", "content": "Send a welcome email"}]},
+    config={
+        "tags": ["production", "email-assistant", "v1.0"],
+        "metadata": {
+            "user_id": "user_123",
+            "session_id": "session_456",
+            "environment": "production"
+        }
+    }
+)
+```
+
+`tracing_context` 也接受标签和元数据，以便进行细粒度控制：
+
+```python
+with ls.tracing_context(
+    project_name="email-agent-test",
+    enabled=True,
+    tags=["production", "email-assistant", "v1.0"],
+    metadata={"user_id": "user_123", "session_id": "session_456", "environment": "production"}):
+    response = agent.invoke(
+        {"messages": [{"role": "user", "content": "Send a welcome email"}]}
+    )
+```
+:::
+
+:::js
+```ts
+import { LangChainTracer } from "@langchain/core/tracers/tracer_langchain";
+
+const tracer = new LangChainTracer({ projectName: "email-agent-test" });
+await agent.invoke(
+  {
+    messages: [{role: "user", content: "Send a test email to alice@example.com"}]
+  },
+  config: {
+    tags: ["production", "email-assistant", "v1.0"],
+    metadata: {
+      userId: "user123",
+      sessionId: "session456",
+      environment: "production"
+    }
+  },
+);
+
+```
+:::
+
+此自定义元数据和标签将附加到 LangSmith 中的追踪。
+
+
+<Tip>
+要详细了解如何使用追踪来调试、评估和监控您的代理，请参阅 [LangSmith 文档](/langsmith/observability)。
+</Tip>
+
+
+## 使用匿名化器防止敏感数据被记录到追踪中
+
+您可能希望遮蔽敏感数据以防止其被记录到 LangSmith。您可以创建[匿名化器](/langsmith/mask-inputs-outputs#rule-based-masking-of-inputs-and-outputs)，并使用配置将其应用到您的图中。此示例将从发送到 LangSmith 的追踪中删除任何匹配社会安全号码格式 XXX-XX-XXXX 的内容。
+
+:::python
+```python Python
+from langchain_core.tracers.langchain import LangChainTracer
+from langgraph.graph import StateGraph, MessagesState
+from langsmith import Client
+from langsmith.anonymizer import create_anonymizer
+
+anonymizer = create_anonymizer([
+    # Matches SSNs
+    { "pattern": r"\b\d{3}-?\d{2}-?\d{4}\b", "replace": "<ssn>" }
+])
+
+tracer_client = Client(anonymizer=anonymizer)
+tracer = LangChainTracer(client=tracer_client)
+# Define the graph
+graph = (
+    StateGraph(MessagesState)
+    ...
+    .compile()
+    .with_config({'callbacks': [tracer]})
+)
+```
+:::
+:::js
+```typescript TypeScript
+import { StateGraph } from "@langchain/langgraph";
+import { LangChainTracer } from "@langchain/core/tracers/tracer_langchain";
+import { StateAnnotation } from "./state.js";
+import { createAnonymizer } from "langsmith/anonymizer"
+import { Client } from "langsmith"
+
+const anonymizer = createAnonymizer([
+  // Matches SSNs
+  { pattern: /\b\d{3}-?\d{2}-?\d{4}\b/, replace: "<ssn>" }
+])
+
+const langsmithClient = new Client({ anonymizer })
+const tracer = new LangChainTracer({
+  client: langsmithClient,
+});
+
+export const graph = new StateGraph(StateAnnotation)
+  .compile()
+  .withConfig({ callbacks: [tracer] });
+```
+:::

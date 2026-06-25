@@ -1,0 +1,132 @@
+---
+title: 使用 Harbor 运行评估
+sidebarTitle: Harbor
+description: 使用 harbor[langsmith] extra 在 LangSmith 沙箱上运行 Harbor 评估和部署。
+---
+
+[Harbor](https://harborframework.com/docs) 是一个用于在沙箱环境中评估和优化智能体及语言模型的框架，由 [Terminal-Bench](https://www.tbench.ai) 的创建者开发。Harbor 在隔离的容器中运行每次试验，因此您可以跨多个环境并行化评估和部署。
+
+`langsmith` Harbor 环境在 LangSmith 沙箱上运行这些试验。使用 `-e langsmith` 选择它以在 LangSmith 基础设施上执行 Harbor 作业，与 AgentCore、Daytona、E2B 和 Modal 等提供商并列。
+
+## 前置条件
+
+- 一个 [LangSmith 账户](https://smith.langchain.com) 和一个 API 密钥。
+- 装有 `pip` 的 Python 环境。
+
+## 安装
+
+使用 `langsmith` extra 安装 Harbor：
+
+```bash
+pip install "harbor[langsmith]"
+```
+
+## 身份验证
+
+Harbor 使用您的 LangSmith 凭据进行身份验证。设置一个 API 密钥：
+
+```bash
+export LANGSMITH_API_KEY="<LANGSMITH_API_KEY>"
+```
+
+`LANGCHAIN_API_KEY` 也可以使用。或者，选择一个 [LangSmith SDK profile](/langsmith/profile-configuration) 而不是导出密钥：
+
+```bash
+export LANGSMITH_PROFILE=prod
+```
+
+## 运行评估
+
+运行 Harbor 任务并使用 `-e langsmith` 选择 LangSmith 环境：
+
+```bash
+harbor run -d "<org/name>" \
+  -m "<model>" \
+  -a "<agent>" \
+  -e langsmith \
+  -n "<n-parallel-trials>"
+```
+
+Harbor 为每次试验创建一个 LangSmith 沙箱，在沙箱内运行 agent 和 verifier，试验完成后销毁沙箱。
+
+## 配置沙箱环境
+
+LangSmith 环境从文件系统快照启动每个沙箱。在 Harbor 任务中提供以下任一配置：
+
+- **预构建镜像**: 在 `task.toml` 中设置 `[environment].docker_image`。Harbor 会复用或基于该镜像创建快照。
+- **现有快照**: 传递 `environment.kwargs.snapshot_name` 以从您已创建的[快照](/langsmith/sandbox-snapshots)启动。
+- **Dockerfile**: 包含 `environment/Dockerfile`。Harbor 会通过 [从 Dockerfile 构建快照流程](/langsmith/sandbox-snapshots#build-a-snapshot-from-a-dockerfile) 基于它构建快照，并使用任务的 `environment/` 目录作为构建上下文。
+
+通过环境参数调整沙箱生命周期，在命令行中使用 `--ek` 传递这些参数：
+
+```bash
+harbor run -d "<org/name>" \
+  -m "<model>" \
+  -a "<agent>" \
+  -e langsmith \
+  -n "<n-parallel-trials>" \
+  --ek idle_ttl_seconds=0 \
+  --ek delete_after_stop_seconds=7200
+```
+
+- `idle_ttl_seconds`：在此秒数后停止空闲沙箱。设置为 `0` 可禁用空闲超时。
+- `delete_after_stop_seconds`：在此秒数后删除已停止的沙箱。
+
+## 在 LangSmith 上运行 Deep Agents
+
+Deep Agents 作为自定义 Harbor 代理在 LangSmith 环境中运行。要构建和运行 Deep Agent，请参阅 [Deep Agents 文档](/oss/deepagents/overview)。Harbor 包装器随 [`deepagents-evals` 包](https://github.com/langchain-ai/deepagents/tree/main/libs/evals) 一起提供，它暴露了 `deepagents_harbor:DeepAgentsWrapper` 并包含现成的 `make run-terminal-bench-*` 目标。请在与 Harbor 相同的环境中安装它：
+
+```bash
+pip install "harbor[langsmith]"
+
+# From a checkout of langchain-ai/deepagents:
+pip install -e libs/evals
+```
+
+设置您的 LangSmith 和模型凭据，然后使用包装器运行 Harbor：
+
+```bash
+export LANGSMITH_PROFILE=prod
+export LANGSMITH_TRACING=true
+export LANGSMITH_PROJECT=harbor-deepagents
+export ANTHROPIC_API_KEY="<ANTHROPIC_API_KEY>"
+
+harbor run -d "terminal-bench@2.0" \
+  --agent-import-path deepagents_harbor:DeepAgentsWrapper \
+  --model anthropic:claude-opus-4-8 \
+  -e langsmith \
+  -n 10 \
+  -l 10 \
+  --yes \
+  --ek idle_ttl_seconds=0 \
+  --ek delete_after_stop_seconds=7200
+```
+
+将 API 密钥保留在您的 shell 环境中，而非作业配置文件中。
+
+## 使用配置文件
+
+在 Harbor 作业配置中捕获相同的运行：
+
+```yaml
+jobs_dir: jobs/deepagents-langsmith
+n_attempts: 1
+n_concurrent_trials: 10
+environment:
+  type: langsmith
+  delete: true
+  kwargs:
+    idle_ttl_seconds: 0
+    delete_after_stop_seconds: 7200
+agents:
+  - import_path: deepagents_harbor:DeepAgentsWrapper
+    model_name: anthropic:claude-opus-4-8
+datasets:
+  - name: terminal-bench
+    version: "2.0"
+    n_tasks: 10
+```
+
+## 多容器任务
+
+LangSmith 环境支持多容器任务。在任务定义中包含 `environment/docker-compose.yaml` 文件，以在每个试验中运行多个容器。详见 [Harbor 沙盒文档](https://harborframework.com/docs/run-jobs/cloud-sandboxes)。

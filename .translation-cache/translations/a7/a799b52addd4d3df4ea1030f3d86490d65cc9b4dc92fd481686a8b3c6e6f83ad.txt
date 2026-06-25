@@ -1,0 +1,307 @@
+---
+title: "NVIDIAEmbeddings 集成"
+description: "使用 LangChain Python 与 NVIDIAEmbeddings 嵌入模型进行集成。"
+---
+
+import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
+
+`langchain-nvidia-ai-endpoints` 包包含由 [NVIDIA AI Foundation Models](https://www.nvidia.com/en-us/ai-data-science/foundation-models/) 提供支持的聊天模型和嵌入的 LangChain 集成，并托管在 [NVIDIA API Catalog](https://build.nvidia.com/) 上。
+
+NVIDIA AI Foundation 模型是由社区和 NVIDIA 构建的模型，经过优化以在 NVIDIA 加速基础设施上提供最佳性能。您可以使用 API 查询 NVIDIA API Catalog 上可用的实时端点，以从 DGX 托管的云计算环境获得快速结果，或者您可以使用 NVIDIA NIM（包含在 NVIDIA AI Enterprise 许可证中）从 NVIDIA 的 API 目录下载模型。在本地运行模型的能力使您的企业拥有自定义的所有权，并完全控制您的 IP 和 AI 应用程序。
+
+NIM 微服务作为容器镜像打包在每个模型/模型系列的基础上，并通过 [NVIDIA NGC Catalog](https://catalog.ngc.nvidia.com/) 分发 NGC 容器镜像。NIM 微服务的核心是提供交互式 API 用于在 AI 模型上运行推理的容器。
+
+本示例介绍如何使用 LangChain 通过 `NVIDIAEmbeddings` 类与支持的 [NVIDIA Retrieval QA Embedding Model](https://build.nvidia.com/nvidia/embed-qa-4) 进行交互，以实现[检索增强生成](https://developer.nvidia.com/blog/build-enterprise-retrieval-augmented-generation-apps-with-nvidia-retrieval-qa-embedding-model/)。
+
+有关通过此 API 访问聊天模型的更多信息，请参阅 [ChatNVIDIA](/oss/integrations/chat/nvidia_ai_endpoints) 文档。
+
+## 安装包
+
+```bash
+pip install -qU langchain-nvidia-ai-endpoints
+```
+
+## 访问 NVIDIA API 目录
+
+要访问 NVIDIA API 目录，请执行以下操作：
+
+1. 在 [NVIDIA API 目录](https://build.nvidia.com/) 上创建一个免费账户并登录。
+2. 点击您的个人资料图标，然后点击 **API 密钥**。此时会出现 **API 密钥** 页面。
+3. 点击 **生成 API 密钥**。此时会出现 **生成 API 密钥** 窗口。
+4. 点击 **生成密钥**。您应该会看到 **API 密钥已授予**，然后您的密钥会出现。
+5. 复制并保存该密钥为 `NVIDIA_API_KEY`。
+6. 要验证您的密钥，请使用以下代码。
+
+```python
+import getpass
+import os
+
+if os.environ.get("NVIDIA_API_KEY", "").startswith("nvapi-"):
+    print("Valid NVIDIA_API_KEY already in environment. Delete to reset")
+else:
+    nvapi_key = getpass.getpass("NVAPI Key (starts with nvapi-): ")
+    assert nvapi_key.startswith(
+        "nvapi-"
+    ), f"{nvapi_key[:5]}... is not a valid key"
+    os.environ["NVIDIA_API_KEY"] = nvapi_key
+```
+
+您现在可以使用您的密钥访问 NVIDIA API Catalog 上的端点。
+
+## 使用 API Catalog
+
+初始化嵌入模型时，您可以通过传递参数来选择模型，例如下面的 `NV-Embed-QA`，或者不传递任何参数以使用默认模型。
+
+```python
+from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
+
+embedder = NVIDIAEmbeddings(model="NV-Embed-QA")
+```
+
+这是一个微调后的 E5-large 模型，支持预期的 @[`Embeddings`] 方法，包括：
+
+- `embed_query`：为查询样本生成查询嵌入。
+
+- `embed_documents`：为要搜索的文档列表生成段落嵌入。
+
+- `aembed_query`/`aembed_documents`：上述方法的异步版本。
+
+## 使用 NVIDIA NIM 微服务进行自托管
+
+当您准备好部署 AI 应用程序时，可以使用 NVIDIA NIM 进行模型自托管。更多信息，请参阅 [NVIDIA NIM 微服务](https://www.nvidia.com/en-us/ai-data-science/products/nim-microservices/)。
+
+以下代码连接到本地托管的 NIM 微服务。
+
+```python
+from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings, NVIDIARerank
+
+# connect to a chat NIM running at localhost:8000, specifying a model
+llm = ChatNVIDIA(base_url="http://localhost:8000/v1", model="meta/llama3-8b-instruct")
+
+# connect to an embedding NIM running at localhost:8080
+embedder = NVIDIAEmbeddings(base_url="http://localhost:8080/v1")
+
+# connect to a reranking NIM running at localhost:2016
+ranker = NVIDIARerank(base_url="http://localhost:2016/v1")
+```
+
+### **相似度**
+
+以下是对这些数据点的相似度快速测试：
+
+**查询：**
+
+- 堪察加的天气怎么样？
+- 意大利以什么食物闻名？
+- 我叫什么名字？我赌你不记得...
+- 生命的意义到底是什么？
+- 生命的意义就是玩得开心 :D
+
+**文档：**
+
+- 堪察加的天气寒冷，冬季漫长而严酷。
+- 意大利以意大利面、披萨、冰激凌和浓缩咖啡闻名。
+- 我无法回忆人名，只能提供信息。
+- 人生的目的因人而异，通常被视为个人实现。
+- 享受生活的每一刻确实是一种美妙的方式。
+
+### Embedding runtimes
+
+```python
+print("\nSequential Embedding: ")
+q_embeddings = [
+    embedder.embed_query("What's the weather like in Komchatka?"),
+    embedder.embed_query("What kinds of food is Italy known for?"),
+    embedder.embed_query("What's my name? I bet you don't remember..."),
+    embedder.embed_query("What's the point of life anyways?"),
+    embedder.embed_query("The point of life is to have fun :D"),
+]
+print("Shape:", (len(q_embeddings), len(q_embeddings[0])))
+```
+
+### 文档嵌入
+
+```python
+print("\nBatch Document Embedding: ")
+d_embeddings = embedder.embed_documents(
+    [
+        "Komchatka's weather is cold, with long, severe winters.",
+        "Italy is famous for pasta, pizza, gelato, and espresso.",
+        "I can't recall personal names, only provide information.",
+        "Life's purpose varies, often seen as personal fulfillment.",
+        "Enjoying life's moments is indeed a wonderful approach.",
+    ]
+)
+print("Shape:", (len(d_embeddings), len(d_embeddings[0])))
+```
+
+现在我们已经生成了嵌入向量，我们可以对结果进行一个简单的相似度检查，以查看哪些文档会在检索任务中被触发为合理的答案：
+
+```python
+pip install -qU  matplotlib scikit-learn
+```
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Compute the similarity matrix between q_embeddings and d_embeddings
+cross_similarity_matrix = cosine_similarity(
+    np.array(q_embeddings),
+    np.array(d_embeddings),
+)
+
+# Plotting the cross-similarity matrix
+plt.figure(figsize=(8, 6))
+plt.imshow(cross_similarity_matrix, cmap="Greens", interpolation="nearest")
+plt.colorbar()
+plt.title("Cross-Similarity Matrix")
+plt.xlabel("Query Embeddings")
+plt.ylabel("Document Embeddings")
+plt.grid(True)
+plt.show()
+```
+
+提醒一下，发送到我们系统的查询和文档如下：
+
+**查询：**
+
+- 堪察加的天气怎么样？
+
+- 意大利以什么美食闻名？
+
+- 我叫什么名字？我打赌你不记得...
+
+- 人生的重点到底是什么？
+
+- 人生的重点就是玩得开心 :D
+
+**文档：**
+
+- 堪察加的天气寒冷，冬季漫长而严酷。
+
+- 意大利以意大利面、披萨、冰激凌和浓缩咖啡闻名。
+
+- 我无法回忆个人信息，只能提供信息。
+
+- 人生的目的因人而异，通常被视为个人实现。
+
+- 享受人生的时刻确实是一种美好的方式。
+
+## 截断
+
+嵌入模型通常具有固定上下文窗口，该窗口决定了可以嵌入的最大输入 token 数量。此限制可能是硬限制（等于模型的最大输入 token 长度），也可能是有效限制（超过该限制后嵌入的准确性会下降）。
+
+由于模型在 token 上运行，而应用程序通常使用文本，因此应用程序可能难以确保其输入保持在模型的 token 限制范围内。默认情况下，如果输入过大，则会抛出异常。
+
+为此，NVIDIA 的 NIM（API Catalog 或本地）提供了一个 `truncate` 参数，如果输入过大，该参数会在服务器端截断输入。
+
+`truncate` 参数有三个选项：
+
+- "NONE"：默认选项。如果输入过大，则抛出异常。
+- "START"：服务器从开头（左侧）截断输入，并根据需要丢弃 token。
+- "END"：服务器从末尾（右侧）截断输入，并根据需要丢弃 token。
+
+```python
+long_text = "AI is amazing, amazing is " * 100
+```
+
+```python
+strict_embedder = NVIDIAEmbeddings()
+try:
+    strict_embedder.embed_query(long_text)
+except Exception as e:
+    print("Error:", e)
+```
+
+```python
+truncating_embedder = NVIDIAEmbeddings(truncate="END")
+truncating_embedder.embed_query(long_text)[:5]
+```
+
+## RAG 检索
+
+以下内容改编自 [LangChain 表达式语言检索教程](https://python.langchain.com/docs/expression_language/cookbook/retrieval) 中的初始示例，但使用 AI 基础模型的 [Mixtral 8x7B Instruct](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/ai-foundation/models/mixtral-8x7b) 和 [NVIDIA Retrieval QA Embedding](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/ai-foundation/models/nvolve-40k) 模型在其 playground 环境中执行。教程中的后续示例也可以正常运行，我们鼓励您使用这些选项进行探索。
+
+**提示：** 我们建议使用 Mixtral 进行内部推理（例如，用于数据提取、工具选择等的指令遵循），然后使用 Llama-Chat 生成单一的最终"总结"响应——即根据历史记录和上下文为用户生成一个简洁有效的回复。
+
+```python
+pip install -qU  langchain faiss-cpu tiktoken langchain-community
+```
+
+<LangchainCommunityUnmaintained />
+
+```python
+from operator import itemgetter
+
+from langchain_community.vectorstores import FAISS
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_nvidia_ai_endpoints import ChatNVIDIA
+```
+
+```python
+vectorstore = FAISS.from_texts(
+    ["harrison worked at kensho"],
+    embedding=NVIDIAEmbeddings(model="NV-Embed-QA"),
+)
+retriever = vectorstore.as_retriever()
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "Answer solely based on the following context:\n<Documents>\n{context}\n</Documents>",
+        ),
+        ("user", "{question}"),
+    ]
+)
+
+model = ChatNVIDIA(model="ai-mixtral-8x7b-instruct")
+
+chain = (
+    {"context": retriever, "question": RunnablePassthrough()}
+    | prompt
+    | model
+    | StrOutputParser()
+)
+
+chain.invoke("where did harrison work?")
+```
+
+```python
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "Answer using information solely based on the following context:\n<Documents>\n{context}\n</Documents>"
+            "\nSpeak only in the following language: {language}",
+        ),
+        ("user", "{question}"),
+    ]
+)
+
+chain = (
+    {
+        "context": itemgetter("question") | retriever,
+        "question": itemgetter("question"),
+        "language": itemgetter("language"),
+    }
+    | prompt
+    | model
+    | StrOutputParser()
+)
+
+chain.invoke({"question": "where did harrison work", "language": "italian"})
+```
+
+## 相关主题
+
+- [`langchain-nvidia-ai-endpoints` 包 `README`](https://github.com/langchain-ai/langchain-nvidia/blob/main/libs/ai-endpoints/README.md)
+- [NVIDIA NIM 大语言模型 (LLMs) 概述](https://docs.nvidia.com/nim/large-language-models/latest/introduction.html)
+- [NeMo Retriever Embedding NIM 概述](https://docs.nvidia.com/nim/nemo-retriever/text-embedding/latest/overview.html)
+- [NeMo Retriever Reranking NIM 概述](https://docs.nvidia.com/nim/nemo-retriever/text-reranking/latest/overview.html)
+- [`ChatNVIDIA` 模型](/oss/integrations/chat/nvidia_ai_endpoints)
+- [NVIDIA 提供商页面](/oss/integrations/providers/nvidia)

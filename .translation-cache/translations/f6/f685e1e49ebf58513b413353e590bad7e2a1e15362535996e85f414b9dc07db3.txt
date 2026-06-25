@@ -1,0 +1,202 @@
+---
+title: Nimble Extract
+---
+
+>[Nimble 的提取 API](https://docs.nimbleway.com/nimble-sdk/extract-api) 通过使用无头浏览器浏览特定 URL 来提取渲染后的内容，而不是依赖缓存或 API 限制的数据。此检索器处理 JavaScript 渲染、动态内容和复杂的导航流程——使其适用于需要访问特定网页的 RAG 应用，包括分页、过滤器和客户端渲染背后的内容。
+
+我们可以将其用作[检索器](/oss/langchain/retrieval)。它将展示此集成特有的功能。阅读完本文后，您可能需要探索[相关用例页面](/oss/langchain/rag)，了解如何将此检索器作为更大链的一部分使用。
+
+### 安装
+
+<CodeGroup>
+```bash pip
+pip install -U langchain-nimble
+```
+```bash uv
+uv add langchain-nimble
+```
+</CodeGroup>
+
+我们还需要设置我们的 Nimble API 密钥。您可以通过在 [Nimble](https://www.nimbleway.com/) 注册来获取 API 密钥。
+
+```python
+import getpass
+import os
+
+if not os.environ.get("NIMBLE_API_KEY"):
+    os.environ["NIMBLE_API_KEY"] = getpass.getpass("Nimble API key:\n")
+```
+
+## 使用方法
+
+现在我们可以实例化检索器：
+
+```python
+from langchain_nimble import NimbleExtractRetriever
+
+# Basic retriever - requires URLs to extract
+retriever = NimbleExtractRetriever()
+```
+
+## 在链中使用
+
+我们可以轻松地将此检索器组合到 RAG 链中，用于提取和分析特定的网页内容：
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_openai import ChatOpenAI
+
+# Create a RAG prompt
+prompt = ChatPromptTemplate.from_template(
+    """Analyze the extracted content from the provided URLs.
+Answer the question based only on the extracted content.
+If you cannot answer based on the content, say so.
+
+Content: {content}
+
+Question: {question}
+
+Answer:"""
+)
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+
+# Configure retriever for content extraction
+retriever = NimbleExtractRetriever(
+    parsing_type="markdown",
+    wait=3000
+)
+
+
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+
+# Example: Extract and analyze content from LangChain documentation
+urls = [
+    "https://python.langchain.com/docs/concepts/retrievers/",
+    "https://python.langchain.com/docs/concepts/tools/",
+    "https://python.langchain.com/docs/tutorials/agents/"
+]
+
+# Create a custom runnable that passes URLs to retriever
+def get_docs(question):
+    # In a real scenario, URLs might be determined by previous steps
+    return retriever.invoke(urls)
+
+
+# Build the RAG chain
+chain = (
+    {
+        "content": lambda _: get_docs(_) | format_docs,
+        "question": RunnablePassthrough()
+    }
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+```
+
+```python
+# Ask a question about the extracted content
+response = chain.invoke("What are the key differences between retrievers and tools in LangChain?")
+print(response)
+```
+
+```output
+Based on the extracted LangChain documentation, here are the key differences:
+
+**Retrievers:**
+- Interface for document retrieval based on unstructured queries
+- Primary use case is RAG (Retrieval Augmented Generation)
+- Returns documents from various sources like vector stores
+- Focuses on semantic search and information retrieval
+- Core component for question-answering systems
+
+**Tools:**
+- Interface for agents to interact with external systems
+- Enables actions beyond text generation (API calls, calculations, web search)
+- Used by agents to extend capabilities dynamically
+- Supports both synchronous and asynchronous execution
+- Can be chained together for complex workflows
+
+**Agents:**
+- High-level orchestrators that use tools to accomplish tasks
+- Make decisions about which tools to use and when
+- Can combine multiple tools to solve complex problems
+- Tutorial shows how to build agent workflows with tool integration
+
+The documentation emphasizes that retrievers are specialized for information retrieval, while tools provide broader action capabilities for agents.
+```
+
+## 高级配置
+
+检索器支持广泛的 URL 提取配置：
+
+| 参数 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `parsing_type` | str | "plain_text" | 输出格式："plain_text"、"markdown" 或 "simplified_html" |
+| `driver` | str | "vx6" | 浏览器驱动版本："vx6"（快速）、"vx8"（平衡）或 "vx10"（全面） |
+| `wait` | int | None | 等待页面加载的毫秒数（0-60000） |
+| `render` | bool | True | 启用 JavaScript 渲染 |
+| `locale` | str | "en" | 页面语言区域偏好（例如 "en-US"） |
+| `country` | str | "US" | 本地化内容的国家代码（例如 "US"） |
+| `api_key` | str | 环境变量 | Nimble API 密钥（默认为 NIMBLE_API_KEY 环境变量） |
+
+**高级配置示例：**
+
+```python
+from langchain_nimble import NimbleExtractRetriever
+
+# Retriever optimized for JavaScript-heavy documentation sites
+retriever = NimbleExtractRetriever(
+    parsing_type="markdown",
+    driver="vx10",  # Use comprehensive driver for complex SPAs
+    wait=5000,  # Wait up to 5 seconds for full page render
+    render=True,  # Enable JavaScript rendering
+    locale="en-US",
+    country="US"
+)
+
+# Extract content from specific LangChain documentation pages
+docs = retriever.invoke([
+    "https://python.langchain.com/docs/concepts/chat_models/",
+    "https://python.langchain.com/docs/concepts/prompts/"
+])
+```
+
+## 最佳实践
+
+### 驱动程序选择
+
+- **vx6**（默认）：适用于标准网站的快速提取
+- **vx8**：适用于中等复杂网站的均衡性能
+- **vx10**：适用于 JavaScript 重度 SPA 和复杂动态内容的全面渲染
+
+### 页面加载配置
+
+- **无等待**（`wait=None`）：大多数现代网站的默认设置
+- **短等待**（`wait=1000-2000`）：适用于懒加载或延迟加载内容的页面
+- **较长等待**（`wait=5000+`）：适用于加载缓慢的 SPA 或需要时间来完全渲染的重度 JavaScript 内容
+
+### 输出格式选择
+
+- **纯文本**（默认）：快速提取原始文本内容
+- **Markdown**：最适合 RAG - 保留标题、列表、代码块等结构
+- **HTML**：需要保留详细样式或结构信息时使用
+
+### 性能优化
+
+1. **调整等待时间**：仅在必要时使用 — 快速网站不需要等待时间
+2. **批量处理相关 URL**：并行提取同一域名的多个页面
+3. **选择合适的格式**：RAG 使用 Markdown，简单处理使用 plain_text
+4. **使用异步**：利用 `ainvoke()` 实现并发 URL 提取
+5. **验证内容**：在处理前检查页面是否成功加载
+
+---
+
+## API 参考
+
+有关 `NimbleExtractRetriever` 所有功能和配置的详细文档，请访问 [Nimble API 文档](https://docs.nimbleway.com/nimble-sdk/search-api/extract-api-quick-start)。

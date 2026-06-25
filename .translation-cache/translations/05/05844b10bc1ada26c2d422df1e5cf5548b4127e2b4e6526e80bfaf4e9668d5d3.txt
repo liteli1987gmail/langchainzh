@@ -1,0 +1,259 @@
+---
+title: "Fmp 数据集成"
+description: "使用 LangChain Python 与 Fmp 数据工具集成。"
+---
+
+通过自然语言查询访问金融市场数据。
+
+## 概述
+
+FMP（Financial Modeling Prep）LangChain 集成提供了一种无缝的方式，通过自然语言查询访问金融市场数据。此集成提供两个主要组件：
+
+- `FMPDataToolkit`：基于自然语言查询创建工具集合
+- `FMPDataTool`：一个统一的工具，可自动选择和使用适当的端点
+
+该集成利用 LangChain 的语义搜索功能，将用户查询与最相关的 FMP API 端点进行匹配，使金融市场数据访问更加直观和高效。
+
+## 设置
+
+```python
+!pip install -U langchain-fmp-data
+```
+
+```python
+import os
+
+# Replace with your actual API keys
+os.environ["FMP_API_KEY"] = "your-fmp-api-key"  # pragma: allowlist secret
+os.environ["OPENAI_API_KEY"] = "your-openai-api-key"  # pragma: allowlist secret
+```
+
+这也有帮助（但不是必需的），设置 [LangSmith](https://smith.langchain.com) 以获得一流的可观测性：
+
+```python
+os.environ["LANGSMITH_TRACING"] = "true"
+# os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
+```
+
+## 实例化
+
+实例化 FMP LangChain 集成有两种主要方式：
+
+1. 使用 FMPDataToolkit
+
+```python
+from langchain_fmp_data import FMPDataToolkit
+
+query = "Get stock market prices and technical indicators"
+# Basic instantiation
+toolkit = FMPDataToolkit(query=query)
+
+# Instantiation with specific query focus
+market_toolkit = FMPDataToolkit(
+    query=query,
+    num_results=5,
+)
+
+# Instantiation with custom configuration
+custom_toolkit = FMPDataToolkit(
+    query="Financial analysis",
+    num_results=3,
+    similarity_threshold=0.4,
+    cache_dir="/custom/cache/path",
+)
+```
+
+2. 使用 FMPDataTool
+
+```python
+from langchain_fmp_data import FMPDataTool
+from langchain_fmp_data.tools import ResponseFormat
+
+# Basic instantiation
+tool = FMPDataTool()
+
+# Advanced instantiation with custom settings
+advanced_tool = FMPDataTool(
+    max_iterations=50,
+    temperature=0.2,
+)
+```
+
+## 调用
+
+工具可以通过多种方式调用：
+
+### 直接调用
+
+```python
+# Using FMPDataTool
+tool_direct = FMPDataTool()
+
+# Basic query
+# fmt: off
+result = tool.invoke({"query": "What's Apple's current stock price?"})
+# fmt: on
+
+# Advanced query with specific format
+# fmt: off
+detailed_result = tool_direct.invoke(
+    {
+        "query": "Compare Tesla and Ford's profit margins",
+        "response_format": ResponseFormat.BOTH,
+    }
+)
+# fmt: on
+```
+
+### 与 LangChain 代理一起使用
+
+```python
+from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain_openai import ChatOpenAI
+
+# Setup
+llm = ChatOpenAI(temperature=0)
+toolkit = FMPDataToolkit(
+    query="Stock analysis",
+    num_results=3,
+)
+tools = toolkit.get_tools()
+
+# Create agent
+prompt = "You are a helpful assistant. Answer the user's questions based on the provided context."
+agent = create_openai_functions_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+)
+
+# Run query
+# fmt: off
+response = agent_executor.invoke({"input": "What's the PE ratio of Microsoft?"})
+# fmt: on
+```
+
+## 高级用法
+
+您可以自定义工具的行为：
+
+```python
+# Initialize with custom settings
+advanced_tool = FMPDataTool(
+    max_iterations=50,  # Increase max iterations for complex queries
+    temperature=0.2,  # Adjust temperature for more/less focused responses
+)
+
+# Example of a complex multi-part analysis
+query = """
+Analyze Apple's financial health by:
+1. Examining current ratios and debt levels
+2. Comparing profit margins to industry average
+3. Looking at cash flow trends
+4. Assessing growth metrics
+"""
+# fmt: off
+response = advanced_tool.invoke(
+    {
+        "query": query,
+        "response_format": ResponseFormat.BOTH}
+)
+# fmt: on
+print("Detailed Financial Analysis:")
+print(response)
+```
+
+## 链接
+
+您可以像其他工具一样链接该工具，只需使用所需模型创建一条链接即可。
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
+
+# Setup
+llm = ChatOpenAI(temperature=0)
+toolkit = FMPDataToolkit(query="Stock analysis", num_results=3)
+tools = toolkit.get_tools()
+
+llm_with_tools = llm.bind(functions=tools)
+output_parser = StrOutputParser()
+# Create chain
+runner = llm_with_tools | output_parser
+
+# Run chain
+# fmt: off
+response = runner.invoke(
+    {
+        "input": "What's the PE ratio of Microsoft?"
+    }
+)
+# fmt: on
+```
+
+## API 参考
+
+### FMPDataToolkit
+
+用于创建 FMP API 工具集合的主类：
+
+```python
+from typing import Any
+
+from langchain.tools import BaseTool
+
+
+class FMPDataToolkit:
+    """Creates a collection of FMP data tools based on queries."""
+
+    def __init__(
+        self,
+        query: str | None = None,
+        num_results: int = 3,
+        similarity_threshold: float = 0.3,
+        cache_dir: str | None = None,
+    ): ...
+
+    def get_tools(self) -> list[BaseTool]:
+        """Returns a list of relevant FMP API tools based on the query."""
+        ...
+```
+
+### FMPDataTool
+
+统一工具，可自动选择合适的 FMP 端点：
+
+```python
+# fmt: off
+class FMPDataTool:
+    """Single unified tool for accessing FMP data through natural language."""
+
+    def __init__(
+            self,
+            max_iterations: int = 3,
+            temperature: float = 0.0,
+    ): ...
+
+    def invoke(
+            self,
+            input: dict[str, Any],
+    ) -> str | dict[str, Any]:
+        """Execute a natural language query against FMP API."""
+        ...
+
+# fmt: on
+```
+
+### ResponseFormat
+
+用于控制响应格式的枚举：
+
+```python
+from enum import Enum
+
+
+class ResponseFormat(str, Enum):
+    RAW = "raw"  # Raw API response
+    ANALYSIS = "text"  # Natural language analysis
+    BOTH = "both"  # Both raw data and analysis
+```

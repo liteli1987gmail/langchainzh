@@ -1,0 +1,174 @@
+---
+title: "Nia 工具包集成"
+description: "使用 LangChain Python 与 Nia 搜索和索引 API 集成。"
+---
+
+[Nia](https://trynia.ai) 是一个搜索和索引 API，持续从文档、研究论文、数据集、代码库等来源提供上下文——确保代理永远不会依赖过时数据。可扩展、成本降低 5 倍、可靠。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [JS 支持](https://js.langchain.com/docs/integrations/tools/) | 版本 |
+|:------|:--------|:---:|:---:|:---:|
+| [`NiaToolkit`](https://github.com/nozomio-labs/nia-langchain) | [`langchain-nia`](https://pypi.org/project/langchain-nia/) | ❌ | ❌ | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-nia?style=flat-square&label=%20) |
+
+### 工具特性
+
+| [返回产物](/oss/langchain/tools) | 原生异步 | 工具包 | 工具数量 | 定价 |
+| :---: | :---: | :---: | :---: | :---: |
+| ❌ | ✅ | ✅ | 20 | 提供免费层级 |
+
+## 设置
+
+该集成位于 `langchain-nia` 包中。
+
+<CodeGroup>
+
+</CodeGroup>
+    ```python pip
+    pip install -U langchain-nia
+    ```
+    ```python uv
+    uv add langchain-nia
+    ```
+</CodeGroup>
+
+### 凭证
+
+在 [trynia.ai](https://trynia.ai) 注册以获取 API 密钥。
+
+```python
+import getpass
+import os
+
+if not os.environ.get("NIA_API_KEY"):
+    os.environ["NIA_API_KEY"] = getpass.getpass("Nia API key:\n")
+```
+
+设置 LangSmith 也是有帮助的（但非必需），它能提供一流的可观测性/<Tooltip tip="记录模型执行的每个步骤，以便调试和改进">追踪</Tooltip>功能，用于追踪您的工具调用。要启用自动追踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+## Instantiation
+
+### Using the toolkit
+
+`NiaToolkit` 提供所有 20 个 Nia 工具，并附带统一的 API 包装器。使用 `include_*` 标志来控制哪些工具组可用：
+
+```python
+from langchain_nia import NiaToolkit
+
+toolkit = NiaToolkit(
+    include_search=True,        # NiaSearch, NiaWebSearch, NiaDeepResearch, NiaUniversalSearch, NiaAdvisor
+    include_sources=True,       # NiaIndex, NiaSourceList, NiaSourceSubscribe, NiaSourceSync, NiaRead, NiaGrep, NiaExplore
+    include_github=True,        # NiaGitHubSearch, NiaGitHubRead, NiaGitHubGlob, NiaGitHubTree
+    include_contexts=True,      # NiaContextSave, NiaContextSearch
+    include_dependencies=True,  # NiaDependencySubscribe, NiaDependencyAnalyze
+)
+tools = toolkit.get_tools()
+```
+
+### 使用单个工具
+
+你也可以直接使用工具：
+
+```python
+from langchain_nia import NiaSearch
+
+tool = NiaSearch()
+```
+
+## 调用
+
+### 搜索已索引的来源
+
+```python
+from langchain_nia import NiaSearch
+
+tool = NiaSearch()
+tool.invoke({"query": "how to use React hooks"})
+```
+
+### 搜索网络
+
+```python
+from langchain_nia import NiaWebSearch
+
+tool = NiaWebSearch()
+tool.invoke({"query": "latest Python release", "num_results": 5})
+```
+
+### 从索引源读取文件
+
+```python
+from langchain_nia import NiaRead
+
+tool = NiaRead()
+tool.invoke({"source_id": "your-source-id", "path": "README.md"})
+```
+
+### 在智能体中
+
+```python
+from langchain_nia import NiaToolkit
+
+toolkit = NiaToolkit(include_search=True, include_sources=False, include_github=False, include_contexts=False, include_dependencies=False)
+tools = toolkit.get_tools()
+
+# pip install -qU "langchain[anthropic]"
+from langchain.agents import create_agent
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=tools,
+)
+
+agent.invoke(
+    {"messages": [{"role": "user", "content": "Search for React hooks best practices"}]}
+)
+```
+
+## 可用工具
+
+### 搜索工具
+
+- **NiaSearch** - 跨索引的仓库、文档、数据集等进行语义搜索
+- **NiaWebSearch** - 带分类筛选和日期范围的网页搜索
+- **NiaDeepResearch** - 多步骤综合研究
+- **NiaUniversalSearch** - 同时搜索所有来源
+- **NiaAdvisor** - 根据索引文档分析代码
+
+### 源管理工具
+
+- **NiaIndex** - 索引新来源（仓库、文档、论文、数据集）
+- **NiaSourceList** - 列出已索引的来源并支持筛选
+- **NiaSourceSubscribe** - 订阅预索引的公共来源
+- **NiaSourceSync** - 重新同步来源以拉取最新更改
+- **NiaRead** - 阅读来自索引来源的文件或页面
+- **NiaGrep** - 在索引来源中进行正则表达式搜索
+- **NiaExplore** - 浏览索引来源的文件树结构
+
+### GitHub 工具
+
+- **NiaGitHubSearch** - 在 GitHub 仓库中搜索代码
+- **NiaGitHubRead** - 读取 GitHub 仓库中的文件
+- **NiaGitHubGlob** - 查找与 glob 模式匹配的文件
+- **NiaGitHubTree** - 浏览仓库文件树结构
+
+### 上下文和记忆工具
+
+- **NiaContextSave** - 保存上下文以便跨代理共享
+- **NiaContextSearch** - 对保存的上下文进行语义搜索
+
+### 依赖工具
+
+- **NiaDependencySubscribe** - 自动订阅项目依赖项的文档
+- **NiaDependencyAnalyze** - 预览清单中将被索引的内容
+
+## API 参考
+
+所有 Nia 工具和配置的详细文档，请参阅 [langchain-nia GitHub 仓库](https://github.com/nozomio-labs/nia-langchain)。

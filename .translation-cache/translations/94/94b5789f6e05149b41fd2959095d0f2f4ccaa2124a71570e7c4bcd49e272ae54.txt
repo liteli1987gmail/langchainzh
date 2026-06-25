@@ -1,0 +1,609 @@
+---
+title: 如何评估 LLM 应用程序
+sidebarTitle: 使用 SDK
+---
+
+本指南向您展示如何使用 LangSmith SDK 对 LLM 应用程序运行评估。
+
+<Info>
+[评估](/langsmith/evaluation-concepts#evaluation-lifecycle) | [评估器](/langsmith/evaluation-concepts#evaluators) | [数据集](/langsmith/evaluation-concepts#datasets)
+</Info>
+
+在本指南中，我们将介绍如何使用 LangSmith SDK 中的 [evaluate()](https://docs.smith.langchain.com/reference/python/evaluation/langsmith.evaluation._runner.evaluate) 方法来评估应用程序。
+
+<Check>
+对于 Python 中较大的评估任务，我们建议使用 [aevaluate()](https://docs.smith.langchain.com/reference/python/evaluation/langsmith.evaluation._arunner.aevaluate)，即 [evaluate()](https://docs.smith.langchain.com/reference/python/evaluation/langsmith.evaluation._runner.evaluate) 的异步版本。在阅读关于 [异步运行评估](/langsmith/evaluation-async) 的操作指南之前，仍然值得先阅读本指南，因为两者具有相同的接口。
+
+在 JS/TS 中，evaluate() 已经是异步的，因此不需要单独的方法。
+
+在运行大型作业时，配置 `max_concurrency`/`maxConcurrency` 参数也很重要。这通过有效地将数据集拆分到各个线程来实现并行评估。
+</Check>
+
+## 定义应用程序
+
+首先我们需要创建一个待评估的应用程序。让我们在这个示例中创建一个简单的毒性分类器。
+
+<CodeGroup>
+
+</fragment>
+
+```python Python
+from langsmith import traceable, wrappers
+from openai import OpenAI
+
+# Optionally wrap the OpenAI client to trace all model calls.
+oai_client = wrappers.wrap_openai(OpenAI())
+
+# Optionally add the 'traceable' decorator to trace the inputs/outputs of this function.
+@traceable
+def toxicity_classifier(inputs: dict) -> dict:
+    instructions = (
+      "Please review the user query below and determine if it contains any form of toxic behavior, "
+      "such as insults, threats, or highly negative comments. Respond with 'Toxic' if it does "
+      "and 'Not toxic' if it doesn't."
+    )
+    messages = [
+        {"role": "system", "content": instructions},
+        {"role": "user", "content": inputs["text"]},
+    ]
+    result = oai_client.chat.completions.create(
+        messages=messages, model="gpt-5.4-mini", temperature=0
+    )
+    return {"class": result.choices[0].message.content}
+```
+
+```typescript TypeScript
+import { OpenAI } from "openai";
+import { wrapOpenAI } from "langsmith/wrappers";
+import { traceable } from "langsmith/traceable";
+
+// Optionally wrap the OpenAI client to trace all model calls.
+const oaiClient = wrapOpenAI(new OpenAI());
+
+// Optionally add the 'traceable' wrapper to trace the inputs/outputs of this function.
+const toxicityClassifier = traceable(
+  async (text: string) => {
+    const result = await oaiClient.chat.completions.create({
+      messages: [
+        {
+           role: "system",
+          content: "Please review the user query below and determine if it contains any form of toxic behavior, such as insults, threats, or highly negative comments. Respond with 'Toxic' if it does, and 'Not toxic' if it doesn't.",
+        },
+        { role: "user", content: text },
+      ],
+      model: "gpt-5.4-mini",
+      temperature: 0,
+    });
+
+    return result.choices[0].message.content;
+  },
+  { name: "toxicityClassifier" }
+);
+```
+
+</CodeGroup>
+
+我们选择性地启用了追踪功能，以捕获管道中每个步骤的输入和输出。要了解如何为追踪注释代码，请参阅[自定义插桩](/langsmith/annotate-code)。
+
+## 创建或选择数据集
+
+我们需要一份[数据集](/langsmith/evaluation-concepts#datasets)来评估我们的应用程序。我们的数据集将包含有毒和无毒文本的标注[示例](/langsmith/evaluation-concepts#examples)。
+
+需要 `langsmith>=0.3.13`
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+ls_client = Client()
+
+examples = [
+  {
+    "inputs": {"text": "Shut up, idiot"},
+    "outputs": {"label": "Toxic"},
+  },
+  {
+    "inputs": {"text": "You're a wonderful person"},
+    "outputs": {"label": "Not toxic"},
+  },
+  {
+    "inputs": {"text": "This is the worst thing ever"},
+    "outputs": {"label": "Toxic"},
+  },
+  {
+    "inputs": {"text": "I had a great day today"},
+    "outputs": {"label": "Not toxic"},
+  },
+  {
+    "inputs": {"text": "Nobody likes you"},
+    "outputs": {"label": "Toxic"},
+  },
+  {
+    "inputs": {"text": "This is unacceptable. I want to speak to the manager."},
+    "outputs": {"label": "Not toxic"},
+  },
+]
+
+dataset = ls_client.create_dataset(dataset_name="Toxic Queries")
+ls_client.create_examples(
+  dataset_id=dataset.id,
+  examples=examples,
+)
+```
+
+```typescript TypeScript
+import { Client } from "langsmith";
+
+const langsmith = new Client();
+
+// create a dataset
+const labeledTexts = [
+  ["Shut up, idiot", "Toxic"],
+  ["You're a wonderful person", "Not toxic"],
+  ["This is the worst thing ever", "Toxic"],
+  ["I had a great day today", "Not toxic"],
+  ["Nobody likes you", "Toxic"],
+  ["This is unacceptable. I want to speak to the manager.", "Not toxic"],
+];
+
+const [inputs, outputs] = labeledTexts.reduce<
+  [Array<{ input: string }>, Array<{ outputs: string }>]
+>(
+  ([inputs, outputs], item) => [
+    [...inputs, { input: item[0] }],
+    [...outputs, { outputs: item[1] }],
+  ],
+  [[], []]
+);
+
+const datasetName = "Toxic Queries";
+const toxicDataset = await langsmith.createDataset(datasetName);
+await langsmith.createExamples({ inputs, outputs, datasetId: toxicDataset.id });
+```
+
+</CodeGroup>
+
+有关数据集的更多详细信息，请参阅[管理数据集](/langsmith/manage-datasets)页面。
+
+## 定义评估器
+
+定义评估器主要有两种方式。
+
+### 在代码中本地定义
+
+<Check>
+您还可以查看 LangChain 的开源评估包 [openevals](https://github.com/langchain-ai/openevals)，其中包含常见的预构建评估器。
+</Check>
+
+[评估器](/langsmith/evaluation-concepts#evaluators) 是用于对应用程序输出进行评分的函数。它们接收示例输入、实际输出，以及在有参考输出时一并接收。由于我们有此任务的标签，因此评估器可以直接检查实际输出是否与参考输出一致。
+
+- Python：需要 `langsmith>=0.3.13`
+- TypeScript：需要 `langsmith>=0.2.9`
+
+<CodeGroup>
+
+```python Python
+def correct(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
+    return outputs["class"] == reference_outputs["label"]
+```
+
+```typescript TypeScript
+import type { EvaluationResult } from "langsmith/evaluation";
+
+function correct({
+  outputs,
+  referenceOutputs,
+}: {
+  outputs: Record<string, any>;
+  referenceOutputs?: Record<string, any>;
+}): EvaluationResult {
+  const score = outputs.output === referenceOutputs?.outputs;
+  return { key: "correct", score };
+}
+```
+
+</CodeGroup>
+
+### 在 LangSmith UI 中
+
+您也可以在 [LangSmith UI](https://smith.langchain.com) 中定义评估器。您可以在 **评估器（Evaluators）** 选项卡下[在 UI 中创建评估器](/langsmith/llm-as-judge)。这些评估器将[随每个新实验自动触发](/langsmith/bind-evaluator-to-dataset)。
+
+## 运行评估
+
+我们将使用 [evaluate()](https://docs.smith.langchain.com/reference/python/evaluation/langsmith.evaluation._runner.evaluate) / [aevaluate()](https://docs.smith.langchain.com/reference/python/evaluation/langsmith.evaluation._arunner.aevaluate) 方法来运行评估。
+
+关键参数包括：
+
+* 一个目标函数，接受输入字典并返回输出字典。每个 [Example](/langsmith/example-data-format) 的 `example.inputs` 字段会传递给目标函数。在这种情况下，我们的 `toxicity_classifier` 已经配置为接受示例输入，因此可以直接使用。
+* `data` - 要评估的 LangSmith 数据集名称或 UUID，或示例迭代器。
+* `evaluators` - 用于对函数输出进行评分的评估器列表；[Langsmith UI](https://smith.langchain.com) 中的数据集评估器也会自动触发。
+* `metadata` - 一个可选对象，用于附加到实验。传递 `models`、`prompts` 和 `tools` 键以填充实验表格视图中的相应列。
+
+Python：需要 `langsmith>=0.3.13`
+
+<CodeGroup>
+
+</fragment>
+
+```python Python
+# optional metadata, used to populate model/prompt/tool columns in UI
+EXPERIMENT_METADATA = {
+    "models": [
+        "openai:gpt-5.4-mini",
+        {
+            "id": ["langchain", "chat_models", "openai", "ChatOpenAI"],
+            "lc": 1,
+            "type": "constructor",
+            "kwargs": {"model_name": "gpt-5.5", "temperature": 0.2},
+        },
+    ],
+    "prompts": ["my-org/my-eval-prompt:abc12345"],
+    "tools": [
+        {
+            "name": "web_search",
+            "description": "Search the web for information",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        },
+    ],
+}
+
+# Can equivalently use the 'evaluate' function directly:
+# from langsmith import evaluate; evaluate(...)
+results = ls_client.evaluate(
+    toxicity_classifier,
+    data=dataset.name,
+    evaluators=[correct],
+    experiment_prefix="gpt-5.4-mini, baseline",  # optional, experiment name prefix
+    description="Testing the baseline system.",  # optional, experiment description
+    max_concurrency=4,  # optional, add concurrency
+    metadata=EXPERIMENT_METADATA,  # optional, used to populate model/prompt/tool columns in UI
+)
+```
+
+```typescript TypeScript
+import { evaluate } from "langsmith/evaluation";
+
+// optional metadata, used to populate model/prompt/tool columns in UI
+const EXPERIMENT_METADATA = {
+  models: [
+    "openai:gpt-5.4-mini",
+    {
+      id: ["langchain", "chat_models", "openai", "ChatOpenAI"],
+      lc: 1,
+      type: "constructor",
+      kwargs: { model_name: "gpt-5.5", temperature: 0.2 },
+    },
+  ],
+  prompts: ["my-org/my-eval-prompt:abc12345"],
+  tools: [
+    {
+      name: "web_search",
+      description: "Search the web for information",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string" } },
+        required: ["query"],
+      },
+    },
+  ],
+};
+
+await evaluate((inputs) => toxicityClassifier(inputs["input"]), {
+  data: datasetName,
+  evaluators: [correct],
+  experimentPrefix: "gpt-5.4-mini, baseline",  // optional, experiment name prefix
+  maxConcurrency: 4, // optional, add concurrency
+  metadata: EXPERIMENT_METADATA,  // optional, used to populate model/prompt/tool columns in UI
+});
+```
+
+</CodeGroup>
+
+## 为实验添加元数据
+
+元数据是一组键值对，您可以附加到实验上，以便在实验表中对实验进行分组和筛选。您可以在运行实验时通过 `metadata` 参数传递元数据（请参阅[运行评估](#run-the-evaluation)），也可以稍后在 LangSmith UI 中直接添加。
+
+要打开**编辑实验**面板，请将鼠标悬停在实验表中的实验行上，然后单击该行右侧出现的**编辑**铅笔图标。
+
+<img
+  className="block dark:hidden"
+  src="/langsmith/images/experiments-table-edit-icon-light.png"
+  alt="Experiments table with the edit pencil icon visible on a hovered row."
+/>
+<img
+  className="hidden dark:block"
+  src="/langsmith/images/experiments-table-edit-icon-dark.png"
+  alt="Experiments table with the edit pencil icon visible on a hovered row."
+/>
+
+**编辑实验**面板允许您更新实验名称和描述，以及管理元数据键值对。单击**+ 添加元数据**添加新的键值对，然后单击右上角的**提交**保存您的更改。
+
+<img
+  className="block dark:hidden"
+  src="/langsmith/images/edit-experiment-panel-light.png"
+  alt="Edit Experiment panel showing metadata key-value pairs and the Add Metadata button."
+/>
+<img
+  className="hidden dark:block"
+  src="/langsmith/images/edit-experiment-panel-dark.png"
+  alt="Edit Experiment panel showing metadata key-value pairs and the Add Metadata button."
+/>
+
+一旦实验被标记了元数据，您可以使用实验表顶部的**分组**控件按任何元数据字段对实验进行聚类。表格上方的汇总图表会按组更新，显示每个配置的平均反馈分数、延迟和 token 使用量。这使得比较同一数据集上不同提示词版本、模型或其他变更的表现变得轻而易举。
+
+保留的 `models`、`prompts` 和 `tools` 键会自动填充实验表中的专用列。单击这些列中的值可以进行筛选或分组。如需完整详情，请参阅[按模型、提示词和工具筛选和分组](/langsmith/analyze-an-experiment#filter-and-group-by-models-prompts-and-tools-in-the-experiments-tab-view)。
+
+## 探索结果
+
+每次调用 `evaluate()` 都会创建一个[实验](/langsmith/evaluation-concepts#experiment)，您可以在 LangSmith UI 中查看或通过 SDK 查询。请参阅[分析实验](/langsmith/analyze-an-experiment)了解更多详情。
+
+针对数据集运行的实验会在实验表中列出。
+
+<img
+  className="block dark:hidden"
+  src="/langsmith/images/experiments-table-light.png"
+  alt="Experiments table showing a list of experiments with columns for experiment name, description, dataset, feedback score, and more."
+/>
+
+<img
+  className="hidden dark:block"
+  src="/langsmith/images/experiments-table-dark.png"
+  alt="Experiments table showing a list of experiments with columns for experiment name, description, dataset, feedback score, and more."
+/>
+
+对于从 Playground 或通过 SDK 运行的实验，**进度**列会实时跟踪完成情况。进度反映运行和评估状态。将鼠标悬停在进度条上可以查看已完成的运行数和已评估的运行数。
+
+<Note>
+通过 SDK 运行的实验需要以下版本才能进行进度跟踪：
+
+- Python: `langsmith>=0.8.16`
+- TypeScript: `langsmith>=0.7.8`
+</Note>
+
+单击实验行可以查看每个示例的分数。按分数进行筛选和排序，以识别应用程序表现良好或不佳的模式。
+
+<img
+  className="block dark:hidden"
+  src="/langsmith/images/experiment-view-light.png"
+  alt="Experiment view showing a table of examples with columns for input, output, reference output, feedback score, and more."
+/>
+
+<img
+  className="hidden dark:block"
+  src="/langsmith/images/experiment-view-dark.png"
+  alt="Experiment view showing a table of examples with columns for input, output, reference output, feedback score, and more."
+/>
+
+单击某个示例可以打开其详情面板，其中包括输入、输出、参考输出以及任何相关的调用（如果您已为调用注释了代码）。
+
+<img
+  className="block dark:hidden"
+  src="/langsmith/images/experiment-view-details-panel-light.png"
+  alt="Experiment view details panel showing the inputs, outputs, reference outputs, and trace for a single example."
+/>
+
+<img
+  className="hidden dark:block"
+  src="/langsmith/images/experiment-view-details-panel-dark.png"
+  alt="Experiment view details panel showing the inputs, outputs, reference outputs, and trace for a single example."
+/>
+
+
+## 参考代码
+
+<Accordion title="点击查看整合的代码片段">
+    <CodeGroup>
+</CodeGroup>
+
+```python Python
+from langsmith import Client, traceable, wrappers
+from openai import OpenAI
+
+# Step 1. Define an application
+oai_client = wrappers.wrap_openai(OpenAI())
+
+@traceable
+def toxicity_classifier(inputs: dict) -> str:
+    system = (
+      "Please review the user query below and determine if it contains any form of toxic behavior, "
+      "such as insults, threats, or highly negative comments. Respond with 'Toxic' if it does "
+      "and 'Not toxic' if it doesn't."
+    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": inputs["text"]},
+    ]
+    result = oai_client.chat.completions.create(
+        messages=messages, model="gpt-5.4-mini", temperature=0
+    )
+    return result.choices[0].message.content
+
+# Step 2. Create a dataset
+ls_client = Client()
+dataset = ls_client.create_dataset(dataset_name="Toxic Queries")
+examples = [
+  {
+    "inputs": {"text": "Shut up, idiot"},
+    "outputs": {"label": "Toxic"},
+  },
+  {
+    "inputs": {"text": "You're a wonderful person"},
+    "outputs": {"label": "Not toxic"},
+  },
+  {
+    "inputs": {"text": "This is the worst thing ever"},
+    "outputs": {"label": "Toxic"},
+  },
+  {
+    "inputs": {"text": "I had a great day today"},
+    "outputs": {"label": "Not toxic"},
+  },
+  {
+    "inputs": {"text": "Nobody likes you"},
+    "outputs": {"label": "Toxic"},
+  },
+  {
+    "inputs": {"text": "This is unacceptable. I want to speak to the manager."},
+    "outputs": {"label": "Not toxic"},
+  },
+]
+ls_client.create_examples(
+  dataset_id=dataset.id,
+  examples=examples,
+)
+
+# Step 3. Define an evaluator
+def correct(inputs: dict, outputs: dict, reference_outputs: dict) -> bool:
+    return outputs["output"] == reference_outputs["label"]
+
+# Step 4. Run the evaluation
+
+# optional metadata, used to populate model/prompt/tool columns in UI
+EXPERIMENT_METADATA = {
+    "models": [
+        "openai:gpt-5.4-mini",
+        {
+            "id": ["langchain", "chat_models", "openai", "ChatOpenAI"],
+            "lc": 1,
+            "type": "constructor",
+            "kwargs": {"model_name": "gpt-5.5", "temperature": 0.2},
+        },
+    ],
+    "prompts": ["my-org/my-eval-prompt:abc12345"],
+    "tools": [
+        {
+            "name": "web_search",
+            "description": "Search the web for information",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        },
+    ],
+}
+
+# Client.evaluate() and evaluate() behave the same.
+results = ls_client.evaluate(
+    toxicity_classifier,
+    data=dataset.name,
+    evaluators=[correct],
+    experiment_prefix="gpt-5.4-mini, simple",  # optional, experiment name prefix
+    description="Testing the baseline system.",  # optional, experiment description
+    max_concurrency=4,  # optional, add concurrency
+    metadata=EXPERIMENT_METADATA,  # optional, used to populate model/prompt/tool columns in UI
+)
+```
+
+```typescript TypeScript
+import { OpenAI } from "openai";
+import { Client } from "langsmith";
+import { evaluate, EvaluationResult } from "langsmith/evaluation";
+import type { Run, Example } from "langsmith/schemas";
+import { traceable } from "langsmith/traceable";
+import { wrapOpenAI } from "langsmith/wrappers";
+
+const oaiClient = wrapOpenAI(new OpenAI());
+
+const toxicityClassifier = traceable(
+  async (text: string) => {
+    const result = await oaiClient.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "Please review the user query below and determine if it contains any form of toxic behavior, such as insults, threats, or highly negative comments. Respond with 'Toxic' if it does, and 'Not toxic' if it doesn't.",
+        },
+        { role: "user", content: text },
+      ],
+      model: "gpt-5.4-mini",
+      temperature: 0,
+    });
+    return result.choices[0].message.content;
+  },
+  { name: "toxicityClassifier" }
+);
+
+const langsmith = new Client();
+
+// create a dataset
+const labeledTexts = [
+  ["Shut up, idiot", "Toxic"],
+  ["You're a wonderful person", "Not toxic"],
+  ["This is the worst thing ever", "Toxic"],
+  ["I had a great day today", "Not toxic"],
+  ["Nobody likes you", "Toxic"],
+  ["This is unacceptable. I want to speak to the manager.", "Not toxic"],
+];
+
+const [inputs, outputs] = labeledTexts.reduce<
+  [Array<{ input: string }>, Array<{ outputs: string }>]
+>(
+  ([inputs, outputs], item) => [
+    [...inputs, { input: item[0] }],
+    [...outputs, { outputs: item[1] }],
+  ],
+  [[], []]
+);
+
+const datasetName = "Toxic Queries";
+const toxicDataset = await langsmith.createDataset(datasetName);
+await langsmith.createExamples({ inputs, outputs, datasetId: toxicDataset.id });
+
+// Row-level evaluator
+function correct({
+  outputs,
+  referenceOutputs,
+}: {
+  outputs: Record<string, any>;
+  referenceOutputs?: Record<string, any>;
+}): EvaluationResult {
+  const score = outputs.output === referenceOutputs?.outputs;
+  return { key: "correct", score };
+}
+
+// optional metadata, used to populate model/prompt/tool columns in UI
+const EXPERIMENT_METADATA = {
+  models: [
+    "openai:gpt-5.4-mini",
+    {
+      id: ["langchain", "chat_models", "openai", "ChatOpenAI"],
+      lc: 1,
+      type: "constructor",
+      kwargs: { model_name: "gpt-5.5", temperature: 0.2 },
+    },
+  ],
+  prompts: ["my-org/my-eval-prompt:abc12345"],
+  tools: [
+    {
+      name: "web_search",
+      description: "Search the web for information",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string" } },
+        required: ["query"],
+      },
+    },
+  ],
+};
+
+await evaluate((inputs) => toxicityClassifier(inputs["input"]), {
+  data: datasetName,
+  evaluators: [correct],
+  experimentPrefix: "gpt-5.4-mini, simple",  // optional, experiment name prefix
+  maxConcurrency: 4, // optional, add concurrency
+  metadata: EXPERIMENT_METADATA,  // optional, used to populate model/prompt/tool columns in UI
+});
+```
+
+</CodeGroup>
+</Accordion>
+
+## 相关
+
+* [异步运行评估](/langsmith/evaluation-async)
+* [通过 REST API 运行评估](/langsmith/run-evals-api-only)
+* [从 Playground 运行评估](/langsmith/run-evaluation-from-playground)

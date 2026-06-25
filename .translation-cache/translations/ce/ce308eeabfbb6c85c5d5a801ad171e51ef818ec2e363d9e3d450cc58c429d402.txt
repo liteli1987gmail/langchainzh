@@ -1,0 +1,258 @@
+---
+title: 提供商与模型
+description: 了解 LangChain 如何使用提供商为您提供单一 API 来访问任意提供商的任意模型
+---
+
+LangChain 为您提供单一、统一的 API 来使用任意提供商的模型。安装提供商包，选择模型名称，然后开始构建——无论您使用 OpenAI、Anthropic、Google 还是任何其他受支持的提供商，相同的代码都能正常工作。
+
+```mermaid
+graph LR
+    subgraph "Your code"
+        A["LangChain API<br/>(invoke, stream, bind_tools)"]
+    end
+
+    subgraph "Providers"
+        B["OpenAI"]
+        C["Anthropic"]
+        D["Google"]
+        E["AWS Bedrock"]
+        F["...and more"]
+    end
+
+    A --> B
+    A --> C
+    A --> D
+    A --> E
+    A --> F
+
+    classDef code fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef provider fill:#EBD0F0,stroke:#885270,stroke-width:2px,color:#441E33
+
+    class A code
+    class B,C,D,E,F provider
+```
+
+## 一个 API，适配所有模型
+
+无论使用哪家提供商的 LangChain 聊天模型，都实现了相同的接口。这意味着您可以：
+
+- **切换提供商**而无需重写应用程序逻辑
+- **对比模型**使用相同代码进行横向对比
+- **使用高级功能**如[工具调用](/oss/langchain/tools)、[结构化输出](/oss/langchain/structured-output)和[流式输出](/oss/langchain/streaming)，跨所有提供商通用
+
+:::python
+```python
+from langchain.chat_models import init_chat_model
+
+openai_model = init_chat_model("openai:gpt-5.5")
+anthropic_model = init_chat_model("anthropic:claude-opus-4-8")
+google_model = init_chat_model("google-genai:gemini-3.1-pro-preview")
+
+for model in [openai_model, anthropic_model, google_model]:
+    response = model.invoke("Explain quantum computing in one sentence.")
+    print(response.text)
+```
+:::
+
+:::js
+```typescript
+import { initChatModel } from "langchain/chat_models/universal";
+
+const openaiModel = await initChatModel("openai:gpt-5.5");
+const anthropicModel = await initChatModel("anthropic:claude-opus-4-8");
+const googleModel = await initChatModel("google-genai:gemini-3.1-pro-preview");
+
+for (const model of [openaiModel, anthropicModel, googleModel]) {
+    const response = await model.invoke("Explain quantum computing in one sentence.");
+    console.log(response.text);
+}
+```
+:::
+
+## 什么是 provider？
+
+**Provider** 是托管 AI 模型并通过 API 暴露这些模型的公司或平台。例如 OpenAI、Anthropic、Google 和 AWS Bedrock。
+
+在 LangChain 中，每个 provider 都有一个专用的**集成包**（例如 `langchain-openai`、`langchain-anthropic`），用于实现该 provider 模型的标准 LangChain 接口。这意味着：
+
+- 每个 provider 都有**专用包**，并具有适当的版本控制和依赖项管理
+- 当您需要时，可以使用**特定于 provider 的功能**（例如 OpenAI 的 Responses API、Anthropic 的扩展思考）
+- 通过环境变量**自动处理 API 密钥**
+
+:::python
+```shell
+uv add langchain-openai       # For OpenAI models
+uv add langchain-anthropic    # For Anthropic models
+uv add langchain-google-genai # For Google models
+```
+:::
+
+:::js
+```bash
+npm install @langchain/openai       # For OpenAI models
+npm install @langchain/anthropic    # For Anthropic models
+npm install @langchain/google-genai # For Google models
+```
+:::
+
+有关完整的提供商包列表，请参阅[集成页面](/oss/integrations/providers/overview)。
+
+## 查找模型名称
+
+每个提供商都支持特定的模型名称，这些名称在初始化聊天模型时传递。指定模型有两种方式：
+
+:::python
+<CodeGroup>
+
+</fragment>
+    ```python Provider prefix format
+    from langchain.chat_models import init_chat_model
+
+    model = init_chat_model("openai:gpt-5.5")
+    ```
+
+    ```python Direct class instantiation
+    from langchain_openai import ChatOpenAI
+
+    model = ChatOpenAI(model="gpt-5.5")
+    ```
+</CodeGroup>
+:::
+
+:::js
+    <CodeGroup>
+    ```typescript Provider prefix format
+    import { initChatModel } from "langchain/chat_models/universal";
+
+    const model = await initChatModel("openai:gpt-5.5");
+    ```
+
+    ```typescript Direct class instantiation
+    import { ChatOpenAI } from "@langchain/openai";
+
+    const model = new ChatOpenAI({ model: "gpt-5.5" });
+    ```
+</CodeGroup>
+:::
+
+使用 @[`init_chat_model`] 配合 `provider:model` 格式时，LangChain 会自动解析 provider 并加载正确的集成包。如果模型名称明确（例如 `"gpt-5.5"` 会解析为 OpenAI），你也可以省略 provider 前缀。
+
+要查找某个 provider 可用的模型名称，请参考该 provider 的官方文档。以下是一些常用的 provider：
+
+| Provider | 在哪里查找模型名称 |
+| :--- | :--- |
+| [OpenAI](/oss/integrations/providers/openai) | [OpenAI 模型页面](https://platform.openai.com/docs/models) |
+| [Anthropic](/oss/integrations/providers/anthropic) | [Anthropic 模型页面](https://docs.anthropic.com/en/docs/about-claude/models) |
+| [Google](/oss/integrations/providers/google) | [Google AI 模型页面](https://ai.google.dev/gemini-api/docs/models) |
+| [AWS Bedrock](/oss/integrations/providers/aws) | [Bedrock 支持的模型](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html) |
+:::python
+| [Ollama](/oss/integrations/providers/ollama) | [Ollama 模型库](https://ollama.com/library) |
+| [Groq](/oss/integrations/providers/groq) | [Groq 支持的模型](https://console.groq.com/docs/models) |
+:::
+
+## 立即使用新模型
+
+因为 LangChain provider 包直接将模型名称传递给 provider 的 API，所以当 provider 发布新模型时，你可以立即使用它们（无需 LangChain 更新）。只需传递新的模型名称即可：
+
+:::python
+```python
+model = init_chat_model("google_genai:gemini-mythos")
+```
+:::
+
+:::js
+```typescript
+const model = await initChatModel("google_genai:gemini-mythos");
+```
+:::
+
+只要您的提供商包版本支持模型所需的 API 版本，新模型名称即可立即生效。在大多数情况下，模型版本向后兼容，无需更新包。
+
+## 模型能力
+
+不同的提供商和模型支持不同的功能。
+有关聊天模型集成及其功能的列表，请参阅[聊天模型集成页面](/oss/integrations/chat)。
+
+## 路由器和代理
+
+**路由器**（也称为代理或网关）让您通过单个 API 和凭证访问来自多个提供商的模型。它们可以简化计费，让您无需更改集成即可切换模型，并提供自动回退和负载均衡等功能。
+
+| 提供商 | 集成 | 描述 |
+| :------- | :---------- | :---------- |
+| [OpenRouter](https://openrouter.ai/) | [`ChatOpenRouter`](/oss/integrations/chat/openrouter) | 统一访问 OpenAI、Anthropic、Google、Meta 等模型 |
+:::python
+| [LiteLLM](https://www.litellm.ai/) | [`ChatLiteLLM`](/oss/integrations/chat/litellm) | 100+ 提供商的统一接口，具有路由、回退和支出追踪功能 |
+:::
+
+路由器在以下情况下很有用：
+
+- **访问多个提供商** 使用单个 API 密钥和计费账户
+- **动态切换模型** 无需管理多个提供商凭证
+- **使用回退模型** 如果主模型失败，自动使用不同的模型重试
+
+:::python
+```python
+from langchain.chat_models import init_chat_model
+
+model = init_chat_model("openrouter:anthropic/claude-sonnet-4-6")
+response = model.invoke("Hello!")
+```
+:::
+
+:::js
+```typescript
+import { initChatModel } from "langchain/chat_models/universal";
+
+const model = await initChatModel("openrouter:anthropic/claude-sonnet-4-6");
+const response = await model.invoke("Hello!");
+```
+:::
+
+## OpenAI 兼容端点
+
+许多提供商提供与 OpenAI 的 [Chat Completions API](https://platform.openai.com/docs/api-reference/chat) 兼容的端点。你可以使用 [`ChatOpenAI`](/oss/integrations/chat/openai) 配合自定义的 `base_url` 来连接这些端点：
+
+:::python
+```python
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(
+    base_url="https://your-provider.com/v1",
+    api_key="your-api-key",
+    model="provider-model-name",
+)
+```
+:::
+
+:::js
+```typescript
+import { ChatOpenAI } from "@langchain/openai";
+
+const model = new ChatOpenAI({
+    configuration: { baseURL: "https://your-provider.com/v1" },
+    apiKey: "your-api-key",
+    model: "provider-model-name",
+});
+```
+:::
+
+<Warning>
+    `ChatOpenAI` 仅针对 [官方 OpenAI API 规范](https://github.com/openai/openai-openapi)。不会提取或保留来自第三方提供商的非标准响应字段。如需访问非标准功能，请使用专用提供商包或路由器。
+</Warning>
+
+## 后续步骤
+
+<CardGroup cols={2}>
+    <Card title="模型指南" icon="cpu" href="/oss/langchain/models">
+        了解如何使用模型：调用、流式处理、批量操作、工具调用等。
+    </Card>
+    <Card title="聊天模型集成" icon="message" href="/oss/integrations/chat">
+        浏览所有聊天模型集成及其功能。
+    </Card>
+    <Card title="所有提供商" icon="grid-dots" href="/oss/integrations/providers/overview">
+        查看提供商包和集成的完整列表。
+    </Card>
+    <Card title="代理" icon="robot" href="/oss/langchain/agents">
+        构建以模型作为推理引擎的代理。
+    </Card>
+</CardGroup>

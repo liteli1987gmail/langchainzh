@@ -1,0 +1,58 @@
+---
+title: 自定义模型提供方
+description: 通过 LLM Gateway 将请求路由到任何 OpenAI 兼容端点，例如通过推理服务器提供服务的自托管开源模型。
+---
+
+<Note>
+**私人 Beta：** LLM Gateway 处于私人 [Beta](/langsmith/release-stages) 阶段。注册[等待名单](https://www.langchain.com/langsmith-llm-gateway-waitlist)以获取访问权限。
+</Note>
+
+除了[内置提供方](/langsmith/llm-gateway#supported-providers)之外，LLM Gateway 还可以将请求代理到**任何 OpenAI 兼容端点**，例如通过推理服务器提供服务的自托管开源模型（vLLM、Ollama 等）。
+
+## 工作原理
+
+自定义提供方由**OpenAI 兼容端点**[模型配置](/langsmith/model-configurations)定义，您可以在 [LangSmith UI](https://smith.langchain.com) 中的**设置 → 模型配置**下保存它。网关使用配置中的以下选项：
+
+- **基础 URL**：网关转发请求的上游端点。
+- **模型名称**：注入到每个请求中，这样调用方无需指定它。
+- **API 密钥**：存储为[工作区密钥](/langsmith/llm-gateway-admin-setup#2-add-provider-secrets)，不会由客户端发送。
+
+然后通过 `https://gateway.smith.langchain.com/providers/{configName}` 路由按名称引用保存的配置。当请求到达时，网关会查找配置、解析密钥，并将调用代理到配置的上游 URL。
+
+<Note>
+`{configName}` 是您工作区[模型配置](/langsmith/model-configurations)中的配置名称。如果名称包含非 URL 安全字符（如 `/` 或空格），需要在路径中进行 URL 编码。例如，名为 `meta-llama/Llama-3.1-8B-Instruct` 的配置变为 `https://gateway.smith.langchain.com/providers/meta-llama%2FLlama-3.1-8B-Instruct/v1/chat/completions`。
+</Note>
+
+## 1. 创建自定义提供方配置
+
+1. 在**设置 → 集成 → 提供方密钥**下，将上游端点的 API 密钥添加为工作区密钥。给它一个描述性名称（例如 `MY_PROVIDER_API_KEY`）。
+1. 前往**设置 → 模型配置**并创建以**OpenAI 兼容端点**作为提供方的配置。
+1. 将**基础 URL** 设置为您的上游端点（例如 `https://my-inference-server.example.com/v1`），并将**模型名称**设置为端点期望的模型标识符。
+1. 将 **API 密钥名称**设置为您创建的密钥。
+1. 使用**名称**保存配置。此名称是您在网关路由中使用的名称。
+
+<Note>
+每个配置固定单个模型，因为网关会用配置的值覆盖请求体中的 `model`。若要从同一端点提供多个模型，请为每个模型创建一个配置（每个配置使用自己的名称和 `/providers/{configName}` 路由）。
+</Note>
+
+## 2. 发起调用
+
+按名称调用保存的配置。路由为 `https://gateway.smith.langchain.com/providers/{configName}`，其中 `{configName}` 是您在**设置 → 模型配置**中保存的配置名称（下列示例中为 `my-custom-endpoint`）。
+
+```bash
+curl https://gateway.smith.langchain.com/providers/my-custom-endpoint/v1/chat/completions \
+    -H "Authorization: Bearer $LANGSMITH_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"ping"}]}'
+```
+
+网关会用已保存配置中的模型名称覆盖请求体中的 `model` 字段，因此您从客户端传递的值会被忽略。
+
+## 支持的端点
+
+自定义提供程序使用与内置 OpenAI 提供程序相同的允许列表：`POST /v1/chat/completions`（包括流式传输）、`POST /v1/responses` 和 `GET /v1/models` 列表端点。任何其他路径都会返回 `501 Not Implemented`。
+
+## 下一步
+
+- [消费策略](/langsmith/llm-gateway-spend-policies)：对自定义提供程序应用成本限制。
+- [PII 和密钥脱敏](/langsmith/llm-gateway-redaction)：在敏感数据到达您的端点之前对其进行脱敏处理。

@@ -1,0 +1,147 @@
+---
+title: "ChatBedrockConverse 集成"
+description: "使用 LangChain JavaScript 与 ChatBedrockConverse 聊天模型集成。"
+---
+
+[Amazon Bedrock Converse](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html) 是一项完全托管的服务，通过 API 提供来自领先 AI 初创公司和 Amazon 的基础模型 (FM)。您可以从多种 FM 中进行选择，找到最适合您用例的模型。它为 Bedrock 模型提供统一的对话接口。
+
+这将帮助您开始使用 `ChatBedrockConverse` [聊天模型](/oss/langchain/models)。有关所有 `ChatBedrockConverse` 功能和配置的详细文档，请前往 [API 参考](https://reference.langchain.com/javascript/langchain-aws/ChatBedrockConverse)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 可序列化 | [Python 支持](https://python.langchain.com/docs/integrations/chat/bedrock/#beta-bedrock-converse-api) | 下载量 | 版本 |
+| :--- | :--- | :---: |  :---: | :---: | :---: |
+| [`ChatBedrockConverse`](https://reference.langchain.com/javascript/langchain-aws/ChatBedrockConverse) | [`@langchain/aws`](https://npmjs.com/@langchain/aws) | ✅ | ✅ | ![NPM - 下载量](https://img.shields.io/npm/dm/@langchain/aws?style=flat-square&label=%20&) | ![NPM - 版本](https://img.shields.io/npm/v/@langchain/aws?style=flat-square&label=%20&) |
+
+### 模型特性
+
+请参阅表头中的链接以获取有关如何使用特定功能的指南。
+
+| [工具调用](/oss/langchain/tools) | [结构化输出](/oss/langchain/structured-output) | [图像输入](/oss/langchain/messages#multimodal) | 音频输入 | 视频输入 | [令牌级流式传输](/oss/langchain/streaming/) | [令牌使用情况](/oss/langchain/models#token-usage) | [对数概率](/oss/langchain/models#log-probabilities) |
+| :---: | :---: | :---: |  :---: | :---: | :---: | :---: | :---: |
+| ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ |
+
+## 设置
+
+要访问 Bedrock 模型，您需要创建一个 AWS 账户、设置 Bedrock API 服务、获取访问密钥 ID 和密钥，以及安装 `@langchain/aws` 集成包。
+
+### 凭证
+
+前往 [AWS 文档](https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started.html) 注册 AWS 并设置您的凭证。您还需要为您账户开启模型访问权限，可通过[按照这些说明](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html)操作。
+
+在环境中设置您的 Bedrock 凭证：
+
+```bash
+export BEDROCK_AWS_REGION="us-east-1"
+export BEDROCK_AWS_ACCESS_KEY_ID="your-access-key-id"
+export BEDROCK_AWS_SECRET_ACCESS_KEY="your-secret-access-key"
+```
+
+或者，设置 `AWS_BEARER_TOKEN_BEDROCK` 用于 API 密钥身份验证。请参阅 [AWS Bedrock API 密钥文档](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html)。
+
+如果您想获取模型调用的自动追踪，您还可以通过取消下方注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```bash
+# export LANGSMITH_TRACING="true"
+# export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+LangChain `ChatBedrockConverse` 集成位于 `@langchain/aws` 包中：
+
+<CodeGroup>
+```bash npm
+npm install @langchain/aws @langchain/core
+```
+```bash yarn
+yarn add @langchain/aws @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/aws @langchain/core
+```
+</CodeGroup>
+
+## 实例化
+
+现在我们可以实例化模型对象并生成聊天补全。
+
+有几种不同的方式向 AWS 进行身份验证——以下示例依赖于您环境变量中设置的访问密钥、秘密访问密钥和区域：
+
+```typescript
+import { ChatBedrockConverse } from "@langchain/aws";
+
+const llm = new ChatBedrockConverse({
+  model: "anthropic.claude-3-5-sonnet-20240620-v1:0",
+  region: process.env.BEDROCK_AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.BEDROCK_AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.BEDROCK_AWS_SECRET_ACCESS_KEY!,
+  },
+});
+```
+
+## 调用
+
+```typescript
+const aiMsg = await llm.invoke([
+  [
+    "system",
+    "You are a helpful assistant that translates English to French. Translate the user sentence.",
+  ],
+  ["human", "I love programming."],
+])
+aiMsg
+```
+
+```text
+AIMessage {
+  "id": "f5dc5791-224e-4fe5-ba2e-4cc51d9e7795",
+  "content": "J'adore la programmation.",
+  "additional_kwargs": {},
+  "response_metadata": {
+    "$metadata": {
+      "httpStatusCode": 200,
+      "requestId": "f5dc5791-224e-4fe5-ba2e-4cc51d9e7795",
+      "attempts": 1,
+      "totalRetryDelay": 0
+    },
+    "metrics": {
+      "latencyMs": 584
+    },
+    "stopReason": "end_turn",
+    "usage": {
+      "inputTokens": 29,
+      "outputTokens": 11,
+      "totalTokens": 40
+    }
+  },
+  "tool_calls": [],
+  "invalid_tool_calls": [],
+  "usage_metadata": {
+    "input_tokens": 29,
+    "output_tokens": 11,
+    "total_tokens": 40
+  }
+}
+```
+
+```typescript
+console.log(aiMsg.content)
+```
+
+```text
+J'adore la programmation.
+```
+
+## 工具调用
+
+使用 Bedrock 模型进行工具调用的工作方式与[其他模型](/oss/langchain/tools)类似，但请注意并非所有 Bedrock 模型都支持工具调用。更多详情请参阅 [AWS 模型文档](https://docs.aws.amazon.com/bedrock/latest/APIReference/welcome.html)。
+
+---
+
+## API 参考
+
+有关所有 `ChatBedrockConverse` 功能及配置的详细文档，请前往 [API 参考](https://reference.langchain.com/javascript/langchain-aws/ChatBedrockConverse)。

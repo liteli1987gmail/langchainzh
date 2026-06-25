@@ -1,0 +1,188 @@
+---
+title: Use annotation queues
+sidebarTitle: 使用注释队列
+---
+
+_注释队列_ 为人工审核员提供了一个专注的工作流程，用于对特定的 [runs](/langsmith/observability-concepts#runs) 附加反馈。虽然您始终可以内联注释 [traces](/langsmith/observability-concepts#traces)，但注释队列允许您将 runs 分组、制定评分标准并跟踪审核员进度。
+
+<Info>
+您还可以通过 SDK 以编程方式管理注释队列和反馈配置。请参阅[以编程方式管理反馈和注释队列](/langsmith/annotation-queues-sdk)。
+</Info>
+
+LangSmith 支持两种队列模式：
+
+- [**单-run 注释队列**](#single-run-annotation-queues) 每次呈现一个 run，让审核员提交您配置的任何评分标准反馈。单-run 队列还支持 [assertions](/langsmith/assertions)，用于捕获离线评估的验收标准。
+- [**成对注释队列 (PAQs)**](#pairwise-annotation-queues) 并排呈现两个 run，让审核员根据您定义的评分标准快速决定哪个输出更好（或是否等效）。
+
+<Tip>
+有关使用注释队列的演示，请观看[注释队列入门](#video-guide)视频指南。
+</Tip>
+
+## 单-run 注释队列
+
+单-run 队列每次呈现一个 run，让审核员提交您配置的任何评分标准反馈。可以直接从 [LangSmith UI](https://smith.langchain.com) 中的 **Annotation queues** 部分创建。
+
+### 创建单-run 队列
+
+1. 在左侧导航中进入 **Annotation Queues**。
+1. 点击左上角的 **+ Annotation Queue**。
+
+    ![Create Annotation Queue form with Basic Details, Annotation Rubric, and Feedback sections.](/langsmith/images/create-annotation-queue-new.png)
+
+#### 基本信息
+
+1. 填写队列的 **Name** 和 **Description**。
+1. 可选择分配一个 **default dataset**，以简化将已审核的 runs 导出到 LangSmith [workspace](/langsmith/administration-overview#workspaces) 中的数据集。
+
+#### 注释评分标准
+
+1. 为注释员起草一些高层级 **Instructions**，这些内容将在每个 run 的侧边栏中显示。
+1. 点击 **+ Add a feedback rubric** 添加反馈键到注释队列。注释员将在每个 run 上看到这些反馈键。
+1. 为每个反馈键添加描述，如果反馈是分类的，还需要添加每个类别的简短描述。
+
+    ![Annotation queue rubric form with instructions and desired feedback entered.](/langsmith/images/create-annotation-rubric.png)
+
+    例如，使用上一个屏幕截图中的描述，审核员将在 UI 右侧窗格中看到 **Annotation Rubric** 详情。
+
+    ![The rendered rubric for reviewers from the example instructions.](/langsmith/images/rubric-for-annotators.png)
+
+#### 协作者设置
+
+设置审核员数量或您希望为协作者保留项目的最长时间。当一个 run 有多个注释员时，您可以选择让 run 保留在队列中，直到所有审核员将其标记为 **Done**。设置如下：
+
+- **All workspace members review each run**: 启用后，一个 run 会保留在队列中，直到每个 [workspace](/langsmith/administration-overview#workspaces) 成员都将审核标记为 **Done**。
+
+- **Enable reservations on runs**: 保留一个 run 可以将其锁定供您审核一段时间。当一个 run 被保留时，其他审核员可以查看但不能添加反馈或笔记。如果所有工作区成员都要审核每个 run，则保留功能将被禁用。
+
+    如果审核员查看了某个 run，然后离开而未将其标记为 **Done**，则保留将在指定的 **Reservation length** 后过期。run 将被释放回队列，可以由另一个审核员保留。
+
+    <Note>
+        点击 run 注释的 **Requeue** 只会将当前 run 移动到当前用户队列的末尾；它不会影响任何其他用户的队列顺序。它还会释放当前用户对该 run 的保留。
+    </Note>
+
+- **Number of reviewers per run**: 这决定了必须将一个 run 标记为 **Done** 的审核员数量才能将其从队列中移除。
+
+    - 审核员无法查看其他审核员留下的反馈。
+    - Run 上的评论对所有审核员可见。
+
+    <Note>
+    当启用 **Use assigned reviewers** 时，**Number of reviewers per run** 设置会被隐藏（见下文）。
+    </Note>
+
+- **Use assigned reviewers**: 启用此开关以使用特定的工作区成员而不是基于数量的阈值。启用后：
+
+    - 会出现一个多选用户选择器，以便您可以选择特定的工作区成员作为指定的审核员。
+    - 只有当每个指定的审核员都提交审核后，run 才会被标记为 **Completed**。队列项目会经历三个状态：**Needs Review** → **Needs Others' Review** → **Completed**。
+    - 非指定的工作区成员仍然可以注释 runs，但他们的提交不计入完成状态。
+    - 任何工作区成员都可以在队列设置中编辑指定的审核员列表。
+
+    <Note>
+    当您向已有已完成项目的队列添加新的指定审核员时，这些项目不会恢复为待处理状态。如果您移除指定的审核员，他们尚未审核的任何项目的完成状态将会重新计算。
+    </Note>
+
+由于这些设置，每个审核员可见的 runs 数量可能与队列总数不同。
+
+### 编辑队列设置
+
+1. 打开要编辑的注释队列的 **Edit Annotation Queue** 面板。可以通过两种方式访问此面板：
+
+    - 在 **Annotation queues** 列表中，点击队列行右侧的 **Actions** 图标 <Icon icon="dots-vertical"/>。从下拉菜单中选择 <Icon icon="pencil"/> **Edit**。
+    - 在注释队列视图中，点击右上角的 **Settings** 图标 <Icon icon="settings"/>。
+
+2. 在 **Edit Annotation Queue** 面板中，修改队列创建期间配置的任何设置，然后点击 **Save**。
+
+### 将 runs 分配到单-run 队列
+
+有几种方法可以用工作项填充单-run 队列：
+
+- **从详情视图**: 在任何 trace 的右上角点击 **Add to Annotation Queue**。可以添加任何中间 [run](/langsmith/observability-concepts#runs)，但不能添加根 span。
+
+    ![Trace view with the Add to Annotation Queue button highlighted at the top of the screen.](/langsmith/images/add-to-annotation-queue.png)
+
+- **从 runs 表格**: 选择多个 runs，然后点击页面底部的 **Add to Annotation Queue**。
+
+    ![View of the runs table with runs selected. Add to Annotation Queue button at the bottom of the page.](/langsmith/images/multi-select-annotation-queue.png)
+
+- **自动化规则**: [设置规则](/langsmith/rules)以自动将匹配过滤条件的 runs（例如错误或低用户评分）分配到队列中。
+- **数据集和实验**: 在数据集中选择一个或多个 [experiments](/langsmith/evaluation-concepts#experiment)，然后点击 **<Icon icon="pencil"/> Annotate**。选择现有队列或创建新队列，然后确认（单-run）队列选项。
+
+    ![Selected experiments with the Annotate button at the bottom of the page.](/langsmith/images/annotate-experiment.png)
+
+### 审核单-run 队列
+
+1. 通过左侧导航栏进入 **Annotation Queues** 部分。
+
+    队列列表包含一个 **Assigned Reviewers** 列，显示每个队列分配了哪些审核员。要仅查看分配给您的队列，请点击列表顶部的 **Assigned to me** 过滤器。
+
+1. 点击您要审核的队列。这将带您进入队列中需要审核的 runs 的专注循环视图。左侧面板显示每个 run 的状态（**Needs Review**、**Needs Others' Review**、**Completed**）。
+
+1. 添加 **Reviewer Notes**，为 [**Feedback**](/langsmith/observability-concepts#feedback) 标准评分，或将 run 标记为已审核。要构建数据集，请编辑 run 的输入和输出以创建更正后的参考示例，然后点击 **Add to Dataset**。点击 **Delete** 从队列中移除 run（无论任何当前保留或队列设置，对所有用户生效）。
+
+    您无需手动创建更正后的参考输出，可以直接在审核侧面板中 [编写 assertions](/langsmith/assertions) 并将其保存为示例的预期输出。
+
+    <Tip>
+        每个选项旁边的键盘快捷键可以帮助简化审核流程。
+    </Tip>
+
+## 成对注释队列
+
+成对注释队列 (PAQs) 并排呈现两个 run，让审核员根据您定义的评分标准快速决定哪个输出更好（或是否等效）。它们专为两个实验之间的快速 A/B 比较而设计（通常是基线模型 vs 候选模型），必须从 **Datasets & Experiments** 页面创建。
+
+### 创建成对队列
+
+1. 进入 **Datasets & Experiments**，打开一个数据集，选择**恰好两个**要比较的实验。
+1. 点击 **Annotate**。在弹出窗口中，选择 **Add to Pairwise Annotation Queue**。（在恰好选择两个实验之前，按钮是禁用的。）
+
+    ![Popover showing the "Add to Pairwise Annotation Queue" card highlighted after two experiments are selected.](/langsmith/images/pairwise-annotation-queue-popup.png)
+
+1. 决定是将实验发送到现有的成对队列还是创建新队列。
+1. 提供队列详情：
+    - **基本信息**（名称和描述）
+    - **Instructions & rubrics**，针对成对评分定制
+    - **协作者设置**（审核员数量、保留、保留时长）
+1. 提交表单以创建队列。LangSmith 会立即从两个实验中配对 runs 并填充队列。
+
+PAQs 的关键区别：
+
+- **实验**: 您必须提前提供两个实验会话。LangSmith 自动按时间顺序配对它们的 runs，并在创建期间填充队列。
+- **评分标准**: 成对评分标准项只需要一个反馈键和（可选）一个描述。注释员决定对于每个评分标准项，Run A、Run B 还是两者都更好。
+- **数据集**: 成对队列不使用默认数据集，因为比较跨越两个实验。
+- **保留和审核员**: 相同的协作者控制适用。保留有助于防止两个人同时评判同一个比较。
+
+### 向成对队列添加更多比较
+
+如果以后需要添加更多比较，请返回 **Datasets & Experiments**，再次选择两个实验，然后选择 **Add to Pairwise Annotation Queue** 以追加新配对。
+
+选择两个实验并创建 PAQ 会自动配对 runs。当扩充现有 PAQ 时，LangSmith 会保留历史比较，并将新配对追加到队列中。
+
+### 审核成对队列
+
+1. 从 **Annotation queues** 中，选择您要审核的成对队列。
+1. 每个队列项在左侧显示 Run A，右侧显示 Run B，以及您的评分标准。
+1. 对于每个评分标准项：
+    - 选择 **A is better**、**B is better** 或 **Equal**。UI 在后台记录两个 run 的二进制反馈。
+    - 使用热键 `A`、`B` 或 `E` 来锁定您的选择。
+1. 完成所有评分标准项后，按 **Done**（或在最后一个评分标准项上按 `Enter`）进入下一个比较。
+1. 可选操作：
+    - 留下与任一 run 关联的评论。
+    - 如果需要重新访问，将比较重新排队。
+    - 打开详情视图进行更深入的调试。
+
+保留、审核员阈值和评论的行为与单-run 队列完全相同，使团队能够使用不同类型的队列而无需修改现有工作流程。
+
+    ![Pairwise review screen showing runs side-by-side with the feedback pane containing A/B/Equal buttons and keyboard shortcuts.](/langsmith/images/pairwise-annotation-queue-review-feedback-pane.png)
+
+<Check>
+考虑将已收到用户反馈的 runs（例如差评）路由到单-run 队列进行分类，并与更强的基线进行成对队列的头对头比较。这有助于您快速识别回归问题。要了解如何从 LLM 应用中捕获用户反馈的更多信息，请遵循[附加用户反馈](/langsmith/attach-user-feedback)指南。
+</Check>
+
+## 视频指南
+
+<iframe
+  className="w-full aspect-video rounded-xl"
+  src="https://www.youtube.com/embed/rxKYHA-2KS0?si=V4EnrUmzJaUVJh0m"
+  title="YouTube video player"
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowFullScreen
+></iframe>

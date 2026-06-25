@@ -1,0 +1,158 @@
+---
+title: 使用 Terraform 管理 LangSmith
+sidebarTitle: Terraform provider
+icon: "brand-terraform"
+description: 使用官方 LangSmith Terraform provider 将工作区、角色、成员、评估器、运行规则和告警规则作为代码进行管理。
+---
+
+官方 [LangSmith Terraform provider](https://registry.terraform.io/providers/langchain-ai/langsmith/latest) 允许您将 LangSmith 组织和工作区资源作为代码进行管理——包括工作区、自定义角色、组织和工作区成员、评估器、运行规则和告警规则。这是[使用 API 管理组织](/langsmith/manage-organization-by-api)的基础设施即代码对应方案。
+
+<Check>
+在深入了解之前，阅读以下内容可能会有所帮助：
+
+* [组织和工作的概念指南](/langsmith/administration-overview)
+* [组织设置操作指南](/langsmith/set-up-hierarchy#set-up-an-organization)
+</Check>
+
+## 安装和配置
+
+将 provider 添加到 Terraform 配置中并固定一个版本：
+
+```hcl
+terraform {
+  required_providers {
+    langsmith = {
+      source  = "langchain-ai/langsmith"
+      version = "~> 0.0.2"
+    }
+  }
+}
+
+provider "langsmith" {
+  # Cloud (US). Use https://eu.api.smith.langchain.com for the EU region,
+  # or your self-hosted URL. Can also be set via LANGSMITH_ENDPOINT.
+  api_url = "https://api.smith.langchain.com"
+
+  # Optional: scope workspace-level resources to a specific workspace.
+  workspace_id = "00000000-0000-0000-0000-000000000000"
+}
+```
+
+然后运行 `terraform init` 以下载提供商。
+
+## 身份验证
+
+提供商解析凭证的方式与 LangSmith SDK 和 CLI 相同。建议使用环境变量或配置文件，而非硬编码 `api_key`：
+
+* **环境变量**—`LANGSMITH_API_KEY`、`LANGSMITH_ENDPOINT`（API URL）、`LANGSMITH_WORKSPACE_ID`。
+* **配置文件**—设置 `profile`（或 `LANGSMITH_PROFILE`）以使用 LangSmith CLI 配置文件。
+* **Provider 参数**—`api_key`、`api_url`、`workspace_id`、`profile`。
+
+在 LangSmith 设置中创建 API 密钥或[服务密钥](/langsmith/administration-overview#service-keys)。有关可用的密钥类型，请参阅[身份验证方法](/langsmith/authentication-methods)。
+
+<Warning>
+组织范围内的操作（如创建工作区和邀请组织成员）需要**具有组织管理员权限的组织范围服务密钥**。设置 `workspace_id`（或 `LANGSMITH_WORKSPACE_ID`）以针对工作区范围的资源（如工作区成员资格、评估器和运行规则）。
+</Warning>
+
+## 示例
+
+### 创建工作区
+
+```hcl
+resource "langsmith_workspace" "demo" {
+  display_name  = "Demo Workspace"
+  tenant_handle = "demo-workspace"
+}
+```
+
+### 管理角色和成员
+
+使用数据源查找内置角色，然后分配它们。这会邀请用户加入组织，并授予他们工作区管理员权限：
+
+```hcl
+data "langsmith_org_role" "user" {
+  name = "ORGANIZATION_USER"
+}
+
+data "langsmith_workspace_role" "admin" {
+  name = "WORKSPACE_ADMIN"
+}
+
+resource "langsmith_org_membership" "alice" {
+  email   = "alice@example.com"
+  role_id = data.langsmith_org_role.user.id
+}
+
+resource "langsmith_workspace_membership" "alice_demo" {
+  workspace_id = langsmith_workspace.demo.id
+  email        = langsmith_org_membership.alice.email
+  role_id      = data.langsmith_workspace_role.admin.id
+}
+```
+
+您还可以定义自定义工作区角色，例如，通过克隆现有角色的权限：
+
+```hcl
+resource "langsmith_workspace_role" "issues_agent" {
+  display_name = "Issues Agent"
+  description  = data.langsmith_workspace_role.admin.description
+  permissions  = data.langsmith_workspace_role.admin.permissions
+}
+```
+
+### 自动化评估器、运行规则和告警
+
+该提供程序管理的不仅仅是账户。您可以将[在线代码评估器](/langsmith/online-evaluations-code)、应用这些评估器的[运行规则](/langsmith/rules)以及[告警](/langsmith/alerts)与您的工作区一起进行编码管理：
+
+```hcl
+resource "langsmith_evaluator" "tool_calls" {
+  workspace_id = langsmith_workspace.demo.id
+  name         = "tool call counts"
+  type         = "code"
+
+  code_evaluator = {
+    language = "javascript"
+    code     = file("${path.module}/evaluator.js")
+  }
+}
+
+# A run rule applies the evaluator to matching runs in a tracing project.
+# Run rules can also add runs to a dataset or annotation queue, or call webhooks.
+resource "langsmith_run_rule" "score_root_runs" {
+  workspace_id  = langsmith_workspace.demo.id
+  display_name  = "score root runs"
+  session_id    = "00000000-0000-0000-0000-000000000000" # tracing project ID
+  sampling_rate = 1
+  filter        = "eq(is_root, true)"
+
+  evaluator_id = langsmith_evaluator.tool_calls.id
+}
+
+resource "langsmith_alert_rule" "error_rate" {
+  session_id     = "00000000-0000-0000-0000-000000000000" # tracing project ID
+  name           = "run error count high"
+  type           = "threshold"
+  attribute      = "error_count"
+  aggregation    = "sum"
+  window_minutes = 15
+  operator       = "gte"
+  threshold      = 10
+  filter         = "eq(is_root, true)"
+
+  actions = [{
+    target  = "webhook"
+    url_env = "LANGSMITH_ALERTS_WEBHOOK_URL"
+    config_json = jsonencode({
+      body = jsonencode({ text = "Error rate elevated" })
+    })
+  }]
+}
+```
+
+## 资源参考
+
+完整的资源和数据源列表（包含所有参数和属性）已在 Terraform Registry 上发布并保持同步：
+
+<Card title="Terraform Registry 上的 LangSmith 提供程序" icon="brand-terraform" href="https://registry.terraform.io/providers/langchain-ai/langsmith/latest/docs">
+  浏览所有资源和数据源的完整参考。
+</Card>

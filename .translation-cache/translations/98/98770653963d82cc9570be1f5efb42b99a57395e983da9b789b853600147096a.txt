@@ -1,0 +1,52 @@
+---
+title: 对 ClickHouse 运行支持查询
+sidebarTitle: 对 ClickHouse 运行支持查询
+---
+
+此 Helm 仓库包含可生成 LangSmith UI 当前不支持直接显示的输出的查询（例如从 Clickhouse 获取查询异常日志）。
+
+此命令接受一个包含嵌入式用户名和密码的 Clickhouse 连接字符串（可从密钥管理器的调用中传入），并执行输入文件中的查询。在下面的示例中，我们使用 `support_queries/clickhouse` 目录中的 `ch_get_query_exceptions.sql` 输入文件。
+
+### 前置条件
+
+请确保已准备好以下工具/项目。
+
+1. kubectl
+
+   * [https://kubernetes.io/docs/tasks/tools/](https://kubernetes.io/docs/tasks/tools/)
+
+2. Clickhouse 数据库凭证
+
+   * 主机
+   * 端口
+   * 用户名
+     * 如果使用捆绑版本，则为 `default`
+   * 密码
+     * 如果使用捆绑版本，则为 `password`
+   * 数据库名称
+     * 如果使用捆绑版本，则为 `default`
+
+3. 从运行迁移脚本的计算机到 Clickhouse 数据库的连接。
+
+   * 如果使用捆绑版本，可能需要将 clickhouse 服务端口转发到本地计算机。
+   * 运行 `kubectl port-forward svc/langsmith-clickhouse 8123:8123` 将 clickhouse 服务端口转发到本地计算机。
+
+4. 运行支持查询的脚本
+
+   * 下载 [ClickHouse 支持查询脚本](https://github.com/langchain-ai/helm/blob/main/charts/langsmith/scripts/run_support_query_ch.sh)
+
+### 运行查询脚本
+
+运行以下命令以运行所需的查询：
+
+```bash
+sh run_support_query_ch.sh <clickhouse_url> --input path/to/query.sql
+```
+
+例如，如果您使用的是捆绑版本并带有端口转发功能，则命令可能如下所示：
+
+```bash
+sh run_support_query_ch.sh "clickhouse://default:password@localhost:8123/default" --input support_queries/clickhouse/ch_get_query_exceptions.sql
+```
+
+它将输出 Clickhouse 中过去 7 天内所有抛出异常的查询的查询日志。要将结果提取到文件，请添加标志 `--output path/to/file.csv`

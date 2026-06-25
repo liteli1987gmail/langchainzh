@@ -1,0 +1,338 @@
+---
+title: 追踪 Pipecat 应用程序
+sidebarTitle: Pipecat
+---
+
+LangSmith 可以使用 OpenTelemetry 检测来捕获 [Pipecat](https://pipecat.ai/) 生成的追踪。本指南将向您展示如何从 Pipecat 语音 AI 管道自动捕获追踪并将其发送到 LangSmith 进行监控和分析。
+
+有关追踪语音代理的高级指导原则，请参阅[语音追踪基础](/langsmith/trace-voice-fundamentals)。
+
+有关完整实现，请参阅[语音演示仓库](https://github.com/langchain-ai/voice-demo)。
+
+## 安装
+
+安装所需的包：
+
+<CodeGroup>
+
+
+</fragment>
+
+```bash pip
+pip install langsmith "pipecat-ai[whisper,openai,local]" opentelemetry-exporter-otlp python-dotenv
+```
+
+```bash uv
+uv add langsmith "pipecat-ai[whisper,openai,local]" opentelemetry-exporter-otlp python-dotenv
+```
+
+</CodeGroup>
+
+<Info>
+如果您计划使用高级音频录制功能，还需要安装：`pip install scipy numpy`
+</Info>
+
+## 快速入门教程
+
+按照此分步教程，使用 Pipecat 和 LangSmith 追踪功能创建一个语音 AI 代理。您将通过复制和粘贴代码片段来构建一个完整的可工作示例。
+
+### 步骤 1：设置您的环境
+
+在项目目录中创建一个 `.env` 文件：
+
+```bash .env
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.smith.langchain.com/otel
+OTEL_EXPORTER_OTLP_HEADERS=x-api-key=<your-langsmith-api-key>, Langsmith-Project=pipecat-voice
+OPENAI_API_KEY=<your-openai-api-key>
+```
+
+### 步骤 2：下载 span processor
+
+Pipecat 会发出 OpenTelemetry spans，但其属性名称并非 LangSmith 默认识别的名称。自定义 span processor 会转换这些属性，使您的 traces 能在 LangSmith 中正确渲染。
+
+添加[自定义 span processor 文件](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/pipecat/processor.py)，并将其保存到项目目录中为 `langsmith_processor.py`。
+
+<Accordion title="span processor 有什么作用？">
+
+span processor 使用 LangSmith 兼容的属性来丰富 Pipecat 的 OpenTelemetry spans，使您的 traces 能在 LangSmith 中正确显示。
+
+**核心功能：**
+
+- 将 Pipecat span 类型（stt、llm、tts、turn、conversation）转换为 LangSmith 格式。
+- 添加 `gen_ai.prompt.*` 和 `gen_ai.completion.*` 属性用于消息可视化。
+- 将完整对话记录渲染到根运行上。
+- 处理音频文件附件（用于高级用法）。
+
+它只重塑其识别为 Pipecat 的 spans；任何其他 span（例如嵌套的 LangChain 或 LangGraph 运行）都会原样通过。processor 在您在代码中导入它时激活。
+
+</Accordion>
+
+### 步骤 3：创建语音 agent 文件
+
+创建一个名为 `agent.py` 的新文件，并添加以下代码。我们将分段构建它，以便您可以复制和粘贴每个部分。
+
+#### 第 1 部分：导入依赖项
+
+```python
+import asyncio
+import uuid
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import Pipecat components
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.runner import PipelineRunner
+from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
+from pipecat.services.whisper.stt import WhisperSTTService
+from pipecat.services.openai import OpenAILLMService, OpenAITTSService
+from pipecat.transports.local.audio import LocalAudioTransport, LocalAudioTransportParams
+
+# Import the span processor setup to enable LangSmith tracing
+from langsmith_processor import setup_langsmith_tracing
+```
+
+#### 第2部分：定义主函数
+
+```python
+async def main():
+    # Generate unique thread ID for LangSmith
+    thread_id = str(uuid.uuid4())
+    print(f"Starting conversation: {thread_id}")
+
+    # Configure OpenTelemetry export to LangSmith and register the span processor.
+    # This reads OTEL_EXPORTER_OTLP_ENDPOINT / OTEL_EXPORTER_OTLP_HEADERS from your
+    # environment and returns the processor so you can register a recording later.
+    span_processor = setup_langsmith_tracing()
+
+    # Configure audio input/output with voice activity detection
+    transport = LocalAudioTransport(
+        LocalAudioTransportParams(
+            audio_in_enabled=True,
+            audio_out_enabled=True,
+            vad_analyzer=SileroVADAnalyzer(),
+        )
+    )
+
+    # Initialize AI services
+    stt = WhisperSTTService()
+    llm = OpenAILLMService(model="gpt-5.4-mini")
+    tts = OpenAITTSService(voice="alloy")
+
+    # Set up conversation context with system prompt
+    context = OpenAILLMContext(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful voice assistant. Keep responses concise and conversational."
+            }
+        ]
+    )
+    context_aggregator = llm.create_context_aggregator(context)
+
+    # Build the processing pipeline
+    pipeline = Pipeline([
+        transport.input(),           # Capture microphone input
+        stt,                         # Convert speech to text
+        context_aggregator.user(),   # Add user message to context
+        llm,                         # Generate AI response
+        tts,                         # Convert response to speech
+        transport.output(),          # Play through speakers
+        context_aggregator.assistant(),  # Add assistant response to context
+    ])
+
+    # Create task with tracing enabled
+    task = PipelineTask(
+        pipeline,
+        params=PipelineParams(enable_metrics=True),
+        enable_tracing=True,
+        enable_turn_tracking=True,
+        conversation_id=thread_id,
+    )
+
+    # Run the agent
+    runner = PipelineRunner()
+    await runner.run(task)
+```
+
+#### 第 3 部分：添加入口点
+
+```python
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Step 4: 运行您的代理
+
+运行您的语音代理：
+
+```bash
+python agent.py
+```
+
+通过麦克风与智能体对话。所有追踪将自动出现在 LangSmith 中。
+
+查看完整的 [agent.py 代码](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/pipecat/agent.py)。
+
+## 高级用法
+
+### 追踪嵌套的 LangGraph 智能体
+
+除了使用现成的 LLM 服务，你还可以使用进程内的 [LangChain 或 LangGraph](/oss/langgraph/overview) 智能体作为管道的 LLM 阶段。通过一些调整，智能体的模型和工具运行会嵌套在 Pipecat 的 `llm` span 内，使整个对话保持为单个追踪。
+
+这需要满足三个条件：
+
+1. **设置 `LANGSMITH_TRACING_MODE=otel`。** 这会让 LangSmith SDK 将你的 LangChain/LangGraph 运行作为 OpenTelemetry span 通过同一 provider 发出，使它们嵌套在 Pipecat 的 `llm` span 下，而不是形成单独的最高级追踪。
+2. **使用已追踪的 LLM 服务。** 裸的 `FrameProcessor` 不会为图的运行产生 `llm` span 来供其嵌套。子类化一个已追踪的服务（如 `OpenAILLMService`）并从已追踪的上下文处理器运行你的图，这样它的运行就会落在 `llm` span 内部。
+3. **在 span processor 上设置 `llm_span_kind="chain"`。** 由于图被嵌套在里面，Pipecat 的 `llm` span 不再自己执行推理：图自身的模型节点才是真正的 LLM 运行。将包装器标记为 `chain` 可以避免在一个 LLM 运行内嵌套另一个 LLM 运行。
+
+最终的追踪结果如下：
+
+```text
+conversation                        ← root: whole transcript + audio recording
+└── turn × N
+    ├── stt
+    ├── llm                         ← chain (orchestrates the graph)
+    │   ├── model                   ← ChatOpenAI (may emit tool calls)
+    │   ├── tools: lookup_weather   ← tool run
+    │   └── model                   ← final answer (spoken)
+    └── tts
+```
+
+<Note>
+只有最终答案会被说出来，但工具调用交换必须持久化回 Pipecat 的 `LLMContext`（以 OpenAI 格式消息的形式），否则模型会在后续轮次中丢失工具历史记录。
+</Note>
+
+要获取完整的工作实现，请参阅 [voice demo 仓库](https://github.com/langchain-ai/voice-demo)。
+
+### 自定义元数据和标签
+
+你可以使用 span 属性向你的追踪添加自定义元数据：
+
+```python
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
+
+async def run_voice_session():
+    with tracer.start_as_current_span("voice_conversation") as span:
+        # Add custom metadata
+        span.set_attribute("langsmith.metadata.session_type", "voice_assistant")
+        span.set_attribute("langsmith.metadata.user_id", "user_123")
+        span.set_attribute("langsmith.span.tags", "pipecat,voice-ai,stt-llm-tts")
+
+        # Your Pipecat pipeline code here
+        task = PipelineTask(pipeline, enable_tracing=True)
+        await task.queue_frames([TextFrame("Hello")])
+```
+
+### 录制追踪并附加音频
+
+录制对话并将其音频附加到根运行中，这样您就可以在转录文本旁边收听它。底层附件 API，请参阅[使用追踪上传文件](/langsmith/upload-files-with-traces)。
+
+录制**用户听到的内容**，而不是生成的内容。简单的方法是在管道中添加录音 `FrameProcessor`，它在 `transport.output()` 的上游捕获 TTS 帧，因此会过度捕获：当打断在中间截断代理说话时，它包含了用户从未听到的音频。相反，应该在设备写入边界处进行捕获，因为输出传输只有在中断截断*之后*才会到达该边界。
+
+演示中的 [`RecordingLocalAudioTransport`](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/pipecat/recording_transport.py) 就是这样做的：它在 `write_audio_frame` 中录制播放的代理音频，并通过输入回调录制用户音频，然后使用共享的 [`build_stereo_session_wav`](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/sdk_tracing.py) 辅助函数写入一个立体声 WAV（左声道用户，右声道代理）。将这些作为参考实现，并根据您的项目进行改编。
+
+将 `LocalAudioTransport` 替换为录音传输，用 span 处理器注册录音以便在对话 span 结束时附加，并在 `finally` 块中保存：
+
+```python
+from pathlib import Path
+from datetime import datetime
+from recording_transport import ConversationRecorder, RecordingLocalAudioTransport
+
+# Write the conversation recording to a per-run path
+recordings_dir = Path.cwd() / "pipecat-recordings"
+recordings_dir.mkdir(exist_ok=True)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+recording_path = recordings_dir / f"conversation_{timestamp}.wav"
+
+# Tap played agent audio and the user's mic at the device boundary
+recorder = ConversationRecorder(recording_path)
+transport = RecordingLocalAudioTransport(
+    LocalAudioTransportParams(
+        audio_in_enabled=True,
+        audio_out_enabled=True,
+        vad_analyzer=SileroVADAnalyzer(),
+    ),
+    recorder,
+)
+
+# Attach the WAV to the conversation root span when the span ends
+span_processor.register_recording(
+    thread_id, str(recording_path), audio_recorder=recorder
+)
+
+# Build the pipeline with the recording transport
+pipeline = Pipeline([
+    transport.input(),               # mic in (taps user audio)
+    stt,
+    context_aggregator.user(),
+    llm,
+    tts,
+    transport.output(),              # speaker out (taps played agent audio)
+    context_aggregator.assistant(),
+])
+
+# Run the pipeline, saving the recording on the way out
+runner = PipelineRunner()
+try:
+    await runner.run(task)
+finally:
+    recorder.save_recording()
+```
+
+<Note>
+`register_recording` 接受任何带有 `save_recording()` 方法的对象作为 `audio_recorder`。跨度处理器在对话跨度结束时调用它，这样文件在读取和附加之前就已经在磁盘上了。`finally` 块处理关闭顺序和追踪被禁用的情况。
+</Note>
+
+## 故障排除
+
+### LangSmith 中没有显示跨度
+
+如果追踪没有在 LangSmith 中显示：
+
+1. **验证环境变量**：确保 `.env` 文件中的 `OTEL_EXPORTER_OTLP_ENDPOINT` 和 `OTEL_EXPORTER_OTLP_HEADERS` 设置正确。
+2. **检查 API 密钥**：确认您的 LangSmith API 密钥具有写入权限。
+3. **验证导入**：确保您是从 `langsmith_processor.py` 导入 `setup_langsmith_tracing`，并在运行管道之前调用它。
+4. **检查 .env 加载**：确保在导入 Pipecat 组件之前调用了 `load_dotenv()`。
+
+### 消息没有正确显示
+
+如果对话消息没有正确显示：
+
+1. **检查跨度处理器**：验证 `langsmith_processor.py` 在您的项目目录中并正确导入。
+2. **验证线程 ID**：确保您在 `PipelineTask` 中设置了唯一的 `conversation_id`。
+3. **启用回合追踪**：确保在 `PipelineTask` 中设置了 `enable_turn_tracking=True`。
+
+### 音频无法正常工作
+
+如果您的麦克风或扬声器无法正常工作：
+
+1. **检查权限**：确保您的终端/IDE 具有麦克风访问权限。
+2. **测试音频设备**：验证您的麦克风和扬声器在其他应用程序中正常工作。
+3. **VAD 设置**：如果语音没有被检测到，请尝试调整 `SileroVADAnalyzer()` 设置。
+4. **检查服务**：确保 OpenAI API 密钥有效且可以访问 Whisper 和 TTS。
+
+### 导入错误
+
+如果出现导入错误：
+
+1. **安装依赖项**：运行 `pip install langsmith "pipecat-ai[whisper,openai,local]" opentelemetry-exporter-otlp python-dotenv`。
+2. **检查 Python 版本**：确保您使用的是 Python 3.9 或更高版本。
+3. **验证 langsmith_processor**：确保 `langsmith_processor.py` 已下载并在与 `agent.py` 相同的目录中。
+
+### 性能问题
+
+如果响应缓慢：
+
+1. **使用更快的模型**：将 LLM 切换到 `gpt-5.4-mini`（已在教程中）。
+2. **检查网络**：确保 API 调用的互联网连接稳定。
+3. **本地 STT**：考虑使用本地 Whisper 而不是基于 API 的服务。
+
+### 高级：音频录制故障排除
+
+有关高级音频录制功能的问题，请参阅[完整演示文档](https://github.com/langchain-ai/voice-demo)。

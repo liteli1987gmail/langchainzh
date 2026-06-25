@@ -1,0 +1,197 @@
+---
+title: "LangSmithLoader 集成"
+description: "使用 LangChain JavaScript 与 LangSmithLoader 文档加载器集成。"
+---
+
+
+本笔记本提供了 `LangSmithLoader` [文档加载器](/oss/integrations/document_loaders/) 快速入门概述。要获取所有 `LangSmithLoader` 功能和配置的详细文档，请前往 [API 参考](https://reference.langchain.com/javascript/langchain-core/document_loaders/langsmith/LangSmithLoader)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | 本地 | 可序列化 | [PY 支持](https://python.langchain.com/docs/integrations/document_loaders/langsmith)|
+| :--- | :---: | :---: | :---: |  :---: |
+| [`LangSmithLoader`](https://reference.langchain.com/javascript/langchain-core/document_loaders/langsmith/LangSmithLoader) | [`@langchain/core`](https://www.npmjs.com/package/@langchain/core) | ✅ | beta | ✅ |
+
+### 加载器功能
+
+| 来源 | Web 加载器 | 仅 Node 环境
+| :---: | :---: | :---: |
+| `LangSmithLoader` | ✅ | ❌ |
+
+## 设置
+
+要访问 LangSmith 文档加载器，你需要安装 `@langchain/core`，创建一个 [LangSmith](https://langsmith.com/) 账户并获取 API 密钥。
+
+### 凭据
+
+在 [langsmith.com](https://langsmith.com) 注册并生成 API 密钥。完成此操作后，设置 `LANGSMITH_API_KEY` 环境变量：
+
+```bash
+export LANGSMITH_API_KEY="your-api-key"
+```
+
+### 安装
+
+`LangSmithLoader` 集成位于 `@langchain/core` 包中：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash npm
+npm install @langchain/core
+```
+```bash yarn
+yarn add @langchain/core
+```
+```bash pnpm
+pnpm add @langchain/core
+```
+</CodeGroup>
+
+## 创建示例数据集
+
+在本例中，我们将创建一个新的数据集，用于我们的文档加载器。
+
+```typescript
+import { Client as LangSmithClient } from 'langsmith';
+import { faker } from "@faker-js/faker";
+
+const lsClient = new LangSmithClient();
+
+const datasetName = "LangSmith Few Shot Datasets Notebook";
+
+const exampleInputs = Array.from({ length: 10 }, (_, i) => ({
+  input: faker.lorem.paragraph(),
+}));
+const exampleOutputs = Array.from({ length: 10 }, (_, i) => ({
+  output: faker.lorem.sentence(),
+}));
+const exampleMetadata = Array.from({ length: 10 }, (_, i) => ({
+  companyCatchPhrase: faker.company.catchPhrase(),
+}));
+
+await lsClient.deleteDataset({
+  datasetName,
+})
+
+const dataset = await lsClient.createDataset(datasetName);
+
+const examples = await lsClient.createExamples({
+  inputs: exampleInputs,
+  outputs: exampleOutputs,
+  metadata: exampleMetadata,
+  datasetId: dataset.id,
+});
+```
+
+```typescript
+import { LangSmithLoader } from "@langchain/core/document_loaders/langsmith"
+
+const loader = new LangSmithLoader({
+  datasetName: "LangSmith Few Shot Datasets Notebook",
+  // Instead of a datasetName, you can alternatively provide a datasetId
+  // datasetId: dataset.id,
+  contentKey: "input",
+  limit: 5,
+  // formatContent: (content) => content,
+  // ... other options
+})
+```
+
+## 加载
+
+```typescript
+const docs = await loader.load()
+docs[0]
+```
+
+```javascript
+{
+  pageContent: 'Conventus supellex aegrotatio termes. Vapulus abscido ubi vita coadunatio modi crapula comparo caecus. Acervus voluptate tergeo pariatur conor argumentum inventore vomito stella.',
+  metadata: {
+    id: 'f1a04800-6f7a-4232-9743-fb5d9029bf1f',
+    created_at: '2024-08-20T17:01:38.984045+00:00',
+    modified_at: '2024-08-20T17:01:38.984045+00:00',
+    name: '#f1a0 @ LangSmith Few Shot Datasets Notebook',
+    dataset_id: '9ccd66e6-e506-478c-9095-3d9e27575a89',
+    source_run_id: null,
+    metadata: {
+      dataset_split: [Array],
+      companyCatchPhrase: 'Integrated solution-oriented secured line'
+    },
+    inputs: {
+      input: 'Conventus supellex aegrotatio termes. Vapulus abscido ubi vita coadunatio modi crapula comparo caecus. Acervus voluptate tergeo pariatur conor argumentum inventore vomito stella.'
+    },
+    outputs: {
+      output: 'Excepturi adeptio spectaculum bis volaticus accusamus.'
+    }
+  }
+}
+```
+
+```typescript
+console.log(docs[0].metadata)
+```
+
+```javascript
+{
+  id: 'f1a04800-6f7a-4232-9743-fb5d9029bf1f',
+  created_at: '2024-08-20T17:01:38.984045+00:00',
+  modified_at: '2024-08-20T17:01:38.984045+00:00',
+  name: '#f1a0 @ LangSmith Few Shot Datasets Notebook',
+  dataset_id: '9ccd66e6-e506-478c-9095-3d9e27575a89',
+  source_run_id: null,
+  metadata: {
+    dataset_split: [ 'base' ],
+    companyCatchPhrase: 'Integrated solution-oriented secured line'
+  },
+  inputs: {
+    input: 'Conventus supellex aegrotatio termes. Vapulus abscido ubi vita coadunatio modi crapula comparo caecus. Acervus voluptate tergeo pariatur conor argumentum inventore vomito stella.'
+  },
+  outputs: { output: 'Excepturi adeptio spectaculum bis volaticus accusamus.' }
+}
+```
+
+```typescript
+console.log(docs[0].metadata.inputs)
+```
+
+```javascript
+{
+  input: 'Conventus supellex aegrotatio termes. Vapulus abscido ubi vita coadunatio modi crapula comparo caecus. Acervus voluptate tergeo pariatur conor argumentum inventore vomito stella.'
+}
+```
+
+```typescript
+console.log(docs[0].metadata.outputs)
+```
+
+```javascript
+{ output: 'Excepturi adeptio spectaculum bis volaticus accusamus.' }
+```
+
+```typescript
+console.log(Object.keys(docs[0].metadata))
+```
+
+```python
+[
+  'id',
+  'created_at',
+  'modified_at',
+  'name',
+  'dataset_id',
+  'source_run_id',
+  'metadata',
+  'inputs',
+  'outputs'
+]
+```
+
+---
+
+## API 参考
+
+有关所有 `LangSmithLoader` 功能和配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-core/document_loaders/langsmith/LangSmithLoader)

@@ -1,0 +1,791 @@
+---
+title: 自定义 Deep Agents
+sidebarTitle: 自定义
+description: 了解如何使用系统提示词、工具、子代理等自定义 Deep Agents
+---
+
+import ChatModelTabsDaPy from '/snippets/chat-model-tabs-da.mdx';
+import ChatModelTabsDaJs from '/snippets/chat-model-tabs-da-js.mdx';
+import HitlBasicConfigPy from '/snippets/code-samples/hitl-basic-config-py.mdx';
+import HitlBasicConfigJs from '/snippets/code-samples/hitl-basic-config-js.mdx';
+import SkillsUsageTabsPy from '/snippets/skills-usage-tabs-py.mdx';
+import SkillsUsageTabsJs from '/snippets/skills-usage-tabs-js.mdx';
+import BackendStatePy from '/snippets/code-samples/backend-state-py.mdx';
+import BackendStateJs from '/snippets/code-samples/backend-state-js.mdx';
+import BackendFilesystemPy from '/snippets/code-samples/backend-filesystem-py.mdx';
+import BackendFilesystemJs from '/snippets/code-samples/backend-filesystem-js.mdx';
+import BackendLocalShellPy from '/snippets/code-samples/backend-local-shell-py.mdx';
+import BackendLocalShellJs from '/snippets/code-samples/backend-local-shell-js.mdx';
+import BackendStorePy from '/snippets/code-samples/backend-store-py.mdx';
+import BackendStoreJs from '/snippets/code-samples/backend-store-js.mdx';
+import BackendContextHubPy from '/snippets/code-samples/backend-context-hub-py.mdx';
+import BackendCompositePy from '/snippets/code-samples/backend-composite-py.mdx';
+import BackendCompositeJs from '/snippets/code-samples/backend-composite-js.mdx';
+import SubagentBasicPy from '/snippets/code-samples/subagent-basic-py.mdx';
+import SubagentBasicJs from '/snippets/code-samples/subagent-basic-js.mdx';
+import SandboxBasicPy from '/snippets/deepagents-sandbox-basic-py.mdx';
+import SandboxBasicJs from '/snippets/deepagents-sandbox-basic-js.mdx';
+import CreateDeepAgentConfigOptionsPy from '/snippets/create-deep-agent-config-options-py.mdx';
+import CreateDeepAgentConfigOptionsJs from '/snippets/create-deep-agent-config-options-js.mdx';
+import CustomizationToolsPy from '/snippets/code-samples/customization-tools-py.mdx';
+import CustomizationToolsJs from '/snippets/code-samples/customization-tools-js.mdx';
+import CustomizationSystemPromptPy from '/snippets/code-samples/customization-system-prompt-py.mdx';
+import CustomizationSystemPromptJs from '/snippets/code-samples/customization-system-prompt-js.mdx';
+import CustomizationMiddlewarePy from '/snippets/code-samples/customization-middleware-py.mdx';
+import CustomizationMiddlewareJs from '/snippets/code-samples/customization-middleware-js.mdx';
+import CustomizationMiddlewareDoPy from '/snippets/code-samples/customization-middleware-do-py.mdx';
+import CustomizationMiddlewareDoJs from '/snippets/code-samples/customization-middleware-do-js.mdx';
+import CustomizationMiddlewareDontPy from '/snippets/code-samples/customization-middleware-dont-py.mdx';
+import CustomizationMiddlewareDontJs from '/snippets/code-samples/customization-middleware-dont-js.mdx';
+import CustomizationInterpretersPy from '/snippets/code-samples/customization-interpreters-py.mdx';
+import CustomizationInterpretersJs from '/snippets/code-samples/customization-interpreters-js.mdx';
+import CustomizationMemoryStatePy from '/snippets/code-samples/customization-memory-state-py.mdx';
+import CustomizationMemoryStateJs from '/snippets/code-samples/customization-memory-state-js.mdx';
+import CustomizationMemoryStorePy from '/snippets/code-samples/customization-memory-store-py.mdx';
+import CustomizationMemoryStoreJs from '/snippets/code-samples/customization-memory-store-js.mdx';
+import CustomizationMemoryFilesystemPy from '/snippets/code-samples/customization-memory-filesystem-py.mdx';
+import CustomizationMemoryFilesystemJs from '/snippets/code-samples/customization-memory-filesystem-js.mdx';
+import CustomizationProfilesPy from '/snippets/code-samples/customization-profiles-py.mdx';
+import CustomizationStructuredOutputPy from '/snippets/code-samples/customization-structured-output-py.mdx';
+import CustomizationStructuredOutputJs from '/snippets/code-samples/customization-structured-output-js.mdx';
+
+在目标周围构建开发框架。`create_deep_agent` 为您提供一个生产级的基础框架：将其连接到您的数据，调整其行为，并添加您的用例所需的功能。
+
+:::python
+
+:::
+
+```python
+from deepagents import create_deep_agent
+
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-6",
+    system_prompt="You are a helpful assistant.",
+    tools=[search, fetch_url],
+    memory=["./AGENTS.md"],
+    skills=["./skills/"],
+)
+```
+
+| 参数 | 功能说明 |
+|---|---|
+| [`model=`](#model) | 指定使用的模型 |
+| [`system_prompt=`](#system-prompt) | 代理的自定义指令 |
+| [`tools=`](#tools) | 代理可调用的领域工具 |
+| [`memory=`](#memory) | 启动时加载的 AGENTS.md 文件 |
+| [`skills=`](#skills) | 按需获取知识的技能目录 |
+| [`backend=`](#backends) | 文件系统后端（默认为 StateBackend）|
+| [`permissions=`](/oss/deepagents/permissions) | 文件系统的路径级访问控制 |
+| [`subagents=`](#subagents) | 用于委派任务的自定义子代理 |
+| [`middleware=`](#middleware) | 追加到[默认堆栈](#default-stack-main-agent)的额外中间件 |
+| [`interrupt_on=`](#human-in-the-loop) | 工具调用前暂停以等待人工批准 |
+| [`response_format=`](#structured-output) | 结构化输出模式 |
+| [`state_schema=`](/oss/deepagents/context-engineering#custom-state-schema) | 自定义图状态模式 |
+| [`context_schema=`](/oss/deepagents/context-engineering#runtime-context) | 每次运行的运行时上下文模式（用户 ID、API 密钥、功能开关） |
+| [profiles](#profiles) | 作为可复用包使用的每模型默认值 |
+
+<Accordion title="完整函数签名">
+<CreateDeepAgentConfigOptionsPy />
+</Accordion>
+
+有关完整的参数列表，请参阅 @[`create_deep_agent`] API 参考。若要从头编写完全自定义的测试框架，请参阅[配置测试框架](/oss/langchain/agents#configure-the-harness)或按照分步[从头构建深度代理](/oss/langchain/deep-agent-from-scratch)指南操作。
+:::
+
+:::js
+
+`createDeepAgent` 附带预组装测试框架：默认启用文件系统、摘要、子代理和提示缓存。以下参数允许你定义代理的角色、将其连接到数据和工具，以及使用额外的中间件扩展[默认中间件堆栈](#default-stack-main-agent)。
+
+```typescript
+import { createDeepAgent } from "deepagents";
+
+const agent = await createDeepAgent({
+  model: "anthropic:claude-sonnet-4-6",
+  systemPrompt: "You are a helpful assistant.",
+  tools: [search, fetchUrl],
+  memory: ["./AGENTS.md"],
+  skills: ["./skills/"],
+});
+```
+
+| 参数 | 说明 |
+|---|---|
+| `model` | 使用的模型 |
+| `systemPrompt` | 给 Agent 的自定义指令 |
+| `tools` | Agent 可调用的领域工具 |
+| `memory` | 启动时加载的 AGENTS.md 文件 |
+| `skills` | 按需知识库的技能目录 |
+| `backend` | 文件系统后端（默认为 StateBackend） |
+| `permissions` | 文件系统的路径级访问控制 |
+| `subagents` | 用于委托任务的自定义子 Agent |
+| `middleware` | 追加到[默认堆栈](#default-stack-main-agent)的额外中间件 |
+| `interruptOn` | 在工具调用前暂停以等待人工审批 |
+| `responseFormat` | 结构化输出模式 |
+| [`contextSchema`](/oss/deepagents/context-engineering#runtime-context) | 每次运行的运行时上下文模式（用户 ID、API 密钥、功能标志） |
+
+完整的参数列表请参阅 [`createDeepAgent`](https://reference.langchain.com/javascript/deepagents/types/CreateDeepAgentParams) API 参考。如需从头开始组合完全自定义的运行框架，请参阅[配置运行框架](/oss/langchain/agents#configure-the-harness)。
+:::
+
+<Tip>
+随着添加工具、子 Agent 和后端，使用 [LangSmith](https://smith.langchain.com) 追踪各个组件的协作方式。按照[可观测性快速入门](/langsmith/observability-quickstart)进行设置，并参阅[投入生产环境](/oss/deepagents/going-to-production)了解在 LangSmith 上的部署方法。
+
+我们还建议您设置 [LangSmith Engine](/langsmith/engine)，它可以监控您的追踪记录、检测问题并提出修复建议。
+</Tip>
+
+## 模型
+
+以 `provider:model` 格式传递 `model` 字符串，或传递一个已初始化的模型实例。支持的模型请参阅[支持的模型](/oss/deepagents/models#supported-models)，测试建议请参阅[推荐模型](/oss/deepagents/models#suggested-models)。
+
+<Tip>
+    使用 `provider:model` 格式（例如 `openai:gpt-5.5`）可以快速切换模型。
+</Tip>
+
+:::python
+<ChatModelTabsDaPy />
+:::
+
+:::js
+<ChatModelTabsDaJs />
+:::
+
+<Tip>
+    聊天模型会自动重试瞬态 API 故障（采用指数退避策略）。有关调整 `max_retries` / `timeout` 的默认值、限制和代码示例，请参阅 LangChain [模型](/oss/langchain/models#connection-resilience)页面。
+</Tip>
+
+## 工具
+
+除了用于规划、文件管理和子 Agent 生成[内置工具](/oss/deepagents/overview#execution-environment)外，您还可以提供自定义工具：
+
+:::python
+<CustomizationToolsPy />
+:::
+
+:::js
+<CustomizationToolsJs />
+:::
+
+### MCP 工具
+
+<Tip>
+  Deep Agents 完全支持 [Model Context Protocol (MCP)](/oss/langchain/mcp) 工具。您可以从任何 MCP 服务器加载工具——数据库、API、文件系统等——并直接将它们传递给 `create_deep_agent`。
+</Tip>
+
+:::python
+安装 `langchain-mcp-adapters` 以连接到 MCP 服务器：
+
+
+:::
+
+```bash
+pip install langchain-mcp-adapters
+```
+
+```python
+import asyncio
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from deepagents import create_deep_agent
+
+async def main():
+    async with MultiServerMCPClient(
+        {
+            "my_server": {
+                "transport": "http",
+                "url": "http://localhost:8000/mcp",
+            }
+        }
+    ) as client:
+        tools = await client.get_tools()
+
+        agent = create_deep_agent(
+            model="openai:gpt-5.5",
+            tools=tools,
+        )
+
+        result = await agent.ainvoke(
+            {"messages": [{"role": "user", "content": "Use the MCP server to help me."}]},
+            config={"configurable": {"thread_id": "1"}},
+        )
+
+asyncio.run(main())
+```
+:::
+
+:::js
+安装 `@langchain/mcp-adapters` 以连接到 MCP 服务器：
+
+
+:::
+
+```bash
+npm install @langchain/mcp-adapters
+```
+
+```ts
+import { MultiServerMCPClient } from "@langchain/mcp-adapters";
+import { createDeepAgent } from "deepagents";
+
+const client = new MultiServerMCPClient({
+    my_server: {
+        transport: "http",
+        url: "http://localhost:8000/mcp",
+    },
+});
+
+const tools = await client.getTools();
+
+const agent = await createDeepAgent({
+    model: "openai:gpt-5.5",
+    tools,
+});
+
+const result = await agent.invoke({
+    messages: [{ role: "user", content: "Use the MCP server to help me." }],
+});
+```
+:::
+
+有关详细的配置选项（包括 stdio 服务器、OAuth 认证、工具过滤和状态会话），请参阅完整的 [MCP 指南](/oss/langchain/mcp)。
+
+## 系统提示词
+
+Deep Agents 配备内置的系统提示词。Deep Agent 的价值来自 SDK 在模型之上提供的编排层——规划、虚拟文件系统工具和子代理——模型需要知道这些组件的存在以及何时使用它们。内置提示词教会代理如何使用这些脚手架，因此您无需为每个项目重新推导它；通过 [profile](/oss/deepagents/profiles#harness-profiles) 或您自己的 `system_prompt=` 来调整它，而不是逐字复制。
+
+当中间件添加特殊工具（如文件系统工具）时，它会将这些工具追加到系统提示词中。
+
+每个 deep agent 还应包含一个特定于其用例的自定义系统提示词：
+
+:::python
+<CustomizationSystemPromptPy />
+:::
+
+:::js
+<CustomizationSystemPromptJs />
+:::
+
+### 提示词组装
+
+Deep Agents 从最多四个命名部分构建系统提示词，以便调用者提供的指令、SDK 的内置代理指导以及任何特定于模型的 [profile](/oss/deepagents/profiles) 覆盖都可以与可预测的优先级共存。如果没有这种分层，针对 Claude 调整的 profile 后缀（例如）可能会根据调用顺序覆盖或被您的 `system_prompt=` 参数覆盖；命名槽使排序变得明确和稳定。
+
+在实践中，大多数调用者只遇到两个槽：`USER`（您的 `system_prompt=`）和 `BASE`（SDK 默认值）。选择具有内置 profile 的模型——目前是 Anthropic 或 OpenAI——会添加 `SUFFIX`。完整的四部分组装主要与您编写自定义 `HarnessProfile` 或调试为什么 profile 的文本出现在某处相关。
+
+四个命名部分（每个都可能不存在）：
+
+| 名称     | 来源                                                  | 备注                                                   |
+| -------- | ----------------------------------------------------- | ----------------------------------------------------- |
+| `USER`   | `create_deep_agent` 的 `system_prompt=` 参数         | `str` 或 `SystemMessage`；未设置时省略。              |
+| `BASE`   | SDK 默认值（`BASE_AGENT_PROMPT`）                    | 除非被 profile 的 `CUSTOM` 替换，否则始终存在。       |
+| `CUSTOM` | [`HarnessProfile.base_system_prompt`](/oss/deepagents/profiles#harness-profiles) | 当匹配的 profile 设置后，完全替换 `BASE`。           |
+| `SUFFIX` | [`HarnessProfile.system_prompt_suffix`](/oss/deepagents/profiles#harness-profiles) | 当匹配的 profile 设置后，追加到最后。                |
+
+顺序始终是 **`USER` -> (`BASE` 或 `CUSTOM`) -> `SUFFIX`**，用空行连接（`\n\n`）。两个不变式如下：
+
+1. **`USER` 始终在最前面。** 调用者的文本优先于任何 SDK 或 profile 内容，因此角色/指令优先，不受所选模型的影响。
+2. **`SUFFIX` 始终在最后面。** Profile 后缀最接近对话历史，模型调优指导最能可靠地发挥作用。
+
+组装形状（✓ = 字段已设置，- = 字段未设置）：
+
+| `system_prompt=` | profile `base_system_prompt`（`CUSTOM`） | profile `system_prompt_suffix`（`SUFFIX`） | 最终组装的系统提示词 |
+| ---------------- | :--------------------------------------: | :---------------------------------------: | ------------------- |
+| `None`           |                    -                     |                     -                     | `BASE`              |
+| `None`           |                    -                     |                     ✓                     | `BASE` + `SUFFIX`   |
+| `None`           |                    ✓                     |                     -                     | `CUSTOM`            |
+| `None`           |                    ✓                     |                     ✓                     | `CUSTOM` + `SUFFIX` |
+| `str`            |                    -                     |                     -                     | `USER` + `BASE`     |
+| `str`            |                    -                     |                     ✓                     | `USER` + `BASE` + `SUFFIX` |
+| `str`            |                    ✓                     |                     -                     | `USER` + `CUSTOM`   |
+| `str`            |                    ✓                     |                     ✓                     | `USER` + `CUSTOM` + `SUFFIX` |
+
+工作示例——内置 profile（Anthropic、OpenAI）仅提供 `system_prompt_suffix`，因此典型的调用落在 `str` + `-` + `✓` 行：
+
+```python
+agent = create_deep_agent(
+    model="anthropic:claude-sonnet-4-6",
+    system_prompt="You are a customer-support agent for ACME Corp.",
+)
+# Final = USER + BASE + SUFFIX
+#       = "You are a customer-support agent for ACME Corp."
+#         + "\n\n"
+#         + BASE_AGENT_PROMPT
+#         + "\n\n"
+#         + <Claude-specific guidance>
+```
+
+<Note>
+    传递一个 `SystemMessage`（而非字符串）会触发不同的拼接路径：右侧组件（`BASE` 或 `CUSTOM` 加上任何 `SUFFIX`）作为额外的文本内容块追加到消息现有的 `content_blocks` 上。相同的逻辑顺序适用（调用者块优先），且调用者块上的任何 `cache_control` 标记都会被保留——这对于放置显式的 Anthropic prompt-cache 断点很有用。
+</Note>
+
+<AccordionGroup>
+    <Accordion title="子代理提示词">
+        [提示词组装](#prompt-assembly) 覆盖规则同样适用于声明式 [子代理](/oss/deepagents/subagents)：每个子代理会针对**其自身的模型**重新运行配置解析，然后将已解析配置的 `base_system_prompt` / `system_prompt_suffix` 应用到其编写的 `system_prompt` 上。子代理的 `system_prompt` 扮演 `BASE` 角色；`CUSTOM` 和 `SUFFIX` 来自匹配子代理模型的配置（这可能与主代理的配置不同）。
+
+        | `spec["system_prompt"]` | 配置 `base_system_prompt`（`CUSTOM`） | 配置 `system_prompt_suffix`（`SUFFIX`） | 最终子代理系统提示词 |
+        | ----------------------- | :-------------------------------------: | :---------------------------------------: | ---------------------------- |
+        | 已编写                  |                    -                    |                     -                     | 已编写                       |
+        | 已编写                  |                    -                    |                     ✓                     | 已编写 + `SUFFIX`            |
+        | 已编写                  |                    ✓                    |                     -                     | `CUSTOM`                     |
+        | 已编写                  |                    ✓                    |                     ✓                     | `CUSTOM` + `SUFFIX`          |
+
+        子代理没有 `USER` 段。规范中编写的 `system_prompt` 是最接近的类比，保留在 `BASE` 槽中。只提供 `system_prompt_suffix` 的配置（内置 Anthropic / OpenAI 配置的常见情况）会追加到子代理作者编写的任何内容之后。而设置 `base_system_prompt` 的配置则会直接替换编写的提示词。
+    </Accordion>
+    <Accordion title="通用子代理提示词">
+        自动添加的[通用子代理](/oss/deepagents/subagents#the-general-purpose-subagent)遵循[提示词组装](#prompt-assembly)覆盖规则，但多了一层处理：GP 基础提示词按以下顺序解析：**`general_purpose_subagent.system_prompt`（如果已设置）-> `HarnessProfile.base_system_prompt`（如果已设置）-> SDK 通用默认值**。配置后缀无论如何都会叠加在上面。
+
+        这两个覆盖字段都可以携带基础提示词替换，但不可互换。`general_purpose_subagent.system_prompt` 是通用代理的特定配置；`base_system_prompt` 是全局覆盖，主要针对主代理。当两者都设置时，**通用代理的特定意图对通用代理获胜**，这样用户在同时调优这两个字段时永远不会看到其 GP 覆盖被静默丢弃：
+
+
+</Accordion>
+
+        ```python
+        register_harness_profile(
+            "anthropic",
+            HarnessProfile(
+                base_system_prompt="You are ACME's support orchestrator.",  # main agent
+                general_purpose_subagent=GeneralPurposeSubagentProfile(
+                    system_prompt="You are a research subagent. Cite sources.",  # GP subagent
+                ),
+                system_prompt_suffix="Always think step by step.",
+            ),
+        )
+        ```
+
+<fragment>
+
+        | Stack | Final system prompt |
+        | ----- | ------------------- |
+        | Main agent | `"You are ACME's support orchestrator." + SUFFIX` |
+        | GP subagent | `"You are a research subagent. Cite sources." + SUFFIX` |
+
+        如果 `general_purpose_subagent.system_prompt` 未设置，GP 子代理会回退到 `base_system_prompt`（如果已设置），最终回退到 SDK 的通用默认值。
+    </Accordion>
+</AccordionGroup>
+
+## 中间件
+
+Deep Agents 支持任何[中间件](/oss/langchain/middleware/overview)，包括下面列出的内置中间件、来自 LangChain 的预构建中间件、提供商特定中间件以及您自己编写的自定义中间件。
+
+:::python
+将中间件传递给 `create_deep_agent` 的 `middleware` 参数。自定义中间件在[默认堆栈](#default-stack-main-agent)中的 @[`PatchToolCallsMiddleware`] 之后追加。
+:::
+
+:::js
+将中间件传递给 `createDeepAgent` 的 `middleware` 参数。自定义中间件在[默认堆栈](#default-stack-main-agent)中的 @[`PatchToolCallsMiddleware`] 之后追加。
+:::
+
+默认情况下，Deep Agents 可以访问以下中间件：
+
+### 默认堆栈（主代理）
+
+从第一个到最后一个：
+
+:::python
+
+1. @[`TodoListMiddleware`]：跟踪和管理待办事项列表，用于组织代理任务和工作。
+2. @[`SkillsMiddleware`]：仅当您传递 `skills` 时。在待办事项中间件**之后**和**文件系统中间件之前**注入，以便文件工具运行前技能元数据可用。
+3. @[`FilesystemMiddleware`]：处理文件系统操作，如读取、写入和导航目录。当您传递 `permissions` 时，文件系统权限强制在此处包含，以便它可以评估代理可能调用的每个工具。
+4. @[`SubAgentMiddleware`]：生成并协调子代理，用于将任务委托给专业代理。
+5. @[`SummarizationMiddleware`]：压缩消息历史以在对话变长时保持在上下文限制内（通过 @[create_summarization_middleware]）。
+6. @[`PatchToolCallsMiddleware`]：修复消息历史中悬空的工具调用，当运行在中断后恢复或收到格式错误的工具调用参数时。在 Anthropic 提示缓存和下面的尾部堆栈**之前**运行。
+7. @[`AsyncSubAgentMiddleware`]：仅当您配置异步子代理时。
+8. **您的中间件参数**：作为 `middleware` 参数传递的可选中间件在此处追加（在 Patch 之后，尾部堆栈之前）。
+9. **Harness profile extras**：来自解析模型 profile 的提供商特定中间件（如果有）。
+10. **排除工具过滤**：当 harness profile 列出排除的工具时，中间件从代理中移除这些工具。
+11. @[`AnthropicPromptCachingMiddleware`]：始终注册；在非 Anthropic 模型上无操作（`unsupported_model_behavior="ignore"`）。在 Patch 和您的中间件**之后**运行，以便缓存前缀与实际发送给模型的内容匹配。
+12. @[`MemoryMiddleware`]：仅当您传递 `memory` 时。
+
+    <Note>
+    `MemoryMiddleware` 放置在 profile extras 和 Anthropic 提示缓存**之后**，以便注入内存的更新不太可能使 Anthropic 缓存前缀失效。`create_deep_agent` 实现注释中也提到了相同的排序问题。
+    </Note>
+
+13. `HumanInTheLoopMiddleware`：仅当您传递 `interrupt_on` 时。在已配置的工具调用处暂停以等待人工批准或输入。
+
+:::
+
+:::js
+
+1. @[`TodoListMiddleware`]：跟踪和管理待办事项列表，用于组织代理任务和工作。
+2. @[`SkillsMiddleware`]：仅当您传递 `skills` 时。在待办事项中间件**之后**和**文件系统中间件之前**注入，以便文件工具运行前技能元数据可用。
+3. @[`FilesystemMiddleware`]：处理文件系统操作，如读取、写入和导航目录。当您传递 `permissions` 时，文件系统权限强制在此处包含，以便它可以评估代理可能调用的每个工具。
+4. @[`SubAgentMiddleware`]：生成并协调子代理，用于将任务委托给专业代理。
+5. @[`SummarizationMiddleware`]：压缩消息历史以在对话变长时保持在上下文限制内（通过 @[createSummarizationMiddleware]）。
+6. @[`PatchToolCallsMiddleware`]：修复消息历史中悬空的工具调用，当运行在中断后恢复或收到格式错误的工具调用参数时。在 Anthropic 提示缓存和下面的尾部堆栈**之前**运行。
+7. @[`AsyncSubAgentMiddleware`]：仅当您配置异步子代理时。
+8. **您的中间件参数**：作为 `middleware` 参数传递的可选中间件在此处追加（在 Patch 之后，尾部堆栈之前）。
+9. **Harness profile extras**：来自解析模型 profile 的提供商特定中间件（如果有）。
+10. **排除工具过滤**：当 harness profile 列出排除的工具时，中间件从代理中移除这些工具。
+11. @[`AnthropicPromptCachingMiddleware`]：当您使用 Anthropic 模型时自动添加。在 Patch 和您的中间件**之后**运行，以便缓存前缀与实际发送给模型的内容匹配。
+12. @[`MemoryMiddleware`]：仅当您传递 `memory` 时。
+
+    <Note>
+    `MemoryMiddleware` 放置在 profile extras 和 Anthropic 提示缓存**之后**，以便注入内存的更新不太可能使 Anthropic 缓存前缀失效。`createDeepAgent` 实现注释中也提到了相同的排序问题。
+    </Note>
+
+13. `HumanInTheLoopMiddleware`：仅当您传递 `interruptOn` 时。在已配置的工具调用处暂停以等待人工批准或输入。
+
+:::
+
+### 默认堆栈（同步子代理）
+
+:::python
+
+内置的**通用**子代理和每个声明式同步 `SubAgent` 图使用由 `create_deep_agent` 在代码中构建的堆栈。它在总体形态上与主代理匹配（待办事项列表、文件系统、摘要、Patch、profile extras、Anthropic 缓存、可选权限），但在两个方面有所不同：
+
+- **技能在这些内部代理上在** @[`PatchToolCallsMiddleware`]**之后**运行（在主代理上，当设置 `skills` 时，技能在文件系统中间件**之前**运行）。
+- 子代理图内部**没有** @[`SubAgentMiddleware`]（只有父代理暴露 `task` 工具）。
+
+当声明式子代理设置 `interrupt_on` 时，该值被转发到子代理的 `create_agent`，后者为已配置的工具调用连接人工介入处理。
+
+:::
+
+:::js
+
+内置的**通用**子代理和每个声明式同步 `SubAgent` 图使用由 `createDeepAgent` 在代码中构建的堆栈。它在总体形态上与主代理匹配（待办事项列表、文件系统、摘要、Patch、profile extras、Anthropic 缓存、可选权限），但在两个方面有所不同：
+
+- **技能在这些内部代理上在** @[`PatchToolCallsMiddleware`]**之后**运行（在主代理上，当设置 `skills` 时，技能在文件系统中间件**之前**运行）。
+- 子代理图内部**没有** @[`SubAgentMiddleware`]（只有父代理暴露 `task` 工具）。
+
+当声明式子代理设置 `interruptOn` 时，该值被转发到子代理的 `createAgent`，后者为已配置的工具调用连接人工介入处理。
+
+:::
+
+### 预构建中间件
+
+LangChain 暴露了额外的预构建中间件，让您可以添加各种功能，如重试、降级或 PII 检测。有关更多信息，请参阅[预构建中间件](/oss/langchain/middleware/built-in)。
+
+:::python
+
+`deepagents` 库还暴露了 @[`create_summarization_tool_middleware`]，使代理能够在适当的时机（如在任务之间）触发摘要，而不是在固定的令牌间隔时触发。有关更多详情，请参阅[摘要](/oss/deepagents/context-engineering#summarization)。
+
+:::
+
+:::js
+
+`deepagents` 包还暴露了 @[`createSummarizationMiddleware`] 用于相同的工作流程。有关更多详情，请参阅[摘要](/oss/deepagents/context-engineering#summarization)。
+
+:::
+
+### 提供商特定中间件
+
+有关针对特定 LLM 提供商优化的提供商特定中间件，请参阅[官方集成](/oss/integrations/middleware#official-integrations)和[社区集成](/oss/integrations/middleware#community-integrations)。
+
+### 自定义中间件
+
+您可以提供额外的中间件来扩展功能、添加工具或实现自定义钩子：
+
+:::python
+<CustomizationMiddlewarePy />
+:::
+
+:::js
+<CustomizationMiddlewareJs />
+:::
+
+<Warning>
+**初始化后不要变更属性**
+
+如果您需要在钩子调用之间跟踪值（例如计数器或累积数据），请使用图状态。
+图状态按设计限定在线程范围内，因此并发下的更新是安全的。
+
+**应该这样做：**
+
+:::python
+<CustomizationMiddlewareDoPy />
+:::
+
+:::js
+<CustomizationMiddlewareDoJs />
+:::
+
+**不要这样做：**
+
+:::python
+<CustomizationMiddlewareDontPy />
+:::
+
+:::js
+<CustomizationMiddlewareDontJs />
+:::
+
+:::python
+就地变更，如在 `before_agent` 中修改 `self.x` 或更改钩子中的其他共享值，可能导致微妙的 bug 和竞态条件，因为许多操作是并发运行的（子代理、并行工具和不同线程上的并行调用）。
+
+有关使用自定义属性扩展状态的完整详情，请参阅[自定义中间件 - 自定义状态模式](/oss/langchain/middleware/custom#custom-state-schema)。
+:::
+:::js
+就地变更，如在 `beforeAgent` 中修改 `state.x`、在 `beforeAgent` 中变更共享变量、或更改钩子中的其他共享值，可能导致微妙的 bug 和竞态条件，因为许多操作是并发运行的（子代理、并行工具和不同线程上的并行调用）。
+:::
+
+如果必须在自定义中间件中使用变更，请考虑当子代理、并行工具或并发代理调用同时运行时会发生什么。
+</Warning>
+
+### 解释器
+
+使用[解释器](/oss/deepagents/interpreters)添加一个 `eval` 工具，用于在作用域化的 QuickJS 运行时中运行 JavaScript。当代理需要以编程方式组合工具、批量处理工作、在代码中处理错误或转换结构化数据而不需要完整的 shell 环境时，解释器非常有用。
+
+:::python
+<CustomizationInterpretersPy />
+:::
+
+:::js
+<CustomizationInterpretersJs />
+:::
+
+有关设置、编程式工具调用、子代理编排和限制，请参阅[解释器](/oss/deepagents/interpreters)。
+
+## 子代理
+
+要隔离详细工作并避免上下文膨胀，请使用子代理：
+
+:::python
+<SubagentBasicPy />
+:::
+
+:::js
+<SubagentBasicJs />
+:::
+
+更多信息，请参阅[子代理](/oss/deepagents/subagents)。
+
+{/* TODO(https://github.com/langchain-ai/docs/pull/2368/) ## Structured response format */}
+
+{/* ## Context - You can persist agent state between runs to store information like user IDs. */}
+
+## 后端
+
+深度代理的工具可以使用虚拟文件系统来存储、访问和编辑文件。默认情况下，深度代理使用 @[`StateBackend`]。
+
+如果您使用[技能](#skills)或[内存](#memory)，则必须在创建代理之前将预期的技能或内存文件添加到后端。
+
+<Tabs>
+    <Tab title="StateBackend">
+        存储在 `langgraph` 状态中的线程作用域文件系统后端。
+
+        文件在单个线程内的多个轮次之间持久化（通过您的检查点），不会跨线程共享。
+
+        :::python
+        <BackendStatePy />
+        :::
+
+        :::js
+        <BackendStateJs />
+        :::
+    </Tab>
+    <Tab title="FilesystemBackend">
+        本地机器的文件系统。
+
+        <Warning>
+            此后端授予代理直接的文件系统读写权限。
+            谨慎使用，仅在适当的环境中使用。
+            更多信息，请参阅[`FilesystemBackend`](/oss/deepagents/backends#filesystembackend-local-disk)。
+        </Warning>
+
+        :::python
+        <BackendFilesystemPy />
+        :::
+
+        :::js
+        <BackendFilesystemJs />
+        :::
+
+        <Tip>
+            将 `FilesystemBackend` 包装在 `CompositeBackend` 中，以防止内部代理数据（卸载的工具结果、对话历史）与您的项目文件一起写入磁盘。请参阅[推荐模式](/oss/deepagents/backends#filesystembackend-local-disk)。
+        </Tip>
+    </Tab>
+    <Tab title="LocalShellBackend">
+        在主机上直接执行 shell 的文件系统。提供文件系统工具以及用于运行命令的 `execute` 工具。
+
+        <Warning>
+            此后端授予代理直接的文件系统读写权限**以及**在您主机上的无限制 shell 执行权限。
+            极其谨慎使用，仅在适当的环境中使用。
+            更多信息，请参阅[`LocalShellBackend`](/oss/deepagents/backends#localshellbackend-local-shell)。
+        </Warning>
+
+        :::python
+        <BackendLocalShellPy />
+        :::
+
+        :::js
+        <BackendLocalShellJs />
+        :::
+    </Tab>
+    <Tab title="StoreBackend">
+        提供跨线程长期存储的文件系统。
+
+        :::python
+        <BackendStorePy />
+        :::
+
+        :::js
+        <BackendStoreJs />
+        :::
+
+        <Note>
+            部署到 [LangSmith Deployment](/langsmith/deployment) 时，省略 `store` 参数。平台会自动为您的代理配置存储。
+        </Note>
+
+        <Tip>
+            `namespace` 参数控制数据隔离。对于多用户部署，请始终设置[命名空间工厂](/oss/deepagents/backends#namespace-factories)以按用户或租户隔离数据。
+        </Tip>
+    </Tab>
+    <Tab title="ContextHubBackend">
+        LangSmith Hub 仓库中的持久化文件系统存储。
+
+        :::python
+        <BackendContextHubPy />
+        :::
+
+        更多详情，请参阅[`ContextHubBackend`](/oss/deepagents/backends#contexthubbackend)。
+    </Tab>
+    <Tab title="CompositeBackend">
+        一种灵活的后端，您可以在其中指定文件系统的不同路由指向不同的后端。
+
+        :::python
+        <BackendCompositePy />
+        :::
+
+        :::js
+        <BackendCompositeJs />
+        :::
+    </Tab>
+</Tabs>
+
+更多信息，请参阅[后端](/oss/deepagents/backends)。
+
+### 沙箱
+
+沙箱是专门的[后端](/oss/deepagents/backends)，在隔离环境中运行代理代码，拥有自己的文件系统和用于 shell 命令的 `execute` 工具。
+当您希望深度代理写入文件、安装依赖项和运行命令而不更改本地计算机上的任何内容时，请使用沙箱后端。
+
+您可以通过在创建深度代理时将沙箱后端传递给 `backend` 来配置沙箱：
+
+:::python
+<SandboxBasicPy />
+:::
+
+:::js
+<SandboxBasicJs />
+:::
+
+更多信息，请参阅[沙箱](/oss/deepagents/sandboxes)。
+
+## 人工介入
+
+某些工具操作可能很敏感，需要在执行前获得人工批准。
+您可以为每个工具配置批准：
+
+:::python
+<HitlBasicConfigPy />
+:::
+
+:::js
+<HitlBasicConfigJs />
+:::
+
+您还可以配置代理和子代理在工具调用时以及在工具调用内部进行中断。
+更多信息，请参阅[人工介入](/oss/deepagents/human-in-the-loop)。
+
+## 技能
+
+您可以使用[技能](/oss/deepagents/overview)为您的深度代理提供新能力和专业知识。
+虽然[工具](/oss/deepagents/customization#tools)倾向于涵盖较低级别的功能（如原生文件系统操作或规划），但技能可以包含关于如何完成任务、参考信息和其他资产（如模板）的详细说明。
+这些文件仅在代理确定技能对当前提示有用时才由代理加载。
+这种渐进式披露减少了代理启动时需要考虑的令牌和上下文量。
+
+有关示例技能，请参阅 [Deep Agents 示例技能](https://github.com/langchain-ai/deepagentsjs/tree/main/examples/skills)。
+
+要将技能添加到您的深度代理，请将它们作为参数传递给 `create_deep_agent`：
+
+:::python
+<SkillsUsageTabsPy />
+:::
+
+:::js
+<SkillsUsageTabsJs />
+:::
+
+## 内存
+
+使用[`AGENTS.md` 文件](https://agents.md/)为您的深度代理提供额外的上下文。
+
+您可以在创建深度代理时将一个或多个文件路径传递给 `memory` 参数：
+
+:::python
+
+<Tabs>
+    <Tab title="StateBackend">
+        <CustomizationMemoryStatePy />
+    </Tab>
+    <Tab title="StoreBackend">
+        <CustomizationMemoryStorePy />
+    </Tab>
+    <Tab title="FilesystemBackend">
+        <CustomizationMemoryFilesystemPy />
+    </Tab>
+</Tabs>
+
+:::
+
+:::js
+
+<Tabs>
+    <Tab title="StateBackend">
+        <CustomizationMemoryStateJs />
+    </Tab>
+    <Tab title="StoreBackend">
+        <CustomizationMemoryStoreJs />
+    </Tab>
+    <Tab title="Filesystem">
+        <CustomizationMemoryFilesystemJs />
+    </Tab>
+</Tabs>
+
+:::
+
+:::python
+
+## Profile
+
+[Harness profile](/oss/deepagents/profiles#harness-profiles) 是可重用的按模型配置包，`create_deep_agent` 在选择匹配模型时自动应用。当您需要随模型（而非调用站点）变化的行为时，Profile 是正确的工具，例如针对 Claude 指令风格调优的系统提示后缀、为 GPT 重写的工具描述，或仅在特定提供商上有意义的额外中间件。
+
+单个 profile 可以包含：自定义基础系统提示（`base_system_prompt`）、追加的后缀（`system_prompt_suffix`）、工具描述覆盖、要排除的工具或中间件、要注入的额外中间件，以及对自动添加的通用子代理的编辑。
+
+<CustomizationProfilesPy />
+
+有关注册键、合并语义和插件打包，请参阅 [Profile](/oss/deepagents/profiles)。较窄的配套 API [Provider profile](/oss/deepagents/profiles#provider-profiles) 打包了用于提供商（API 密钥、超时、重试设置）的模型构建参数。
+
+:::
+
+## 结构化输出
+
+Deep Agents 支持[结构化输出](/oss/langchain/structured-output)。
+:::python
+您可以通过将所需的结构化输出模式作为 `response_format` 参数传递给对 `create_deep_agent()` 的调用来设置它。
+当模型生成结构化数据时，它会被捕获、验证并在深度代理状态的 'structured_response' 键中返回。
+
+<CustomizationStructuredOutputPy />
+
+:::
+:::js
+您可以通过将所需的结构化输出模式作为 `responseFormat` 参数传递给对 `createDeepAgent()` 的调用来设置它。
+当模型生成结构化数据时，它会被捕获、验证并在代理状态的 'structuredResponse' 键中返回。
+
+<CustomizationStructuredOutputJs />
+
+:::
+
+更多信息和示例，请参阅[响应格式](/oss/langchain/structured-output#response-format)。
+
+## 高级
+
+:::python
+
+`create_deep_agent` 在 @[`create_agent`] 之上预组装了一个中间件堆栈。要构建完全自定义的代理——精确选择要包含哪些功能——请参阅[配置 harness](/oss/langchain/agents#configure-the-harness)。
+
+:::
+
+:::js
+
+`createDeepAgent` 在 `createAgent` 之上预组装了一个中间件堆栈。要构建完全自定义的代理——精确选择要包含哪些功能——请参阅[配置 harness](/oss/langchain/agents#configure-the-harness)。
+
+:::
+
+
+</fragment>

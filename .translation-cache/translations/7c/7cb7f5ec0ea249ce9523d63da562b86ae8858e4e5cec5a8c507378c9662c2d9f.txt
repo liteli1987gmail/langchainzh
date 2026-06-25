@@ -1,0 +1,210 @@
+---
+title: 追踪快速入门
+sidebarTitle: 快速入门
+description: 在几分钟内为 LLM 应用添加 LangSmith 追踪。
+icon: "rocket"
+---
+
+import project from '/snippets/langsmith/trace-ingestion-project.mdx';
+import ObservabilityQuickstartAppJava from '/snippets/code-samples/observability-quickstart-app-java.mdx';
+import ObservabilityQuickstartAppKt from '/snippets/code-samples/observability-quickstart-app-kt.mdx';
+import SaasRegionUrls from '/snippets/langsmith/saas-region-urls.mdx';
+
+LangSmith 通过捕获[_追踪_](/langsmith/observability-concepts#traces)为您的 LLM 应用程序提供端到端可见性；完整记录请求期间运行的每个步骤，从传入的输入到返回的最终输出。
+
+在本快速入门中，您将为 AI 助手添加追踪功能并在 LangSmith 中查看结果。
+
+<Tip>
+如果您正在使用 [LangChain](https://docs.langchain.com/oss/python/langchain/overview) 或 [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) 构建应用程序，只需设置一个环境变量即可启用 LangSmith 追踪。请参阅[使用 LangChain 追踪](/langsmith/trace-with-langchain)或[使用 LangGraph 追踪](/langsmith/trace-with-langgraph)。
+</Tip>
+
+## 前置要求
+
+在开始之前，请确保您已具备：
+
+- **LangSmith 账户**：在 [smith.langchain.com](https://smith.langchain.com) 注册或登录。
+- **LangSmith API 密钥**：请按照[创建 API 密钥](/langsmith/create-account-api-key)指南获取。
+- **OpenAI API 密钥**：从 [OpenAI 仪表板](https://platform.openai.com/account/api-keys)生成。
+
+本示例使用 OpenAI 作为 LLM 提供商。您可以根据自己的提供商进行调整。
+
+## 1. 设置您的环境
+
+1. 创建项目目录，安装依赖，并配置所需的环境变量：
+
+    <CodeGroup>
+
+    ```bash Python
+    mkdir ls-quickstart && cd ls-quickstart
+    python -m venv .venv && source .venv/bin/activate
+    pip install -U langsmith openai
+    ```
+
+    ```bash TypeScript
+    mkdir ls-quickstart-ts && cd ls-quickstart-ts
+    npm init -y
+    npm install langsmith openai
+    npm install -D typescript tsx
+    ```
+
+    ```kotlin Java/Kotlin (Gradle)
+    implementation("com.langchain.smith:langsmith-java:0.1.0-alpha.28")
+    ```
+
+<CodeGroup>
+
+1. 在 shell 中导出环境变量：
+
+</CodeGroup>
+
+    ```bash
+    export LANGSMITH_TRACING=true
+    export LANGSMITH_API_KEY="<your-langsmith-api-key>"
+    export OPENAI_API_KEY="<your-openai-api-key>"
+    ```
+
+<project />
+
+    <Note>
+    如果您的账户位于美国（默认）以外的地区，还需要将 `LANGSMITH_ENDPOINT` 设置为您的地区的 API URL。如果没有此设置，您的 API 密钥将无法被识别，请求将无法通过身份验证。
+
+    <SaasRegionUrls prefix="api.smith" />
+
+    例如，欧盟账户：`export LANGSMITH_ENDPOINT="https://eu.api.smith.langchain.com"`。
+    </Note>
+
+    如果您使用的是 Anthropic，请使用 [Anthropic wrapper](/langsmith/trace-anthropic)。如果您使用的是 Google Gemini，请使用 [Gemini wrapper](/langsmith/trace-with-google-gemini)。对于其他提供商，请使用 [`@traceable` decorator](/langsmith/annotate-code#use-%40traceable-%2F-traceable) 手动追踪调用。
+
+## 2. 构建应用
+
+以下应用使用两个 LangSmith 工具来添加追踪：
+
+- **OpenAI wrapper**：包装 OpenAI 客户端，以便每次 LLM 调用都自动记录为嵌套 span。
+- **Traceable wrapper**：包装函数，使其输入、输出和任何嵌套 span 在 LangSmith 中显示为单个 trace。在 Python 中使用 `@traceable`，在 TypeScript 和 Kotlin 中使用 `traceable`，在 Java 中使用 `Tracing.traceFunction`。
+
+`assistant` 函数调用一个工具（`get_context`）来检索相关上下文，然后将该上下文传递给模型。对这两个函数使用 traceable wrapper 可以将完整的管道捕获为一个 trace，其中工具调用和 LLM 调用作为嵌套 span。
+
+创建一个名为 `app.py`、`index.ts`、`App.java` 或 `App.kt` 的文件，其中包含以下代码：
+
+<CodeGroup>
+
+```python Python
+from openai import OpenAI
+from langsmith.wrappers import wrap_openai
+from langsmith import traceable
+
+client = wrap_openai(OpenAI())  # log every OpenAI call automatically
+
+@traceable(run_type="tool")  # trace this as a tool span
+def get_context(question: str) -> str:
+    # In a real app, this would query a knowledge base or vector store
+    return "LangSmith traces are stored for 14 days on the Developer plan."
+
+@traceable  # capture the full pipeline as a single trace
+def assistant(question: str) -> str:
+    context = get_context(question)
+    response = client.chat.completions.create(
+        model="gpt-5.4-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": f"Answer using the context below.\n\nContext: {context}",
+            },
+            {"role": "user", "content": question},
+        ],
+    )
+    return response.choices[0].message.content
+
+if __name__ == "__main__":
+    print(assistant("How long are LangSmith traces stored?"))
+```
+
+```typescript TypeScript
+import OpenAI from "openai";
+import { wrapOpenAI } from "langsmith/wrappers";
+import { traceable } from "langsmith/traceable";
+
+const client = wrapOpenAI(new OpenAI()); // log every OpenAI call automatically
+
+const getContext = traceable(
+    async function getContext(question: string): Promise<string> { // trace this as a tool span
+        // In a real app, this would query a knowledge base or vector store
+        return "LangSmith traces are stored for 14 days on the Developer plan.";
+    },
+    { run_type: "tool" }
+);
+
+const assistant = traceable(async function assistant(question: string) { // capture the full pipeline as a single trace
+    const context = await getContext(question);
+    const response = await client.chat.completions.create({
+        model: "gpt-5.4-mini",
+        messages: [
+            {
+                role: "system",
+                content: `Answer using the context below.\n\nContext: ${context}`,
+            },
+            { role: "user", content: question },
+        ],
+    });
+    return response.choices[0]?.message?.content ?? null;
+});
+
+(async () => {
+    console.log(await assistant("How long are LangSmith traces stored?"));
+})();
+```
+
+<ObservabilityQuickstartAppJava />
+<ObservabilityQuickstartAppKt />
+</CodeGroup>
+
+## 3. 运行应用
+
+<CodeGroup>
+
+```bash Python
+python app.py
+```
+
+```bash TypeScript
+npx tsx index.ts
+```
+
+```bash Java/Kotlin
+./gradlew run
+```
+
+</CodeGroup>
+
+## 4. 查看您的追踪
+
+在 [LangSmith UI](https://smith.langchain.com) 中，进入 **Tracing** 并选择您的 **default** 项目。点击 `assistant` 行打开追踪。**Messages** 标签页显示发送给模型的对话内容。选择 **Details** 标签页可查看完整的运行树，包括带有 `get_context` 工具调用的 `assistant` 函数，以及嵌套在其内部的 OpenAI 调用。
+
+<img
+    className="block dark:hidden"
+    src="/langsmith/images/trace-quickstart-app.png"
+    alt="LangSmith UI 显示一个追踪，包含外部应用跨度和一个嵌套的 LLM 调用跨度。"
+/>
+
+<img
+    className="hidden dark:block"
+    src="/langsmith/images/trace-quickstart-app-dark.png"
+    alt="LangSmith UI 显示一个追踪，包含外部应用跨度和一个嵌套的 LLM 调用跨度。"
+/>
+
+外部跨度捕获了 `assistant` 函数的所有输入和输出。嵌套的 **get_context** 跨度记录了工具调用，**ChatOpenAI** 跨度记录了发送给模型的确切提示词和返回的响应。
+
+<Tip>
+您还可以使用 [LangSmith CLI](/langsmith/langsmith-cli) 从终端检查追踪。
+</Tip>
+
+## 下一步
+
+- [追踪集成](/langsmith/integrations)：LangChain、LangGraph、Anthropic 等提供商。
+- [追踪 LLM 应用程序](/langsmith/observability-llm-tutorial)：从原型设计到生产的完整生命周期教程。
+- [筛选追踪](/langsmith/filter-traces-in-application)：搜索和浏览大型追踪项目。
+- [记录到特定项目](/langsmith/log-traces-to-project)：将追踪发送到命名项目而非 **default**。
+
+<Callout type="info" icon="feather">
+记录追踪后，使用 **[Chat](/langsmith/chat)** 分析追踪，获取有关应用程序性能的 AI 驱动洞察。
+</Callout>

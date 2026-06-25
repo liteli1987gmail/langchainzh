@@ -1,0 +1,61 @@
+---
+title: "AgentMail"
+description: "在 AgentMail 收件箱上进行关键词检索。"
+---
+
+`AgentMailRetriever` 对 [AgentMail](https://agentmail.to) 收件箱执行关键词搜索。它通过 `AgentMailLoader` 加载最近的消息，使用不区分大小写的子字符串匹配进行进程内评分（主题匹配加权 2 倍），并将前 `k` 条结果作为 LangChain `Document` 返回。如需语义搜索，请将 `AgentMailLoader` 与您自己的向量存储配合使用。
+
+## 概述
+
+| 类 | 包 |
+|:------|:--------|
+| `AgentMailRetriever` | [`langchain-agentmail`](https://pypi.org/project/langchain-agentmail/) |
+
+## 设置
+
+安装包：
+
+```bash
+pip install -qU langchain-agentmail
+```
+
+设置您的 AgentMail API 密钥（在 [agentmail.to](https://agentmail.to) 获取）：
+
+```python
+import getpass
+import os
+
+if not os.environ.get("AGENTMAIL_API_KEY"):
+    os.environ["AGENTMAIL_API_KEY"] = getpass.getpass("AgentMail API key:\n")
+```
+
+## 实例化
+
+```python
+from langchain_agentmail import AgentMailRetriever
+
+retriever = AgentMailRetriever(
+    inbox_id="ib_abc123",
+    k=5,              # number of documents to return
+    labels=["inbox"], # optional — filter messages by label
+    scan_limit=50,    # number of messages to scan before ranking
+)
+```
+
+## 使用方法
+
+```python
+docs = retriever.invoke("invoice from acme")
+for doc in docs:
+    print(doc.metadata["subject"], "—", doc.metadata.get("from"))
+```
+
+检索器返回的 `Document` 结构与 `AgentMailLoader` 相同——`page_content` 中包含完整的纯文本正文，加上 inbox/message/thread/sender 元数据。
+
+## 何时使用加载器
+
+`AgentMailRetriever` 是"直接给我匹配 X 的最新消息"的逃生口——无嵌入、无向量存储。如果需要语义检索、按相关性排序或跨数百万条消息筛选，请使用 `AgentMailLoader` 将 `Document` 实例化，然后输入到真正的向量存储中。请参阅[文档加载器页面](/oss/integrations/document_loaders/agentmail)了解该流程。
+
+## API 参考
+
+包源码位于 [github.com/agentmail-to/langchain-agentmail](https://github.com/agentmail-to/langchain-agentmail)。

@@ -1,0 +1,93 @@
+---
+title: 使用框架和平台部署
+sidebarTitle: 概述
+description: 使用 LangSmith、Next.js、SvelteKit、Nuxt、Cloudflare Workers、Deno Deploy 和 Vite 部署 LangChain 代理，支持流式 UI 和线程历史。
+mode: wide
+---
+
+以下页面提供了在 JavaScript 框架和托管平台上运行 LangChain 代理的生产级参考实现。[部署食谱仓库](https://github.com/langchain-ai/deployment-cookbook)中的每个示例都是一个全栈聊天应用，具有流式 UI、子代理和线程历史，使用相同的 [Agent Streaming Protocol](https://github.com/langchain-ai/agent-protocol/tree/main/streaming) 部署在不同的平台上。
+
+当你需要发布一个代理驱动产品时，使用这些指南：复制与你的托管环境相匹配的技术栈，换入你自己的工具和模型，并在扩展到单个实例之外时升级持久化。
+
+## 示例
+
+<CardGroup cols={3}>
+
+<Card title="LangSmith + Vite" icon="/images/providers/light/langchain.svg" href="/langsmith/deploy-vite-langsmith">
+Agent 图在 LangSmith Deployment 上运行；Vite + React UI 从 Agent Server API 流式传输。
+</Card>
+
+<Card title="Next.js" icon="/images/providers/light/nextjs.svg" href="/langsmith/deploy-nextjs">
+App Router 路由处理器在 `/api/threads/...` 下实现协议。一键部署到 Vercel。
+</Card>
+
+<Card title="SvelteKit" icon="/images/providers/light/svelte.svg" href="/langsmith/deploy-sveltekit">
+Cloudflare Workers 上的 SvelteKit 服务器路由，配合 `@langchain/svelte` 和每线程 Durable Objects 用于 SSE 重放。
+</Card>
+
+<Card title="Nuxt" icon="/images/providers/light/nuxt.svg" href="/langsmith/deploy-nuxt">
+Nitro 路由处理器和 `@langchain/vue` 组合式函数在一个可部署的 Nuxt 4 应用中。
+</Card>
+
+<Card title="Cloudflare Workers" icon="/images/providers/light/cloudflare.svg" href="/langsmith/deploy-cloudflare-workers">
+Vite + React SPA 和 Hono API 在一个 Worker 上，使用 Workers Assets 和 Durable Objects。
+</Card>
+
+<Card title="Deno Deploy" icon="/images/providers/light/deno.svg" href="/langsmith/deploy-deno">
+Deno.serve + Hono 从单一入口点提供协议 API 和 Vite 构建的 React SPA。
+</Card>
+
+</CardGroup>
+
+<Tip>
+每个 cookbook 示例都共享相同的演示代理：一个协调器，将任务委托给 `researcher` 和 `math-whiz` 子代理，并配备模拟工具，这样你可以比较不同的托管选择而不改变应用行为。
+</Tip>
+
+## Agent 部署包含哪些内容
+
+每个示例都遵循相同的架构。框架和托管方式会改变，但职责不会。
+
+### Agent 运行时
+
+Agent 本身，通常是一个 LangGraph 图或 [`deepagents`](https://www.npmjs.com/package/deepagents) 协调器，包含工具、可选的子代理和中间件。它使用 **checkpointer** 编译，以便对话状态在多次交互中保持。示例从内存中的 `MemorySaver` 开始以简化操作；生产部署则替换为 Redis（[`@langchain/langgraph-checkpoint-redis`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-redis)）、Postgres（[`@langchain/langgraph-checkpoint-postgres`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-postgres)）、SQLite（[`@langchain/langgraph-checkpoint-sqlite`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-sqlite)）或平台特定存储。
+
+### 协议服务器
+
+HTTP 路由处理器在 `/api/threads/...` 下实现 [Agent Streaming Protocol](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)。
+
+#### 最小集（流式聊天）
+
+使用 `HttpAgentServerAdapter`，这三个端点足以运行单线程流式聊天：
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `POST` | `/api/threads/:threadId/commands` | 接收命令（`run.start`、...）并启动运行 |
+| `POST` | `/api/threads/:threadId/stream` | 运行的 SSE 协议事件流 |
+| `GET` / `POST` | `/api/threads/:threadId/state` | 读取和引导检查点线程状态 |
+
+#### 线程侧边栏（所有示例）
+
+每个示例还实现了线程历史侧边栏的端点：
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/threads` | 列出检查点已知的线程 |
+| `DELETE` | `/api/threads/:threadId` | 删除线程的会话和检查点 |
+| `POST` | `/api/threads/:threadId/history` | 分页检查点历史 |
+
+### 会话和运行管理
+
+服务器端逻辑追踪活跃的运行，将命令桥接到 agent，并通过 SSE 向外传播实时事件。注册表或会话存储允许客户端重新连接进行中的流。在无服务器或多实例主机上，这一层必须与检查点共享或共存。
+
+### 聊天前端
+
+通过 `HttpAgentServerAdapter` 连接协议的浏览器 UI，来自 [`@langchain/react`](https://www.npmjs.com/package/@langchain/react)、[`@langchain/vue`](https://www.npmjs.com/package/@langchain/vue)、[`@langchain/svelte`](https://www.npmjs.com/package/@langchain/svelte) 或 [`@langchain/angular`](https://www.npmjs.com/package/@langchain/angular)。客户端引导线程状态，提交消息，消费 SSE 流，并渲染令牌、工具调用、推理和子代理活动。
+
+这些绑定不自带任何组件。`useStream` 等钩子返回简单的响应式状态（消息、工具调用、加载标志、线程元数据），你可以将其连接到你喜欢的任何视觉层。关于适配器模式和权衡，参见 [前端集成概览](/oss/langchain/frontend/integrations/overview)。
+
+## 另请参见
+
+- [LangSmith Deployment 概览](/langsmith/deployment)
+- [Agent Server](/langsmith/agent-server)
+- [配置检查点](/langsmith/configure-checkpointer)
+- [前端概览](/oss/langchain/frontend/overview)

@@ -1,0 +1,176 @@
+---
+title: Workload isolation
+sidebarTitle: Workload isolation
+---
+
+LangSmith 使用层级结构来组织您的工作：[组织](/langsmith/administration-overview#organizations)、[工作区](/langsmith/administration-overview#workspaces)、[应用程序](/langsmith/administration-overview#applications)和[资源](/langsmith/administration-overview#resources)。这种结构让您可以在协作与访问控制之间取得平衡，使您能够为团队需求选择合适的隔离级别。
+
+LangSmith 权限系统建立在此层级之上。通过[基于角色的访问控制 (RBAC)](/langsmith/rbac)，用户[权限](/langsmith/organization-workspace-operations)被限定在一个或多个工作区，从而强制执行工作区之间的隔离。通过更细粒度的[基于属性的访问控制](/langsmith/organization-workspace-operations#access-policies)（ABAC），可以根据工作区内的属性（如标签或应用程序）进一步限制或授予访问权限（例如，允许用户仅访问开发资源或仅访问与特定应用程序关联的资源）。
+
+本页面介绍三种常见的工作区组织方法，基于您团队的隔离需求：
+
+- [以团队为中心的工作区](#team-centric-workspaces)：每个团队一个工作区（推荐给大多数客户）
+- [协作工作区](#collaborative-workspaces)：每个工作区多个团队
+- [项目隔离工作区](#project-isolated-workspaces)：每个团队多个工作区（用于严格隔离要求）
+
+<Tip>
+有关设置组织和工作区的详细信息，请参阅[设置层级结构](/langsmith/set-up-hierarchy)。
+</Tip>
+
+## Team-centric workspaces
+
+<Warning>
+这是默认模式，也是大多数客户的推荐选择。
+</Warning>
+
+此模型（每个团队一个工作区）使用单一组织作为顶级边界。在组织内，使用多个工作区来隔离不同的团队或业务单元。每个工作区代表特定团队的逻辑边界，并控制该团队可以访问哪些数据和资源。在工作区内，团队使用多个应用程序来组合支持同一代理的资源。应用程序还可以包含不同的资源，例如用于开发和生产环境的单独跟踪项目。
+
+```mermaid actions={false}
+graph LR
+    Org[Organization]
+
+    WS1[Workspace: Team A]
+    WS2[Workspace: Team B]
+
+    App1A[Application]
+    App1B[Application]
+
+    DevA[Dev Tracing Project]
+    ProdA[Prod Tracing Project]
+    DatasetA[Dataset]
+
+    DevB[Dev Tracing Project]
+    ProdB[Prod Tracing Project]
+    DatasetB[Dataset]
+
+    Org --> WS1
+    Org --> WS2
+
+    WS1 --> App1A
+    WS2 --> App1B
+
+    App1A --> DevA
+    App1A --> ProdA
+    App1A --> DatasetA
+
+    App1B --> DevB
+    App1B --> ProdB
+    App1B --> DatasetB
+
+    classDef orgStyle fill:#B2DEFF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef wsStyle fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef appStyle fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef resourceStyle fill:#F2FAFF,stroke:#40668D,stroke-width:1px,color:#2F4B68
+
+    class Org orgStyle
+    class WS1,WS2 wsStyle
+    class App1A,App1B appStyle
+    class DevA,ProdA,DatasetA,DevB,ProdB,DatasetB resourceStyle
+```
+
+- **优点：** 单个工作区允许共享所有团队资源，使团队内的协作和迭代变得简单。它还简化了从开发到生产的推广流程。例如，相同的 [prompt](/langsmith/prompt-engineering) 可以使用标签进行版本控制并推广到生产环境，无需复制或重复。
+- **缺点：** 主要权衡是同一团队不同环境之间的隔离有限。开发、测试和生产资源共存于同一应用程序中，因此团队必须依赖标签和约定来避免对生产环境造成意外影响。[RBAC](/langsmith/rbac) 在工作区级别进行作用域划分。[ABAC](/langsmith/organization-workspace-operations#access-policies) 通过基于资源属性限制访问来提供更细粒度的权限，例如允许用户仅访问开发资源。
+
+## 协作工作区
+
+在此模型中（每个工作区多个团队），多个团队在组织内共享一个工作区，并使用应用程序和 [ABAC](/langsmith/organization-workspace-operations#access-policies) 来分离资源和治理访问。因此，共享资源（如 [prompts](/langsmith/prompt-engineering) 和 [deployments](/langsmith/deployment)）可以在团队之间重用，而对敏感资源（如 [traces](/langsmith/observability-concepts#traces) 和 [datasets](/langsmith/evaluation-concepts#datasets)）的访问仅限于拥有该资源的团队。
+
+```mermaid actions={false}
+graph LR
+    Org[Organization]
+
+    WS[Shared Workspace]
+
+    AppA[Application: Team A]
+    AppB[Application: Team B]
+
+    TracesA[Traces: Team A]
+    DatasetA[Dataset: Team A]
+    PromptA[Prompt: Shared]
+
+    TracesB[Traces: Team B]
+    DatasetB[Dataset: Team B]
+    PromptB[Prompt: Shared]
+
+    Org --> WS
+
+    WS --> AppA
+    WS --> AppB
+
+    AppA --> TracesA
+    AppA --> DatasetA
+    AppA --> PromptA
+
+    AppB --> TracesB
+    AppB --> DatasetB
+    AppB --> PromptB
+
+    classDef orgStyle fill:#B2DEFF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef wsStyle fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef appStyle fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef restrictedStyle fill:#F8E8E6,stroke:#B27D75,stroke-width:1px,color:#634643
+    classDef sharedStyle fill:#FDF3FF,stroke:#7E65AE,stroke-width:1px,color:#504B5F
+
+    class Org orgStyle
+    class WS wsStyle
+    class AppA,AppB appStyle
+    class TracesA,DatasetA,TracesB,DatasetB restrictedStyle
+    class PromptA,PromptB sharedStyle
+```
+
+- **优点：** 提示词和部署等常见资源可以在团队之间共享和重用，从而提高协作效率并减少重复工作。与以团队为中心的工作区模式不同，协作不限于单个团队，可以跨越工作区内的所有团队。
+- **缺点：** 团队和环境之间的隔离比多工作区模式弱，且取决于正确使用 ABAC。配置错误的标签或策略可能导致敏感[追踪](/langsmith/observability-concepts#traces)或[数据集](/langsmith/evaluation-concepts#datasets)在团队之间暴露，且跨多个团队管理权限会增加运营复杂性。
+
+## 项目隔离工作区
+
+<Callout icon="check" iconType="solid" color="#C7D2FE">
+此方法仅在需要严格隔离时使用。
+</Callout>
+
+在此模型中（每个团队多个工作区），通过为单个团队创建多个工作区来增强隔离。工作区可以按项目或按环境组织，例如单独的开发和生产工作区。每个工作区完全隔离，拥有自己的用户、数据和资源，且访问权限严格限定在该工作区内。
+
+```mermaid actions={false}
+graph LR
+    Org[Organization]
+
+    WSDev[Workspace: Dev]
+    WSProd[Workspace: Prod]
+
+    AppDev[Application]
+    AppProd[Application]
+
+    TracesDev[Traces]
+    DatasetDev[Dataset]
+    DeploymentDev[Deployment]
+
+    TracesProd[Traces]
+    DatasetProd[Dataset]
+    DeploymentProd[Deployment]
+
+    Org --> WSDev
+    Org --> WSProd
+
+    WSDev --> AppDev
+    WSProd --> AppProd
+
+    AppDev --> TracesDev
+    AppDev --> DatasetDev
+    AppDev --> DeploymentDev
+
+    AppProd --> TracesProd
+    AppProd --> DatasetProd
+    AppProd --> DeploymentProd
+
+    classDef orgStyle fill:#B2DEFF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef wsStyle fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef appStyle fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef resourceStyle fill:#F2FAFF,stroke:#40668D,stroke-width:1px,color:#2F4B68
+
+    class Org orgStyle
+    class WSDev,WSProd wsStyle
+    class AppDev,AppProd appStyle
+    class TracesDev,DatasetDev,DeploymentDev,TracesProd,DatasetProd,DeploymentProd resourceStyle
+```
+
+- **优点：**团队、项目和环境之间相互隔离。只有开发工作区访问权限的用户无法查看或访问生产数据或任何生产资源，降低了意外变更或跨环境误用的风险。
+- **缺点：**资源无法跨工作区共享。重用 [prompts](/langsmith/prompt-engineering)、[datasets](/langsmith/evaluation-concepts#datasets) 或 [experiments](/langsmith/evaluation-concepts#experiment)，即使是将代理从开发环境升级到生产环境，也需要手动在工作区之间复制，这增加了摩擦和重复工作。

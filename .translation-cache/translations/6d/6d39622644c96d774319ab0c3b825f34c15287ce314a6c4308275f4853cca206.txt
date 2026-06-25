@@ -1,0 +1,104 @@
+# Cala
+
+>[Cala](https://cala.ai) 是一个经过验证的 AI 智能体知识图谱。
+>它返回结构化的、有来源引用的、可追溯的事实——而非原始网页抓取内容。
+>每个答案都包含引用、置信度评分和实体级来源追踪，
+>使其适用于需要可审计、抗幻觉检索的生产级智能体。
+
+## 安装
+
+```bash
+pip install langchain-cala
+```
+
+在 [console.cala.ai](https://console.cala.ai) 获取您的 API 密钥。
+
+## 配置
+
+```python
+import os
+os.environ["CALA_API_KEY"] = "your-api-key"
+```
+
+或者直接传递密钥：
+
+```python
+from langchain_cala import CalaRetriever
+
+retriever = CalaRetriever(api_key="your-api-key")
+```
+
+## 检索器
+
+`CalaRetriever` 实现了 LangChain 的 `BaseRetriever` 接口，支持三种模式：
+
+| 模式 | 端点 | 使用场景 |
+|------|----------|----------|
+| `"search"` *(默认)* | `POST /v1/knowledge/search` | 开放式自然语言问题 — 返回带有引用的综合答案 |
+| `"query"` | `POST /v1/knowledge/query` | 结构化点符号查询 — 例如 `"OpenAI.founded.year"` |
+| `"entities"` | `GET /v1/entities` | 在进行更深层次查询之前按名称发现实体 |
+
+### 基础搜索
+
+```python
+from langchain_cala import CalaRetriever
+
+retriever = CalaRetriever(api_key="your-api-key")
+docs = retriever.invoke("Which EU AI startups raised funding in 2024?")
+
+for doc in docs:
+    print(doc.page_content)
+    print(doc.metadata)  # includes 'verified', 'source', 'explainability'
+```
+
+### 结构化查询
+
+```python
+retriever = CalaRetriever(api_key="your-api-key", mode="query")
+docs = retriever.invoke("Mistral.founded.year")
+```
+
+### 实体发现
+
+```python
+retriever = CalaRetriever(api_key="your-api-key", mode="entities")
+docs = retriever.invoke("Factorial HR")
+```
+
+### 在 RAG 链中
+
+```python
+from langchain_cala import CalaRetriever
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_openai import ChatOpenAI
+
+retriever = CalaRetriever(api_key="your-api-key")
+
+prompt = ChatPromptTemplate.from_template(
+    "Answer the question based only on the following context:\n\n{context}\n\nQuestion: {question}"
+)
+
+chain = (
+    {"context": retriever, "question": RunnablePassthrough()}
+    | prompt
+    | ChatOpenAI()
+    | StrOutputParser()
+)
+
+chain.invoke("Who are the key players in European AI infrastructure?")
+```
+
+## 关键参数
+
+| 参数 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `api_key` | `SecretStr` | `$CALA_API_KEY` | 您的 Cala API 密钥 |
+| `mode` | `str` | `"search"` | 可选值：`"search"`、`"query"`、`"entities"` |
+| `k` | `int` | `5` | 返回的最大文档数量 |
+| `timeout` | `int` | `30` | HTTP 请求超时时间（秒） |
+
+## 为什么选择 Cala
+
+与网络搜索检索器不同，Cala 返回**已验证的实体数据**，并具有完整的来源可追溯性。响应中的每个文档都包含一个 `verified` 元数据字段和一条引用链——这使其符合欧盟 AI 法案第 13 条对高风险 AI 部署的可解释性要求。

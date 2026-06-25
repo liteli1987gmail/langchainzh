@@ -1,0 +1,180 @@
+---
+title: 追踪 OpenAI Codex 会话
+sidebarTitle: OpenAI Codex
+description: 在 LangSmith 中捕获 OpenAI Codex 智能体轮次、工具调用、模型元数据和子智能体线程。
+---
+
+[`langsmith-codex-plugins`](https://github.com/langchain-ai/langsmith-codex-plugins) 市场发布了一个追踪插件，可将 [OpenAI Codex](https://developers.openai.com/codex) 会话数据发送到 LangSmith。使用它可以检查 Codex 工作流程中的智能体轮次、模型元数据、令牌使用量、工具调用和子智能体线程。
+
+## 前置条件
+
+在设置追踪之前，请确保您已具备以下条件：
+
+- [Codex CLI](https://developers.openai.com/codex/quickstart?setup=cli) v0.128 或更高版本。
+- 一个 [LangSmith API 密钥](/langsmith/create-account-api-key)。
+
+## 安装并启用插件
+
+使用 Codex CLI 添加市场：
+
+```bash
+codex plugin marketplace add langchain-ai/langsmith-codex-plugins
+```
+
+在全局的 `~/.codex/config.toml` 中启用插件钩子和追踪插件，或仅针对特定项目在 `.codex/config.toml` 中启用：
+
+```toml
+[features]
+plugin_hooks = true
+
+[plugins."tracing@langsmith-codex-plugins"]
+enabled = true
+```
+
+## 配置追踪
+
+追踪功能在 `TRACE_TO_LANGSMITH` 设置为 `"true"` 或配置文件中 `enabled` 为 `true` 之前处于禁用状态。使用环境变量、JSON 配置文件或两者结合来配置凭据。
+
+### 环境变量
+
+插件首先读取 Codex 特定的变量，然后回退到通用的 LangSmith SDK 变量。
+
+| 变量 | 必需 | 默认值 | 描述 |
+| --- | --- | --- | --- |
+| `TRACE_TO_LANGSMITH` | 是 | - | 设置为 `"true"` 以启用追踪。 |
+| `LANGSMITH_CODEX_API_KEY` | 条件性 | - | LangSmith API 密钥。回退到 `LANGSMITH_API_KEY`。除非每个副本都提供自己的 API 密钥，否则为必需。 |
+| `LANGSMITH_CODEX_ENDPOINT` | 否 | `https://api.smith.langchain.com` | LangSmith API URL。回退到 `LANGSMITH_ENDPOINT`。 |
+| `LANGSMITH_CODEX_PROJECT` | 否 | `codex` | LangSmith 项目名称。回退到 `LANGSMITH_PROJECT`。 |
+| `LANGSMITH_CODEX_METADATA` | 否 | - | 合并到根追踪元数据的 JSON 对象。回退到 `LANGSMITH_METADATA`。 |
+| `LANGSMITH_CODEX_RUNS_ENDPOINTS` | 否 | - | 副本目标的 JSON 数组。回退到 `LANGSMITH_RUNS_ENDPOINTS`。 |
+
+将变量添加到你的 shell 配置文件（`~/.zshrc`、`~/.bashrc` 或 `~/.bash_profile`）：
+
+```bash
+export TRACE_TO_LANGSMITH="true"
+export LANGSMITH_CODEX_API_KEY="<your-langsmith-api-key>"
+export LANGSMITH_CODEX_PROJECT="codex"
+```
+
+### 配置文件
+
+使用 `<project>/.codex/langsmith.json` 设置项目级配置，或使用 `~/.codex/langsmith.json` 设置全局默认值。全局文件优先加载，项目文件会覆盖全局设置，而匹配的环境变量优先级最高。
+
+```json
+{
+  "enabled": true,
+  "api_key": "<your-langsmith-api-key>",
+  "api_url": "https://api.smith.langchain.com",
+  "project": "codex",
+  "metadata": {
+    "team": "agents",
+    "environment": "dev"
+  }
+}
+```
+
+| 字段 | 环境变量 | 默认值 | 描述 |
+| --- | --- | --- | --- |
+| `enabled` | `TRACE_TO_LANGSMITH` | `false` | 设置为 `true` 以启用追踪。 |
+| `api_key` | `LANGSMITH_CODEX_API_KEY`, `LANGSMITH_API_KEY` | - | LangSmith API 密钥。 |
+| `api_url` | `LANGSMITH_CODEX_ENDPOINT`, `LANGSMITH_ENDPOINT` | LangSmith 默认值 | LangSmith API URL。 |
+| `project` | `LANGSMITH_CODEX_PROJECT`, `LANGSMITH_PROJECT` | `codex` | LangSmith 项目名称。 |
+| `metadata` | `LANGSMITH_CODEX_METADATA`, `LANGSMITH_METADATA` | - | 合并到根追踪元数据中的对象。 |
+| `replicas` | `LANGSMITH_CODEX_RUNS_ENDPOINTS`, `LANGSMITH_RUNS_ENDPOINTS` | - | 用于复制追踪的其他 LangSmith 目标。 |
+
+请勿将包含 API 密钥的配置文件纳入版本控制。
+
+## 追踪到多个目标
+
+在 `langsmith.json` 中设置 `replicas` 或使用 `LANGSMITH_CODEX_RUNS_ENDPOINTS` 将相同的追踪数据发送到其他 LangSmith 工作区或项目。设置后，副本列表将覆盖其他客户端设置。
+
+追踪到多个[副本](/langsmith/log-traces-to-project)可用于：
+
+- 将追踪同时发送到生产项目和预发布项目。
+- 使用不同的 API 密钥追踪多个工作区。
+- 向特定副本目标添加额外的元数据。
+
+<Tabs>
+
+<Tab title="配置文件（推荐）">
+
+在 `<project>/.codex/langsmith.json` 或 `~/.codex/langsmith.json` 中：
+
+```json
+{
+  "enabled": true,
+  "replicas": [
+    {
+      "apiUrl": "https://api.smith.langchain.com",
+      "apiKey": "lsv2_pt_workspace_a",
+      "projectName": "project-prod"
+    },
+    {
+      "apiUrl": "https://api.smith.langchain.com",
+      "apiKey": "lsv2_pt_workspace_b",
+      "projectName": "project-staging",
+      "updates": { "metadata": { "environment": "staging" } }
+    }
+  ]
+}
+```
+
+</Tab>
+
+<Tab title="Shell 环境变量">
+
+
+</Tab>
+
+```bash
+export LANGSMITH_CODEX_RUNS_ENDPOINTS='[{"apiUrl":"https://api.smith.langchain.com","apiKey":"lsv2_pt_workspace_a","projectName":"project-prod"},{"apiUrl":"https://api.smith.langchain.com","apiKey":"lsv2_pt_workspace_b","projectName":"project-staging","updates":{"metadata":{"environment":"staging"}}}]'
+```
+
+要生成转义后的 JSON 字符串，请使用：
+
+```bash
+echo '[{"apiUrl":"...","apiKey":"...","projectName":"..."}]' | jq -c .
+```
+
+</Tab>
+
+</Tabs>
+
+每个副本对象支持以下字段：
+
+| 字段 | 必填 | 描述 |
+| --- | --- | --- |
+| `apiUrl` | 是 | LangSmith API URL（通常为 `https://api.smith.langchain.com`）。 |
+| `apiKey` | 是 | 目标工作区的 API 密钥。 |
+| `projectName` | 是 | 目标工作区中的项目名称。 |
+| `updates` | 否 | 可选，用于覆盖复制运行的运行时字段，例如额外的元数据。 |
+
+## 追踪内容
+
+每个 LLM 运行包括：
+
+- **输入**：累积的对话消息。
+- **输出**：助手响应内容。
+- **元数据**：模型提供商、模型名称、停止原因和 token 使用量。
+
+工具调用（包括函数调用、shell 调用、计算机调用、文件读取、网络搜索）会包含其输入和输出。子代理线程会被解析并作为嵌套子运行上传到父轮次下。
+
+用户中途取消的中断轮次会在会话完成后仍然上传。
+
+## 在 LangSmith 中查看追踪
+
+打开配置的 LangSmith 项目并完成一次 Codex 轮次。追踪默认显示在 `codex` 项目中。插件会上传已完成的 Codex 记录数据，包括消息、工具调用的输入和输出、模型元数据、token 使用量和子代理线程结构。
+
+<Warning>
+插件会将完整的 Codex 记录数据上传到 LangSmith。请勿为包含您不希望存储在 LangSmith 中的数据的会话启用追踪。
+</Warning>
+
+## 故障排除
+
+如果追踪未出现在 LangSmith 中：
+
+- 确认 `plugin_hooks = true` 且 `config.toml` 中启用了追踪插件。
+- 确认 `TRACE_TO_LANGSMITH=true` 对 Codex 进程可见。
+- 确认 `LANGSMITH_CODEX_API_KEY` 或 `LANGSMITH_API_KEY` 已设置且有效。
+- 如果运行进入了错误的项目，请设置 `LANGSMITH_CODEX_PROJECT` 或 `project` 配置键。
+- 如果未使用自定义端点，请设置 `LANGSMITH_CODEX_ENDPOINT` 或 `api_url` 配置键。

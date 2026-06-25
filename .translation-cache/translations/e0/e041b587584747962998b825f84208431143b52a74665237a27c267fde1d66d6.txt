@@ -1,0 +1,192 @@
+---
+title: "OpenGauss VectorStore 集成"
+description: "使用 LangChain Python 与 OpenGauss VectorStore 进行集成。"
+---
+
+本笔记本介绍如何开始使用 openGauss VectorStore。[openGauss](https://opengauss.org/en/) 是一个高性能的关系型数据库，原生支持向量存储和检索功能。此集成使 LangChain 应用程序中能够进行符合 ACID 标准的向量操作，将传统 SQL 功能与现代 AI 驱动的相似性搜索相结合。
+向量存储。
+
+## 设置
+
+### 启动 openGauss 容器
+
+```bash
+docker run --name opengauss \
+  -d \
+  -e GS_PASSWORD='MyStrongPass@123' \
+  -p 8888:5432 \
+  opengauss/opengauss-server:latest
+```
+
+### 安装 langchain-opengauss
+
+```bash
+pip install langchain-opengauss
+```
+
+**系统要求**：
+
+- openGauss ≥ 7.0.0
+- Python ≥ 3.8
+- psycopg2-binary
+
+### 凭据
+
+使用您的 openGauss 凭据
+
+## 初始化
+
+<EmbeddingTabs/>
+
+```python
+from langchain_opengauss import OpenGauss, OpenGaussSettings
+
+# Configure with schema validation
+config = OpenGaussSettings(
+    table_name="test_langchain",
+    embedding_dimension=384,
+    index_type="HNSW",
+    distance_strategy="COSINE",
+)
+vector_store = OpenGauss(embedding=embeddings, config=config)
+```
+
+## 管理向量存储
+
+### 添加内容到向量存储
+
+```python
+from langchain_core.documents import Document
+
+document_1 = Document(page_content="foo", metadata={"source": "https://example.com"})
+
+document_2 = Document(page_content="bar", metadata={"source": "https://example.com"})
+
+document_3 = Document(page_content="baz", metadata={"source": "https://example.com"})
+
+documents = [document_1, document_2, document_3]
+
+vector_store.add_documents(documents=documents, ids=["1", "2", "3"])
+```
+
+### 更新向量存储中的项目
+
+```python
+updated_document = Document(
+    page_content="qux", metadata={"source": "https://another-example.com"}
+)
+
+# If the id is already exist, will update the document
+vector_store.add_documents(document_id="1", document=updated_document)
+```
+
+### 从向量存储中删除项目
+
+```python
+vector_store.delete(ids=["3"])
+```
+
+## 查询向量存储
+
+一旦您的向量存储创建完成并添加了相关文档，您很可能希望在链或代理运行期间对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以按如下方式进行：
+
+- TODO: Edit and then run code cell to generate output
+
+```python
+results = vector_store.similarity_search(
+    query="thud", k=1, filter={"source": "https://another-example.com"}
+)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+如果您想要执行相似性搜索并接收相应的分数，您可以运行：
+
+```python
+results = vector_store.similarity_search_with_score(
+    query="thud", k=1, filter={"source": "https://example.com"}
+)
+for doc, score in results:
+    print(f"* [SIM={score:3f}] {doc.page_content} [{doc.metadata}]")
+```
+
+### 通过转换为检索器进行查询
+
+您还可以将向量存储转换为检索器，以便在链中更方便地使用。
+
+- TODO: Edit and then run code cell to generate output
+
+```python
+retriever = vector_store.as_retriever(search_type="mmr", search_kwargs={"k": 1})
+retriever.invoke("thud")
+```
+
+## 用于检索增强生成的用法
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下章节：
+
+- [检索文档](/oss/langchain/retrieval)
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [代理型 RAG](/oss/langgraph/agentic-rag)
+
+## 配置
+
+### 连接设置
+
+| 参数                | 默认值                 | 描述                                                     |
+|---------------------|------------------------|----------------------------------------------------------|
+| `host`              | localhost              | 数据库服务器地址                                         |
+| `port`              | 8888                   | 数据库连接端口                                           |
+| `user`              | gaussdb                | 数据库用户名                                             |
+| `password`          | -                      | 复杂密码字符串                                           |
+| `database`          | postgres               | 默认数据库名称                                           |
+| `min_connections`   | 1                      | 连接池最小大小                                           |
+| `max_connections`   | 5                      | 连接池最大大小                                           |
+| `table_name`        | langchain_docs         | 用于存储向量数据和元数据的表名                           |
+| `index_type`        | IndexType.HNSW         | 向量索引算法类型。选项：HNSW 或 IVFFLAT\n默认为 HNSW。   |
+| `vector_type`       | VectorType.vector      | 要使用的向量表示类型。默认为 Vector。                     |
+| `distance_strategy` | DistanceStrategy.COSINE | 用于检索的向量相似度度量。选项：euclidean（L2 距离）、cosine（角距离，适用于文本嵌入）、manhattan（L1 距离，用于稀疏数据）、negative_inner_product（归一化向量的点积）。\n默认为 cosine。 |
+| `embedding_dimension`| 1536                   | 向量嵌入的维度。                                          |
+
+### 支持的组合
+
+| 向量类型 | 维度      | 索引类型     | 支持的距离策略                               |
+|-------------|------------|--------------|---------------------------------------------|
+| vector      | ≤2000      | HNSW/IVFFLAT | COSINE/EUCLIDEAN/MANHATTAN/INNER_PROD       |
+
+## 性能优化
+
+### 索引调优指南
+
+**HNSW 参数**：
+
+- `m`: 16-100（平衡召回率和内存）
+- `ef_construction`: 64-1000（必须 > 2*m）
+
+**IVFFLAT 建议**：
+
+```python
+import math
+
+lists = min(
+    int(math.sqrt(total_rows)) if total_rows > 1e6 else int(total_rows / 1000),
+    2000,  # openGauss maximum
+)
+```
+
+### 连接池
+
+```python
+OpenGaussSettings(min_connections=3, max_connections=20)
+```
+
+## 限制
+
+- `bit` 和 `sparsevec` 向量类型正在开发中
+- `vector` 类型的最大向量维度：2000
+
+---

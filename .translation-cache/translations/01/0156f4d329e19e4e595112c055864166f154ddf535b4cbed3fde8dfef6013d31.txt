@@ -1,0 +1,304 @@
+---
+title: 生成式 UI
+description: 使用 json-render 渲染 AI 生成的用户界面
+---
+
+生成式 UI 让 AI 能够根据自然语言提示生成完整的用户界面。AI 输出不再是聊天气泡中的文本响应，**而是**用户界面本身：表单、卡片、仪表板等。开发者定义可用的组件（"目录"），AI 将它们组合成有效的 UI 树。
+
+此模式使用 [json-render](https://json-render.dev)，即生成式 UI 框架，来定义组件目录、使用 AI 生成规范，并在 React、Vue、Svelte 和 Angular 中安全地渲染它们。
+
+import { PatternEmbed } from "/snippets/pattern-embed.jsx"
+
+<PatternEmbed pattern="generative-ui" />
+
+## 工作原理
+
+1. **定义目录**：声明 AI 可以使用的组件及其类型化属性
+2. **提示 AI**：用自然语言描述你想要的 UI
+3. **AI 生成规格**：描述组件树的 JSON 文档
+4. **安全渲染**：json-render 的 `Renderer` 使用你的组件渲染规格
+
+目录作为护栏：AI 只能使用你定义的组件，以及符合你模式的属性。输出始终可预测且安全。
+
+## 定义组件目录
+
+目录描述了 AI 可以使用的每个组件。每个组件都有其属性的 Zod 模式，以及 AI 用于理解何时使用该组件的描述：
+
+```ts
+import { defineCatalog } from "@json-render/core";
+import { schema } from "@json-render/react/schema";
+import { z } from "zod";
+
+const catalog = defineCatalog(schema, {
+  components: {
+    Card: {
+      description: "A card container with optional title and padding",
+      props: z.object({
+        title: z.string().optional(),
+        padding: z.enum(["sm", "md", "lg"]).optional(),
+      }),
+    },
+    Stack: {
+      description: "Layout children vertically or horizontally with consistent spacing",
+      props: z.object({
+        direction: z.enum(["vertical", "horizontal"]).optional(),
+        gap: z.enum(["sm", "md", "lg"]).optional(),
+      }),
+    },
+    TextInput: {
+      description: "A text input field with optional label and placeholder",
+      props: z.object({
+        label: z.string().optional(),
+        placeholder: z.string().optional(),
+        type: z.enum(["text", "email", "password", "number", "textarea"]).optional(),
+      }),
+    },
+    Button: {
+      description: "A clickable button with label and style variants",
+      props: z.object({
+        label: z.string(),
+        variant: z.enum(["primary", "secondary", "ghost", "link"]).optional(),
+        fullWidth: z.boolean().optional(),
+      }),
+    },
+  },
+  actions: {},
+});
+```
+
+<Tip>
+保持目录专注。只包含 AI 所需组件以满足用例。
+更小的目录比大杂烩式的方法产生更好的结果。
+</Tip>
+
+## 构建组件注册表
+
+注册表将每个目录组件映射到其实际渲染实现。
+使用 `defineRegistry` 获取目录属性与组件函数之间的类型安全绑定：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```tsx React
+import { defineRegistry, Renderer, JSONUIProvider } from "@json-render/react";
+
+const { registry } = defineRegistry(catalog, {
+  components: {
+    Card: ({ props, children }) => (
+      <div className="card">
+        {props.title && <h2>{props.title}</h2>}
+        {children}
+      </div>
+    ),
+    Stack: ({ props, children }) => (
+      <div className={`stack stack-${props.direction ?? "vertical"} gap-${props.gap ?? "md"}`}>
+        {children}
+      </div>
+    ),
+    TextInput: ({ props }) => (
+      <div>
+        {props.label && <label>{props.label}</label>}
+        <input type={props.type ?? "text"} placeholder={props.placeholder} />
+      </div>
+    ),
+    Button: ({ props }) => (
+      <button className={props.variant ?? "primary"}>
+        {props.label}
+      </button>
+    ),
+  },
+});
+```
+
+```vue Vue
+<script setup lang="ts">
+import { h } from "vue";
+import { defineRegistry, Renderer, JSONUIProvider } from "@json-render/vue";
+
+const { registry } = defineRegistry(catalog, {
+  components: {
+    Card: ({ props, children }) =>
+      h("div", { class: "card" }, [
+        props.title ? h("h2", null, props.title) : null,
+        children,
+      ]),
+    Stack: ({ props, children }) =>
+      h("div", { class: `stack stack-${props.direction ?? "vertical"} gap-${props.gap ?? "md"}` }, children),
+    TextInput: ({ props }) =>
+      h("div", null, [
+        props.label ? h("label", null, props.label) : null,
+        h("input", { type: props.type ?? "text", placeholder: props.placeholder }),
+      ]),
+    Button: ({ props }) =>
+      h("button", { class: props.variant ?? "primary" }, props.label),
+  },
+});
+</script>
+```
+
+</CodeGroup>
+
+## 连接到 agent
+
+Agent 使用结构化输出来返回 json-render 规范。使用 agent 的 assistant ID 设置 `useStream`，然后从 AI 消息的 `tool_calls` 中提取规范：
+
+<CodeGroup>
+
+```tsx React
+import { useStream } from "@langchain/react";
+import { AIMessage } from "langchain";
+
+function GenerativeUI() {
+  const stream = useStream<typeof myAgent>({
+    apiUrl: "http://localhost:2024",
+    assistantId: "generative_ui",
+  });
+
+  const aiMessage = stream.messages.find(AIMessage.isInstance);
+  const rawSpec = aiMessage?.tool_calls?.[0]?.args;
+
+  // ... filter and render (see streaming section below)
+}
+```
+
+```vue Vue
+<script setup lang="ts">
+import { useStream } from "@langchain/vue";
+import { AIMessage } from "langchain";
+import { computed } from "vue";
+
+const stream = useStream<typeof myAgent>({
+  apiUrl: "http://localhost:2024",
+  assistantId: "generative_ui",
+});
+
+const aiMessage = computed(() => stream.messages.value.find(AIMessage.isInstance));
+const rawSpec = computed(() => aiMessage.value?.tool_calls?.[0]?.args);
+</script>
+```
+
+```svelte Svelte
+<script lang="ts">
+  import { useStream } from "@langchain/svelte";
+  import { AIMessage } from "langchain";
+
+  const stream = useStream<typeof myAgent>({
+    apiUrl: "http://localhost:2024",
+    assistantId: "generative_ui",
+  });
+
+  const aiMessage = $derived(stream.messages.find((m) => AIMessage.isInstance(m)));
+  const rawSpec = $derived(aiMessage?.tool_calls?.[0]?.args);
+</script>
+```
+
+```ts Angular
+import { Component } from "@angular/core";
+import { injectStream } from "@langchain/angular";
+import { AIMessage } from "langchain";
+
+@Component({
+  selector: "app-generative-ui",
+  template: `...`,
+})
+export class GenerativeUIComponent {
+  stream = injectStream<typeof myAgent>({
+    apiUrl: "http://localhost:2024",
+    assistantId: "generative_ui",
+  });
+
+  get rawSpec() {
+    const ai = this.stream.messages().find(AIMessage.isInstance);
+    return ai?.tool_calls?.[0]?.args;
+  }
+}
+```
+
+</CodeGroup>
+
+## 流式传输和渐进式渲染
+
+在流式传输过程中，规范会逐步构建。元素逐个到达，最初可能缺少 `type` 或 `props`。筛选出完整的元素，并向 `Renderer` 传递 `loading={true}`，这会告诉它静默跳过尚未到达的子元素。UI 逐个组件地构建：
+
+```tsx
+/*
+ * Filter the streamed spec to only include elements with valid type/props,
+ * enabling progressive rendering as the AI response builds up. Passing
+ * loading={true} to the Renderer tells it to skip missing children silently.
+ */
+const spec = (() => {
+  if (!rawSpec?.root || !rawSpec?.elements) return null;
+  const rootEl = rawSpec.elements[rawSpec.root];
+  if (!rootEl?.type || rootEl?.props == null) return null;
+
+  const safeElements = {};
+  for (const [key, el] of Object.entries(rawSpec.elements)) {
+    if (el?.type && el?.props != null) {
+      safeElements[key] = el;
+    }
+  }
+  return { root: rawSpec.root, elements: safeElements };
+})();
+
+return (
+  <>
+    {spec && (
+      <JSONUIProvider registry={registry}>
+        <Renderer spec={spec} registry={registry} loading={stream.isLoading} />
+      </JSONUIProvider>
+    )}
+  </>
+);
+```
+
+<Note>
+`JSONUIProvider` 是设置 json-render 内部上下文 providers（状态、可见性、验证、操作）所必需的。`Renderer` 组件必须在其内部渲染。
+</Note>
+
+## 规范格式
+
+AI agent 会生成一个扁平的 JSON 规范，其中包含一个指向根元素的 `root` 键，以及一个包含所有组件的 `elements` 映射：
+
+```json
+{
+  "root": "login-card",
+  "elements": {
+    "login-card": {
+      "type": "Card",
+      "props": { "title": "Login" },
+      "children": ["login-stack"]
+    },
+    "login-stack": {
+      "type": "Stack",
+      "props": { "direction": "vertical", "gap": "md" },
+      "children": ["email-input", "password-input", "submit-btn"]
+    },
+    "email-input": {
+      "type": "TextInput",
+      "props": { "label": "Email", "placeholder": "Enter your email", "type": "email" },
+      "children": []
+    },
+    "password-input": {
+      "type": "TextInput",
+      "props": { "label": "Password", "placeholder": "Enter your password", "type": "password" },
+      "children": []
+    },
+    "submit-btn": {
+      "type": "Button",
+      "props": { "label": "Sign In", "variant": "primary", "fullWidth": true },
+      "children": []
+    }
+  }
+}
+```
+
+每个元素通过 ID 引用其子元素，像 `TextInput` 和 `Button` 这样的叶元素具有空的 `children` 数组。
+
+## 最佳实践
+
+- **使用描述性组件描述**：AI 使用这些描述来理解何时使用每个组件。清晰的描述可以带来更好的 UI 生成。
+- **渲染前验证**：在传递给 Renderer 之前，始终检查元素是否具有有效的 `type` 和非空的 `props`，因为流式传输会传递部分数据。
+- **为流式传输设计**：在流式传输期间传递 `loading={true}`，以便 Renderer 能够优雅地处理尚未到达的子元素。用户看到 UI 实时构建，而不是等待完整响应。
+- **使用设计令牌进行样式设计**：使用 CSS 自定义属性，使渲染的组件能够自动适配浅色和深色主题。
+- **使用 JSONUIProvider 包装**：`Renderer` 必须位于 `JSONUIProvider` 内，以访问 json-render 的内部上下文，用于状态、可见性和操作。

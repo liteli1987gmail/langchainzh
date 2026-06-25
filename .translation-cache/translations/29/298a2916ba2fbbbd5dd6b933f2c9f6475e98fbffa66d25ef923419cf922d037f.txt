@@ -1,0 +1,85 @@
+---
+title: "AgentMail"
+description: "将 AgentMail 收件箱中的消息加载为 LangChain 文档。"
+---
+
+`AgentMailLoader` 将 [AgentMail](https://agentmail.to) 收件箱中的消息流式传输为 LangChain `Document` 对象——每条消息一个文档，纯文本正文作为 `page_content`，发件人/主题/标签/线程/附件元数据放在 `metadata` 上。可用于将收件箱索引到向量存储中以进行邮件 RAG。
+
+## 概述
+
+| 类 | 包 |
+|:------|:--------|
+| `AgentMailLoader` | [`langchain-agentmail`](https://pypi.org/project/langchain-agentmail/) |
+
+## 设置
+
+安装包：
+
+```bash
+pip install -qU langchain-agentmail
+```
+
+设置您的 AgentMail API 密钥（请在 [agentmail.to](https://agentmail.to) 获取）：
+
+```python
+import getpass
+import os
+
+if not os.environ.get("AGENTMAIL_API_KEY"):
+    os.environ["AGENTMAIL_API_KEY"] = getpass.getpass("AgentMail API key:\n")
+```
+
+## 实例化
+
+```python
+from langchain_agentmail import AgentMailLoader
+
+loader = AgentMailLoader(
+    inbox_id="ib_abc123",
+    labels=["inbox"],  # optional — filter messages by label
+    limit=100,         # optional — cap the number of messages loaded
+)
+```
+
+## 加载
+
+```python
+docs = loader.load()
+print(docs[0].page_content[:200])
+print(docs[0].metadata)
+```
+
+每个 `Document` 包含以下元数据键（如果存在）：
+
+- `inbox_id`、`message_id`、`thread_id`
+- `from`、`to`、`cc`、`subject`、`labels`、`timestamp`
+- `has_attachments`、`attachments`：一个 `{attachment_id, filename, content_type, size}` 列表
+
+要下载附件字节，请将加载器与工具包中的 `AgentMailGetAttachmentTool` 配对——它会返回一个预签名下载 URL。
+
+## 懒加载
+
+对于较大的收件箱，一次流式传输一个文档，而不是物化完整列表：
+
+```python
+for doc in loader.lazy_load():
+    print(doc.metadata["subject"])
+```
+
+## 索引向量存储
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_openai import OpenAIEmbeddings
+
+docs = AgentMailLoader(inbox_id="ib_abc123", limit=200).load()
+
+store = InMemoryVectorStore.from_documents(docs, OpenAIEmbeddings())
+retriever = store.as_retriever(search_kwargs={"k": 5})
+
+retriever.invoke("Q3 invoice from acme")
+```
+
+## API 参考
+
+包源码位于 [github.com/agentmail-to/langchain-agentmail](https://github.com/agentmail-to/langchain-agentmail)。

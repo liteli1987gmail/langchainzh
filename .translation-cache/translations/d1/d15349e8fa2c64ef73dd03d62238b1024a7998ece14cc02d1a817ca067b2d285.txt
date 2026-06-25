@@ -1,0 +1,145 @@
+---
+title: "SpiceDB 集成"
+description: "使用 LangChain Python 与 SpiceDB 集成。"
+---
+
+> [SpiceDB](https://authzed.com/spicedb) 是一个开源的、基于图的授权系统，灵感来自 Google Zanzibar。它为您的应用程序提供细粒度的、基于关系的访问控制。
+
+## 安装和设置
+
+安装 Python SDK：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install langchain-spicedb
+```
+
+```bash uv
+uv add langchain-spicedb
+```
+</CodeGroup>
+
+可用的额外选项支持特定的框架：
+
+<CodeGroup>
+```bash pip
+pip install langchain-spicedb[langchain]
+pip install langchain-spicedb[langgraph]
+pip install langchain-spicedb[all]
+```
+
+```bash uv
+uv add langchain-spicedb --extra langchain
+uv add langchain-spicedb --extra langgraph
+uv add langchain-spicedb --extra all
+```
+</CodeGroup>
+
+你还需要一个正在运行的 SpiceDB 实例。对于本地开发：
+
+```bash
+docker run --rm -p 50051:50051 authzed/spicedb serve \
+    --grpc-preshared-key "sometoken" \
+    --grpc-no-tls
+```
+
+<Accordion title="定义您的 schema 和权限">
+
+创建定义授权模型的 SpiceDB schema：
+
+</Accordion>
+
+```python
+from authzed.api.v1 import Client, WriteSchemaRequest
+from grpcutil import insecure_bearer_token_credentials
+
+client = Client("localhost:50051", insecure_bearer_token_credentials("sometoken"))
+
+schema = """
+definition user {}
+
+definition article {
+    relation viewer: user
+    permission view = viewer
+}
+"""
+
+await client.WriteSchema(WriteSchemaRequest(schema=schema))
+```
+
+创建用户和资源之间的关系：
+
+```python
+from authzed.api.v1 import (
+    WriteRelationshipsRequest,
+    RelationshipUpdate,
+    Relationship,
+    ObjectReference,
+    SubjectReference,
+)
+
+# Alice can view article:doc1
+relationship = Relationship(
+    resource=ObjectReference(object_type="article", object_id="doc1"),
+    relation="viewer",
+    subject=SubjectReference(
+        object=ObjectReference(object_type="user", object_id="alice")
+    ),
+)
+
+await client.WriteRelationships(
+    WriteRelationshipsRequest(
+        updates=[
+            RelationshipUpdate(
+                operation=RelationshipUpdate.OPERATION_CREATE,
+                relationship=relationship,
+            )
+        ]
+    )
+)
+```
+
+</Accordion>
+
+## Retriever
+
+`SpiceDBRetriever` 包装任何 LangChain 检索器，并添加 SpiceDB 授权过滤，移除用户无权访问的文档。
+
+```python
+from langchain_spicedb import SpiceDBRetriever
+```
+
+详细的分步指南，请参阅 [SpiceDB Retriever](/oss/integrations/retrievers/spicedb) 页面。
+
+## 工具
+
+`SpiceDBPermissionTool` 和 `SpiceDBBulkPermissionTool` 使代理能够在执行操作之前检查 SpiceDB 权限。
+
+```python
+from langchain_spicedb import SpiceDBPermissionTool, SpiceDBBulkPermissionTool
+```
+
+有关详细演练，请参阅 [SpiceDB 工具](/oss/integrations/tools/spicedb) 页面。
+
+## Runnables
+
+`SpiceDBAuthFilter` 是一个与 LCEL 兼容的 Runnable，用于链中的授权。`SpiceDBAuthLambda` 是一个轻量级包装器，可与 `RunnableLambda` 一起使用。
+
+```python
+from langchain_spicedb import SpiceDBAuthFilter, SpiceDBAuthLambda
+```
+
+## LangGraph 节点
+
+用于将授权添加为 LangGraph 工作流中的节点的工厂函数和类：
+
+```python
+from langchain_spicedb import create_auth_node, AuthorizationNode, RAGAuthState
+```
+
+## 相关资源
+
+- [SpiceDB 文档](https://authzed.com/docs)
+- [SpiceDB GitHub](https://github.com/authzed/spicedb)

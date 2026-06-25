@@ -1,0 +1,85 @@
+---
+title: 与 Claude Agent SDK 的对比
+sidebarTitle: 与 Claude Agent SDK 的对比
+description: 将 LangChain Deep Agents 与 Claude Agent SDK 进行对比，帮助您为用例选择合适的工具。
+---
+
+本页面说明 [LangChain Deep Agents](/oss/deepagents/overview) 与 [Claude Agent SDK](https://platform.anthropic.com/docs/en/agent-sdk/overview) 的对比情况。两者都是用于构建自定义 Agent 的框架，但在执行环境、部署方式和厂商耦合方面做出了不同的权衡。
+
+<Info>
+    Deep Agents 已在生产环境中被 [OpenSWE](https://github.com/langchain-ai/open-swe) 和 [LangSmith Fleet](/langsmith/fleet/index) 使用。
+</Info>
+
+## 一览
+
+| | **Deep Agents** | **Claude Agent SDK** |
+| --- | --- | --- |
+| **Agent 运行位置** | 在沙箱内，或在沙箱外部远程执行命令 | 在沙箱内 |
+| **执行后端** | 可插拔：[本地、虚拟文件系统、远程沙箱或自定义](/oss/deepagents/backends) | 运行沙箱的本地文件系统 |
+| **模型提供商** | 任意（Anthropic、OpenAI、Google、100+ 其他） | Claude（Anthropic、Bedrock、Vertex、Azure） |
+| **按提供商/模型调优** | [Harness profiles](/oss/deepagents/profiles)（beta）：声明式的系统提示词、工具、中间件和子 Agent 调整包，按提供商或特定模型注册 | 在每个模型调用点通过代码配置 |
+| **部署** | LangSmith 中的[托管 Deep Agents](/langsmith/managed-deep-agents-overview)，或通过 [`langgraph build`](/langsmith/cli#build) 自托管[独立镜像](/langsmith/deploy-standalone-server) | [自托管](https://code.claude.com/docs/en/agent-sdk/hosting)。需自行构建服务器、认证和流式传输层。[Claude 托管 Agent](https://platform.claude.com/docs/en/managed-agents/overview) 是独立产品 |
+| **多租户** | [内置](/oss/deepagents/going-to-production#multi-tenancy)：作用域线程、每用户沙箱、RBAC | 自行构建 |
+| **许可证** | MIT | MIT（Claude Code 本身是专有的） |
+
+## 主要差异
+
+### Agent 和执行环境
+
+[连接 Agent 与沙箱有两种模式](https://www.langchain.com/blog/the-two-patterns-by-which-agents-connect-sandboxes)：在沙箱*内部*运行 Agent，或在外部运行 Agent 并**将沙箱作为工具使用**。
+
+Claude Agent SDK 仅支持第一种模式。您的 Agent 在沙箱内运行，并针对沙箱的本地文件系统执行工具。Anthropic 的托管模型 [Claude 托管 Agent](https://platform.claude.com/docs/en/managed-agents/overview) 采用解耦模式，这反映了生产环境 Agent 架构的发展方向。
+
+Deep Agents 支持两种模式，并让您选择[后端](/oss/deepagents/backends#quickstart)来将它们连接在一起。在实践中，这意味着您可以：
+
+- 在沙箱内运行 Agent（与 Claude Agent SDK 相同的模式）。
+- 在长生命周期容器中运行 Agent，并通过[远程沙箱作为工具](https://www.langchain.com/blog/the-two-patterns-by-which-agents-connect-sandboxes)使用，通过网络执行命令。
+- 在测试中换入虚拟文件系统，或使用自定义后端对接您自己的基础设施。
+
+### 多租户
+
+当您将应用投入生产时，通常需要向多个最终用户开放，并必须为每个用户隔离环境。
+
+在 Claude Agent SDK 中，SDK 将 Agent 与其沙箱绑定。要为每个用户提供隔离的执行环境，您必须构建一个 API 包装器，为每个用户启动沙箱、跟踪哪个沙箱属于哪个用户，并在之后清理。
+
+Deep Agents 直接处理这个问题：在 harness 中配置每个用户或每个助手的沙箱[生命周期](/oss/deepagents/going-to-production#lifecycle)，并包含作用域线程、运行历史和 [RBAC](/oss/deepagents/going-to-production#team-access-control-rbac)。如果您使用 [LangSmith Sandbox](/langsmith/sandbox-auth-proxy)，还可以开箱即用地获得认证代理，使最终用户能够从沙箱中调用第三方 API，而无需为每个用户配置凭证。
+
+### 生产级 Agent 服务器
+
+要将[自托管 Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/hosting) 应用向最终用户开放，您需要编写自己的 HTTP/WebSocket 或 SSE 服务器来调用 Agent、返回令牌流并管理对话线程。该服务器需要您自行构建、运维和安全保障。
+
+Deep Agents 部署包含开箱即用的 [Agent 服务器](/langsmith/agent-server)：流式端点、线程管理、运行历史、Webhook 和[认证](/langsmith/auth)。
+
+### 托管云或自托管
+
+Claude Agent SDK 部署采用[自托管](https://code.claude.com/docs/en/agent-sdk/hosting)。SDK 和 [Claude 托管 Agent](https://platform.claude.com/docs/en/managed-agents/overview) 是独立产品。使用 SDK 编写的代码不能直接部署到托管服务。
+
+Deep Agents 可以通过两种模式运行，无需修改代码：
+
+- **托管模式：** 在 LangSmith 中使用 [托管 Deep Agents](/langsmith/managed-deep-agents-overview) 创建、运行和运维 deep agents。
+- **自托管模式：** 运行 [`langgraph build`](/langsmith/cli#build) 生成[独立 Docker 镜像](/langsmith/deploy-standalone-server)，可部署到任何地方。
+
+<Tip>
+    如需跨任何模型提供商的托管 Agent 平台，请使用 [LangSmith Fleet](/langsmith/fleet/index)。[Claude 托管 Agent](https://platform.claude.com/docs/en/managed-agents/overview) 仅限于 Anthropic 生态。
+</Tip>
+
+### LLM
+
+Claude Agent SDK 执行将模型、后端和部署捆绑在一起，并优化三者之间的支持。
+
+使用 Deep Agents，您可以独立选择模型提供商、执行后端和部署目标。选择此框架即意味着您在模型和基础设施选择上保留最大灵活性。
+
+### 生态系统
+
+Claude Agent SDK 专为 Claude 和 Anthropic 产品矩阵构建。Deep Agents 与更广泛的 LangChain 生态系统集成，包括用于可观测性、评估和部署的 LangSmith，并支持任何模型提供商。
+
+## 总结
+
+- **选择 Deep Agents**：如果您需要模型和基础设施灵活性、内置多租户部署，以及无需代码修改即可托管或自托管的选项。
+- **选择 Claude Agent SDK**：如果您已投入 Anthropic 生态，并希望自行托管和构建 API、认证和多租户层。
+
+<Note>
+    **发现错误了吗？**
+
+    我们于 2026 年 4 月 16 日起草了此对比内容。如产品已有变化，请[提交 issue](https://github.com/langchain-ai/docs/issues)。
+</Note>

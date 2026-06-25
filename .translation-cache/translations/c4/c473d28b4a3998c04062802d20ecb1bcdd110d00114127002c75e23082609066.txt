@@ -1,0 +1,94 @@
+---
+title: 设置 LLM-as-a-judge 在线评估器
+sidebarTitle: LLM-as-a-judge
+---
+
+[在线评估](/langsmith/evaluation-concepts#online-evaluations) 提供对生产追踪的实时反馈。这对于持续监控应用程序性能非常有用——可以识别问题、衡量改进并确保随时间推移的质量一致性。
+
+**[LLM-as-a-judge](/langsmith/evaluation-concepts#llm-as-judge)** 评估器使用 LLM 来评估追踪，作为人类判断的可扩展替代方案。本指南涵盖评估单个运行的**运行级**评估器。要评估整个对话线程，请参阅[多轮在线评估器](/langsmith/online-evaluations-multi-turn)。
+
+<Note>当在线评估器对追踪中的任何运行执行时，该追踪将自动升级为[扩展数据保留](/langsmith/usage-and-billing#data-retention-auto-upgrades)。此升级会影响追踪定价，但可确保满足您评估条件的追踪（通常是分析最有价值的追踪）被保留以供调查。</Note>
+
+## 查看在线评估器
+
+在 [LangSmith UI](https://smith.langchain.com) 中，进入 **Tracing Projects** 标签页并选择一个追踪项目。要查看该项目的现有在线评估器，请点击 **Evaluators** 标签页。
+
+## 添加在线评估器
+
+1. 在 [LangSmith UI](https://smith.langchain.com) 中，导航到 **Tracing** 页面并选择一个追踪项目。
+1. 点击 **Evaluators** 标签页。
+1. 点击 **+ Evaluator** 打开 **Add Evaluator** 面板。
+1. 选择以下选项之一：
+   - **从零创建**：选择 **LLM-as-a-Judge Evaluator**。
+   - **附加现有评估器**：选择一个工作区中已有的评估器来复用。
+   - **从模板创建**：从现成的评估器开始。
+1. 为您的评估器命名。
+
+## 应用筛选条件以触发评估器
+
+您可以对触发评估器的运行应用筛选条件。您可能希望基于以下条件应用评估器：
+
+- [用户留下反馈](/langsmith/attach-user-feedback)表明响应不满意的运行。
+- 调用特定工具调用的运行。有关更多信息，请参阅[筛选工具调用](/langsmith/filter-traces-in-application#example-filtering-for-tool-calls)。
+- 匹配特定元数据的运行（例如，如果您记录追踪时带有 `plan_type` 并且只想对来自企业客户的追踪运行评估）。有关更多信息，请参阅[向追踪添加元数据](/langsmith/add-metadata-tags)。
+
+[评估器上的筛选条件](/langsmith/filter-traces-in-application) 与在项目中筛选追踪时的工作方式相同。
+
+<Tip>
+在创建评估器的筛选条件时，检查运行通常很有帮助。打开评估器配置面板后，您可以检查运行并对其应用筛选条件。您对运行表应用的任何筛选条件都会自动反映在评估器的筛选条件中。
+</Tip>
+
+<Tip>
+如果您在该项目上还有 webhook 自动化规则，并且希望 webhook 负载包含此评估器的分数，请向 webhook 规则添加反馈筛选条件，而不是依赖规则排序。例如，筛选 `has(feedback_key, "answer_usefulness")`，以便 webhook 仅在分数存在后才触发。有关详细信息，请参阅[确保 webhook 触发前评估完成](/langsmith/webhooks#ensuring-evaluations-complete-before-the-webhook-fires)。
+</Tip>
+
+## 配置采样率
+
+配置采样率以控制触发自动化操作的筛选运行的百分比。例如，为了控制成本，您可能希望设置筛选条件以仅将评估器应用于 10% 的追踪。为此，您需要将采样率设置为 0.1。
+
+## 将规则应用于过去的运行
+
+通过切换 **Apply to past runs** 并输入"Backfill from"日期，将规则应用于过去的运行。这仅在创建规则时可行。
+
+<Note>
+回填作为后台作业处理，因此您不会立即看到结果。
+</Note>
+
+要跟踪回填的进度，您可以进入追踪项目中的 **Evaluators** 标签页，然后点击您创建的评估器的 Logs 按钮来查看评估器的日志。在线评估器日志与[自动化规则日志](/langsmith/rules#view-logs-for-your-automations)类似。
+
+1. 添加评估器名称。
+1. （可选）筛选您希望应用评估器的运行或配置采样率。
+1. 选择 **Apply Evaluator**。
+
+## 配置 LLM-as-a-judge 评估器
+
+有关更多信息，请参阅 [LLM-as-a-judge 评估器](/langsmith/llm-as-judge#evaluator-templates)。
+
+## 将多模态内容映射到评估器
+
+如果您的追踪包含图像、音频或文档等多模态内容，您可以在评估器提示中包含此内容。有两种方法：
+
+- **使用追踪中的 base64 编码内容**：如果您的应用程序将多模态内容作为 base64 编码数据记录在追踪中（例如，在运行的输入或输出中），您可以使用模板变量直接在评估器提示中引用此内容。评估器将从追踪中提取 base64 数据并将其传递给 LLM。
+- **使用追踪中的附件**：与[带附件的离线评估](/langsmith/evaluate-with-attachments)类似，您可以在在线评估中使用追踪中的附件。由于您的追踪已经包含通过 SDK 记录的附件，您可以直接在评估器中引用它们。
+    1. 从数据集页面选择 **+ Evaluator**。
+    1. 在 **Template variables** 编辑器中，为要包含的附件添加变量：
+        - 如果要包含特定附件，可以使用建议的变量名，例如 `{{attachment.file_name}}`，这会将附件列表中具有 `file_name` 的文件映射并传递给评估器。
+        - 如果要包含所有附件，请使用 `{{attachments}`}` 变量。
+
+    <img
+    className="block dark:hidden"
+    src="/langsmith/images/variable-multimodal-content-light.png"
+    alt="Edit evaluator modal with an image attachment selected for the input."
+    />
+
+    <img
+        className="hidden dark:block"
+        src="/langsmith/images/variable-multimodal-content-dark.png"
+        alt="Edit evaluator modal with an image attachment selected for the input."
+    />
+
+然后，评估器可以在评估追踪时访问这些附件。这对于需要以下功能的评估器很有用：
+
+- 验证图像描述是否与追踪中的实际图像匹配。
+- 检查转录是否准确反映音频输入。
+- 验证从文档中提取的文本是否正确。

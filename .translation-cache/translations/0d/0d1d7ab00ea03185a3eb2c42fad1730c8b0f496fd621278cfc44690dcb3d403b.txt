@@ -1,0 +1,160 @@
+---
+title: "Flyte 集成"
+description: "使用 LangChain Python 与 Flyte 集成。"
+---
+
+> [Flyte](https://github.com/flyteorg/flyte) 是一个开源编排器，可帮助构建生产级数据和 ML 管道。
+> 它基于可扩展性和可重现性而构建，以 Kubernetes 作为底层平台。
+
+本笔记本的目的是演示如何将 `FlyteCallback` 集成到您的 Flyte 任务中，使您能够有效地监控和跟踪您的 LangChain 实验。
+
+## 安装与设置
+
+- 运行命令 `pip install flytekit` 安装 Flytekit 库。
+- 运行命令 `pip install flytekitplugins-envd` 安装 Flytekit-Envd 插件。
+- 运行命令 `pip install langchain` 安装 LangChain。
+- 在您的系统上安装 [Docker](https://docs.docker.com/engine/install/)。
+
+## Flyte 任务
+
+Flyte [任务](https://docs.flyte.org/en/latest/user_guide/basics/tasks.html) 是 Flyte 的基础构建块。
+要执行 LangChain 实验，您需要编写定义所涉及的具体步骤和操作的 Flyte 任务。
+
+注意：[入门指南](https://docs.flyte.org/projects/cookbook/en/latest/index.html) 提供了在本地安装 Flyte 和运行第一个 Flyte 管道的详细分步说明。
+
+首先，导入必要的依赖项以支持您的 LangChain 实验。
+
+```python
+import os
+
+from flytekit import ImageSpec, task
+from langchain.agents import create_agent, load_tools
+from langchain.callbacks import FlyteCallbackHandler
+from langchain_classic.chains import LLMChain
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from langchain.messages import HumanMessage
+```
+
+设置必要的环境变量以使用 OpenAI API 和 Serp API：
+
+```python
+# Set OpenAI API key
+os.environ["OPENAI_API_KEY"] = "<your_openai_api_key>"
+
+# Set Serp API key
+os.environ["SERPAPI_API_KEY"] = "<your_serp_api_key>"
+```
+
+将 `<your_openai_api_key>` 和 `<your_serp_api_key>` 替换为从 OpenAI 和 Serp API 获取的相应 API 密钥。
+
+为了确保管道的可重现性，Flyte 任务采用容器化处理。
+每个 Flyte 任务必须关联一个镜像，该镜像可以是整个 Flyte [工作流](https://docs.flyte.org/en/latest/user_guide/basics/workflows.html) 共享的，也可以为每个任务单独提供。
+
+为了简化为每个 Flyte 任务提供所需依赖的过程，可以初始化一个 [`ImageSpec`](https://docs.flyte.org/en/latest/user_guide/customizing_dependencies/imagespec.html) 对象。
+此方法会自动触发 Docker 构建，无需用户手动创建 Docker 镜像。
+
+```python
+custom_image = ImageSpec(
+    name="langchain-flyte",
+    packages=[
+        "langchain",
+        "openai",
+        "spacy",
+        "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0.tar.gz",
+        "textstat",
+        "google-search-results",
+    ],
+    registry="<your-registry>",
+)
+```
+
+您可以灵活地将 Docker 镜像推送到您选择的镜像仓库中。
+[Docker Hub](https://hub.docker.com/) 或 [GitHub Container Registry (GHCR)](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) 是一个便捷的入门选择。
+
+选择镜像仓库后，您可以继续创建 Flyte 任务，将 LangChain 指标记录到 Flyte Deck 中。
+
+以下示例展示了与 OpenAI LLM、chains 以及带工具的 agent 相关的任务：
+
+### LLM
+
+```python
+@task(disable_deck=False, container_image=custom_image)
+def langchain_llm() -> str:
+    llm = ChatOpenAI(
+        model_name="gpt-3.5-turbo",
+        temperature=0.2,
+        callbacks=[FlyteCallbackHandler()],
+    )
+    return llm.invoke([HumanMessage(content="Tell me a joke")]).content
+```
+
+### 链
+
+```python
+@task(disable_deck=False, container_image=custom_image)
+def langchain_chain() -> list[dict[str, str]]:
+    template = """You are a playwright. Given the title of play, it is your job to write a synopsis for that title.
+Title: {title}
+Playwright: This is a synopsis for the above play:"""
+    llm = ChatOpenAI(
+        model_name="gpt-3.5-turbo",
+        temperature=0,
+        callbacks=[FlyteCallbackHandler()],
+    )
+    prompt_template = PromptTemplate(input_variables=["title"], template=template)
+    synopsis_chain = LLMChain(
+        llm=llm, prompt=prompt_template, callbacks=[FlyteCallbackHandler()]
+    )
+    test_prompts = [
+        {
+            "title": "documentary about good video games that push the boundary of game design"
+        },
+    ]
+    return synopsis_chain.apply(test_prompts)
+```
+
+### Agent
+
+```python
+@task(disable_deck=False, container_image=custom_image)
+def langchain_agent() -> str:
+    llm = ChatOpenAI(
+        model_name="gpt-3.5-turbo",
+        temperature=0,
+        callbacks=[FlyteCallbackHandler()],
+    )
+
+    tools = load_tools(
+        ["serpapi", "llm-math"],
+        llm=llm,
+        callbacks=[FlyteCallbackHandler()],
+    )
+
+    agent = create_agent(
+        model=llm,
+        tools=tools,
+        callbacks=[FlyteCallbackHandler()],
+        verbose=True,
+    )
+
+    return agent.invoke(
+        "Who is Leonardo DiCaprio's girlfriend? Could you calculate her current age and raise it to the power of 0.43?"
+    )
+```
+
+这些任务作为在 Flyte 中运行 LangChain 实验的起点。
+
+## 在 Kubernetes 上执行 Flyte 任务
+
+要在与配置好的 Flyte 后端上执行 Flyte 任务，请使用以下命令：
+
+```bash
+pyflyte run --image <your-image> langchain_flyte.py langchain_llm
+```
+
+此命令将在 Flyte 后端启动 `langchain_llm` 任务的执行。您可以以类似的方式触发其余两个任务。
+
+指标将按如下方式显示在 Flyte UI 上：
+
+![Screenshot of Flyte Deck showing LangChain metrics and a dependency tree visualization.](https://ik.imagekit.io/c8zl7irwkdda/Screenshot_2023-06-20_at_1.23.29_PM_MZYeG0dKa.png?updatedAt=1687247642993 "Flyte Deck Metrics Display")

@@ -1,0 +1,108 @@
+---
+title: FIPS 合规镜像
+sidebarTitle: FIPS 合规镜像
+description: 在符合 FIPS 140 标准的容器镜像上运行自托管 LangSmith 安装
+---
+
+<Note>
+  FIPS 和气隙 LangSmith 部署需要在推出前与您的 LangChain 客户经理沟通。在更改安装配置之前，请联系我们以确定许可范围、支持的配置和升级路径。
+</Note>
+
+从 v15 开始，每个由 LangChain 编写的 LangSmith 镜像都有一个在 FIPS 140 模式下运行的 `-fips` 对应版本。当您的自托管部署需要 FIPS 合规性时（例如联邦机构、国防承包商和受监管行业），请使用这些镜像。
+
+## 镜像的构建方式
+
+`-fips` 变体构建于 [Chainguard FIPS 容器镜像](https://edu.chainguard.dev/chainguard/fips/fips-images/) 之上，这些镜像包含经过 NIST 验证的加密模块（根据基础镜像不同，分别为 OpenSSL FIPS 提供程序、Bouncy Castle FIPS 或 BoringCrypto）。有关模块列表及其 CMVP 证书，请参阅 [Chainguard 的 FIPS 承诺](https://edu.chainguard.dev/chainguard/fips/fips-images/)。
+
+每个由 LangChain 编写的镜像都有一个 `-fips` 对应版本，与非 FIPS 版本发布在相同的标签下：
+
+| 非 FIPS 镜像 | FIPS 镜像 |
+| --- | --- |
+| `langchain/langsmith-ace-backend` | `langchain/langsmith-ace-backend-fips` |
+| `langchain/langsmith-backend` | `langchain/langsmith-backend-fips` |
+| `langchain/langsmith-frontend` | `langchain/langsmith-frontend-fips` |
+| `langchain/langsmith-go-backend` | `langchain/langsmith-go-backend-fips` |
+| `langchain/langsmith-playground` | `langchain/langsmith-playground-fips` |
+| `langchain/hosted-langserve-backend` | `langchain/hosted-langserve-backend-fips` |
+| `langchain/langgraph-operator` | `langchain/langgraph-operator-fips` |
+
+PostgreSQL、Redis 和 ClickHouse 未作为 FIPS 变体由 LangChain 发布。如果您的部署需要这些组件符合 FIPS，请提供您自己的 FIPS 模式服务，并通过[外部 Postgres](/langsmith/self-host-external-postgres)、[外部 Redis](/langsmith/self-host-external-redis) 或[外部 ClickHouse](/langsmith/self-host-external-clickhouse) 进行连接。
+
+## 使用 FIPS 镜像
+
+在 LangSmith Helm 安装中更新 `values.yaml`，将每个 LangChain 镜像仓库指向其 `-fips` 对应版本，同时保留现有标签。将 `0.15.0` 替换为您要部署的 [LangSmith 版本](/langsmith/self-hosted-changelog)：
+
+```yaml
+images:
+  aceBackendImage:
+    repository: "langchain/langsmith-ace-backend-fips"
+    pullPolicy: IfNotPresent
+    tag: "0.15.0"
+  backendImage:
+    repository: "langchain/langsmith-backend-fips"
+    pullPolicy: IfNotPresent
+    tag: "0.15.0"
+  frontendImage:
+    repository: "langchain/langsmith-frontend-fips"
+    pullPolicy: IfNotPresent
+    tag: "0.15.0"
+  hostBackendImage:
+    repository: "langchain/hosted-langserve-backend-fips"
+    pullPolicy: IfNotPresent
+    tag: "0.15.0"
+  operatorImage:
+    repository: "langchain/langgraph-operator-fips"
+    pullPolicy: IfNotPresent
+    tag: "0.15.0"
+  platformBackendImage:
+    repository: "langchain/langsmith-go-backend-fips"
+    pullPolicy: IfNotPresent
+    tag: "0.15.0"
+  playgroundImage:
+    repository: "langchain/langsmith-playground-fips"
+    pullPolicy: IfNotPresent
+    tag: "0.15.0"
+```
+
+应用更改并按照 [Upgrading LangSmith](/langsmith/self-host-upgrades) 指南进行升级。
+
+## 验证 FIPS 模式
+
+Chainguard 在每个 FIPS 镜像中都附带了 `openssl-fips-test` 工具。针对 pod 运行该工具会输出 FIPS 自测、活动的 FIPS 提供程序版本以及适用 CMVP 证书的链接。
+
+检查正在运行的 pod：
+
+```bash
+kubectl exec <pod-name> -- openssl-fips-test
+```
+
+Expected output (abridged):
+
+```text
+Checking OpenSSL lifecycle assurance.
+	✓ Self-test KAT_Integrity HMAC ... passed.
+	✓ Self-test Module_Integrity HMAC ... passed.
+	...
+	✓ 29 out of 29 self-tests passed.
+	✓ Check FIPS cryptographic module is available... passed.
+	✓ Check FIPS approved only mode (EVP_default_properties_is_fips_enabled)... passed.
+Public OpenSSL API (libssl.so & libcrypto.so):
+	name:      OpenSSL 3.6.0 1 Oct 2025
+	version:   3.6.0
+FIPS cryptographic module provider details (fips.so):
+	name:      OpenSSL FIPS Provider
+	version:   3.1.2
+Locate applicable CMVP certificate(s) at: CMVP #4985
+```
+
+您也可以在 Kubernetes 外部验证镜像：
+
+```bash
+docker run --rm --entrypoint openssl-fips-test langchain/langsmith-go-backend-fips:0.15.0
+```
+
+有关输出解读的更多详细信息，请参阅 [Chainguard FIPS 验证指南](https://edu.chainguard.dev/chainguard/fips/verify-fips/)。
+
+## 气隙部署的镜像
+
+`-fips` 命名约定在将镜像同步到私有仓库时完全适用。请按照[镜像同步指南](/langsmith/self-host-mirroring-images)操作，并将每个仓库替换为其 `-fips` 对应版本。无论是否使用 FIPS，气隙部署都需要在开始前与您的 LangChain 客户经理进行范围确认。

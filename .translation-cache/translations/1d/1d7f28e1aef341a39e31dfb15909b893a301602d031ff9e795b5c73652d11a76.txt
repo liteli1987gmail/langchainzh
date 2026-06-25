@@ -1,0 +1,100 @@
+---
+title: 可观测性概念
+sidebarTitle: 概念
+icon: "book"
+---
+
+import MaxRunsPerTrace from '/snippets/langsmith/max-runs-per-trace.mdx';
+
+LangSmith 可观测性让您能够记录、检查和分析 LLM 应用程序采取的每一个步骤。本页介绍 LangSmith 中的数据结构以及如何发送跟踪。
+
+## LangSmith 如何组织数据
+
+LangSmith 在一个 [_project_](#projects)（项目）中包含多个 [_traces_](#traces)（跟踪）。每个跟踪记录应用程序执行单个操作时所采取的步骤序列，这些步骤由独立的 [_runs_](#runs)（运行）组成。您可以将多轮对话中的跟踪链接为一个 [_thread_](#threads)（线程）。
+
+```mermaid actions={false}
+graph TB
+    Project -->|contains| Trace1[Trace]
+    Project -->|contains| Trace2[Trace]
+    Trace1 -->|contains| Run1[Run]
+    Trace1 -->|contains| Run2[Run]
+    Trace1 -->|contains| Run3[Run]
+    Trace1 -->|part of| Thread
+    Trace2 -->|part of| Thread
+```
+
+### 项目
+
+项目 是包含单个应用程序或服务的所有追踪的容器。
+
+[将追踪记录到项目](/langsmith/log-traces-to-project)。
+
+### 追踪
+
+追踪 是单个操作的运行集合。例如，如果用户请求触发了调用 LLM 然后调用输出解析器的链，则所有这些运行都属于同一个追踪。运行通过唯一的追踪 ID 绑定到追踪。如果您熟悉 [OpenTelemetry](https://opentelemetry.io/)，可以将 LangSmith 追踪视为跨度集合。
+
+<Note><MaxRunsPerTrace /></Note>
+
+### 运行
+
+运行 是代表 LLM 应用程序中单个工作单元的跨度：调用 LLM、格式化提示词、检索调用或任何其他离散操作。如果您熟悉 [OpenTelemetry](https://opentelemetry.io/)，可以将运行视为跨度。
+
+### 线程
+
+线程 是代表一次对话的追踪序列。多轮对话中的每一轮都是独立的追踪，但追踪通过共享标识符关联。要将追踪分组为线程，请传递一个特殊的元数据键（`session_id`、`thread_id` 或 `conversation_id`）并附上唯一值。
+
+[了解如何配置线程](/langsmith/threads)。
+
+<Callout type="info" icon="feather">
+使用 **[Chat](/langsmith/chat)** 来分析追踪、运行和线程。Chat 帮助您了解智能体性能、调试问题，并从对话线程中获取洞察，而无需手动挖掘数据。
+</Callout>
+
+## 追踪增强
+
+### 反馈
+
+反馈 允许您根据特定标准对单个运行进行评分。每个反馈条目包含一个标签和一个分数，并通过唯一的运行 ID 绑定到运行。反馈可以是连续的或离散的（分类的），标签可以在组织内的多个运行中重复使用。
+
+有关反馈存储方式的更多信息，请参阅[反馈数据格式指南](/langsmith/feedback-data-format)。
+
+### 标签
+
+标签 是可以附加到运行上的字符串，用于在 LangSmith UI 中对运行进行分类、筛选和分组。
+
+[了解如何向追踪附加标签](/langsmith/add-metadata-tags)。
+
+### 元数据
+
+元数据 是可以附加到运行上的键值对集合。例如，应用程序版本、环境或任何其他上下文信息。与标签类似，您可以使用元数据来筛选和分组运行。
+
+[了解如何向追踪添加元数据](/langsmith/add-metadata-tags)。
+
+## 发送追踪
+
+有两种方式可以向 LangSmith 发送追踪数据。
+
+### 集成
+
+LangSmith 集成 为流行的 LLM 提供商和智能体框架提供自动追踪（相当于通用可观测性中的自动插桩）。当您使用支持的框架（如 LangChain、LangGraph、OpenAI、Anthropic 或 CrewAI）时，集成会捕获输入、输出和元数据，无需手动更改代码。
+
+[浏览所有集成](/langsmith/integrations)。
+
+### 手动插桩
+
+手动插桩 允许您向任何代码添加追踪，不受框架限制。当您没有使用支持的集成或需要细粒度控制追踪内容时，可以使用此方式。LangSmith 提供三种机制：
+
+- `@traceable` / `traceable`：用于追踪任何函数的装饰器
+- `trace` 上下文管理器（Python）：包装特定的代码块
+- `RunTree` API：低级别的显式追踪构建
+
+[了解如何添加手动插桩](/langsmith/annotate-code)。
+
+## 数据保留
+
+LangSmith (SaaS) 从数据摄入时起保留追踪数据 400 天。之后，追踪将被永久删除，保留有限的元数据用于使用统计信息。有关保留层和定价的详细信息，请参阅[使用和计费：数据保留](/langsmith/usage-and-billing#data-retention)。
+
+<Note>
+若要在保留期后保留数据，可将其添加到[数据集](/langsmith/manage-datasets)。即使源追踪被删除，数据集也会永久保留。
+</Note>
+
+有关在到期日前删除追踪的信息，请参阅[管理追踪](/langsmith/manage-trace#delete-a-trace)。

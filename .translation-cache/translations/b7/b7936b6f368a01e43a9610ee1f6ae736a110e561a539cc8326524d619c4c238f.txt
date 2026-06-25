@@ -1,0 +1,76 @@
+---
+title: 自动在实验上运行评估器
+sidebarTitle: 在实验上运行评估器
+---
+
+LangSmith 支持两种对通过 SDK 创建的实验进行评分的方式：
+
+* **通过编程方式**，在代码中指定评估器（详情请参阅[如何评估 LLM 应用程序](/langsmith/evaluate-llm-application)）
+* 通过在 UI 中**将评估器绑定到数据集**。这将自动对创建的任何新实验运行评估器，同时还会运行通过 SDK 设置的所有评估器。当您正在迭代应用程序（目标函数），并且拥有一组想要在所有实验上运行的标准评估器时，这非常有用。
+
+## 在数据集上配置评估器
+
+1. 在 [LangSmith UI](https://smith.langchain.com) 中，选择一个数据集。
+1. 点击 **评估器** 选项卡。
+1. 点击 **+ 评估器** 打开 **添加评估器** 面板。
+1. 选择以下选项之一：
+   - **从头创建**：构建新的 [LLM 即评判者](/langsmith/llm-as-judge)、[代码](/langsmith/online-evaluations-code) 或 [复合](/langsmith/composite-evaluators-ui) 评估器，或选择 **从标注数据** 创建一个 [与人类反馈对齐的](/langsmith/improve-judge-evaluator-feedback) LLM 即评判者评估器。
+   - **附加现有评估器**：选择工作区中已有的评估器进行复用。
+   - **从模板创建**：从预制评估器开始。
+
+<Note>
+为数据集配置评估器时，只会影响到评估器配置之后创建的实验运行。不会影响评估器配置之前创建的实验运行的评估。
+</Note>
+
+## LLM 即评判者评估器
+
+将评估器绑定到数据集的过程与在 Playground 中配置 LLM 即评判者评估器的过程非常相似。查看 [在 Playground 中配置 LLM 即评判者评估器的说明](/langsmith/llm-as-judge?mode=ui)。
+
+## 自定义代码评估器
+
+将代码评估器绑定到数据集的过程与在线评估中配置代码评估器的过程非常相似。查看 [配置代码评估器的说明](/langsmith/online-evaluations-code)。
+
+在在线评估中配置代码评估器与将代码评估器绑定到数据集之间的唯一区别是，自定义代码评估器可以引用作为数据集 `Example` 一部分的输出。
+
+对于绑定到数据集的自定义代码评估器，评估器函数接受两个参数：
+
+* 一个 `Run`（[参考](/langsmith/run-data-format)）。这代表实验中的新运行。例如，如果您通过 SDK 运行了实验，这将包含您正在测试的链或模型的输入/输出。
+* 一个 `Example`（[参考](/langsmith/example-data-format)）。这代表数据集中链或模型使用的参考示例。Run 和 Example 的 `inputs` 应该相同。如果您的 Example 有参考 `outputs`，则可以使用它来与运行的输出进行比较以进行评分。
+
+以下代码展示了一个简单的评估器函数示例，该函数检查输出是否与参考输出完全相等。
+
+<CodeGroup>
+
+```python Python
+import numpy as np
+
+def perform_eval(run, example):
+    # run is a Run object
+    # example is an Example object
+    output = run['outputs']['output']
+    ref_output = example['outputs']['outputs']
+    output_match = np.array_equal(output, ref_output)
+
+    return { "exact_match": output_match }
+```
+
+```javascript JavaScript
+function perform_eval(run, example) {
+    // run is a Run object
+    // example is an Example object
+    const output = run.outputs.output;
+    const refOutput = example.outputs.outputs;
+
+    // Deep equality check for arrays/objects
+    const outputMatch = JSON.stringify(output) === JSON.stringify(refOutput);
+
+    return { "exact_match": outputMatch };
+}
+```
+
+</CodeGroup>
+
+## 后续步骤
+
+* 在[实验标签页](/langsmith/analyze-an-experiment)中分析您的实验结果
+* 在[对比视图](/langsmith/compare-experiment-results)中比较您的实验结果

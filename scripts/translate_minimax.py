@@ -498,6 +498,16 @@ def split_fenced_blocks(text: str) -> list[tuple[str, str]]:
     return units
 
 
+def should_preserve_line(line: str) -> bool:
+    stripped = line.lstrip()
+    return (
+        bool(re.match(r"^\s*(import|export)\b", line))
+        or "data:image/" in line
+        or "base64," in line
+        or stripped.startswith("<img ")
+    )
+
+
 def split_preserved_lines(text: str) -> list[tuple[str, str]]:
     units: list[tuple[str, str]] = []
     buffer: list[str] = []
@@ -516,7 +526,7 @@ def split_preserved_lines(text: str) -> list[tuple[str, str]]:
             preserved = []
 
     for line in text.splitlines(keepends=True):
-        if re.match(r"^\s*(import|export)\b", line):
+        if should_preserve_line(line):
             flush_buffer()
             preserved.append(line)
         else:
@@ -535,6 +545,13 @@ def chunk_text(text: str, max_chars: int) -> list[str]:
     chunks: list[str] = []
     current = ""
     for part in re.split(r"(\n{2,})", text):
+        if len(part) > max_chars:
+            if current:
+                chunks.append(current)
+                current = ""
+            for start in range(0, len(part), max_chars):
+                chunks.append(part[start : start + max_chars])
+            continue
         if len(current) + len(part) > max_chars and current:
             chunks.append(current)
             current = part
@@ -585,6 +602,7 @@ def translate_file(
     cache_path: Path,
     *,
     force: bool,
+    verbose_cache: bool,
     cache_lock: Any | None = None,
 ) -> tuple[str, bool]:
     source_text = source_path.read_text(encoding="utf-8")
@@ -599,7 +617,8 @@ def translate_file(
             model=client.config.model,
         )
         if cached_text is not None:
-            print(f"cache: {rel_path}", file=sys.stderr)
+            if verbose_cache:
+                print(f"cache: {rel_path}", file=sys.stderr)
             target_path.parent.mkdir(parents=True, exist_ok=True)
             target_path.write_text(cached_text, encoding="utf-8")
             return "cached", False
@@ -610,7 +629,8 @@ def translate_file(
             and cache_entry.get("sha256") == source_hash
             and cache_entry.get("model") == client.config.model
         ):
-            print(f"backfill-cache: {rel_path}", file=sys.stderr)
+            if verbose_cache:
+                print(f"backfill-cache: {rel_path}", file=sys.stderr)
             translated = target_path.read_text(encoding="utf-8")
             with cache_lock or nullcontext():
                 remember_translation(
@@ -708,6 +728,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Write keep-going failures to this JSON file.",
     )
+    parser.add_argument(
+        "--verbose-cache",
+        action="store_true",
+        help="Print one line for every cached translation restored.",
+    )
     return parser.parse_args()
 
 
@@ -773,6 +798,7 @@ def main() -> int:
             cache,
             args.cache,
             force=args.force,
+            verbose_cache=args.verbose_cache,
             cache_lock=cache_lock,
         )
 

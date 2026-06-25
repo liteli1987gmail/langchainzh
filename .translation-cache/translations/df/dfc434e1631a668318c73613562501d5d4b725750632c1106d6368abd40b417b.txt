@@ -1,0 +1,1667 @@
+---
+title: 构建具有按需技能的 SQL 助手
+sidebarTitle: "技能：SQL 助手"
+---
+
+import ChatModelTabsPy from '/snippets/chat-model-tabs.mdx';
+import ChatModelTabsJs from '/snippets/chat-model-tabs-js.mdx';
+
+本教程展示了如何使用**渐进式披露**——一种上下文管理技术，其中代理按需加载信息而非预先加载——来实现**技能**（基于提示的专业指令）。代理通过工具调用来加载技能，而非动态更改系统提示，只发现并加载每个任务所需的技能。
+
+**用例：** 想象构建一个代理来帮助编写大型企业不同业务垂直领域的 SQL 查询。您的组织可能为每个垂直领域设置独立的数据存储，也可能使用包含数千张表的单一巨型数据库。无论哪种方式，预先加载所有模式都会耗尽上下文窗口。渐进式披露通过仅在需要时加载相关模式来解决这个问题。这种架构还使不同的产品所有者和利益相关者能够独立贡献和维护其特定业务垂直领域的技能。
+
+**您将构建的内容：** 一个具有两个技能（销售分析和库存管理）的 SQL 查询助手。代理在系统提示中看到轻量级技能描述，然后仅当与用户查询相关时，通过工具调用加载完整的数据库模式和业务逻辑。
+
+<Note>
+有关具有查询执行、错误纠正和验证功能的完整 SQL 代理示例，请参阅我们的 [SQL Agent 教程](/oss/langchain/sql-agent)。本教程专注于渐进式披露模式，该模式可应用于任何领域。
+</Note>
+
+<Tip>
+渐进式披露由 Anthropic 推广，作为构建可扩展代理技能系统的技术。这种方法采用三层架构（元数据 → 核心内容 → 详细资源），其中代理仅在需要时加载信息。有关此技术的更多信息，请参阅 [使用代理技能为现实世界配备工具](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills)。
+</Tip>
+
+## 工作原理
+
+以下是用户请求 SQL 查询时的工作流程：
+
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#E5F4FF','primaryTextColor':'#030710','primaryBorderColor':'#006DDD','lineColor':'#40668D','secondaryColor':'#F6FFDB','tertiaryColor':'#FDF3FF','tertiaryBorderColor':'#7E65AE','tertiaryTextColor':'#504B5F'}}}%%
+flowchart TD
+    Start([💬 User: Write SQL query<br/>for high-value customers]) --> SystemPrompt[📋 Agent sees skill descriptions:<br/>• sales_analytics<br/>• inventory_management]
+
+    SystemPrompt --> Decide{🤔 Need sales schema}
+
+    Decide --> LoadSkill[🔧 load_skill<br/>'sales_analytics']
+
+    LoadSkill --> Schema[📊 Schema loaded:<br/>customers, orders tables<br/>+ business logic]
+
+    Schema --> WriteQuery[✍️ Agent writes SQL query<br/>using schema knowledge]
+
+    WriteQuery --> Response([✅ Returns valid SQL<br/>following business rules])
+
+    %% Styling for light and dark modes
+    classDef startEnd fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#FDF3FF,stroke:#7E65AE,stroke-width:2px,color:#504B5F
+    classDef decision fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+    classDef enrichment fill:#EBD0F0,stroke:#885270,stroke-width:2px,color:#441E33
+
+    class Start,Response startEnd
+    class SystemPrompt,LoadSkill,WriteQuery process
+    class Decide decision
+    class Schema enrichment
+```
+
+**为什么渐进式披露：**
+- **减少上下文使用** - 只需加载任务所需的 2-3 个技能，而非所有可用技能
+- **支持团队自治** - 不同团队可以独立开发专用技能（类似于其他多智能体架构）
+- **高效扩展** - 可以添加数十或数百个技能而不会使上下文不堪重负
+- **简化对话历史** - 单个智能体只需一个对话线程
+
+**什么是技能：** 技能，作为 Claude Code 推广的概念，主要是基于提示词的：针对特定业务任务的专业化指令的自包含单元。在 Claude Code 中，技能作为文件系统上的目录和文件暴露，通过文件操作发现。技能通过提示词指导行为，并可提供关于工具使用的信息，或包含示例代码供编码智能体执行。
+
+<Tip>
+采用渐进式披露的技能可以视为一种 [RAG（检索增强生成）](/oss/langchain/rag) 的形式，其中每个技能都是一个检索单元——虽然不一定由嵌入或关键词搜索支持，但通过浏览内容的工具（如文件操作或本教程中的直接查找）来实现。
+</Tip>
+
+**权衡：**
+- **延迟**：按需加载技能需要额外的工具调用，这会给首次需要每个技能的请求增加延迟
+- **工作流控制**：基本实现依赖提示词来引导技能使用——如果不添加自定义逻辑，就无法强制执行硬性约束，如"始终在技能 B 前尝试技能 A"
+
+<Tip>
+**实现您自己的技能系统**
+
+在构建自己的技能实现（正如我们在本教程中所做的）时，核心概念是渐进式披露——按需加载信息。除此之外，实现上完全灵活：
+
+- **存储**：数据库、S3、内存数据结构或任何后端
+- **发现**：直接查找（本教程）、RAG 用于大型技能集合、文件系统扫描或 API 调用
+- **加载逻辑**：自定义延迟特性，添加搜索技能内容或排名相关性的逻辑
+- **副作用**：定义技能加载时发生的情况，例如暴露与该技能关联的工具（第 8 节中介绍）
+
+这种灵活性让您可以针对性能、存储和工作流控制方面的特定需求进行优化。
+</Tip>
+
+## 设置
+
+### 安装
+
+本教程需要 `langchain` 包：
+
+:::python
+<CodeGroup>
+```bash pip
+pip install langchain
+```
+```bash uv
+uv add langchain
+```
+```bash conda
+conda install langchain -c conda-forge
+```
+</CodeGroup>
+:::
+
+:::js
+<CodeGroup>
+```bash npm
+npm install langchain
+```
+```bash yarn
+yarn add langchain
+```
+```bash pnpm
+pnpm add langchain
+```
+</CodeGroup>
+:::
+
+更多详情，请参阅我们的[安装指南](/oss/langchain/install)。
+
+### LangSmith
+
+设置 [LangSmith](https://smith.langchain.com) 以检查代理内部正在发生的情况。然后设置以下环境变量：
+
+:::python
+<CodeGroup>
+```bash bash
+export LANGSMITH_TRACING="true"
+export LANGSMITH_API_KEY="..."
+```
+```python python
+import getpass
+import os
+
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
+```
+</CodeGroup>
+:::
+
+:::js
+<CodeGroup>
+```bash bash
+export LANGSMITH_TRACING="true"
+export LANGSMITH_API_KEY="..."
+```
+```typescript typescript
+process.env.LANGSMITH_TRACING = "true";
+process.env.LANGSMITH_API_KEY = "...";
+```
+</CodeGroup>
+:::
+
+### 选择 LLM
+
+从 LangChain 的集成套件中选择一个聊天模型：
+
+:::python
+<ChatModelTabsPy />
+:::
+
+:::js
+<ChatModelTabsJs />
+:::
+
+## 1. 定义技能
+
+首先，定义技能的结构。每个技能都有一个名称、一个简短描述（显示在系统提示中）以及完整内容（按需加载）：
+
+:::python
+```python
+from typing import TypedDict
+
+class Skill(TypedDict):  # [!code highlight]
+    """A skill that can be progressively disclosed to the agent."""
+    name: str  # Unique identifier for the skill
+    description: str  # 1-2 sentence description to show in system prompt
+    content: str  # Full skill content with detailed instructions
+```
+:::
+
+:::js
+```typescript
+import { z } from "zod";
+
+// A skill that can be progressively disclosed to the agent
+const SkillSchema = z.object({  // [!code highlight]
+  name: z.string(),  // Unique identifier for the skill
+  description: z.string(),  // 1-2 sentence description to show in system prompt
+  content: z.string(),  // Full skill content with detailed instructions
+});
+
+type Skill = z.infer<typeof SkillSchema>;
+```
+:::
+
+现在为 SQL 查询助手定义示例技能。这些技能的设计原则是**描述简洁**（在代理启动时显示），但**内容详尽**（仅在需要时加载）：
+
+<Accordion title="View complete skill definitions">
+
+:::python
+
+::
+```python
+SKILLS: list[Skill] = [
+    {
+        "name": "sales_analytics",
+        "description": "Database schema and business logic for sales data analysis including customers, orders, and revenue.",
+        "content": """# Sales Analytics Schema
+
+## Tables
+
+### customers
+- customer_id (PRIMARY KEY)
+- name
+- email
+- signup_date
+- status (active/inactive)
+- customer_tier (bronze/silver/gold/platinum)
+
+### orders
+- order_id (PRIMARY KEY)
+- customer_id (FOREIGN KEY -> customers)
+- order_date
+- status (pending/completed/cancelled/refunded)
+- total_amount
+- sales_region (north/south/east/west)
+
+### order_items
+- item_id (PRIMARY KEY)
+- order_id (FOREIGN KEY -> orders)
+- product_id
+- quantity
+- unit_price
+- discount_percent
+
+## Business Logic
+
+**Active customers**: status = 'active' AND signup_date <= CURRENT_DATE - INTERVAL '90 days'
+
+**Revenue calculation**: Only count orders with status = 'completed'. Use total_amount from orders table, which already accounts for discounts.
+
+**Customer lifetime value (CLV)**: Sum of all completed order amounts for a customer.
+
+**High-value orders**: Orders with total_amount > 1000
+
+## Example Query
+
+-- Get top 10 customers by revenue in the last quarter
+SELECT
+    c.customer_id,
+    c.name,
+    c.customer_tier,
+    SUM(o.total_amount) as total_revenue
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+WHERE o.status = 'completed'
+  AND o.order_date >= CURRENT_DATE - INTERVAL '3 months'
+GROUP BY c.customer_id, c.name, c.customer_tier
+ORDER BY total_revenue DESC
+LIMIT 10;
+""",
+    },
+    {
+        "name": "inventory_management",
+        "description": "Database schema and business logic for inventory tracking including products, warehouses, and stock levels.",
+        "content": """# Inventory Management Schema
+
+## Tables
+
+### products
+- product_id (PRIMARY KEY)
+- product_name
+- sku
+- category
+- unit_cost
+- reorder_point (minimum stock level before reordering)
+- discontinued (boolean)
+
+### warehouses
+- warehouse_id (PRIMARY KEY)
+- warehouse_name
+- location
+- capacity
+
+### inventory
+- inventory_id (PRIMARY KEY)
+- product_id (FOREIGN KEY -> products)
+- warehouse_id (FOREIGN KEY -> warehouses)
+- quantity_on_hand
+- last_updated
+
+### stock_movements
+- movement_id (PRIMARY KEY)
+- product_id (FOREIGN KEY -> products)
+- warehouse_id (FOREIGN KEY -> warehouses)
+- movement_type (inbound/outbound/transfer/adjustment)
+- quantity (positive for inbound, negative for outbound)
+- movement_date
+- reference_number
+
+## Business Logic
+
+**Available stock**: quantity_on_hand from inventory table where quantity_on_hand > 0
+
+**Products needing reorder**: Products where total quantity_on_hand across all warehouses is less than or equal to the product's reorder_point
+
+**Active products only**: Exclude products where discontinued = true unless specifically analyzing discontinued items
+
+**Stock valuation**: quantity_on_hand * unit_cost for each product
+
+## Example Query
+
+-- Find products below reorder point across all warehouses
+SELECT
+    p.product_id,
+    p.product_name,
+    p.reorder_point,
+    SUM(i.quantity_on_hand) as total_stock,
+    p.unit_cost,
+    (p.reorder_point - SUM(i.quantity_on_hand)) as units_to_reorder
+FROM products p
+JOIN inventory i ON p.product_id = i.product_id
+WHERE p.discontinued = false
+GROUP BY p.product_id, p.product_name, p.reorder_point, p.unit_cost
+HAVING SUM(i.quantity_on_hand) <= p.reorder_point
+ORDER BY units_to_reorder DESC;
+""",
+    },
+]
+```
+:::
+
+:::js
+```typescript
+import { context } from "langchain";
+
+const SKILLS: Skill[] = [
+  {
+    name: "sales_analytics",
+    description:
+      "Database schema and business logic for sales data analysis including customers, orders, and revenue.",
+    content: context`
+    # Sales Analytics Schema
+
+    ## Tables
+
+    ### customers
+    - customer_id (PRIMARY KEY)
+    - name
+    - email
+    - signup_date
+    - status (active/inactive)
+    - customer_tier (bronze/silver/gold/platinum)
+
+    ### orders
+    - order_id (PRIMARY KEY)
+    - customer_id (FOREIGN KEY -> customers)
+    - order_date
+    - status (pending/completed/cancelled/refunded)
+    - total_amount
+    - sales_region (north/south/east/west)
+
+    ### order_items
+    - item_id (PRIMARY KEY)
+    - order_id (FOREIGN KEY -> orders)
+    - product_id
+    - quantity
+    - unit_price
+    - discount_percent
+
+    ## Business Logic
+
+    **Active customers**:
+    status = 'active' AND signup_date <= CURRENT_DATE - INTERVAL '90 days'
+
+    **Revenue calculation**:
+    Only count orders with status = 'completed'.
+    Use total_amount from orders table, which already accounts for discounts.
+
+    **Customer lifetime value (CLV)**:
+    Sum of all completed order amounts for a customer.
+
+    **High-value orders**:
+    Orders with total_amount > 1000
+
+    ## Example Query
+
+    -- Get top 10 customers by revenue in the last quarter
+    SELECT
+        c.customer_id,
+        c.name,
+        c.customer_tier,
+        SUM(o.total_amount) as total_revenue
+    FROM customers c
+    JOIN orders o ON c.customer_id = o.customer_id
+    WHERE o.status = 'completed'
+    AND o.order_date >= CURRENT_DATE - INTERVAL '3 months'
+    GROUP BY c.customer_id, c.name, c.customer_tier
+    ORDER BY total_revenue DESC
+    LIMIT 10;`,
+  },
+  {
+    name: "inventory_management",
+    description:
+      "Database schema and business logic for inventory tracking including products, warehouses, and stock levels.",
+    content: context`
+    # Inventory Management Schema
+
+    ## Tables
+
+    ### products
+    - product_id (PRIMARY KEY)
+    - product_name
+    - sku
+    - category
+    - unit_cost
+    - reorder_point (minimum stock level before reordering)
+    - discontinued (boolean)
+
+    ### warehouses
+    - warehouse_id (PRIMARY KEY)
+    - warehouse_name
+    - location
+    - capacity
+
+    ### inventory
+    - inventory_id (PRIMARY KEY)
+    - product_id (FOREIGN KEY -> products)
+    - warehouse_id (FOREIGN KEY -> warehouses)
+    - quantity_on_hand
+    - last_updated
+
+    ### stock_movements
+    - movement_id (PRIMARY KEY)
+    - product_id (FOREIGN KEY -> products)
+    - warehouse_id (FOREIGN KEY -> warehouses)
+    - movement_type (inbound/outbound/transfer/adjustment)
+    - quantity (positive for inbound, negative for outbound)
+    - movement_date
+    - reference_number
+
+    ## Business Logic
+
+    **Available stock**:
+    quantity_on_hand from inventory table where quantity_on_hand > 0
+
+    **Products needing reorder**:
+    Products where total quantity_on_hand across all warehouses is less
+    than or equal to the product's reorder_point
+
+    **Active products only**:
+    Exclude products where discontinued = true unless specifically analyzing discontinued items
+
+    **Stock valuation**:
+    quantity_on_hand * unit_cost for each product
+
+    ## Example Query
+
+    -- Find products below reorder point across all warehouses
+    SELECT
+        p.product_id,
+        p.product_name,
+        p.reorder_point,
+        SUM(i.quantity_on_hand) as total_stock,
+        p.unit_cost,
+        (p.reorder_point - SUM(i.quantity_on_hand)) as units_to_reorder
+    FROM products p
+    JOIN inventory i ON p.product_id = i.product_id
+    WHERE p.discontinued = false
+    GROUP BY p.product_id, p.product_name, p.reorder_point, p.unit_cost
+    HAVING SUM(i.quantity_on_hand) <= p.reorder_point
+    ORDER BY units_to_reorder DESC;`,
+  },
+];
+```
+:::
+
+</Accordion>
+
+## 2. 创建技能加载工具
+
+创建一个按需加载完整技能内容的工具：
+
+:::python
+```python
+from langchain.tools import tool
+
+@tool  # [!code highlight]
+def load_skill(skill_name: str) -> str:
+    """Load the full content of a skill into the agent's context.
+
+    Use this when you need detailed information about how to handle a specific
+    type of request. This will provide you with comprehensive instructions,
+    policies, and guidelines for the skill area.
+
+    Args:
+        skill_name: The name of the skill to load (e.g., "expense_reporting", "travel_booking")
+    """
+    # Find and return the requested skill
+    for skill in SKILLS:
+        if skill["name"] == skill_name:
+            return f"Loaded skill: {skill_name}\n\n{skill['content']}"  # [!code highlight]
+
+    # Skill not found
+    available = ", ".join(s["name"] for s in SKILLS)
+    return f"Skill '{skill_name}' not found. Available skills: {available}"
+```
+:::
+
+:::js
+```typescript
+import { tool } from "langchain";
+import { z } from "zod";
+
+const loadSkill = tool(  // [!code highlight]
+  async ({ skillName }) => {
+    // Find and return the requested skill
+    const skill = SKILLS.find((s) => s.name === skillName);
+    if (skill) {
+      return `Loaded skill: ${skillName}\n\n${skill.content}`;  // [!code highlight]
+    }
+
+    // Skill not found
+    const available = SKILLS.map((s) => s.name).join(", ");
+    return `Skill '${skillName}' not found. Available skills: ${available}`;
+  },
+  {
+    name: "load_skill",
+    description: `Load the full content of a skill into the agent's context.
+
+Use this when you need detailed information about how to handle a specific
+type of request. This will provide you with comprehensive instructions,
+policies, and guidelines for the skill area.`,
+    schema: z.object({
+      skillName: z.string().describe("The name of the skill to load"),
+    }),
+  }
+);
+```
+`load_skill` 工具以字符串形式返回完整的技能内容，该内容作为 ToolMessage 的一部分进入对话。如需了解创建和使用工具的更多详情，请参阅[工具指南](/oss/langchain/tools)。
+
+## 3. 构建技能中间件
+
+创建自定义中间件，将技能描述注入系统提示词中。此中间件使技能可被发现，而无需预先加载其完整内容。
+
+<Note>
+本指南演示如何创建自定义中间件。如需了解中间件概念和模式的完整指南，请参阅[自定义中间件文档](/oss/langchain/middleware/custom)。
+</Note>
+
+:::python
+```python
+from langchain.agents.middleware import ModelRequest, ModelResponse, AgentMiddleware
+from langchain.messages import SystemMessage
+from typing import Callable
+
+class SkillMiddleware(AgentMiddleware):  # [!code highlight]
+    """Middleware that injects skill descriptions into the system prompt."""
+
+    # Register the load_skill tool as a class variable
+    tools = [load_skill]  # [!code highlight]
+
+    def __init__(self):
+        """Initialize and generate the skills prompt from SKILLS."""
+        # Build skills prompt from the SKILLS list
+        skills_list = []
+        for skill in SKILLS:
+            skills_list.append(
+                f"- **{skill['name']}**: {skill['description']}"
+            )
+        self.skills_prompt = "\n".join(skills_list)
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse],
+    ) -> ModelResponse:
+        """Sync: Inject skill descriptions into system prompt."""
+        # Build the skills addendum
+        skills_addendum = ( # [!code highlight]
+            f"\n\n## Available Skills\n\n{self.skills_prompt}\n\n" # [!code highlight]
+            "Use the load_skill tool when you need detailed information " # [!code highlight]
+            "about handling a specific type of request." # [!code highlight]
+        )
+
+        # Append to system message content blocks
+        new_content = list(request.system_message.content_blocks) + [
+            {"type": "text", "text": skills_addendum}
+        ]
+        new_system_message = SystemMessage(content=new_content)
+        modified_request = request.override(system_message=new_system_message)
+        return handler(modified_request)
+```
+:::
+
+:::js
+```typescript
+import { createMiddleware } from "langchain";
+
+// Build skills prompt from the SKILLS list
+const skillsPrompt = SKILLS.map(
+  (skill) => `- **${skill.name}**: ${skill.description}`
+).join("\n");
+
+const skillMiddleware = createMiddleware({  // [!code highlight]
+  name: "skillMiddleware",
+  tools: [loadSkill],  // [!code highlight]
+  wrapModelCall: async (request, handler) => {
+    // Build the skills addendum
+    const skillsAddendum =  // [!code highlight]
+      `\n\n## Available Skills\n\n${skillsPrompt}\n\n` +  // [!code highlight]
+      "Use the load_skill tool when you need detailed information " +  // [!code highlight]
+      "about handling a specific type of request.";  // [!code highlight]
+
+    // Append to system prompt
+    const newSystemPrompt = request.systemPrompt + skillsAddendum;
+
+    return handler({
+      ...request,
+      systemPrompt: newSystemPrompt,
+    });
+  },
+});
+```
+:::
+
+中间件将技能描述附加到系统提示中，使代理了解可用的技能，而无需加载其完整内容。`load_skill` 工具被注册为类变量，使其对代理可用。
+
+<Note>
+**生产环境注意事项**：为简单起见，本教程在 `__init__` 中加载技能列表。在生产系统中，您可能希望在 `before_agent` 钩子中加载技能，以便定期刷新它们以反映最新变化（例如，添加新技能或修改现有技能时）。有关详细信息，请参阅 [before_agent 钩子文档](/oss/langchain/middleware/custom#node-style-hooks)。
+</Note>
+
+## 4. 创建支持技能的代理
+
+现在创建带有技能中间件和检查点以保持状态持久性的代理：
+
+:::python
+```python
+from langchain.agents import create_agent
+from langgraph.checkpoint.memory import InMemorySaver
+
+# Create the agent with skill support
+agent = create_agent(
+    model,
+    system_prompt=(
+        "You are a SQL query assistant that helps users "
+        "write queries against business databases."
+    ),
+    middleware=[SkillMiddleware()],  # [!code highlight]
+    checkpointer=InMemorySaver(),
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent } from "langchain";
+import { MemorySaver } from "@langchain/langgraph";
+
+// Create the agent with skill support
+const agent = createAgent({
+  model,
+  systemPrompt:
+    "You are a SQL query assistant that helps users " +
+    "write queries against business databases.",
+  middleware: [skillMiddleware],  // [!code highlight]
+  checkpointer: new MemorySaver(),
+});
+```
+:::
+
+智能体现在其系统提示中可以访问技能描述，并可以在需要时调用 `load_skill` 来获取完整的技能内容。检查点器在多个轮次之间维护对话历史。
+
+## 5. 测试渐进式披露
+
+使用需要特定技能知识的问题测试智能体：
+
+:::python
+```python
+from langchain_core.utils.uuid import uuid7
+
+# Configuration for this conversation thread
+thread_id = str(uuid7())
+config = {"configurable": {"thread_id": thread_id}}
+
+# Ask for a SQL query
+result = agent.invoke(  # [!code highlight]
+    {
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "Write a SQL query to find all customers "
+                    "who made orders over $1000 in the last month"
+                ),
+            }
+        ]
+    },
+    config
+)
+
+# Print the conversation
+for message in result["messages"]:
+    if hasattr(message, 'pretty_print'):
+        message.pretty_print()
+    else:
+        print(f"{message.type}: {message.content}")
+```
+:::
+
+:::js
+```typescript
+// Configuration for this conversation thread
+const threadId = crypto.randomUUID();
+const config = { configurable: { thread_id: threadId } };
+
+// Ask for a SQL query
+const result = await agent.invoke(  // [!code highlight]
+  {
+    messages: [
+      {
+        role: "user",
+        content:
+          "Write a SQL query to find all customers " +
+          "who made orders over $1000 in the last month",
+      },
+    ],
+  },
+  config
+);
+
+// Print the conversation
+for (const message of result.messages) {
+  console.log(`${message._getType()}: ${message.content}`);
+}
+```
+:::
+
+```
+================================ Human Message =================================
+
+Write a SQL query to find all customers who made orders over $1000 in the last month
+================================== Ai Message ==================================
+Tool Calls:
+  load_skill (call_abc123)
+ Call ID: call_abc123
+  Args:
+    skill_name: sales_analytics
+================================= Tool Message =================================
+Name: load_skill
+
+Loaded skill: sales_analytics
+
+# Sales Analytics Schema
+
+## Tables
+
+### customers
+- customer_id (PRIMARY KEY)
+- name
+- email
+- signup_date
+- status (active/inactive)
+- customer_tier (bronze/silver/gold/platinum)
+
+### orders
+- order_id (PRIMARY KEY)
+- customer_id (FOREIGN KEY -> customers)
+- order_date
+- status (pending/completed/cancelled/refunded)
+- total_amount
+- sales_region (north/south/east/west)
+
+[... rest of schema ...]
+
+## Business Logic
+
+**High-value orders**: Orders with `total_amount > 1000`
+**Revenue calculation**: Only count orders with `status = 'completed'`
+
+================================== Ai Message ==================================
+
+Here's a SQL query to find all customers who made orders over $1000 in the last month:
+
+\`\`\`sql
+SELECT DISTINCT
+    c.customer_id,
+    c.name,
+    c.email,
+    c.customer_tier
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+WHERE o.total_amount > 1000
+  AND o.status = 'completed'
+  AND o.order_date >= CURRENT_DATE - INTERVAL '1 month'
+ORDER BY c.customer_id;
+\`\`\`
+
+This query:
+- Joins customers with their orders
+- Filters for high-value orders (>$1000) using the total_amount field
+- Only includes completed orders (as per the business logic)
+- Restricts to orders from the last month
+- Returns distinct customers to avoid duplicates if they made multiple qualifying orders
+```
+
+## 6. Advanced: Add constraints with custom state
+
+<Accordion title="Optional: Track loaded skills and enforce tool constraints">
+
+您可以添加约束条件，强制某些工具只有在特定技能加载后才能使用。这需要在自定义代理状态中跟踪已加载的技能。
+
+### Define custom state
+
+首先，扩展代理状态以跟踪已加载的技能：
+
+:::python
+
+</fragment>
+```python
+from langchain.agents.middleware import AgentState
+
+class CustomState(AgentState):  # [!code highlight]
+    skills_loaded: NotRequired[list[str]]  # Track which skills have been loaded  # [!code highlight]
+```
+:::
+
+:::js
+```typescript
+import { StateSchema } from "@langchain/langgraph";
+import { z } from "zod";
+
+const CustomState = new StateSchema({
+  skillsLoaded: z.array(z.string()).optional(),  // Track which skills have been loaded  // [!code highlight]
+});
+```
+:::
+
+### Update load_skill to modify state
+
+修改 `load_skill` 工具以更新状态当技能被加载时：
+
+:::python
+```python
+from langgraph.types import Command  # [!code highlight]
+from langchain.tools import tool, ToolRuntime
+from langchain.messages import ToolMessage  # [!code highlight]
+
+@tool
+def load_skill(skill_name: str, runtime: ToolRuntime) -> Command:  # [!code highlight]
+    """Load the full content of a skill into the agent's context.
+
+    Use this when you need detailed information about how to handle a specific
+    type of request. This will provide you with comprehensive instructions,
+    policies, and guidelines for the skill area.
+
+    Args:
+        skill_name: The name of the skill to load
+    """
+    # Find and return the requested skill
+    for skill in SKILLS:
+        if skill["name"] == skill_name:
+            skill_content = f"Loaded skill: {skill_name}\n\n{skill['content']}"
+
+            # Update state to track loaded skill
+            return Command(  # [!code highlight]
+                update={  # [!code highlight]
+                    "messages": [  # [!code highlight]
+                        ToolMessage(  # [!code highlight]
+                            content=skill_content,  # [!code highlight]
+                            tool_call_id=runtime.tool_call_id,  # [!code highlight]
+                        )  # [!code highlight]
+                    ],  # [!code highlight]
+                    "skills_loaded": [skill_name],  # [!code highlight]
+                }  # [!code highlight]
+            )  # [!code highlight]
+
+    # Skill not found
+    available = ", ".join(s["name"] for s in SKILLS)
+    return Command(
+        update={
+            "messages": [
+                ToolMessage(
+                    content=f"Skill '{skill_name}' not found. Available skills: {available}",
+                    tool_call_id=runtime.tool_call_id,
+                )
+            ]
+        }
+    )
+```
+:::
+
+:::js
+```typescript
+import { tool, ToolMessage, type ToolRuntime } from "langchain";
+import { Command } from "@langchain/langgraph";  // [!code highlight]
+import { z } from "zod";
+
+const loadSkill = tool(  // [!code highlight]
+  async ({ skillName }, runtime: ToolRuntime<typeof CustomState.State>) => {
+    // Find and return the requested skill
+    const skill = SKILLS.find((s) => s.name === skillName);
+
+    if (skill) {
+      const skillContent = `Loaded skill: ${skillName}\n\n${skill.content}`;
+
+      // Update state to track loaded skill
+      return new Command({  // [!code highlight]
+        update: {  // [!code highlight]
+          messages: [  // [!code highlight]
+            new ToolMessage({  // [!code highlight]
+              content: skillContent,  // [!code highlight]
+              tool_call_id: runtime.toolCallId,  // [!code highlight]
+            }),  // [!code highlight]
+          ],  // [!code highlight]
+          skillsLoaded: [skillName],  // [!code highlight]
+        },  // [!code highlight]
+      });  // [!code highlight]
+    }
+
+    // Skill not found
+    const available = SKILLS.map((s) => s.name).join(", ");
+    return new Command({
+      update: {
+        messages: [
+          new ToolMessage({
+            content: `Skill '${skillName}' not found. Available skills: ${available}`,
+            tool_call_id: runtime.toolCallId,
+          }),
+        ],
+      },
+    });
+  },
+  {
+    name: "load_skill",
+    description: `Load the full content of a skill into the agent's context.`,
+    schema: z.object({
+      skillName: z.string().describe("The name of the skill to load"),
+    }),
+  }
+);
+```
+:::
+
+### 创建受限工具
+
+创建一个仅在特定技能加载后才可使用的工具：
+
+:::python
+```python
+@tool
+def write_sql_query(  # [!code highlight]
+    query: str,
+    vertical: str,
+    runtime: ToolRuntime,
+) -> str:
+    """Write and validate a SQL query for a specific business vertical.
+
+    This tool helps format and validate SQL queries. You must load the
+    appropriate skill first to understand the database schema.
+
+    Args:
+        query: The SQL query to write
+        vertical: The business vertical (sales_analytics or inventory_management)
+    """
+    # Check if the required skill has been loaded
+    skills_loaded = runtime.state.get("skills_loaded", [])  # [!code highlight]
+
+    if vertical not in skills_loaded:  # [!code highlight]
+        return (  # [!code highlight]
+            f"Error: You must load the '{vertical}' skill first "  # [!code highlight]
+            f"to understand the database schema before writing queries. "  # [!code highlight]
+            f"Use load_skill('{vertical}') to load the schema."  # [!code highlight]
+        )  # [!code highlight]
+
+    # Validate and format the query
+    return (
+        f"SQL Query for {vertical}:\n\n"
+        f"```sql\n{query}\n```\n\n"
+        f"✓ Query validated against {vertical} schema\n"
+        f"Ready to execute against the database."
+    )
+```
+:::
+
+:::js
+```typescript
+const writeSqlQuery = tool(  // [!code highlight]
+  async ({ query, vertical }, runtime: ToolRuntime<typeof CustomState.State>) => {
+    // Check if the required skill has been loaded
+    const skillsLoaded = runtime.state.skillsLoaded ?? [];  // [!code highlight]
+
+    if (!skillsLoaded.includes(vertical)) {  // [!code highlight]
+      return (  // [!code highlight]
+        `Error: You must load the '${vertical}' skill first ` +  // [!code highlight]
+        `to understand the database schema before writing queries. ` +  // [!code highlight]
+        `Use load_skill('${vertical}') to load the schema.`  // [!code highlight]
+      );  // [!code highlight]
+    }
+
+    // Validate and format the query
+    return (
+      `SQL Query for ${vertical}:\n\n` +
+      `\`\`\`sql\n${query}\n\`\`\`\n\n` +
+      `✓ Query validated against ${vertical} schema\n` +
+      `Ready to execute against the database.`
+    );
+  },
+  {
+    name: "write_sql_query",
+    description: `Write and validate a SQL query for a specific business vertical.
+
+This tool helps format and validate SQL queries. You must load the
+appropriate skill first to understand the database schema.`,
+    schema: z.object({
+      query: z.string().describe("The SQL query to write"),
+      vertical: z.string().describe("The business vertical (sales_analytics or inventory_management)"),
+    }),
+  }
+);
+```
+:::
+
+### 更新中间件和代理
+
+更新中间件以使用自定义状态架构：
+
+:::python
+```python
+class SkillMiddleware(AgentMiddleware[CustomState]):  # [!code highlight]
+    """Middleware that injects skill descriptions into the system prompt."""
+
+    state_schema = CustomState  # [!code highlight]
+    tools = [load_skill, write_sql_query]  # [!code highlight]
+
+    # ... rest of the middleware implementation stays the same
+```
+:::
+
+:::js
+```typescript
+const skillMiddleware = createMiddleware({  // [!code highlight]
+  name: "skillMiddleware",
+  stateSchema: CustomState,  // [!code highlight]
+  tools: [loadSkill, writeSqlQuery],  // [!code highlight]
+  // ... rest of the middleware implementation stays the same
+});
+```
+:::
+
+使用注册约束工具的中间件创建代理：
+
+:::python
+```python
+agent = create_agent(
+    model,
+    system_prompt=(
+        "You are a SQL query assistant that helps users "
+        "write queries against business databases."
+    ),
+    middleware=[SkillMiddleware()],  # [!code highlight]
+    checkpointer=InMemorySaver(),
+)
+```
+:::
+
+:::js
+```typescript
+const agent = createAgent({
+  model,
+  systemPrompt:
+    "You are a SQL query assistant that helps users " +
+    "write queries against business databases.",
+  middleware: [skillMiddleware],  // [!code highlight]
+  checkpointer: new MemorySaver(),
+});
+```
+现在，如果代理在加载所需技能之前尝试使用 `write_sql_query`，它将收到一条错误消息，提示它先加载适当的技能（例如 `sales_analytics` 或 `inventory_management`）。这确保代理在尝试验证查询之前具有必要的模式知识。
+
+</Accordion>
+
+## 完整示例
+
+<Accordion title="查看完整的可运行脚本">
+
+以下是一个完整的、可运行的实现，结合了本教程的所有内容：
+
+:::python
+```python
+from langchain_core.utils.uuid import uuid7
+from typing import TypedDict, NotRequired
+from langchain.tools import tool
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRequest, ModelResponse, AgentMiddleware
+from langchain.messages import SystemMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from typing import Callable
+
+# Define skill structure
+class Skill(TypedDict):
+    """A skill that can be progressively disclosed to the agent."""
+    name: str
+    description: str
+    content: str
+
+# Define skills with schemas and business logic
+SKILLS: list[Skill] = [
+    {
+        "name": "sales_analytics",
+        "description": "Database schema and business logic for sales data analysis including customers, orders, and revenue.",
+        "content": """# Sales Analytics Schema
+
+## Tables
+
+### customers
+- customer_id (PRIMARY KEY)
+- name
+- email
+- signup_date
+- status (active/inactive)
+- customer_tier (bronze/silver/gold/platinum)
+
+### orders
+- order_id (PRIMARY KEY)
+- customer_id (FOREIGN KEY -> customers)
+- order_date
+- status (pending/completed/cancelled/refunded)
+- total_amount
+- sales_region (north/south/east/west)
+
+### order_items
+- item_id (PRIMARY KEY)
+- order_id (FOREIGN KEY -> orders)
+- product_id
+- quantity
+- unit_price
+- discount_percent
+
+## Business Logic
+
+**Active customers**: status = 'active' AND signup_date <= CURRENT_DATE - INTERVAL '90 days'
+
+**Revenue calculation**: Only count orders with status = 'completed'. Use total_amount from orders table, which already accounts for discounts.
+
+**Customer lifetime value (CLV)**: Sum of all completed order amounts for a customer.
+
+**High-value orders**: Orders with total_amount > 1000
+
+## Example Query
+
+-- Get top 10 customers by revenue in the last quarter
+SELECT
+    c.customer_id,
+    c.name,
+    c.customer_tier,
+    SUM(o.total_amount) as total_revenue
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+WHERE o.status = 'completed'
+  AND o.order_date >= CURRENT_DATE - INTERVAL '3 months'
+GROUP BY c.customer_id, c.name, c.customer_tier
+ORDER BY total_revenue DESC
+LIMIT 10;
+""",
+    },
+    {
+        "name": "inventory_management",
+        "description": "Database schema and business logic for inventory tracking including products, warehouses, and stock levels.",
+        "content": """# Inventory Management Schema
+
+## Tables
+
+### products
+- product_id (PRIMARY KEY)
+- product_name
+- sku
+- category
+- unit_cost
+- reorder_point (minimum stock level before reordering)
+- discontinued (boolean)
+
+### warehouses
+- warehouse_id (PRIMARY KEY)
+- warehouse_name
+- location
+- capacity
+
+### inventory
+- inventory_id (PRIMARY KEY)
+- product_id (FOREIGN KEY -> products)
+- warehouse_id (FOREIGN KEY -> warehouses)
+- quantity_on_hand
+- last_updated
+
+### stock_movements
+- movement_id (PRIMARY KEY)
+- product_id (FOREIGN KEY -> products)
+- warehouse_id (FOREIGN KEY -> warehouses)
+- movement_type (inbound/outbound/transfer/adjustment)
+- quantity (positive for inbound, negative for outbound)
+- movement_date
+- reference_number
+
+## Business Logic
+
+**Available stock**: quantity_on_hand from inventory table where quantity_on_hand > 0
+
+**Products needing reorder**: Products where total quantity_on_hand across all warehouses is less than or equal to the product's reorder_point
+
+**Active products only**: Exclude products where discontinued = true unless specifically analyzing discontinued items
+
+**Stock valuation**: quantity_on_hand * unit_cost for each product
+
+## Example Query
+
+-- Find products below reorder point across all warehouses
+SELECT
+    p.product_id,
+    p.product_name,
+    p.reorder_point,
+    SUM(i.quantity_on_hand) as total_stock,
+    p.unit_cost,
+    (p.reorder_point - SUM(i.quantity_on_hand)) as units_to_reorder
+FROM products p
+JOIN inventory i ON p.product_id = i.product_id
+WHERE p.discontinued = false
+GROUP BY p.product_id, p.product_name, p.reorder_point, p.unit_cost
+HAVING SUM(i.quantity_on_hand) <= p.reorder_point
+ORDER BY units_to_reorder DESC;
+""",
+    },
+]
+
+# Create skill loading tool
+@tool
+def load_skill(skill_name: str) -> str:
+    """Load the full content of a skill into the agent's context.
+
+    Use this when you need detailed information about how to handle a specific
+    type of request. This will provide you with comprehensive instructions,
+    policies, and guidelines for the skill area.
+
+    Args:
+        skill_name: The name of the skill to load (e.g., "sales_analytics", "inventory_management")
+    """
+    # Find and return the requested skill
+    for skill in SKILLS:
+        if skill["name"] == skill_name:
+            return f"Loaded skill: {skill_name}\n\n{skill['content']}"
+
+    # Skill not found
+    available = ", ".join(s["name"] for s in SKILLS)
+    return f"Skill '{skill_name}' not found. Available skills: {available}"
+
+# Create skill middleware
+class SkillMiddleware(AgentMiddleware):
+    """Middleware that injects skill descriptions into the system prompt."""
+
+    # Register the load_skill tool as a class variable
+    tools = [load_skill]
+
+    def __init__(self):
+        """Initialize and generate the skills prompt from SKILLS."""
+        # Build skills prompt from the SKILLS list
+        skills_list = []
+        for skill in SKILLS:
+            skills_list.append(
+                f"- **{skill['name']}**: {skill['description']}"
+            )
+        self.skills_prompt = "\n".join(skills_list)
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse],
+    ) -> ModelResponse:
+        """Sync: Inject skill descriptions into system prompt."""
+        # Build the skills addendum
+        skills_addendum = (
+            f"\n\n## Available Skills\n\n{self.skills_prompt}\n\n"
+            "Use the load_skill tool when you need detailed information "
+            "about handling a specific type of request."
+        )
+
+        # Append to system message content blocks
+        new_content = list(request.system_message.content_blocks) + [
+            {"type": "text", "text": skills_addendum}
+        ]
+        new_system_message = SystemMessage(content=new_content)
+        modified_request = request.override(system_message=new_system_message)
+        return handler(modified_request)
+
+# Initialize your chat model (replace with your model)
+# Example: from langchain_anthropic import ChatAnthropic
+# model = ChatAnthropic(model="claude-3-5-sonnet-20241022")
+from langchain_openai import ChatOpenAI
+model = ChatOpenAI(model="gpt-4")
+
+# Create the agent with skill support
+agent = create_agent(
+    model,
+    system_prompt=(
+        "You are a SQL query assistant that helps users "
+        "write queries against business databases."
+    ),
+    middleware=[SkillMiddleware()],
+    checkpointer=InMemorySaver(),
+)
+
+# Example usage
+if __name__ == "__main__":
+    # Configuration for this conversation thread
+    thread_id = str(uuid7())
+    config = {"configurable": {"thread_id": thread_id}}
+
+    # Ask for a SQL query
+    result = agent.invoke(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Write a SQL query to find all customers "
+                        "who made orders over $1000 in the last month"
+                    ),
+                }
+            ]
+        },
+        config
+    )
+
+    # Print the conversation
+    for message in result["messages"]:
+        if hasattr(message, 'pretty_print'):
+            message.pretty_print()
+        else:
+            print(f"{message.type}: {message.content}")
+```
+:::
+
+:::js
+```typescript
+import {
+  tool,
+  createAgent,
+  createMiddleware,
+  ToolMessage,
+  context,
+  type ToolRuntime,
+} from "langchain";
+import { MemorySaver, Command } from "@langchain/langgraph";
+import { ChatOpenAI } from "@langchain/openai";
+import { z } from "zod";
+
+// A skill that can be progressively disclosed to the agent
+const SkillSchema = z.object({
+  name: z.string(), // Unique identifier for the skill
+  description: z.string(), // 1-2 sentence description to show in system prompt
+  content: z.string(), // Full skill content with detailed instructions
+});
+
+type Skill = z.infer<typeof SkillSchema>;
+
+const SKILLS: Skill[] = [
+  {
+    name: "sales_analytics",
+    description:
+      "Database schema and business logic for sales data analysis including customers, orders, and revenue.",
+    content: context`
+    # Sales Analytics Schema
+
+    ## Tables
+
+    ### customers
+    - customer_id (PRIMARY KEY)
+    - name
+    - email
+    - signup_date
+    - status (active/inactive)
+    - customer_tier (bronze/silver/gold/platinum)
+
+    ### orders
+    - order_id (PRIMARY KEY)
+    - customer_id (FOREIGN KEY -> customers)
+    - order_date
+    - status (pending/completed/cancelled/refunded)
+    - total_amount
+    - sales_region (north/south/east/west)
+
+    ### order_items
+    - item_id (PRIMARY KEY)
+    - order_id (FOREIGN KEY -> orders)
+    - product_id
+    - quantity
+    - unit_price
+    - discount_percent
+
+    ## Business Logic
+
+    **Active customers**: status = 'active' AND signup_date <= CURRENT_DATE - INTERVAL '90 days'
+
+    **Revenue calculation**:
+    Only count orders with status = 'completed'. Use total_amount from orders table,
+    which already accounts for discounts.
+
+    **Customer lifetime value (CLV)**:
+    Sum of all completed order amounts for a customer.
+
+    **High-value orders**:
+    Orders with total_amount > 1000
+
+    ## Example Query
+    -- Get top 10 customers by revenue in the last quarter
+    SELECT
+        c.customer_id,
+        c.name,
+        c.customer_tier,
+        SUM(o.total_amount) as total_revenue
+    FROM customers c
+    JOIN orders o ON c.customer_id = o.customer_id
+    WHERE o.status = 'completed'
+    AND o.order_date >= CURRENT_DATE - INTERVAL '3 months'
+    GROUP BY c.customer_id, c.name, c.customer_tier
+    ORDER BY total_revenue DESC
+    LIMIT 10;`,
+  },
+  {
+    name: "inventory_management",
+    description:
+      "Database schema and business logic for inventory tracking including products, warehouses, and stock levels.",
+    content: context`
+    # Inventory Management Schema
+
+    ## Tables
+
+    ### products
+    - product_id (PRIMARY KEY)
+    - product_name
+    - sku
+    - category
+    - unit_cost
+    - reorder_point (minimum stock level before reordering)
+    - discontinued (boolean)
+
+    ### warehouses
+    - warehouse_id (PRIMARY KEY)
+    - warehouse_name
+    - location
+    - capacity
+
+    ### inventory
+    - inventory_id (PRIMARY KEY)
+    - product_id (FOREIGN KEY -> products)
+    - warehouse_id (FOREIGN KEY -> warehouses)
+    - quantity_on_hand
+    - last_updated
+
+    ### stock_movements
+    - movement_id (PRIMARY KEY)
+    - product_id (FOREIGN KEY -> products)
+    - warehouse_id (FOREIGN KEY -> warehouses)
+    - movement_type (inbound/outbound/transfer/adjustment)
+    - quantity (positive for inbound, negative for outbound)
+    - movement_date
+    - reference_number
+
+    ## Business Logic
+
+    **Available stock**:
+    quantity_on_hand from inventory table where quantity_on_hand > 0
+
+    **Products needing reorder**:
+    Products where total quantity_on_hand across all warehouses is
+    less than or equal to the product's reorder_point
+
+    **Active products only**:
+    Exclude products where discontinued = true unless specifically
+    analyzing discontinued items
+
+    **Stock valuation**:
+    quantity_on_hand * unit_cost for each product
+
+    ## Example Query
+
+    -- Find products below reorder point across all warehouses
+    SELECT
+        p.product_id,
+        p.product_name,
+        p.reorder_point,
+        SUM(i.quantity_on_hand) as total_stock,
+        p.unit_cost,
+        (p.reorder_point - SUM(i.quantity_on_hand)) as units_to_reorder
+    FROM products p
+    JOIN inventory i ON p.product_id = i.product_id
+    WHERE p.discontinued = false
+    GROUP BY p.product_id, p.product_name, p.reorder_point, p.unit_cost
+    HAVING SUM(i.quantity_on_hand) <= p.reorder_point
+    ORDER BY units_to_reorder DESC;`,
+  },
+];
+
+// const loadSkill = tool(
+//   async ({ skillName }) => {
+//     // Find and return the requested skill
+//     const skill = SKILLS.find((s) => s.name === skillName);
+//     if (skill) {
+//       return `Loaded skill: ${skillName}\n\n${skill.content}`;
+//     }
+
+//     // Skill not found
+//     const available = SKILLS.map((s) => s.name).join(", ");
+//     return `Skill '${skillName}' not found. Available skills: ${available}`;
+//   },
+//   {
+//     name: "load_skill",
+//     description: `Load the full content of a skill into the agent's context.
+
+// Use this when you need detailed information about how to handle a specific
+// type of request. This will provide you with comprehensive instructions,
+// policies, and guidelines for the skill area.`,
+//     schema: z.object({
+//       skillName: z.string().describe("The name of the skill to load"),
+//     }),
+//   }
+// );
+
+// Build skills prompt from the SKILLS list
+const skillsPrompt = SKILLS.map(
+  (skill) => `- **${skill.name}**: ${skill.description}`
+).join("\n");
+
+const skillMiddleware = createMiddleware({
+  name: "skillMiddleware",
+  tools: [loadSkill],
+  wrapModelCall: async (request, handler) => {
+    // Build the skills addendum
+    const skillsAddendum =
+      `\n\n## Available Skills\n\n${skillsPrompt}\n\n` +
+      "Use the load_skill tool when you need detailed information " +
+      "about handling a specific type of request.";
+
+    // Append to system prompt
+    const newSystemPrompt = request.systemPrompt + skillsAddendum;
+
+    return handler({
+      ...request,
+      systemPrompt: newSystemPrompt,
+    });
+  },
+});
+
+const model = new ChatOpenAI({
+  model: "gpt-5.4-mini",
+  temperature: 0,
+});
+
+// Create the agent with skill support
+const agent = createAgent({
+  model,
+  systemPrompt:
+    "You are a SQL query assistant that helps users " +
+    "write queries against business databases.",
+  middleware: [skillMiddleware],
+  checkpointer: new MemorySaver(),
+});
+
+// Configuration for this conversation thread
+const threadId = crypto.randomUUID();
+const config = { configurable: { thread_id: threadId } };
+
+// Ask for a SQL query
+const result = await agent.invoke(
+  {
+    messages: [
+      {
+        role: "user",
+        content:
+          "Write a SQL query to find all customers " +
+          "who made orders over $1000 in the last month",
+      },
+    ],
+  },
+  config
+);
+
+// Print the conversation
+for (const message of result.messages) {
+  console.log(`${message.type}: ${message.content}`);
+}
+```
+:::
+
+此完整示例包括：
+- 包含完整数据库架构的技能定义
+- 用于按需加载的 `load_skill` 工具
+- 将技能描述注入系统提示词的 `SkillMiddleware`
+- 使用中间件和检查点创建代理
+- 示例用法展示代理如何加载技能和编写 SQL 查询
+
+运行此示例，你需要：
+1. 安装所需包：`pip install langchain langchain-openai langgraph`
+2. 设置你的 API 密钥（例如 `export OPENAI_API_KEY=...`）
+3. 用你喜欢的 LLM 提供商替换模型初始化
+
+</Accordion>
+
+## 实现变体
+
+<Accordion title="查看实现选项和权衡">
+
+本教程将技能实现为通过工具调用加载的内存中 Python 字典。然而，有多种方式可以实现技能的分级披露：
+
+**存储后端：**
+- **内存中**（本教程）：技能定义为 Python 数据结构，访问速度快，无 I/O 开销
+- **文件系统**（Claude Code 方式）：技能为包含文件的目录，通过文件操作如 `read_file` 发现
+- **远程存储**：技能存放在 S3、数据库、Notion 或 API 中，按需获取
+
+**技能发现**（代理如何了解存在哪些技能）：
+- **系统提示列表**：技能描述在系统提示词中（本教程使用的方式）
+- **基于文件**：通过扫描目录发现技能（Claude Code 方式）
+- **基于注册表**：查询技能注册服务或 API 获取可用技能
+- **动态查找**：通过工具调用列出可用技能
+
+**分级披露策略**（如何加载技能内容）：
+- **单次加载**：在一次工具调用中加载整个技能内容（本教程使用的方式）
+- **分页**：分多页/多块加载技能内容，适用于大型技能
+- **基于搜索**：在特定技能内容中搜索相关部分（例如，对技能文件使用 grep/读取操作）
+- **层级式**：先加载技能概览，再深入具体子部分
+
+**大小注意事项**（未校准的 mental model - 根据你的系统优化）：
+- **小型技能**（< 1K tokens / ~750 词）：可直接包含在系统提示词中，并使用提示词缓存以节省成本并加快响应
+- **中型技能**（1-10K tokens / ~750-7.5K 词）：受益于按需加载以避免上下文开销（本教程）
+- **大型技能**（> 10K tokens / ~7.5K 词，或 > 5-10% 的上下文窗口）：应使用分级披露技术，如分页、基于搜索的加载或层级式探索，以避免消耗过多上下文
+
+选择取决于你的需求：内存中方式最快，但技能更新需要重新部署，而基于文件或远程存储可实现无需代码更改的动态技能管理。
+
+</Accordion>
+
+## 分级披露与上下文工程
+
+<Accordion title="结合少样本提示和其他技术">
+
+分级披露本质上是一种 **[上下文工程](/oss/langchain/context-engineering) 技术** - 你在管理哪些信息对代理可用以及何时可用。本教程重点介绍加载数据库架构，但相同原则适用于其他类型的上下文。
+
+### 与少样本提示结合
+
+对于 SQL 查询用例，你可以扩展分级披露以动态加载与用户查询匹配的**少样本示例**：
+
+**示例方法：**
+1. 用户问："找出 6 个月未下单的客户"
+2. 代理加载 `sales_analytics` 架构（如本教程所示）
+3. 代理还通过语义搜索或标签查找加载 2-3 个相关示例查询：
+   - 查找不活跃客户的查询
+   - 基于日期过滤的查询
+   - 连接客户表和订单表的查询
+4. 代理结合架构知识和示例模式编写查询
+
+这种分级披露（按需加载架构）和动态少样本提示（加载相关示例）的组合创建了一个强大的上下文工程模式，可扩展到大型知识库，同时提供高质量、基于事实的输出。
+
+</Accordion>
+
+## 下一步
+
+- 了解 **[中间件](/oss/langchain/middleware)** 以实现更动态的代理行为
+- 探索 **[上下文工程](/oss/langchain/context-engineering)** 技术来管理代理上下文
+- 探索 **[交接模式](/oss/langchain/multi-agent/handoffs-customer-support)** 用于顺序工作流
+- 阅读 **[子代理模式](/oss/langchain/multi-agent/subagents-personal-assistant)** 用于并行任务路由
+- 查看 **[多代理模式](/oss/langchain/multi-agent)** 了解专业代理的其他方法
+- 使用 [LangSmith](https://smith.langchain.com) 调试和监控技能加载

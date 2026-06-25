@@ -1,0 +1,167 @@
+---
+title: 使用服务端缓存
+sidebarTitle: 缓存
+description: 在您的代理部署中通过 stale-while-revalidate 和键值缓存 API 进行服务端值缓存。
+---
+
+[Agent Server](/langsmith/agent-server) 包含一个内置缓存，您可以在已部署的图中使用。调用 `swr` 并传入键和加载函数，服务器会缓存结果，在后台重新验证过期条目，并在每次读取时返回新数据。
+
+所有缓存 API 均为**仅服务端**且需要 LangGraph Agent Server 运行时。值必须是 JSON 可序列化的。
+
+<Note>
+`swr` 需要 Agent Server 运行时 **v0.7.79** 或更高版本，目前处于**[测试阶段](/langsmith/release-stages)**。
+`cache_get` 和 `cache_set` 需要 **v0.7.29** 或更高版本。
+</Note>
+
+## 快速开始
+
+传入一个键和一个异步加载函数。如果缓存值可用，`swr` 会返回该值，否则调用加载函数获取数据：
+
+```python
+from langgraph_sdk.cache import swr
+
+result = await swr("config:global", load_config)
+config_data = result.value
+```
+
+首次调用时，`swr` 会等待 `load_config()` 并缓存结果。后续调用时，它会立即返回缓存的值，并在后台重新验证。
+
+## 配置新鲜度
+
+控制缓存值被认为新鲜的时长以及它们何时过期：
+
+```python
+from datetime import timedelta
+from langgraph_sdk.cache import swr
+
+result = await swr(
+    "config:global",
+    load_config,
+    fresh_for=timedelta(minutes=5),
+    max_age=timedelta(hours=1),
+)
+```
+
+| 参数 | 默认值 | 描述 |
+|---|---|---|
+| `fresh_for` | `timedelta(0)` | 将缓存值视为新鲜的持续时间。在此时间窗口内，`swr` 返回缓存值，不进行重新验证。 |
+| `max_age` | `timedelta(days=1)` | 缓存条目的最大生命周期。超过此时间后，`swr` 在返回前阻塞于加载器。上限为 1 天。 |
+
+### 如何进行重新验证
+
+| 缓存状态 | 条件 | 行为 |
+|---|---|---|
+| **未命中** | 键不在缓存中 | 等待 `loader()`，存储结果并返回。 |
+| **新鲜** | `age < fresh_for` | 返回缓存值，不进行重新验证。 |
+| **陈旧** | `fresh_for <= age < max_age` | 立即返回缓存值，触发后台刷新。 |
+| **已过期** | `age >= max_age` | 等待 `loader()`，存储结果并返回。 |
+
+## 与 Pydantic 模型配合使用
+
+传递 `model` 参数以自动序列化和反序列化 Pydantic 模型：
+
+```python
+from pydantic import BaseModel
+from langgraph_sdk.cache import swr
+
+class UserProfile(BaseModel):
+    name: str
+    email: str
+    role: str
+
+result = await swr(
+    f"profile:{user_id}",
+    lambda: fetch_profile(user_id),
+    model=UserProfile,
+)
+profile: UserProfile = result.value  # deserialized automatically
+```
+
+`swr` 在存储前调用 `model_dump(mode="json")`，并在读取时调用 `model.model_validate()`。
+
+## 缓存认证凭证
+
+您可以在[自定义身份验证处理器](/langsmith/custom-auth)中缓存凭证验证，以避免每次请求都访问您的身份提供者：
+
+```python
+from datetime import timedelta
+from langgraph_sdk import Auth
+from langgraph_sdk.cache import swr
+
+auth = Auth()
+
+@auth.authenticate
+async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
+    token = (headers.get(b"authorization") or b"").decode()
+    if not token:
+        raise Auth.exceptions.HTTPException(status_code=401, detail="Missing token")
+
+    result = await swr(
+        f"auth:token:{token}",
+        lambda: validate_and_fetch_user(token),
+        fresh_for=timedelta(minutes=5),
+        max_age=timedelta(hours=1),
+    )
+    return result.value
+```
+
+有了这个设置，服务器在 5 分钟内返回缓存的用户而不进行重新验证，然后在后台重新验证最多 1 小时。1 小时后，下一个请求会阻塞，直到 `validate_and_fetch_user` 完成。
+
+## 检查缓存状态
+
+`swr` 返回一个包含值和缓存状态的 `SWRResult` 对象：
+
+```python
+result = await swr("my-key", my_loader)
+
+result.value   # the cached or freshly loaded value
+result.status  # "miss" | "fresh" | "stale" | "expired"
+```
+
+调用 `.mutate()` 来更新缓存值或强制重新验证：
+
+```python
+await result.mutate(new_value)  # update the cache with a new value
+await result.mutate()           # force revalidation by calling the loader
+```
+
+## 低级缓存 API
+
+对于无需重新验证的简单 get/set 缓存操作，请直接使用 `cache_get` 和 `cache_set`：
+
+```python
+from datetime import timedelta
+from langgraph_sdk.cache import cache_get, cache_set
+
+value = await cache_get("my-key")
+
+if value is None:
+    value = await expensive_computation()
+    await cache_set("my-key", value, ttl=timedelta(hours=1))
+```
+
+### `cache_get`
+
+```python
+async def cache_get(key: str) -> Any | None
+```
+
+返回反序列化的值，如果键不存在或已过期，则返回 `None`。
+
+### `cache_set`
+
+```python
+async def cache_set(key: str, value: Any, *, ttl: timedelta | None = None) -> None
+```
+
+| 参数 | 类型 | 默认值 | 描述 |
+|---|---|---|---|
+| `key` | `str` | 必填 | 缓存键 |
+| `value` | `Any` | 必填 | 要缓存的值。必须是 JSON 可序列化的 |
+| `ttl` | `timedelta \| None` | `None` | 生存时间。服务器将其上限设为 1 天。`None` 或零默认为 1 天 |
+
+## 后续步骤
+
+- [添加自定义身份验证](/langsmith/custom-auth)到您的部署。
+- [添加自定义生命周期事件](/langsmith/custom-lifespan)在服务器启动时初始化资源。
+- 了解[代理服务器架构](/langsmith/agent-server)。

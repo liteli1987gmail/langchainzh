@@ -1,0 +1,282 @@
+---
+title: 连接身份验证提供商
+sidebarTitle: 连接身份验证提供商
+---
+在[上一个教程](/langsmith/resource-auth)中，您添加了资源授权来为用户提供私人对话。但是，您仍在使用硬编码的令牌进行身份验证，这并不安全。现在您将使用[OAuth2](/langsmith/deployment-quickstart)将这些令牌替换为真实用户账户。
+
+您将保留相同的@[`Auth`][Auth]对象和[资源级访问控制](/langsmith/auth#single-owner-resources)，但将升级身份验证以使用Supabase作为您的身份提供商。虽然本教程使用的是Supabase，但这些概念适用于任何OAuth2提供商。您将学习如何：
+
+1. 用真实的JWT令牌替换测试令牌
+2. 与OAuth2提供商集成以实现安全的用户身份验证
+3. 在保持现有授权逻辑的同时处理用户会话和元数据
+
+## 背景
+
+OAuth2涉及三个主要角色：
+
+1. **授权服务器**: 处理用户身份验证和颁发令牌的身份提供商（例如Supabase、Auth0、Google）
+2. **应用后端**: 您的LangGraph应用程序。它验证令牌并提供受保护的资源（对话数据）
+3. **客户端应用**: 用户与您的服务交互的Web或移动应用
+
+标准OAuth2流程大致如下：
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Client
+    participant AuthServer
+    participant Agent Server
+
+    User->>Client: Initiate login
+    User->>AuthServer: Enter credentials
+    AuthServer->>Client: Send tokens
+    Client->>Agent Server: Request with token
+    Agent Server->>AuthServer: Validate token
+    AuthServer->>Agent Server: Token valid
+    Agent Server->>Client: Serve request (e.g., run agent or graph)
+```
+
+## 前提条件
+
+在开始本教程之前，请确保您已具备以下条件：
+
+* 第二篇教程中的[机器人](/langsmith/resource-auth)能够无错误运行。
+* [Supabase 项目](https://supabase.com/dashboard)用于其身份验证服务器。
+
+## 1. 安装依赖项
+
+安装所需的依赖项。在您的 `custom-auth` 目录中开始，并确保已安装 `langgraph-cli`：
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+cd custom-auth
+pip install -U "langgraph-cli[inmem]"
+```
+
+```bash uv
+cd custom-auth
+uv add "langgraph-cli[inmem]"
+```
+</CodeGroup>
+
+<a id="setup-auth-provider"></a>
+## 2. 设置身份验证提供程序
+
+接下来，获取身份验证服务器的 URL 和用于身份验证的私钥。由于您使用的是 Supabase，可以在 Supabase 仪表板中完成此操作：
+
+1. 在左侧边栏中，点击 ️⚙ 项目设置，然后点击 API
+2. 复制您的项目 URL 并将其添加到您的 `.env` 文件中
+  ```shell
+  echo "SUPABASE_URL=your-project-url" >> .env
+  ```
+3. 复制您的服务角色密钥并将其添加到您的 `.env` 文件：
+  ```shell
+  echo "SUPABASE_SERVICE_KEY=your-service-role-key" >> .env
+  ```
+4. 复制你的 "anon public" 密钥并记下来。稍后在设置我们的客户端代码时会用到它。
+  ```bash
+  SUPABASE_URL=your-project-url
+  SUPABASE_SERVICE_KEY=your-service-role-key
+  ```
+
+## 3. 实现令牌验证
+
+在之前的教程中，您使用 @[`Auth`][Auth] 对象来[验证硬编码的令牌](/langsmith/set-up-custom-auth)并[添加资源所有权](/langsmith/resource-auth)。
+
+现在您将升级您的身份验证，以验证来自 Supabase 的真实 JWT 令牌。主要的更改将全部在 @[`@auth.authenticate`][Auth.authenticate] 装饰器函数中：
+
+* 代替检查硬编码的令牌列表，您将向 Supabase 发送 HTTP 请求来验证令牌。
+* 您将从已验证的令牌中提取真实的用户信息（ID、邮箱）。
+* 现有的资源授权逻辑保持不变。
+
+更新 `src/security/auth.py` 以实现此功能：
+
+```python {highlight={8-9,20-30}} title="src/security/auth.py"
+import os
+import httpx
+from langgraph_sdk import Auth
+
+auth = Auth()
+
+# This is loaded from the `.env` file you created above
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
+
+
+@auth.authenticate
+async def get_current_user(authorization: str | None):
+    """Validate JWT tokens and extract user information."""
+    assert authorization
+    scheme, token = authorization.split()
+    assert scheme.lower() == "bearer"
+
+    try:
+        # Verify token with auth provider
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers={
+                    "Authorization": authorization,
+                    "apiKey": SUPABASE_SERVICE_KEY,
+                },
+            )
+            assert response.status_code == 200
+            user = response.json()
+            return {
+                "identity": user["id"],  # Unique user identifier
+                "email": user["email"],
+                "is_authenticated": True,
+            }
+    except Exception as e:
+        raise Auth.exceptions.HTTPException(status_code=401, detail=str(e))
+
+# ... the rest is the same as before
+
+# Keep our resource authorization from the previous tutorial
+@auth.on
+async def add_owner(ctx, value):
+    """Make resources private to their creator using resource metadata."""
+    filters = {"owner": ctx.user.identity}
+    metadata = value.setdefault("metadata", {})
+    metadata.update(filters)
+    return filters
+```
+
+最重要的变化是，我们现在使用真实的身份验证服务器来验证令牌。我们的身份验证处理程序拥有 Supabase 项目的私钥，我们可以用它来验证用户的令牌并提取他们的信息。
+
+## 4. 测试身份验证流程
+
+让我们测试一下新的身份验证流程。你可以在文件或笔记本中运行以下代码。你需要提供：
+
+* 一个有效的电子邮件地址
+* Supabase 项目 URL（来自[上文](#setup-auth-provider)）
+* Supabase anon **公钥**（也来自[上文](#setup-auth-provider)）
+
+```python
+import os
+import httpx
+from getpass import getpass
+from langgraph_sdk import get_client
+
+
+# Get email from command line
+email = getpass("Enter your email: ")
+base_email = email.split("@")
+password = "secure-password"  # CHANGEME
+email1 = f"{base_email[0]}+1@{base_email[1]}"
+email2 = f"{base_email[0]}+2@{base_email[1]}"
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+if not SUPABASE_URL:
+    SUPABASE_URL = getpass("Enter your Supabase project URL: ")
+
+# This is your PUBLIC anon key (which is safe to use client-side)
+# Do NOT mistake this for the secret service role key
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+if not SUPABASE_ANON_KEY:
+    SUPABASE_ANON_KEY = getpass("Enter your public Supabase anon  key: ")
+
+
+async def sign_up(email: str, password: str):
+    """Create a new user account."""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{SUPABASE_URL}/auth/v1/signup",
+            json={"email": email, "password": password},
+            headers={"apiKey": SUPABASE_ANON_KEY},
+        )
+        assert response.status_code == 200
+        return response.json()
+
+# Create two test users
+print(f"Creating test users: {email1} and {email2}")
+await sign_up(email1, password)
+await sign_up(email2, password)
+```
+
+⚠️ 在继续之前：请检查您的电子邮件并点击两个确认链接。Supabase 将拒绝 `/login` 请求，直到您确认用户的电子邮件。
+
+现在测试用户只能看到自己的数据。继续之前请确保服务器正在运行（运行 `langgraph dev`）。以下代码片段需要您之前在 [设置身份验证提供商](#setup-auth-provider) 时从 Supabase 仪表板复制的"anon public"密钥。
+
+```python
+async def login(email: str, password: str):
+    """Get an access token for an existing user."""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+            json={
+                "email": email,
+                "password": password
+            },
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Content-Type": "application/json"
+            },
+        )
+        assert response.status_code == 200
+        return response.json()["access_token"]
+
+
+# Log in as user 1
+user1_token = await login(email1, password)
+user1_client = get_client(
+    url="http://localhost:2024", headers={"Authorization": f"Bearer {user1_token}"}
+)
+
+# Create a thread as user 1
+thread = await user1_client.threads.create()
+print(f"✅ User 1 created thread: {thread['thread_id']}")
+
+# Try to access without a token
+unauthenticated_client = get_client(url="http://localhost:2024")
+try:
+    await unauthenticated_client.threads.create()
+    print("❌ Unauthenticated access should fail!")
+except Exception as e:
+    print("✅ Unauthenticated access blocked:", e)
+
+# Try to access user 1's thread as user 2
+user2_token = await login(email2, password)
+user2_client = get_client(
+    url="http://localhost:2024", headers={"Authorization": f"Bearer {user2_token}"}
+)
+
+try:
+    await user2_client.threads.get(thread["thread_id"])
+    print("❌ User 2 shouldn't see User 1's thread!")
+except Exception as e:
+    print("✅ User 2 blocked from User 1's thread:", e)
+```
+
+The fragment content is empty. Please provide the Markdown/MDX content you want translated.
+
+```shell
+✅ User 1 created thread: d6af3754-95df-4176-aa10-dbd8dca40f1a
+✅ Unauthenticated access blocked: Client error '403 Forbidden' for url 'http://localhost:2024/threads'
+✅ User 2 blocked from User 1's thread: Client error '404 Not Found' for url 'http://localhost:2024/threads/d6af3754-95df-4176-aa10-dbd8dca40f1a'
+```
+
+您的身份验证和授权正在协同工作：
+
+1. 用户必须登录才能访问机器人
+2. 每个用户只能查看自己的线程
+
+所有用户都由 Supabase 身份验证提供商管理，因此您无需实现任何其他用户管理逻辑。
+
+## 下一步
+
+您已成功为 LangGraph 应用程序构建了一个可投入生产的身份验证系统！让我们回顾一下您所取得的成就：
+
+1. 设置身份验证提供商（在本例中为 Supabase）
+2. 添加了使用电子邮件/密码身份验证的真实用户账户
+3. 将 JWT 令牌验证集成到您的 Agent Server 中
+4. 实施了适当的授权以确保用户只能访问自己的数据
+5. 创建了一个基础架构，为处理下一个身份验证挑战做好准备
+
+既然您已拥有可投入生产的身份验证功能，请考虑以下事项：
+
+1. 使用您首选的框架构建 Web UI（请参阅 [Custom Auth](https://github.com/langchain-ai/custom-auth) 模板作为示例）
+2. 在 [身份验证概念指南](/langsmith/auth) 中了解更多关于身份验证和授权的其他方面
+3. 在阅读 @[参考文档][Auth] 后进一步自定义您的处理程序和设置。

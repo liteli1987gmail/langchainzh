@@ -1,0 +1,206 @@
+---
+title: "OpenGradientToolkit 集成"
+description: "使用 LangChain Python 与 OpenGradientToolkit 工具进行集成。"
+---
+
+本笔记本演示了如何使用 OpenGradient 工具包构建工具。该工具包使用户能够基于 [OpenGradient 网络](https://www.opengradient.ai/) 上的模型和工作流创建自定义工具。
+
+## 设置
+
+确保您拥有 OpenGradient API 密钥以便访问 OpenGradient 网络。如果您已有 API 密钥，只需设置环境变量：
+
+```python
+!export OPENGRADIENT_PRIVATE_KEY="your-api-key"
+```
+
+如果需要设置新的 API 密钥，请下载 opengradient SDK 并按照说明初始化新的配置。
+
+```python
+!pip install opengradient
+!opengradient config init
+```
+
+### 安装
+
+此工具包位于 `langchain-opengradient` 包中：
+
+```python
+pip install -qU langchain-opengradient
+```
+
+## 实例化
+
+现在我们可以使用之前的 API 密钥来实例化我们的工具包。
+
+```python
+from langchain_opengradient import OpenGradientToolkit
+
+toolkit = OpenGradientToolkit(
+    # Not required if you have already set the environment variable OPENGRADIENT_PRIVATE_KEY
+    private_key="your-api-key"
+)
+```
+
+## 构建您自己的工具
+
+OpenGradientToolkit 提供两种创建自定义工具的主要方法：
+
+### 1. 创建用于运行 ML 模型的工具
+
+您可以创建利用部署在 [OpenGradient 模型中心](https://hub.opengradient.ai/) 上的 ML 模型的工具。用户创建的模型可以通过 [OpenGradient SDK](https://docs.opengradient.ai/developers/sdk/model_management.html) 上传、推理并共享到模型中心。
+
+```python
+import opengradient as og
+from pydantic import BaseModel, Field
+
+
+# Example 1: Simple tool with no input schema
+def price_data_provider():
+    """Function that provides input data to the model."""
+    return {
+        "open_high_low_close": [
+            [2535.79, 2535.79, 2505.37, 2515.36],
+            [2515.37, 2516.37, 2497.27, 2506.94],
+            [2506.94, 2515, 2506.35, 2508.77],
+            [2508.77, 2519, 2507.55, 2518.79],
+            [2518.79, 2522.1, 2513.79, 2517.92],
+            [2517.92, 2521.4, 2514.65, 2518.13],
+            [2518.13, 2525.4, 2517.2, 2522.6],
+            [2522.59, 2528.81, 2519.49, 2526.12],
+            [2526.12, 2530, 2524.11, 2529.99],
+            [2529.99, 2530.66, 2525.29, 2526],
+        ]
+    }
+
+
+def format_volatility(inference_result):
+    """Function that formats the model output."""
+    return format(float(inference_result.model_output["Y"].item()), ".3%")
+
+
+# Create the tool
+volatility_tool = toolkit.create_run_model_tool(
+    model_cid="QmRhcpDXfYCKsimTmJYrAVM4Bbvck59Zb2onj3MHv9Kw5N",
+    tool_name="eth_volatility",
+    model_input_provider=price_data_provider,
+    model_output_formatter=format_volatility,
+    tool_description="Generates volatility measurement for ETH/USDT trading pair",
+    inference_mode=og.InferenceMode.VANILLA,
+)
+
+
+# Example 2: Tool with input schema from the agent
+class TokenInputSchema(BaseModel):
+    token: str = Field(description="Token name (ethereum or bitcoin)")
+
+
+def token_data_provider(**inputs):
+    """Dynamic function that changes behavior based on agent input."""
+    token = inputs.get("token")
+    if token == "bitcoin":
+        return {"price_series": [100001.1, 100013.2, 100149.2, 99998.1]}
+    else:  # ethereum
+        return {"price_series": [2010.1, 2012.3, 2020.1, 2019.2]}
+
+
+# Create the tool with schema
+token_tool = toolkit.create_run_model_tool(
+    model_cid="QmZdSfHWGJyzBiB2K98egzu3MypPcv4R1ASypUxwZ1MFUG",
+    tool_name="token_volatility",
+    model_input_provider=token_data_provider,
+    model_output_formatter=lambda x: format(float(x.model_output["std"].item()), ".3%"),
+    tool_input_schema=TokenInputSchema,
+    tool_description="Measures return volatility for a specified token",
+)
+
+# Add tools to the toolkit
+toolkit.add_tool(volatility_tool)
+toolkit.add_tool(token_tool)
+```
+
+### 2. 创建用于读取工作流结果的工具
+
+读取工作流是定期运行的计划推理，使用实时预言机数据对存储在智能合约上的模型进行推理。更多信息请参阅[此处](https://docs.opengradient.ai/developers/sdk/ml_workflows.html)。
+
+您可以创建用于从工作流智能合约读取结果的工具：
+
+```python
+# Create a tool to read from a workflow
+forecast_tool = toolkit.create_read_workflow_tool(
+    workflow_contract_address="0x58826c6dc9A608238d9d57a65bDd50EcaE27FE99",
+    tool_name="ETH_Price_Forecast",
+    tool_description="Reads latest forecast for ETH price from deployed workflow",
+    output_formatter=lambda x: f"Price change forecast: {format(float(x.numbers['regression_output'].item()), '.2%')}",
+)
+
+# Add the tool to the toolkit
+toolkit.add_tool(forecast_tool)
+```
+
+## 工具
+
+使用内置的 `get_tools()` 方法来查看 OpenGradient 工具包中可用工具的列表。
+
+```python
+tools = toolkit.get_tools()
+
+# View tools
+for tool in tools:
+    print(tool)
+```
+
+## 在代理中使用
+
+以下是如何将您的 OpenGradient 工具与 LangChain 代理结合使用：
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+
+
+# Initialize LLM
+model = ChatOpenAI(model="gpt-5.5")
+
+# Create tools from the toolkit
+tools = toolkit.get_tools()
+
+# Create agent
+agent_executor = create_agent(model, tools)
+
+# Example query for the agent
+example_query = "What's the current volatility of ETH?"
+
+# Execute the agent
+stream = agent_executor.stream_events(
+    {"messages": [("user", example_query)]},
+    version="v3",
+)
+for snapshot in stream.values:
+    snapshot["messages"][-1].pretty_print()
+```
+
+以下是将所有内容整合在一起的示例输出：
+
+```
+================================ Human Message =================================
+
+What's the current volatility of ETH?
+================================== Ai Message ==================================
+Tool Calls:
+  eth_volatility (chatcmpl-tool-d66ab9ee8f2c40e5a2634d90c7aeb17d)
+ Call ID: chatcmpl-tool-d66ab9ee8f2c40e5a2634d90c7aeb17d
+  Args:
+================================= Tool Message =================================
+Name: eth_volatility
+
+0.038%
+================================== Ai Message ==================================
+
+The current volatility of the ETH/USDT trading pair is 0.038%.
+```
+
+---
+
+## API 参考
+
+查看 [GitHub 页面](https://github.com/OpenGradient/og-langchain) 了解更多详情。

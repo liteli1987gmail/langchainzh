@@ -1,0 +1,140 @@
+在本地使用 LangChain 构建代理时，可视化代理内部发生的情况非常有用、实时与其交互并即时调试问题。**LangSmith Studio** 是一个免费的可视化界面，用于从本地机器开发和测试您的 LangChain 代理。
+
+Studio 连接到您本地运行的代理，向您展示代理执行的每个步骤：发送给模型的提示词、工具调用及其结果，以及最终输出。您可以测试不同的输入、检查中间状态，并迭代优化代理的行为，无需编写额外代码或进行部署。
+
+本页面介绍如何将 Studio 与您的本地 LangChain 代理配合设置。
+
+## 前置条件
+
+在开始之前，请确保满足以下条件：
+
+- **LangSmith 账户**：在 [smith.langchain.com](https://smith.langchain.com) 免费注册或登录。
+- **LangSmith API 密钥**：按照[创建 API 密钥](/langsmith/create-account-api-key)指南操作。
+- 如果您不想让数据被[追踪](/langsmith/observability-concepts#traces)到 LangSmith，请在应用程序的 `.env` 文件中设置 `LANGSMITH_TRACING=false`。禁用追踪后，不会向本地服务器发送任何数据。
+
+## 设置本地代理服务器
+
+### 1. 安装 LangGraph CLI
+
+[LangGraph CLI](/langsmith/cli) 提供了一个本地开发服务器（也称为[代理服务器](/langsmith/agent-server)），用于将您的代理连接到 Studio。
+
+```shell
+npx @langchain/langgraph-cli
+```
+
+### 2. 准备您的代理
+
+如果您已有 LangChain 代理，可以直接使用它。本示例使用一个简单的电子邮件代理：
+
+```typescript title="agent.ts"
+import { createAgent } from "@langchain/agents";
+
+function sendEmail(to: string, subject: string, body: string): string {
+  const email = {
+    to,
+    subject,
+    body,
+  };
+  // ... email sending logic
+
+  return `Email sent to ${to}`;
+}
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [sendEmail],
+  systemPrompt: "You are an email assistant. Always use the send_email tool.",
+});
+```
+
+### 3. 环境变量
+
+Studio 需要 LangSmith API 密钥来连接您的本地代理。在项目的根目录创建一个 `.env` 文件，并添加您从 [LangSmith](https://smith.langchain.com/settings) 获取的 API 密钥。
+
+<Warning>
+    确保您的 `.env` 文件不会被提交到版本控制系统中，例如 Git。
+</Warning>
+
+```bash .env
+LANGSMITH_API_KEY=lsv2...
+```
+
+### 4. 创建一个 LangGraph 配置文件
+
+LangGraph CLI 使用配置文件来定位您的代理并管理依赖项。在您的应用目录中创建一个 `langgraph.json` 文件：
+
+```json title="langgraph.json"
+{
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./src/agent.ts:agent"
+  },
+  "env": ".env"
+}
+```
+
+@[`createAgent`] 函数自动返回一个编译后的 LangGraph 图，这正是配置文件中的 `graphs` 键所期望的。
+
+<Info>
+有关配置文件的 JSON 对象中每个键的详细说明，请参阅 [LangGraph 配置文件参考](/langsmith/cli#configuration-file)。
+</Info>
+
+此时，项目结构将如下所示：
+
+```bash
+my-app/
+├── src
+│   └── agent.ts
+├── .env
+└── langgraph.json
+```
+
+### 5. 安装依赖
+
+```shell
+yarn install
+```
+
+### 6. 在 Studio 中查看你的代理
+
+启动开发服务器以将你的代理连接到 Studio：
+
+```shell
+npx @langchain/langgraph-cli dev
+```
+
+<Warning>
+Safari 会阻止到 Studio 的 `localhost` 连接。要解决此问题，请使用 `--tunnel` 运行上述命令，以通过安全隧道访问 Studio。
+</Warning>
+
+服务器运行后，您的 Agent 可以通过 API（`http://127.0.0.1:2024`）和 Studio UI（`https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024`）访问：
+
+<Frame>
+![Agent view in the Studio UI](/oss/images/studio_create-agent.png)
+</Frame>
+
+Studio 连接到本地 Agent 后，您可以快速迭代 Agent 的行为。运行测试输入，检查包含提示词、工具参数、返回值以及令牌/延迟指标的完整执行追踪。当出现问题时，Studio 会捕获异常及其周围状态，帮助您了解发生了什么。
+
+开发服务器支持热重载——修改代码中的提示词或工具签名，Studio 会立即反映这些变更。从任何步骤重新运行对话线程来测试变更，无需从头开始。此工作流可扩展至简单的单工具 Agent 和复杂的多节点图。
+
+有关运行 Studio 的更多信息，请参阅 [LangSmith 文档](/langsmith/observability)中的以下指南：
+
+- [运行应用](/langsmith/use-studio#run-application)
+- [管理助手](/langsmith/use-studio#manage-assistants)
+- [管理线程](/langsmith/use-studio#manage-threads)
+- [迭代提示词](/langsmith/observability-studio)
+- [调试 LangSmith 追踪](/langsmith/observability-studio#debug-langsmith-traces)
+- [向数据集添加节点](/langsmith/observability-studio#add-node-to-dataset)
+
+## 视频指南
+
+<Frame>
+<iframe
+  className="w-full aspect-video rounded-xl"
+  src="https://www.youtube.com/embed/Mi1gSlHwZLM?si=zA47TNuTC5aH0ahd"
+  title="Studio"
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowFullScreen
+></iframe>
+</Frame>

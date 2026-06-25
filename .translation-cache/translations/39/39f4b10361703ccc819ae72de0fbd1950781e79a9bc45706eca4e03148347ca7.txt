@@ -1,0 +1,131 @@
+---
+title: "Naver 集成"
+description: "使用 LangChain Python 与 Naver 嵌入模型集成。"
+---
+
+本笔记本介绍如何开始使用 CLOVA Studio 提供的嵌入模型。有关 `ClovaXEmbeddings` 的功能配置选项的详细文档，请参阅 [API 参考](https://guide.ncloud-docs.com/docs/clovastudio-dev-langchain#%EC%9E%84%EB%B2%A0%EB%94%A9%EB%8F%84%EA%B5%AC%EC%9D%B4%EC%9A%A9)。
+
+## 概述
+
+### 集成详情
+
+| 提供商 | 包 |
+|:--------:|:-------:|
+| [Naver](/oss/integrations/providers/naver.mdx) | [`langchain-naver`](https://pypi.org/project/langchain-naver/) |
+
+## 设置
+
+在使用 CLOVA Studio 提供的嵌入模型之前，必须完成以下步骤。
+
+1. 创建 [NAVER Cloud Platform](https://www.ncloud.com/) 账户
+2. 申请使用 [CLOVA Studio](https://www.ncloud.com/product/aiService/clovaStudio)
+3. 创建要使用的模型的 CLOVA Studio 测试应用或服务应用（请参阅 [CLOVA Studio 测试应用设置](https://guide.ncloud-docs.com/docs/clovastudio-explorer03#%ED%85%8C%EC%8A%A4%ED%8A%B8%EC%95%B1%EC%83%9D%EC%84%B1)。）
+4. 颁发测试或服务 API 密钥（请参阅 [CLOVA Studio API 密钥指南](https://guide.ncloud-docs.com/docs/clovastudio-explorer-testapp)。）
+
+### 凭据
+
+使用您的 API 密钥设置 `CLOVASTUDIO_API_KEY` 环境变量。
+
+```python
+import getpass
+import os
+
+if not os.getenv("CLOVASTUDIO_API_KEY"):
+    os.environ["CLOVASTUDIO_API_KEY"] = getpass.getpass("Enter CLOVA Studio API Key: ")
+```
+
+### 安装
+
+ClovaXEmbeddings 集成位于 `langchain_naver` 包中：
+
+```python
+# install package
+pip install -qU langchain-naver
+```
+
+## 实例化
+
+现在我们可以实例化 embeddings 对象并嵌入查询或文档：
+
+- CLOVA Studio 中有多种 embedding 模型可供使用。更多详细信息请参阅 [CLOVA Studio embedding API 文档](https://guide.ncloud-docs.com/docs/en/clovastudio-explorer03#임베딩API)。
+- 请注意，根据您的具体使用场景，您可能需要对 embeddings 进行归一化处理。
+
+```python
+from langchain_naver import ClovaXEmbeddings
+
+embeddings = ClovaXEmbeddings(
+    model="clir-emb-dolphin"  # set with the model name of corresponding test/service app. Default is `clir-emb-dolphin`
+)
+```
+
+## 索引与检索
+
+嵌入模型常用于检索增强生成（RAG）流程中，既可以作为索引数据的一部分，也可以在后续检索时使用。更多详细说明，请参阅我们的 [RAG 教程](/oss/langchain/rag)。
+
+下文展示了如何使用上面初始化的 `embeddings` 对象来索引和检索数据。在此示例中，我们将在 `InMemoryVectorStore` 中索引和检索一个示例文档。
+
+```python
+# Create a vector store with a sample text
+from langchain_core.vectorstores import InMemoryVectorStore
+
+text = "CLOVA Studio is an AI development tool that allows you to customize your own HyperCLOVA X models."
+
+vectorstore = InMemoryVectorStore.from_texts(
+    [text],
+    embedding=embeddings,
+)
+
+# Use the vectorstore as a retriever
+retriever = vectorstore.as_retriever()
+
+# Retrieve the most similar text
+retrieved_documents = retriever.invoke("What is CLOVA Studio?")
+
+# show the retrieved document's content
+retrieved_documents[0].page_content
+```
+
+```text
+'CLOVA Studio is an AI development tool that allows you to customize your own HyperCLOVA X models.'
+```
+
+## 直接使用
+
+在底层，vectorstore 和 retriever 的实现会调用 `embeddings.embed_documents(...)` 和 `embeddings.embed_query(...)` 来分别为 `from_texts` 和检索 `invoke` 操作中使用的文本创建嵌入。
+
+您可以直接调用这些方法来为您的用例获取嵌入。
+
+### 嵌入单个文本
+
+您可以使用 `embed_query` 嵌入单个文本或文档：
+
+```python
+single_vector = embeddings.embed_query(text)
+print(str(single_vector)[:100])  # Show the first 100 characters of the vector
+```
+
+```text
+[-0.094717406, -0.4077411, -0.5513184, 1.6024436, -1.3235079, -1.0720996, -0.44471845, 1.3665184, 0.
+```
+
+### 嵌入多个文本
+
+您可以使用 `embed_documents` 嵌入多个文本：
+
+```python
+text2 = "LangChain is a framework for building context-aware reasoning applications"
+two_vectors = embeddings.embed_documents([text, text2])
+for vector in two_vectors:
+    print(str(vector)[:100])  # Show the first 100 characters of the vector
+```
+
+```text
+[-0.094717406, -0.4077411, -0.5513184, 1.6024436, -1.3235079, -1.0720996, -0.44471845, 1.3665184, 0.
+[-0.25525448, -0.84877056, -0.6928286, 1.5867524, -1.2930486, -0.8166254, -0.17934391, 1.4236152, 0.
+```
+
+---
+
+## API 参考
+
+有关 `ClovaXEmbeddings` 功能和配置选项的详细文档，请参阅 [API 参考](https://guide.ncloud-docs.com/docs/clovastudio-dev-langchain#%EC%9E%A0%EB%B2%A0%EB%94%A9%EB%8F%84%EA%B5%AC%EC%9D%B4%EC%9A%A9)。

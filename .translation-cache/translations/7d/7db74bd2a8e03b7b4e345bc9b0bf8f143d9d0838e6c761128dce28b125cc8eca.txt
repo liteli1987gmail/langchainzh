@@ -1,0 +1,199 @@
+---
+title: "turbopuffer 集成"
+description: "使用 LangChain Python 与 turbopuffer 向量存储集成。"
+---
+
+>[turbopuffer](https://turbopuffer.com) 是一个快速、经济高效的向量数据库，用于搜索和检索。
+
+本指南展示了如何将 `TurbopufferVectorStore` 与 LangChain 配合使用。
+
+## 设置
+
+要使用 turbopuffer 向量存储，您需要安装 `langchain-turbopuffer` 集成包。
+
+```python
+pip install -qU langchain-turbopuffer
+```
+
+### 凭证
+
+在 [turbopuffer.com](https://turbopuffer.com) 创建一个 turbopuffer 账户并获取 API 密钥。
+
+```python
+import getpass
+import os
+
+if not os.getenv("TURBOPUFFER_API_KEY"):
+    os.environ["TURBOPUFFER_API_KEY"] = getpass.getpass("Enter your turbopuffer API key: ")
+```
+
+如果您想获取模型调用的自动化跟踪，您还可以通过取消注释以下内容来设置您的 [LangSmith](https://docs.langchain.com/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+## 初始化
+
+创建 turbopuffer 客户端和命名空间，然后初始化向量存储：
+
+```python
+from langchain_openai import OpenAIEmbeddings
+from turbopuffer import Turbopuffer
+
+tpuf = Turbopuffer(region="gcp-us-central1")
+ns = tpuf.namespace("langchain-test")
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+```
+
+```python
+from langchain_turbopuffer import TurbopufferVectorStore
+
+vector_store = TurbopufferVectorStore(embedding=embeddings, namespace=ns)
+```
+
+## 管理向量存储
+
+创建向量存储后，您可以通过添加和删除项目来与其交互。
+
+### 向向量存储添加项目
+
+```python
+from uuid import uuid4
+
+from langchain_core.documents import Document
+
+document_1 = Document(
+    page_content="I had chocolate chip pancakes and scrambled eggs for breakfast this morning.",
+    metadata={"source": "tweet"},
+)
+
+document_2 = Document(
+    page_content="The weather forecast for tomorrow is cloudy and overcast, with a high of 62 degrees.",
+    metadata={"source": "news"},
+)
+
+document_3 = Document(
+    page_content="Building an exciting new project with LangChain - come check it out!",
+    metadata={"source": "tweet"},
+)
+
+document_4 = Document(
+    page_content="Robbers broke into the city bank and stole $1 million in cash.",
+    metadata={"source": "news"},
+)
+
+document_5 = Document(
+    page_content="Wow! That was an amazing movie. I can't wait to see it again.",
+    metadata={"source": "tweet"},
+)
+
+document_6 = Document(
+    page_content="Is the new iPhone worth the price? Read this review to find out.",
+    metadata={"source": "website"},
+)
+
+document_7 = Document(
+    page_content="The top 10 soccer players in the world right now.",
+    metadata={"source": "website"},
+)
+
+document_8 = Document(
+    page_content="LangGraph is the best framework for building stateful, agentic applications!",
+    metadata={"source": "tweet"},
+)
+
+document_9 = Document(
+    page_content="The stock market is down 500 points today due to fears of a recession.",
+    metadata={"source": "news"},
+)
+
+document_10 = Document(
+    page_content="I have a bad feeling I am going to get deleted :(",
+    metadata={"source": "tweet"},
+)
+
+documents = [
+    document_1,
+    document_2,
+    document_3,
+    document_4,
+    document_5,
+    document_6,
+    document_7,
+    document_8,
+    document_9,
+    document_10,
+]
+uuids = [str(uuid4()) for _ in range(len(documents))]
+vector_store.add_documents(documents=documents, ids=uuids)
+```
+
+### 从向量存储中删除项目
+
+```python
+vector_store.delete(ids=[uuids[-1]])
+```
+
+## 查询向量存储
+
+一旦您的向量存储创建完成并添加了相关文档，您很可能希望在链或代理运行期间对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以如下进行：
+
+```python
+results = vector_store.similarity_search(
+    "LangChain provides abstractions to make working with LLMs easy",
+    k=2,
+    filters=("source", "Eq", "tweet"),
+)
+for res in results:
+    print(f"* {res.page_content} [{res.metadata}]")
+```
+
+#### 带分数的相似性搜索
+
+你也可以带分数进行搜索。距离越小，相似度越高：
+
+```python
+results = vector_store.similarity_search_with_score(
+    "Will it be hot tomorrow?", k=1, filters=("source", "Eq", "news")
+)
+for res, score in results:
+    print(f"* [SIM={score:3f}] {res.page_content} [{res.metadata}]")
+```
+
+### 转换为检索器进行查询
+
+您还可以将向量存储转换为检索器，以便在链中更轻松地使用。
+
+```python
+retriever = vector_store.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={"k": 1, "score_threshold": 0.4},
+)
+retriever.invoke("Stealing from the bank is a crime")
+```
+
+## 过滤
+
+turbopuffer 支持使用元组表达式进行元数据过滤。将过滤器传递给任何搜索方法：
+
+```python
+results = vector_store.similarity_search(
+    "interesting articles",
+    k=2,
+    filters=("source", "Eq", "website"),
+)
+```
+
+请参阅 [turbopuffer 过滤文档](https://turbopuffer.com/docs/reference/query#filter-parameters) 了解支持的全部过滤运算符。
+
+## 相关内容
+
+- 向量存储 [概念指南](/oss/integrations/vectorstores)
+- 向量存储 [操作指南](/oss/integrations/vectorstores)

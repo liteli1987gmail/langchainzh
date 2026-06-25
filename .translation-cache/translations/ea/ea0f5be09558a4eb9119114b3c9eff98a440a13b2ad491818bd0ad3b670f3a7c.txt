@@ -1,0 +1,120 @@
+---
+title: "Valyucontext 集成"
+description: "使用 LangChain Python 与 Valyucontext 检索器集成。"
+---
+
+>[Valyu](https://www.valyu.network/) 让 AI 应用和代理能够搜索互联网和专有数据源，获取相关的 LLM 可用信息。
+
+本笔记本介绍如何在 LangChain 中使用 Valyu 深度搜索工具。
+
+首先，获取一个 Valyu API 密钥并将其添加为环境变量。通过[在此注册](https://platform.valyu.network/)获得 10 美元的免费额度。
+
+## 设置
+
+该集成位于 `langchain-valyu` 包中。
+
+```python
+pip install -qU langchain-valyu
+```
+
+要使用此包，您还需要将 `VALYU_API_KEY` 环境变量设置为您的 Valyu API 密钥。
+
+```python
+import os
+
+valyu_api_key = os.environ["VALYU_API_KEY"]
+```
+
+## 实例化
+
+现在我们可以实例化我们的检索器：
+`ValyuContextRetriever` 可以通过以下参数进行配置：
+
+- `k: int = 5`
+  每个查询返回的顶部结果数量。
+
+- `search_type: str = "all"`
+  要执行的搜索类型：'all'、'proprietary' 或 'web'。默认为 'all'。
+
+- `relevance_threshold: float = 0.5`
+  文档被视为相关所需的最低相关性分数（介于 0 和 1 之间）。默认为 0.5。
+
+- `max_price: float = 20.0`
+  您愿意为每个查询支付的最高价格（以美元计）。默认为 20.0。
+
+- `start_date: Optional[str] = None`
+  时间过滤的起始日期，格式为 YYYY-MM-DD（可选）。
+
+- `end_date: Optional[str] = None`
+  时间过滤的结束日期，格式为 YYYY-MM-DD（可选）。
+
+- `client: Optional[Valyu] = None`
+  可选的自定义 Valyu 客户端实例。如果未提供，将在内部创建新客户端。
+
+- `valyu_api_key: Optional[str] = None`
+  您的 Valyu API 密钥。如果未提供，检索器将查找 `VALYU_API_KEY` 环境变量。
+
+```python
+from langchain_valyu import ValyuRetriever
+
+retriever = ValyuRetriever(
+    k=5,
+    search_type="all",
+    relevance_threshold=0.5,
+    max_price=20.0,
+    start_date="2024-01-01",
+    end_date="2024-12-31",
+    client=None,
+    valyu_api_key=os.environ["VALYU_API_KEY"],
+)
+```
+
+## 使用
+
+```python
+query = "What are the benefits of renewable energy?"
+docs = retriever.invoke(query)
+
+for doc in docs:
+    print(doc.page_content)
+    print(doc.metadata)
+```
+
+## 在链中使用
+
+我们可以轻松地将此检索器组合到链中。
+
+```python
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_openai import ChatOpenAI
+
+prompt = ChatPromptTemplate.from_template(
+    """Answer the question based only on the context provided.
+
+Context: {context}
+
+Question: {question}"""
+)
+
+llm = ChatOpenAI(model="gpt-5.4-mini")
+
+
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
+
+chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+```
+
+---
+
+## API 参考
+
+有关 Valyu Context API 所有功能和配置的详细文档，请参阅 API 参考：[docs.valyu.network/overview](https://docs.valyu.network/overview)

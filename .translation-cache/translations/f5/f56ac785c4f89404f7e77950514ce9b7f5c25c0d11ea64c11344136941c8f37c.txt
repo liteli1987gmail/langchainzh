@@ -1,0 +1,65 @@
+---
+title: INVALID_TOOL_RESULTS
+---
+
+<Note>
+    目前仅在 `langchainjs`（JavaScript/TypeScript）中使用。
+</Note>
+
+当在工具调用操作期间向模型传递不匹配、数量不足或过多的 @[`ToolMessage`] 对象时，会发生此错误。
+
+该错误的根源在于一个基本要求：带有 `tool_calls` 的助手消息后面必须跟有响应每个 `tool_call_id` 的工具消息。
+
+当模型返回带有工具调用的 @[`AIMessage`] 时，必须为每个工具调用提供恰好一个对应的 @[`ToolMessage`]，并且 `tool_call_id` 值必须匹配。
+
+## 常见原因
+
+* **响应不足**：如果模型请求两次工具执行但你只提供了一个响应消息，模型会拒绝不完整的消息链
+* **重复响应**：为同一工具调用 ID 提供多个 @[`ToolMessage`] 对象会导致拒绝，ID 不匹配的情况也是如此
+* **孤立工具消息**：发送没有前置包含工具调用的 @[`AIMessage`] 的 @[`ToolMessage`] 违反协议要求
+
+:::python
+Here's an example of a problematic pattern:
+
+
+:::
+
+```python
+# Model requests two tool calls
+response_message.tool_calls  # Returns 2 calls
+
+# But only one ToolMessage provided
+chat_history.append(ToolMessage(
+    content=str(tool_response),
+    tool_call_id=tool_call.get("id")
+))
+
+model_with_tools.invoke(chat_history)
+```
+:::
+
+:::js
+Here's an example of a problematic pattern:
+
+
+</fragment>
+
+```javascript
+// Model requests two tool calls
+responseMessage.tool_calls // Returns 2 calls
+
+// But only one ToolMessage provided
+chatHistory.push({
+  role: "tool",
+  content: toolResponse,
+  tool_call_id: responseMessage.tool_calls[0].id
+});
+
+await modelWithTools.invoke(chatHistory); // Fails with INVALID_TOOL_RESULTS
+```
+## 故障排除
+
+要解决此错误：
+
+* **确保配对数量匹配**：确保在 preceding @[`AIMessage`] 中每个工具调用都有一个 @[`ToolMessage`]
+* **验证 ID**：确认每个 `ToolMessage.tool_call_id` 都与实际的工具调用标识符匹配

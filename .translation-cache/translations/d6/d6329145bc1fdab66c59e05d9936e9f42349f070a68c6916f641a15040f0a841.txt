@@ -1,0 +1,74 @@
+---
+title: "Bodo DataFrames 集成"
+description: "使用 LangChain Python 与 Bodo DataFrames 集成。"
+---
+
+[Bodo DataFrames](https://github.com/bodo-ai/Bodo) 是一个高性能 DataFrame 库，用于大规模 Python 数据处理，是 Pandas 的直接替代品；只需将：
+
+```python
+import pandas as pd
+```
+
+with:
+
+```python
+import bodo.pandas as pd
+```
+
+用于自动扩展和加速 Pandas 工作负载。
+由于 Bodo DataFrames 与 Pandas 兼容，它是 LLM 代码生成的理想目标，易于验证、高效且可扩展，超越了 Pandas 的典型限制。
+
+我们的集成包提供了一个工具包，用于使用 Bodo DataFrames 向代理询问有关大型数据集的问题，以提高效率和可扩展性。
+
+在底层，Bodo DataFrames 使用惰性求值来优化 Pandas 操作序列，通过运算符流式传输数据以处理大于内存的数据集，并利用基于 MPI 的高性能计算技术实现高效并行执行，可轻松从笔记本电脑扩展到大型集群。
+
+## 安装和设置
+
+```bash pip
+pip install -U langchain_bodo
+```
+
+## 工具包
+
+[langchain-bodo 包](https://pypi.org/project/langchain-bodo/) 提供了用于创建能够使用 Bodo DataFrames 回答有关大型数据集问题的代理的功能。
+有关更详细的使用示例，请参阅 [Bodo DataFrames 工具页面](/oss/integrations/tools/bodo)。
+
+**注意：**
+此功能在底层使用 `Python` 代理来执行 LLM 生成的 Python 代码——如果 LLM 生成的 Python 代码有害，这可能会很危险。请谨慎使用。
+
+```python
+from langchain_bodo import create_bodo_dataframes_agent
+```
+
+### 用法示例
+
+在运行以下代码之前，复制 [titanic 数据集](https://raw.githubusercontent.com/pandas-dev/pandas/main/doc/data/titanic.csv)
+并本地保存为 `titanic.csv`。
+
+```python
+import bodo.pandas as pd
+from langchain_openai import OpenAI
+
+df = pd.read_csv("titanic.csv")
+agent = create_bodo_dataframes_agent(
+    OpenAI(temperature=0), df, verbose=True, allow_dangerous_code=True
+)
+```
+
+```python
+agent.invoke("how many rows are there?")
+```
+
+```text
+> Entering new AgentExecutor chain...
+Thought: I can use the len() function to get the number of rows in the dataframe.
+Action: python_repl_ast
+Action Input: len(df)891891 is the number of rows in the dataframe.
+Final Answer: 891
+
+> Finished chain.
+```
+
+```python
+{'input': 'how many rows are there?', 'output': '891'}
+```

@@ -1,0 +1,243 @@
+---
+title: "BoxRetriever 集成"
+description: "使用 LangChain Python 与 BoxRetriever 检索器集成。"
+---
+
+这将帮助您开始使用 Box [检索器](/oss/langchain/retrieval)。
+
+# 概述
+
+`BoxRetriever` 类帮助您以 LangChain 的 @[`Document`] 格式获取 Box 中的非结构化内容。您可以通过基于全文搜索来搜索文件，或使用 Box AI 检索包含针对文件的 AI 查询结果的 @[`Document`]。这需要包含一个包含 Box 文件 ID 的 `List[str]`，即 `["12345","67890"]`
+
+<Info>
+Box AI 需要 Enterprise Plus 许可证
+</Info>
+
+没有文本表示的文件将被跳过。
+
+### 集成详情
+
+1: 使用自有数据（即，为自定义文档语料库建立索引并进行搜索）：
+
+| 检索器 | 自托管 | 云服务 | 包 |
+| :--- | :--- | :--- | :--- |
+`BoxRetriever` | ❌ | ✅ | `langchain-box` |
+
+## 设置
+
+要使用 Box 包，您需要具备以下条件：
+
+* 一个 Box 账户 — 如果您不是 Box 现有客户或想在 Box 生产实例之外进行测试，您可以使用[免费开发者账户](https://account.box.com/signup/n/developer#ty9l3)。
+* [一个 Box 应用](https://developer.box.com/guides/getting-started/first-application/) — 这在[开发者控制台](https://account.box.com/developers/console)中配置，对于 Box AI，必须启用 `Manage AI` 作用域。在这里您还将选择您的身份验证方法
+* 应用必须[由管理员启用](https://developer.box.com/guides/authorization/custom-app-approval/#manual-approval)。对于免费开发者账户，由注册账户的人员操作。
+
+### 凭证
+
+对于这些示例，我们将使用[令牌身份验证](https://developer.box.com/guides/authentication/tokens/developer-tokens)。这可以与任何[身份验证方法](https://developer.box.com/guides/authentication/)配合使用。只需使用任何方法获取令牌即可。如果您想了解更多关于如何在 `langchain-box` 中使用其他身份验证类型的信息，请访问 [Box 提供商](/oss/integrations/providers/box)文档。
+
+```python
+import getpass
+import os
+
+box_developer_token = getpass.getpass("Enter your Box Developer Token: ")
+```
+
+如果你想从单个查询获取自动化追踪，你也可以通过取消下面的注释来设置你的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+此检索器位于 `langchain-box` 包中：
+
+```python
+pip install -qU langchain-box
+```
+
+## 实例化
+
+现在我们可以实例化我们的检索器：
+
+## 搜索
+
+```python
+from langchain_box import BoxRetriever
+
+retriever = BoxRetriever(box_developer_token=box_developer_token)
+```
+
+为了实现更精细的搜索，我们提供了一系列选项，帮助您筛选结果。这使用 `langchain_box.utilities.SearchOptions` 与 `langchain_box.utilities.SearchTypeFilter` 和 `langchain_box.utilities.DocumentFiles` 枚举结合使用，来筛选诸如创建日期、要搜索文件的哪个部分，甚至限制搜索范围到特定文件夹。
+
+更多信息，请参阅 [API 参考](https://python.langchain.com/v0.2/api_reference/box/utilities/langchain_box.utilities.box.SearchOptions.html)。
+
+```python
+from langchain_box.utilities import BoxSearchOptions, DocumentFiles, SearchTypeFilter
+
+box_folder_id = "260931903795"
+
+box_search_options = BoxSearchOptions(
+    ancestor_folder_ids=[box_folder_id],
+    search_type_filter=[SearchTypeFilter.FILE_CONTENT],
+    created_date_range=["2023-01-01T00:00:00-07:00", "2024-08-01T00:00:00-07:00,"],
+    k=200,
+    size_range=[1, 1000000],
+    updated_data_range=None,
+)
+
+retriever = BoxRetriever(
+    box_developer_token=box_developer_token, box_search_options=box_search_options
+)
+
+retriever.invoke("AstroTech Solutions")
+```
+
+```text
+[Document(metadata={'source': 'https://dl.boxcloud.com/api/2.0/internal_files/1514555423624/versions/1663171610024/representations/extracted_text/content/', 'title': 'Invoice-A5555_txt'}, page_content='Vendor: AstroTech Solutions\nInvoice Number: A5555\n\nLine Items:\n    - Gravitational Wave Detector Kit: $800\n    - Exoplanet Terrarium: $120\nTotal: $920')]
+```
+
+## Box AI
+
+```python
+from langchain_box import BoxRetriever
+
+box_file_ids = ["1514555423624", "1514553902288"]
+
+retriever = BoxRetriever(
+    box_developer_token=box_developer_token, box_file_ids=box_file_ids
+)
+```
+
+## 使用方法
+
+```python
+query = "What was the most expensive item purchased"
+
+retriever.invoke(query)
+```
+
+```text
+[Document(metadata={'source': 'Box AI', 'title': 'Box AI What was the most expensive item purchased'}, page_content='The most expensive item purchased is the **Gravitational Wave Detector Kit** from AstroTech Solutions, which costs **$800**.')]
+```
+
+## 引用
+
+使用 Box AI 和 `BoxRetriever`，您可以返回提示的答案、返回 Box 用于获取答案的引用，或同时返回两者。无论您选择如何使用 Box AI，检索器都会返回一个 `List[Document]` 对象。我们通过两个 `bool` 参数 `answer` 和 `citations` 提供这种灵活性。答案默认为 `True`，引用默认为 `False`，因此如果您只需要答案，可以省略这两个参数。如果您需要两者，只需包含 `citations=True`；如果您只需要引用，则包含 `answer=False` 和 `citations=True`
+
+### 获取两者
+
+```python
+retriever = BoxRetriever(
+    box_developer_token=box_developer_token, box_file_ids=box_file_ids, citations=True
+)
+
+retriever.invoke(query)
+```
+
+```text
+[Document(metadata={'source': 'Box AI', 'title': 'Box AI What was the most expensive item purchased'}, page_content='The most expensive item purchased is the **Gravitational Wave Detector Kit** from AstroTech Solutions, which costs **$800**.'),
+ Document(metadata={'source': 'Box AI What was the most expensive item purchased', 'file_name': 'Invoice-A5555.txt', 'file_id': '1514555423624', 'file_type': 'file'}, page_content='Vendor: AstroTech Solutions\nInvoice Number: A5555\n\nLine Items:\n    - Gravitational Wave Detector Kit: $800\n    - Exoplanet Terrarium: $120\nTotal: $920')]
+```
+
+### 仅限引用
+
+```python
+retriever = BoxRetriever(
+    box_developer_token=box_developer_token,
+    box_file_ids=box_file_ids,
+    answer=False,
+    citations=True,
+)
+
+retriever.invoke(query)
+```
+
+```text
+[Document(metadata={'source': 'Box AI What was the most expensive item purchased', 'file_name': 'Invoice-A5555.txt', 'file_id': '1514555423624', 'file_type': 'file'}, page_content='Vendor: AstroTech Solutions\nInvoice Number: A5555\n\nLine Items:\n    - Gravitational Wave Detector Kit: $800\n    - Exoplanet Terrarium: $120\nTotal: $920')]
+```
+
+## 作为代理工具使用
+
+与其他检索器一样，BoxRetriever 也可以作为工具添加到 LangGraph 代理中。
+
+```python
+pip install -U langsmith
+```
+
+```python
+from langchain_classic import hub
+from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain.tools.retriever import create_retriever_tool
+```
+
+```python
+box_search_options = BoxSearchOptions(
+    ancestor_folder_ids=[box_folder_id],
+    search_type_filter=[SearchTypeFilter.FILE_CONTENT],
+    created_date_range=["2023-01-01T00:00:00-07:00", "2024-08-01T00:00:00-07:00,"],
+    k=200,
+    size_range=[1, 1000000],
+    updated_data_range=None,
+)
+
+retriever = BoxRetriever(
+    box_developer_token=box_developer_token, box_search_options=box_search_options
+)
+
+box_search_tool = create_retriever_tool(
+    retriever,
+    "box_search_tool",
+    "This tool is used to search Box and retrieve documents that match the search criteria",
+)
+tools = [box_search_tool]
+```
+
+```python
+prompt = hub.pull("hwchase17/openai-tools-agent")
+prompt.messages
+
+llm = ChatOpenAI(temperature=0, openai_api_key=openai_key)
+
+agent = create_openai_tools_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+```
+
+```text
+/Users/shurrey/local/langchain/.venv/lib/python3.11/site-packages/langsmith/client.py:312: LangSmithMissingAPIKeyWarning: API key must be provided when using hosted LangSmith API
+  warnings.warn(
+```
+
+```python
+result = agent_executor.invoke(
+    {
+        "input": "list the items I purchased from AstroTech Solutions from most expensive to least expensive"
+    }
+)
+```
+
+```python
+print(f"result {result['output']}")
+```
+
+```text
+result The items you purchased from AstroTech Solutions from most expensive to least expensive are:
+
+1. Gravitational Wave Detector Kit: $800
+2. Exoplanet Terrarium: $120
+
+Total: $920
+```
+
+## 额外字段
+
+所有 Box 连接器都提供选择额外字段的功能，可以从 Box `FileFull` 对象中获取并作为自定义 LangChain 元数据返回。每个对象接受一个可选的 `List[str]` 类型的 `extra_fields` 参数，其中包含返回对象中的 json 键，例如 `extra_fields=["shared_link"]`。
+
+连接器会将此字段添加到集成运行所需的字段列表中，然后将结果添加到 @[`Document`] 或 `Blob` 返回的元数据中，例如 `"metadata" : { "source" : "source", "shared_link" : "shared_link" }`。如果该字段对该文件不可用，则返回空字符串，例如 `"shared_link" : ""`。
+
+---
+
+## 帮助
+
+如有问题，您可以查看我们的[开发者文档](https://developer.box.com)或通过我们的[开发者社区](https://community.box.com)与我们联系。

@@ -1,0 +1,819 @@
+---
+title: 沙盒
+description: 构建支持沙盒环境的类 IDE UI，用于编码代理
+---
+
+编码代理需要的不仅仅是聊天窗口。它们需要文件浏览器、代码查看器和差异对比面板，提供 IDE 体验。此模式将深度代理连接到[沙盒](/oss/deepagents/sandboxes)，使其能够在隔离环境中读取、写入和执行代码，然后通过自定义 API 服务器暴露沙盒文件系统，使前端能够在代理工作时实时显示文件。
+
+本页面涵盖**三面板 UI**（文件树、代码查看器和聊天）以及向其暴露沙盒文件系统的**自定义 API 路由**。有关沙盒提供商、生命周期作用域、文件植入、密钥、部署和生产环境 `useStream` 配置，请参阅[投入生产](/oss/deepagents/going-to-production)。
+
+import { PatternEmbed } from "/snippets/pattern-embed.jsx";
+import FrontendSandboxThreadBackendPy from "/snippets/code-samples/frontend-sandbox-thread-backend-py.mdx";
+
+<PatternEmbed pattern="deep-agent-ide" minHeight={700} />
+
+## 架构
+
+此设置包含三个部分：
+
+1. **带有沙箱后端的深度代理：** 代理自动从沙箱获取文件系统工具
+   (`read_file`、`write_file`、`edit_file`、`execute`)
+
+:::python
+
+2. **自定义 API 服务器** — 通过 `langgraph.json` 的 `http.app` 字段暴露的 FastAPI 应用，提供前端可调用的文件浏览端点
+
+:::
+
+:::js
+
+2. **自定义 API 服务器：** 通过 `langgraph.json` 的 `http.app` 字段暴露的 Hono 应用，提供前端可调用的文件浏览端点
+
+:::
+
+3. **三面板前端：** 文件树、代码/差异查看器和聊天面板，可在代理进行更改时实时同步文件
+
+```mermaid
+%%{
+  init: {
+    "fontFamily": "monospace",
+    "flowchart": {
+      "curve": "curve"
+    }
+  }
+}%%
+graph LR
+  UI["IDE Frontend"]
+  API["API Server"]
+  AGENT["createDeepAgent()"]
+  SANDBOX["Sandbox"]
+
+  UI --"useStream()"--> AGENT
+  UI --"/sandbox/:threadId/*"--> API
+  AGENT --"read/write/execute"--> SANDBOX
+  API --"ls / read"--> SANDBOX
+
+  classDef blueHighlight fill:#E5F4FF,stroke:#006DDD,color:#030710;
+  classDef greenHighlight fill:#F6FFDB,stroke:#6E8900,color:#2E3900;
+  classDef purpleHighlight fill:#EBD0F0,stroke:#885270,color:#441E33;
+  classDef orangeHighlight fill:#FDF3FF,stroke:#7E65AE,color:#504B5F;
+  class UI blueHighlight;
+  class AGENT greenHighlight;
+  class SANDBOX purpleHighlight;
+  class API orangeHighlight;
+```
+
+## 沙箱生命周期
+
+在连接前端之前，选择沙箱的存活时长以及谁可以访问它。
+请参阅[沙箱生命周期](/oss/deepagents/going-to-production#lifecycle)了解线程作用域沙箱与助手作用域沙箱的对比、异步[图工厂](/langsmith/graph-rebuild)设置、TTL 行为以及 SDK 调用示例。
+
+本指南默认使用**线程作用域沙箱**。前端和自定义 API 服务器都通过 LangGraph [线程](/langsmith/use-threads) ID 解析沙箱。这样可以保持对话隔离，并在您[持久化线程 ID](#thread-creation)时让页面重新加载后重新连接到同一环境。
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant LG as LangGraph API
+    participant HTTP as API Server
+    participant SB as Sandbox
+
+    Note over FE: Page loads
+    FE->>LG: POST /threads
+    LG-->>FE: threadId
+
+    FE->>HTTP: GET /sandbox/:threadId/tree
+    HTTP->>LG: threads.get(threadId) → metadata.sandbox_id
+    alt No sandbox yet
+        HTTP->>SB: LangSmithSandbox.create()
+        HTTP->>LG: threads.update(threadId, metadata.sandbox_id)
+    else Existing sandbox
+        HTTP->>SB: connect(sandbox_id)
+    end
+    HTTP-->>FE: file tree
+
+    Note over FE: User sends message
+    FE->>LG: POST /threads/:threadId/runs/stream
+    LG->>LG: backend reads thread_id from config
+    LG->>SB: connect to same sandbox
+```
+
+对于[多租户](/oss/deepagents/going-to-production#multi-tenancy)应用，请在后端工厂中按用户或助手的作用域来划分沙箱。对于没有 LangGraph 线程的演示，请在 API URL 中传递客户端生成的会话 ID。会话 ID 不会跨浏览器会话持久保存。
+
+## 连接代理和 API 服务器
+
+按照[执行环境](/oss/deepagents/going-to-production#execution-environment)中所述，使用[沙箱后端](/oss/deepagents/sandboxes)配置深度代理。代理会自动获取文件系统工具和 `execute` 工具；无需额外配置工具。
+
+构建此 UI 需要在生产环境设置基础上增加一个要求：一个**自定义 API 服务器**，它在代理图之外运行，因此代理后端和文件浏览路由必须为每个线程解析**同一个沙箱**。将沙箱 ID 存储在线程元数据中，并在两者之间共享一个查找函数。
+
+### 从线程元数据解析沙箱
+
+:::js
+
+在共享模块中定义 `getOrCreateSandboxForThread`。代理图工厂和自定义 API 路由都导入它：
+
+```ts
+// src/api/utils.ts
+import { Client } from "@langchain/langgraph-sdk";
+import { LangSmithSandbox } from "deepagents";
+import { SandboxClient } from "langsmith/sandbox";
+
+export async function getOrCreateSandboxForThread(threadId: string) {
+  const client = new Client({ apiUrl: "http://localhost:2024" });
+  const thread = await client.threads.get(threadId);
+  const sandboxId = thread.metadata?.sandbox_id;
+
+  if (sandboxId) {
+    const existing = await new SandboxClient().getSandbox(sandboxId);
+    if (existing.status === "ready") {
+      return new LangSmithSandbox({ sandbox: existing });
+    }
+  }
+
+  const sandbox = await LangSmithSandbox.create({ templateName: "my-template" });
+  await seedSandbox(sandbox);  // See File transfers below
+  await client.threads.update(threadId, { metadata: { sandbox_id: sandbox.id } });
+  return sandbox;
+}
+```
+
+将代理接入为异步 [graph factory](/langsmith/graph-rebuild)，从运行配置中读取
+`thread_id`，并将解析后的后端传递给
+`createDeepAgent`：
+
+```ts
+// src/agents/deep-agent-ide.ts
+import { createDeepAgent } from "deepagents";
+import type { LangGraphRunnableConfig } from "@langchain/langgraph";
+
+import { getOrCreateSandboxForThread } from "../api/utils.js";
+
+export async function agent(config: LangGraphRunnableConfig) {
+  const threadId = config.configurable?.thread_id;
+  if (!threadId) throw new Error("No thread_id — agent must run on a thread");
+
+  const backend = await getOrCreateSandboxForThread(threadId);
+
+  return createDeepAgent({
+    model: "google_genai:gemini-3.5-flash",
+    backend,
+    systemPrompt: "You are an expert developer working on a project in /app.",
+  });
+}
+```
+
+:::
+
+:::python
+
+<FrontendSandboxThreadBackendPy />
+
+:::
+
+<Note>
+  与[投入生产](/oss/deepagents/going-to-production#lifecycle)中的示例类似，agent 是一个在每次运行时调用的异步图工厂。在线程元数据中存储沙盒 ID，以便自定义 `http.app` 路由可以调用相同的
+  `getOrCreateSandboxForThread` 辅助函数。当 LangGraph SDK 是唯一入口点时，投入生产会使用提供程序标签查找。
+</Note>
+
+### 初始化项目文件
+
+在 agent 运行之前，使用 `uploadFiles` / `upload_files` 上传启动文件。参见[文件传输](/oss/deepagents/going-to-production#file-transfers)
+了解初始化模式、提供程序示例，以及将[记忆](/oss/deepagents/memory)或[技能](/oss/deepagents/skills)同步到
+沙盒。对于 LangSmith 沙盒，在创建容器时传入[sandbox snapshot](/langsmith/sandbox-snapshots)中的 `templateName`。
+
+<Tip>
+  上传 `package.json` 后运行 `sandbox.execute("cd /app && npm install")`，以便在第一个 agent 回合之前准备好依赖项。
+</Tip>
+
+## 添加文件浏览 API
+
+:::js
+
+agent 可以读取和写入文件，但前端还需要直接访问来
+浏览沙盒文件系统。添加一个自定义 [Hono](https://hono.dev) API 服务器
+并通过 `langgraph.json` 中的 `http.app` 字段暴露它。
+
+:::
+
+:::python
+
+agent 可以读取和写入文件，但前端还需要直接访问来
+浏览沙盒文件系统。添加一个自定义 [FastAPI](https://fastapi.tiangolo.com) API 服务器
+并通过 `langgraph.json` 中的 `http.app` 字段暴露它。
+
+:::
+
+### 创建 API 服务器
+
+沙盒 API 端点使用线程 ID 作为 URL 路径参数。这
+确保前端始终访问当前
+:::python
+会话的正确沙盒，使用与
+::::::js
+会话的正确沙盒，使用与
+:::agent 后端相同的 `get_or_create_sandbox_for_thread` 函数：
+
+:::js
+
+<FrontendSandboxThreadBackendJs />
+
+```js title="sandboxApi.js"
+import { Hono } from "hono";
+import { getOrCreateSandboxForThread } from "./backend.js";
+
+const app = new Hono();
+
+app.get("/files/*", async (c) => {
+  const threadId = c.req.param("threadId");
+  const sandbox = await getOrCreateSandboxForThread(threadId);
+  const path = c.req.path.replace(`/files/${threadId}`, "");
+  const files = await sandbox.runGrep("find /home/user -type f");
+
+  return c.json({ threadId, path, files });
+});
+
+export default app;
+```
+
+:::
+
+:::python
+
+<FrontendSandboxThreadBackendPy />
+
+```python title="sandbox_api.py"
+from fastapi import FastAPI, HTTPException
+from backend import get_or_create_sandbox_for_thread
+
+app = FastAPI()
+
+@app.get("/files/{thread_id}/*")
+async def get_files(thread_id: str, path: str = ""):
+    sandbox = await get_or_create_sandbox_for_thread(thread_id)
+    files = await sandbox.run("find /home/user -type f")
+    return {"thread_id": thread_id, "path": path, "files": files}
+```
+
+:::
+
+
+</fragment>
+
+```ts
+// src/api/app.ts
+import { Hono } from "hono";
+import { getOrCreateSandboxForThread } from "./utils.js";
+
+export const app = new Hono();
+
+app.get("/sandbox/:threadId/tree", async (c) => {
+  const threadId = c.req.param("threadId");
+  const rootPath = c.req.query("filePath") || "/app";
+
+  const sandbox = await getOrCreateSandboxForThread(threadId);
+  const result = await sandbox.execute(
+    `find '${rootPath}' -printf '%y\\t%s\\t%p\\n' 2>/dev/null | sort -t$'\\t' -k3`,
+  );
+
+  const entries = result.output
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [typeChar, sizeStr, fullPath] = line.split("\t");
+      return {
+        name: fullPath.split("/").pop(),
+        type: typeChar === "d" ? "directory" : "file",
+        path: fullPath,
+        size: parseInt(sizeStr, 10) || 0,
+      };
+    });
+
+  return c.json({ path: rootPath, entries, sandboxId: sandbox.id });
+});
+
+app.get("/sandbox/:threadId/file", async (c) => {
+  const threadId = c.req.param("threadId");
+  const filePath = c.req.query("filePath");
+  if (!filePath) return c.json({ error: "filePath is required" }, 400);
+
+  const sandbox = await getOrCreateSandboxForThread(threadId);
+  const results = await sandbox.downloadFiles([filePath]);
+  const file = results[0];
+  if (file.error) return c.json({ error: file.error }, 404);
+
+  const content = new TextDecoder().decode(file.content!);
+  return c.json({ path: filePath, content });
+});
+```
+
+:::python
+
+
+:::
+
+```python
+# src/api/server.py
+from fastapi import FastAPI, Query, Path
+from utils import get_or_create_sandbox_for_thread
+
+app = FastAPI()
+
+@app.get("/sandbox/{thread_id}/tree")
+async def list_tree(
+    thread_id: str = Path(...),
+    filePath: str = Query("/app"),
+):
+    sandbox = await get_or_create_sandbox_for_thread(thread_id)
+    result = await sandbox.aexecute(
+        f"find {filePath} -printf '%y\\t%s\\t%p\\n' 2>/dev/null | sort"
+    )
+    entries = []
+    for line in result.output.strip().split("\n"):
+        if not line:
+            continue
+        type_char, size_str, full_path = line.split("\t")
+        entries.append({
+            "name": full_path.split("/")[-1],
+            "type": "directory" if type_char == "d" else "file",
+            "path": full_path,
+            "size": int(size_str),
+        })
+    return {"path": filePath, "entries": entries, "sandboxId": sandbox.id}
+
+@app.get("/sandbox/{thread_id}/file")
+async def read_file(
+    thread_id: str = Path(...),
+    filePath: str = Query(...),
+):
+    sandbox = await get_or_create_sandbox_for_thread(thread_id)
+    results = await sandbox.adownload_files([filePath])
+    return {"path": filePath, "content": results[0].content.decode()}
+```
+
+:::
+
+<Note>
+  代理的后端和 API 服务器都调用同一个
+:::python
+  `get_or_create_sandbox_for_thread` 函数。这确保它们始终解析
+:::
+:::js
+  `getOrCreateSandboxForThread` 函数。这确保它们始终解析
+:::
+  到给定线程的同一沙箱。线程元数据中的沙箱 ID
+  是唯一的真实来源——无需内存缓存。
+</Note>
+
+### 配置 `langgraph.json`
+
+注册代理图和 API 服务器。`http.app` 字段告诉
+LangGraph 平台与默认路由一起提供你的自定义路由。
+请参阅[应用程序结构](/oss/langgraph/application-structure)和
+[LangSmith 部署](/oss/deepagents/going-to-production#langsmith-deployments)
+了解完整的 `langgraph.json` 选项集。
+
+:::js
+
+
+:::
+
+```json
+{
+  "node_version": "22",
+  "graphs": {
+    "deep_agent_ide": "./src/agents/deep-agent-ide.ts:agent"
+  },
+  "env": ".env",
+  "http": {
+    "app": "./src/api/app.ts:app"
+  }
+}
+```
+
+:::
+
+:::python
+
+
+</fragment>
+
+```json
+{
+  "graphs": {
+    "deep_agent_ide": "./src/agents/my_agent.py:agent"
+  },
+  "env": ".env",
+  "http": {
+    "app": "./src/api/server.py:app"
+  }
+}
+```
+
+:::
+
+您的自定义路由与 LangGraph API 位于同一主机。对于使用 `langgraph dev` 进行本地开发，地址是 `http://localhost:2024`。
+
+<Note>
+  在 `http.app` 中定义的自定义路由优先于默认的 LangGraph 路由。这意味着您可以在需要时覆盖内置端点，但请注意不要意外覆盖 `/threads` 或 `/runs` 等路由。
+</Note>
+
+## 构建前端
+
+前端有三个面板：文件树侧边栏、代码/差异查看器和聊天面板。它使用 @[`useStream`] 进行智能体对话，并使用自定义 API 端点进行文件浏览。
+
+对于生产部署，请将 `apiUrl` 指向您的 [LangSmith 部署](/langsmith/deployment)，并在每次运行中传递一个稳定的 `thread_id`。有关这些设置以及使用 `thread_id` 和运行时 `context` [调用智能体](/oss/deepagents/going-to-production#invoking-the-agent) 的信息，请参阅[进入生产环境](/oss/deepagents/going-to-production)中的[前端](/oss/deepagents/going-to-production#frontend)部分。
+
+### 创建线程
+
+在页面加载时创建一个 LangGraph 线程，并将其 ID 持久化到 `sessionStorage` 中，以便页面重新加载后重新连接到同一个沙箱：
+
+```tsx
+const THREAD_KEY = "sandbox-thread-id";
+
+function IDEPreview() {
+  const [threadId, setThreadId] = useState<string | null>(
+    () => sessionStorage.getItem(THREAD_KEY),
+  );
+
+  const updateThreadId = useCallback((id: string | null) => {
+    setThreadId(id);
+    if (id) sessionStorage.setItem(THREAD_KEY, id);
+    else sessionStorage.removeItem(THREAD_KEY);
+  }, []);
+
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "deep_agent_ide",
+    threadId,
+    onThreadId: updateThreadId,
+  });
+
+  // Create thread on first mount
+  useEffect(() => {
+    if (threadId) return;
+    stream.client.threads.create().then((t) => updateThreadId(t.thread_id));
+  }, [stream.client, threadId, updateThreadId]);
+
+  // Pass threadId to sandbox file hooks
+  const { tree, files } = useSandboxFiles(threadId);
+  // ...
+}
+```
+
+"新建对话"按钮会清除存储的 ID，以便下次挂载时创建新的线程（和沙箱）：
+
+```tsx
+function handleNewThread() {
+  updateThreadId(null);
+}
+```
+
+### 文件状态管理
+
+跟踪沙箱文件系统的两个快照：原始状态（代理运行前）和当前状态（实时更新）。API URL 中包含线程 ID，这样请求始终指向正确的沙箱：
+
+```ts
+const AGENT_URL = "http://localhost:2024";
+
+async function fetchTree(threadId: string): Promise<FileEntry[]> {
+  const res = await fetch(
+    `${AGENT_URL}/sandbox/${encodeURIComponent(threadId)}/tree?filePath=/app`,
+  );
+  const data = await res.json();
+  return data.entries.filter((e: FileEntry) => !e.path.includes("node_modules"));
+}
+
+async function fetchFile(threadId: string, path: string): Promise<string | null> {
+  const res = await fetch(
+    `${AGENT_URL}/sandbox/${encodeURIComponent(threadId)}/file?filePath=${encodeURIComponent(path)}`,
+  );
+  const data = await res.json();
+  return data.content ?? null;
+}
+```
+
+### 实时文件同步
+
+IDE 体验的关键在于**在代理工作时**更新文件，而不是在其完成后。监听流中的消息，查找文件修改工具发出的 `ToolMessage` 实例。当 `write_file` 或 `edit_file` 工具调用完成时，刷新该特定文件。当 `execute` 完成时，刷新所有内容（因为 shell 命令可能修改任何文件）：
+
+<CodeGroup>
+
+</CodeGroup>
+```tsx React
+import { useStream } from "@langchain/react";
+import { ToolMessage, AIMessage } from "langchain";
+
+const FILE_MUTATING_TOOLS = new Set(["write_file", "edit_file", "execute"]);
+
+export function IDEPreview() {
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "deep_agent_ide",
+  });
+
+  const processedIds = useRef(new Set<string>());
+
+  useEffect(() => {
+    // Build a map of file-mutating tool calls from AI messages
+    const toolCallMap = new Map();
+    for (const msg of stream.messages) {
+      if (!AIMessage.isInstance(msg)) continue;
+      for (const tc of msg.tool_calls ?? []) {
+        if (tc.id && FILE_MUTATING_TOOLS.has(tc.name)) {
+          toolCallMap.set(tc.id, { name: tc.name, args: tc.args });
+        }
+      }
+    }
+
+    // When a ToolMessage appears for a file-mutating tool, refresh
+    for (const msg of stream.messages) {
+      if (!ToolMessage.isInstance(msg)) continue;
+      const id = msg.id ?? msg.tool_call_id;
+      if (!id || processedIds.current.has(id)) continue;
+
+      const call = toolCallMap.get(msg.tool_call_id);
+      if (!call) continue;
+      processedIds.current.add(id);
+
+      if (call.name === "write_file" || call.name === "edit_file") {
+        refreshSingleFile(call.args.path ?? call.args.file_path);
+      } else if (call.name === "execute") {
+        refreshTreeAndFiles();
+      }
+    }
+  }, [stream.messages]);
+}
+```
+
+```vue Vue
+<script setup lang="ts">
+import { useStream } from "@langchain/vue";
+import { ToolMessage, AIMessage } from "langchain";
+import { watch } from "vue";
+
+const FILE_MUTATING_TOOLS = new Set(["write_file", "edit_file", "execute"]);
+const processedIds = new Set<string>();
+
+const stream = useStream<typeof myAgent>({
+  apiUrl: AGENT_URL,
+  assistantId: "deep_agent_ide",
+});
+
+watch(
+  () => stream.messages.value,
+  (messages) => {
+    const toolCallMap = new Map();
+    for (const msg of messages) {
+      if (AIMessage.isInstance(msg)) {
+        for (const tc of msg.tool_calls ?? []) {
+          if (tc.id && FILE_MUTATING_TOOLS.has(tc.name)) {
+            toolCallMap.set(tc.id, { name: tc.name, args: tc.args });
+          }
+        }
+      }
+    }
+
+    for (const msg of messages) {
+      if (!ToolMessage.isInstance(msg)) continue;
+      const id = msg.id ?? msg.tool_call_id;
+      if (!id || processedIds.has(id)) continue;
+
+      const call = toolCallMap.get(msg.tool_call_id);
+      if (!call) continue;
+      processedIds.add(id);
+
+      if (call.name === "write_file" || call.name === "edit_file") {
+        refreshSingleFile(call.args.path ?? call.args.file_path);
+      } else if (call.name === "execute") {
+        refreshTreeAndFiles();
+      }
+    }
+  },
+  { deep: true },
+);
+</script>
+```
+
+```svelte Svelte
+<script lang="ts">
+  import { useStream } from "@langchain/svelte";
+  import { ToolMessage, AIMessage } from "langchain";
+
+  const FILE_MUTATING_TOOLS = new Set(["write_file", "edit_file", "execute"]);
+  const processedIds = new Set<string>();
+
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "deep_agent_ide",
+  });
+
+  $effect(() => {
+    const msgs = stream.messages;
+    const toolCallMap = new Map();
+    for (const msg of msgs) {
+      if (AIMessage.isInstance(msg)) {
+        for (const tc of msg.tool_calls ?? []) {
+          if (tc.id && FILE_MUTATING_TOOLS.has(tc.name)) {
+            toolCallMap.set(tc.id, { name: tc.name, args: tc.args });
+          }
+        }
+      }
+    }
+
+    for (const msg of msgs) {
+      if (!ToolMessage.isInstance(msg)) continue;
+      const id = msg.id ?? msg.tool_call_id;
+      if (!id || processedIds.has(id)) continue;
+
+      const call = toolCallMap.get(msg.tool_call_id);
+      if (!call) continue;
+      processedIds.add(id);
+
+      if (call.name === "write_file" || call.name === "edit_file") {
+        refreshSingleFile(call.args.path ?? call.args.file_path);
+      } else if (call.name === "execute") {
+        refreshTreeAndFiles();
+      }
+    }
+  });
+</script>
+```
+
+```ts Angular
+import { Component, effect } from "@angular/core";
+import { injectStream } from "@langchain/angular";
+import { ToolMessage, AIMessage } from "langchain";
+
+const FILE_MUTATING_TOOLS = new Set(["write_file", "edit_file", "execute"]);
+
+@Component({
+  selector: "app-ide-preview",
+  template: `<!-- ... -->`,
+})
+export class IdePreviewComponent {
+  stream = injectStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "deep_agent_ide",
+  });
+
+  private processedIds = new Set<string>();
+
+  constructor() {
+    effect(() => {
+      const messages = this.stream.messages();
+      const toolCallMap = new Map();
+      for (const msg of messages) {
+        if (AIMessage.isInstance(msg)) {
+          for (const tc of (msg as AIMessage).tool_calls ?? []) {
+            if (tc.id && FILE_MUTATING_TOOLS.has(tc.name)) {
+              toolCallMap.set(tc.id, { name: tc.name, args: tc.args });
+            }
+          }
+        }
+      }
+
+      for (const msg of messages) {
+        if (!ToolMessage.isInstance(msg)) continue;
+        const id = (msg as ToolMessage).id ?? (msg as ToolMessage).tool_call_id;
+        if (!id || this.processedIds.has(id)) continue;
+
+        const call = toolCallMap.get((msg as ToolMessage).tool_call_id);
+        if (!call) continue;
+        this.processedIds.add(id);
+
+        if (call.name === "write_file" || call.name === "edit_file") {
+          this.refreshSingleFile(call.args.path ?? call.args.file_path);
+        } else if (call.name === "execute") {
+          this.refreshTreeAndFiles();
+        }
+      }
+    });
+  }
+}
+```
+
+</CodeGroup>
+
+### 检测变更文件
+
+在每次代理运行前，对当前文件内容进行快照。文件刷新后，将其与快照进行对比，以识别哪些文件发生了变化：
+
+```ts
+function detectChanges(current: FileSnapshot, original: FileSnapshot): Set<string> {
+  const changed = new Set<string>();
+  for (const [path, content] of Object.entries(current)) {
+    if (original[path] !== content) changed.add(path);
+  }
+  for (const path of Object.keys(original)) {
+    if (!(path in current)) changed.add(path);
+  }
+  return changed;
+}
+```
+
+当用户选择已修改的文件时，默认显示差异视图，以便他们立即看到代理修改的内容。
+
+### 显示差异
+
+使用适合您框架的差异库来呈现统一差异：
+
+| 框架     | 库                                                                       | 组件                                                         |
+| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| React    | [`@pierre/diffs`](https://diffs.com)                                     | `<FileDiff>` 配合 `parseDiffFromFile`                        |
+| Vue      | [`@git-diff-view/vue`](https://github.com/MrWangJustToDo/git-diff-view)  | `<DiffView>` 配合 `@git-diff-view/file` 的 `generateDiffFile` |
+| Svelte   | [`@git-diff-view/svelte`](https://github.com/MrWangJustToDo/git-diff-view) | `<DiffView>` 配合 `@git-diff-view/file` 的 `generateDiffFile` |
+| Angular  | [`ngx-diff`](https://github.com/rars/ngx-diff)                           | `<ngx-unified-diff>` 配合 `[before]` 和 `[after]`            |
+
+使用 `@pierre/diffs`（React）的示例：
+
+```tsx
+import { FileDiff } from "@pierre/diffs/react";
+import { parseDiffFromFile } from "@pierre/diffs";
+
+function DiffPanel({ original, current, fileName }) {
+  const diff = parseDiffFromFile(
+    { name: fileName, contents: original },
+    { name: fileName, contents: current },
+  );
+
+  return (
+    <FileDiff
+      fileDiff={diff}
+      options={{ theme: "github-dark", diffStyle: "unified", diffIndicators: "bars" }}
+    />
+  );
+}
+```
+
+### 已更改文件摘要
+
+显示所有已修改文件的摘要，包含行级添加/删除计数。
+这让用户可以快速了解智能体的影响范围——类似于 `git status`：
+
+```tsx
+function ChangedFilesSummary({ changedFiles, files, originalFiles, onSelect }) {
+  const stats = [...changedFiles].map((path) => {
+    const oldLines = (originalFiles[path] ?? "").split("\n");
+    const newLines = (files[path] ?? "").split("\n");
+    // Compute additions/deletions by comparing lines
+    return { path, additions, deletions };
+  });
+
+  return (
+    <div>
+      <h3>{stats.length} Files Changed</h3>
+      {stats.map((file) => (
+        <button key={file.path} onClick={() => onSelect(file.path)}>
+          {file.path}
+          <span className="text-green-400">+{file.additions}</span>
+          <span className="text-red-400">-{file.deletions}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+```
+
+## 使用场景
+
+沙盒是以下场景的正确选择：
+
+- **编码代理**，需要创建、修改和运行代码，并需要超越聊天的可视化界面
+- **代码审查工作流**，代理建议更改，用户在采纳前审查差异
+- **教程或学习应用**，AI 助手帮助用户逐步构建项目，在上下文中显示更改
+- **原型设计工具**，用户用自然语言描述功能，观看代理实时实现
+
+## 最佳实践
+
+前端方面：
+
+- **将 `threadId` 持久化到 `sessionStorage`**，这样页面重新加载后会重新连接到相同的线程和沙盒，而不会创建新的。
+- **每次相关工具调用时同步文件**，而不仅仅是运行完成时。监听 `write_file`、`edit_file` 和 `execute` 工具消息并立即刷新。
+- **对于已更改的文件默认使用差异视图**。当用户点击代理修改过的文件时，首先显示差异——这才是他们关心的。
+- **对于只读操作显示简洁的工具结果**。不要在聊天中转储 `read_file` 的完整输出，而是显示一行摘要如 `Read router.js L1-42`。将完整输出显示保留给变更工具。
+- **从文件树中过滤 `node_modules`**。没人想浏览数千个依赖文件。获取树时将其过滤掉。
+
+后端和沙盒方面：
+
+- **在生产应用中使用线程作用域沙盒**。请参阅[沙盒生命周期](/oss/deepagents/going-to-production#lifecycle)。
+- **通过线程元数据在代理后端和 API 服务器之间共享沙盒解析**，使两者使用相同的无内存缓存的环境。
+- **用真实项目初始化沙盒**。请参阅[文件传输](/oss/deepagents/going-to-production#file-transfers)。
+- **将密钥排除在沙盒之外**。使用[沙盒认证代理](/oss/deepagents/going-to-production#managing-secrets)，而不是环境变量或文件上传来存储 API 密钥。
+- **上线前添加护栏**。为自主编码代理配置[速率限制](/oss/deepagents/going-to-production#rate-limiting)、[错误处理](/oss/deepagents/going-to-production#handling-errors)和[数据隐私](/oss/deepagents/going-to-production#data-privacy)中间件。
+
+## 相关
+
+<CardGroup cols={2}>
+  <Card title="投入生产" icon="rocket" href="/oss/deepagents/going-to-production">
+    使用持久化沙盒、认证、护栏和生产环境 `useStream` 设置部署代理。
+  </Card>
+  <Card title="沙盒" icon="box" href="/oss/deepagents/sandboxes">
+    沙盒提供商、安全模型和文件传输 API。
+  </Card>
+  <Card title="前端概览" icon="layout" href="/oss/deepagents/frontend/overview">
+    其他深度代理 UI 模式：子代理流式输出、待办事项列表和自定义状态。
+  </Card>
+  <Card title="应用结构" icon="file-code" href="/oss/langgraph/application-structure">
+    完整的 `langgraph.json` 参考，包括自定义 `http.app` 路由。
+  </Card>
+</CardGroup>

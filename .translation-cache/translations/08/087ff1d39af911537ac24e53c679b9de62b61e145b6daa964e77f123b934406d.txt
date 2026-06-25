@@ -1,0 +1,153 @@
+---
+title: "CockroachDB 聊天消息历史"
+description: "使用 LangChain Python 在 CockroachDB 中存储聊天对话历史记录"
+---
+
+`CockroachDBChatMessageHistory` 在 CockroachDB 的分布式 SQL 数据库中存储聊天对话历史记录。
+
+该代码位于集成包中：[langchain-cockroachdb](https://github.com/cockroachdb/langchain-cockroachdb/)。
+
+## 概述
+
+CockroachDBChatMessageHistory 提供：
+
+- **分布式存储**：聊天历史记录自动跨节点复制
+- **强一致性**：SERIALIZABLE 事务防止消息排序问题
+- **高可用性**：自动故障转移，无数据丢失
+- **会话隔离**：每个对话都有唯一的会话 ID
+- **PostgreSQL 兼容性**：易于从基于 PostgreSQL 的系统迁移
+
+## 设置
+
+### 安装
+
+```bash
+pip install -qU langchain-cockroachdb
+```
+
+### 连接字符串
+
+```python
+# CockroachDB Cloud
+CONNECTION_STRING = "cockroachdb://user:password@host:26257/database?sslmode=verify-full"
+
+# Local insecure cluster  
+CONNECTION_STRING = "cockroachdb://root@localhost:26257/defaultdb?sslmode=disable"
+```
+
+## 初始化
+
+### 创建消息历史表
+
+```python
+import asyncio
+from langchain_cockroachdb import CockroachDBChatMessageHistory
+
+# Create table (only needs to be done once)
+async def setup():
+    chat_history = CockroachDBChatMessageHistory(
+        session_id="setup",
+        connection_string=CONNECTION_STRING,
+        table_name="chat_history",
+    )
+    await chat_history._acreate_table_if_not_exists()
+
+asyncio.run(setup())
+```
+
+<Tip>
+**可选**：使用 `schema` 参数指定模式名称（默认："public"）
+</Tip>
+
+### 为会话初始化
+
+为特定对话创建聊天历史实例：
+
+```python
+import uuid
+
+session_id = str(uuid.uuid4())  # Unique ID for this conversation
+
+chat_history = CockroachDBChatMessageHistory(
+    session_id=session_id,
+    connection_string=CONNECTION_STRING,
+    table_name="chat_history",
+)
+```
+
+## 使用
+
+### 添加消息
+
+```python
+from langchain.messages import HumanMessage, AIMessage
+
+# Add messages to the conversation
+await chat_history.aadd_message(HumanMessage(content="Hello! What is CockroachDB?"))
+await chat_history.aadd_message(AIMessage(content="CockroachDB is a distributed SQL database..."))
+```
+
+### 一次添加多条消息
+
+```python
+messages = [
+    HumanMessage(content="What are vector indexes?"),
+    AIMessage(content="Vector indexes enable fast similarity search..."),
+    HumanMessage(content="How do they work?"),
+    AIMessage(content="They use approximate nearest neighbor algorithms..."),
+]
+
+await chat_history.aadd_messages(messages)
+```
+
+### 获取消息
+
+获取该会话的所有消息：
+
+```python
+messages = await chat_history.aget_messages()
+
+for msg in messages:
+    if isinstance(msg, HumanMessage):
+        print(f"User: {msg.content}")
+    elif isinstance(msg, AIMessage):
+        print(f"AI: {msg.content}")
+```
+
+### 清除对话历史
+
+删除该会话的所有消息：
+
+```python
+await chat_history.aclear()
+```
+
+## 同步接口
+
+使用同步 API：
+
+```python
+# Sync usage
+chat_history_sync = CockroachDBChatMessageHistory(
+    session_id=session_id,
+    connection_string=CONNECTION_STRING,
+    table_name="chat_history",
+)
+
+# Sync operations
+chat_history_sync.add_message(HumanMessage(content="Hello!"))
+messages = chat_history_sync.messages
+chat_history_sync.clear()
+```
+
+## API 参考
+
+详细文档：
+
+- [GitHub 仓库](https://github.com/cockroachdb/langchain-cockroachdb)
+- [PyPI 包](https://pypi.org/project/langchain-cockroachdb/)
+
+## 其他资源
+
+- [CockroachDB 文档](https://www.cockroachlabs.com/docs/)
+- [CockroachDB Cloud](https://cockroachlabs.cloud)

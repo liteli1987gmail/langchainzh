@@ -1,0 +1,106 @@
+---
+title: "JSON 文件集成"
+description: "使用 LangChain JavaScript 与 JSON 文件文档加载器集成。"
+---
+
+JSON 加载器使用 [JSON pointer](https://github.com/janl/node-jsonpointer) 来定位您想要处理的 JSON 文件中的键。
+
+### 无 JSON pointer 示例
+
+最简单的方法是不指定 JSON pointer。
+加载器将加载 JSON 对象中找到的所有字符串。
+
+示例 JSON 文件：
+
+```json
+{
+  "texts": ["This is a sentence.", "This is another sentence."],
+  "nestedTexts": {
+    "one": "This is a sentence nested in an object.",
+    "two": "This is another sentence nested in an object."
+  }
+}
+```
+
+示例代码:
+
+```typescript
+import { JSONLoader } from "@langchain/classic/document_loaders/fs/json";
+
+const loader = new JSONLoader("src/document_loaders/example_data/example.json");
+
+const docs = await loader.load();
+/*
+[
+  Document {
+    pageContent: 'This is a sentence.',
+    metadata: { source: 'example.json', line: 1 }
+  },
+  Document {
+    pageContent: 'This is another sentence.',
+    metadata: { source: 'example.json', line: 2 }
+  },
+  Document {
+    pageContent: 'This is a sentence nested in an object.',
+    metadata: { source: 'example.json', line: 3 }
+  },
+  Document {
+    pageContent: 'This is another sentence nested in an object.',
+    metadata: { source: 'example.json', line: 4 }
+  }
+]
+*/
+```
+
+### 使用 JSON pointer 示例
+
+您可以选择要从 JSON 对象中提取字符串的键。
+
+在此示例中，我们只想从 "from" 和 "surname" 条目中提取信息。
+
+```json
+{
+  "1": {
+    "body": "BD 2023 SUMMER",
+    "from": "LinkedIn Job",
+    "labels": ["IMPORTANT", "CATEGORY_UPDATES", "INBOX"]
+  },
+  "2": {
+    "body": "Intern, Treasury and other roles are available",
+    "from": "LinkedIn Job2",
+    "labels": ["IMPORTANT"],
+    "other": {
+      "name": "plop",
+      "surname": "bob"
+    }
+  }
+}
+```
+
+示例代码:
+
+```typescript
+import { JSONLoader } from "@langchain/classic/document_loaders/fs/json";
+
+const loader = new JSONLoader(
+  "src/document_loaders/example_data/example.json",
+  ["/from", "/surname"]
+);
+
+const docs = await loader.load();
+/*
+[
+  Document {
+    pageContent: 'LinkedIn Job',
+    metadata: { source: 'example.json', line: 1 }
+  },
+  Document {
+    pageContent: 'LinkedIn Job2',
+    metadata: { source: 'example.json', line: 2 }
+  },
+  Document {
+    pageContent: 'bob',
+    metadata: { source: 'example.json', line: 3 }
+  }
+]
+```

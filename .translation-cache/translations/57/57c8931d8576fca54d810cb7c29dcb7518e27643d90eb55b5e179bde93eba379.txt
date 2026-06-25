@@ -1,0 +1,1177 @@
+---
+title: 启用 LangSmith Deployment、Fleet、Insights 和 Chat
+sidebarTitle: 启用附加功能
+description: 在自托管 LangSmith 实例上启用 LangSmith Deployment、Fleet、Insights 和 Chat。
+---
+
+除了基础 [LangSmith](/langsmith/self-hosted) 平台外，您还可以启用以下功能：
+
+- **[LangSmith Deployment](/langsmith/deployment)** 添加了[控制平面](/langsmith/control-plane)和[数据平面](/langsmith/data-plane)，让您可以直接通过 LangSmith UI 部署、扩展和管理代理和应用程序。
+
+    <Note>
+    如果您不需要完整的基于 UI 的设置，请参阅[独立服务器](/langsmith/deploy-standalone-server)作为轻量级替代方案。
+    </Note>
+
+- **[Fleet](/langsmith/fleet/index)** 允许您在 LangSmith 中直接创建、部署和管理 AI 代理，无需编写代码。
+
+- **[Insights](/langsmith/insights)** 提供 LangSmith 内对跟踪和应用程序数据的 AI 驱动分析。
+
+- **[Chat](/langsmith/chat)** 提供工作区内聊天体验，帮助您分析跟踪、线程、提示词和实验结果。
+
+<Info>
+这些功能需要 [Enterprise](https://langchain.com/pricing) 计划。[获取演示](https://www.langchain.com/contact-sales)了解更多。
+</Info>
+
+## 先决条件
+
+<Steps>
+  <Step title="安装基础 LangSmith 平台">
+    在继续之前，请按照 [Kubernetes 安装指南](/langsmith/kubernetes)安装基础 LangSmith 平台。
+  </Step>
+  <Step title="安装 KEDA">
+    运行以下命令在集群上安装 `KEDA`：
+
+    ```bash
+    helm repo add kedacore https://kedacore.github.io/charts
+    helm upgrade --install keda kedacore/keda --namespace keda --create-namespace
+    ```
+
+<Info>
+KEDA 会根据队列大小自动扩展部署系统。
+</Info>
+  </Step>
+  <Step title="配置入口">
+    为您的 LangSmith 实例配置入口、网关或 Istio。所有代理将作为 Kubernetes 服务部署在此入口之后。请参阅[设置入口](/langsmith/self-host-ingress)。您必须在[`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts)中提供 `hostname`。
+  </Step>
+  <Step title="验证集群容量">
+    确保您的集群有足够的可用容量来部署多个实例。建议使用集群自动扩缩容器。
+  </Step>
+  <Step title="验证存储">
+    确保您的集群上有有效的动态 PV 配置器或 PV 可用。
+</Step>
+
+    ```bash
+    kubectl get storageclass
+    ```
+
+至少应有一个 StorageClass 具有 `PROVISIONER` 值（不是 `kubernetes.io/no-provisioner`）并标记为 `(default)`，否则必须先配置一个。
+  </Step>
+  <Step title="验证出口流量">
+    确保可以访问 `https://beacon.langchain.com` 的出口流量。请参阅[出口流量文档](/langsmith/self-host-egress)。
+  </Step>
+</Steps>
+
+## 启用 LangSmith 部署
+
+### 组件
+
+启用 LangSmith 部署会在您的集群中配置以下资源：
+
+- `listener`：监听[控制平面](/langsmith/control-plane)中部署的更改，并创建或更新下游 CRD。
+- `LangGraphPlatform CRD`：管理 LangSmith 部署的实例。
+- `operator`：处理对 LangSmith CRD 的更改。
+- `host-backend`：[控制平面](/langsmith/control-plane)。
+
+### 启用此功能
+
+要启用 LangSmith 部署，请更新您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts)：
+
+<Steps>
+  <Step title="在配置中启用部署">
+    在您的 `langsmith_config.yaml` 中，启用 `deployment` 选项。您还必须配置有效的入口。
+  </Step>
+
+    ```yaml
+    config:
+      deployment:
+        enabled: true
+    ```
+<Note>
+从 v0.12.0 开始，`langgraphPlatform` 选项已弃用。对于 v0.12.0 之后的任何版本，请使用 `config.deployment`。
+</Note>
+
+  </Step>
+
+  <Step title="(可选) 配置镜像镜像">
+    如果需要将镜像镜像到私有仓库，请在 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 中配置 `hostBackendImage` 和 `operatorImage` 选项。请使用 [最新 LangSmith Helm chart 版本](https://github.com/langchain-ai/helm/releases) 中指定的镜像标签。
+
+
+</fragment>
+
+    ```yaml
+    hostBackendImage:
+      repository: "docker.io/langchain/hosted-langserve-backend"
+      pullPolicy: IfNotPresent
+    operatorImage:
+      repository: "docker.io/langchain/langgraph-operator"
+      pullPolicy: IfNotPresent
+    ```
+</Step>
+
+<Step title="（可选）配置基础代理模板">
+    如果需要自定义操作符创建代理 Kubernetes 资源的方式，请覆盖 [`values.yaml` 中的基础代理模板](https://github.com/langchain-ai/helm/blob/main/charts/langsmith/values.yaml#L1428)。最常见的用例是添加 `imagePullSecrets` 来验证私有容器注册表。有关详细信息，请参阅[为私有注册表配置身份验证](#configure-authentication-for-private-registries)。
+  </Step>
+
+  <Step title="应用更改">
+    运行以下命令来应用更改。在整个指南中，只要要求您应用更改，都会使用此命令。将 `<version>` 和 `<namespace>` 替换为您的值：
+
+</Step>
+
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+
+验证新 Pod 已运行后再继续：
+
+    ```bash
+    kubectl get pods -n <namespace>
+    ```
+
+<Step>
+    您的实例现已准备好创建部署。
+  </Step>
+</Steps>
+
+## 启用 Fleet、Insights 和 Chat
+
+<Info>
+Fleet 需要 [LangSmith Self-Hosted v0.13](https://changelog.langchain.com/announcements/langsmith-self-hosted-v0-13) 或更高版本。下方描述的独立部署模式需要 v0.15 或更高版本。
+</Info>
+
+每个功能都需要一个 Fernet 加密密钥。您可以在单个 Helm 配置中启用所有三个功能。
+
+### 组件
+
+启用这些功能将为集群中的每个功能（Fleet、Insights、Chat）配置以下组件：
+
+- `api-server`：处理该功能请求的主 API 服务器。
+- `queue`：后台任务处理队列。
+- `postgres`：该功能的专用 PostgreSQL 实例。可替换为外部 PostgreSQL 实例。
+- `redis`：该功能的专用 Redis 实例，用于缓存和发布/订阅。可替换为外部 Redis 实例。
+
+Fleet 额外配置：
+
+- `toolServer`：为代理提供 MCP 工具执行。
+- `triggerServer`：处理 Webhook 和定时触发器。
+
+### 生成加密密钥
+
+每个功能使用自己的 Fernet 加密密钥来加密功能特定的密钥（如凭证和令牌）。独立的密钥允许独立轮换，并可限制密钥泄露时的暴露范围。使用 Python 为每个功能生成一个密钥：
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+我们建议将每个密钥存储在预定义的 Kubernetes Secret 中，而不是直接在配置文件中设置它们。请参阅[使用现有 Secret](/langsmith/self-host-using-an-existing-secret#parameters)了解相关参数：`agent_builder_encryption_key`、`insights_encryption_key` 和 `polly_encryption_key`。
+
+### 启用功能
+
+<Steps>
+  <Step title="将配置添加到你的 langsmith_config.yaml">
+    <Tabs>
+      <Tab title="使用 Kubernetes Secret（推荐）">
+        通过名称引用你现有的 Secret。图表会自动从中读取 `agent_builder_encryption_key`、`insights_encryption_key` 和 `polly_encryption_key`。
+
+        ```yaml
+        config:
+          existingSecretName: "<your-secret-name>"
+
+        fleet:
+          enabled: true
+
+        insights:
+          enabled: true
+
+        # Chat (formerly Polly)
+        polly:
+          enabled: true
+
+        fleetToolServer:
+          enabled: true
+
+        fleetTriggerServer:
+          enabled: true
+        ```
+</Tab>
+<Tab title="Using inline values">
+直接在配置文件中设置加密密钥。避免将此文件提交到版本控制系统。
+</Tab>
+
+        ```yaml
+        fleet:
+          enabled: true
+          encryptionKey: "<fleet-encryption-key>"
+
+        insights:
+          enabled: true
+          encryptionKey: "<insights-encryption-key>"
+
+        polly:
+          enabled: true
+          encryptionKey: "<chat-encryption-key>"
+
+        fleetToolServer:
+          enabled: true
+
+        fleetTriggerServer:
+          enabled: true
+        ```
+</Tab>
+    </Tabs>
+
+    <Warning>
+    如果您正在从旧的 `agentBootstrap` 部署模型迁移，请禁用 `backend.agentBootstrap` 以及旧的 `config.agentBuilder`、`config.insights` 和 `config.polly` 标志。这些是 `config` 部分下的标志，不是上面显示的顶级 `fleet`、`insights` 和 `polly` 标志。
+
+    您还必须通过 LangSmith Deployments UI 手动删除现有的 Fleet、Insights 和 Chat 部署。如果您在旧的 `agentBootstrap` 模型中未使用外部 PostgreSQL 数据库来运行 Fleet，并希望保留现有的 Fleet agents，请在应用此配置之前通过 [Support Portal](https://support.langchain.com) 联系技术支持。
+    </Warning>
+
+    <Note>
+    Fleet 需要 `fleetToolServer` 和 `fleetTriggerServer`。这些从 Helm chart v15 起取代了已弃用的 `agentBuilderToolServer` 和 `agentBuilderTriggerServer` 键。
+    </Note>
+
+    默认情况下，每个功能都会部署自己专用的 PostgreSQL 和 Redis 实例。如需改用外部数据库，请在每个功能下配置 `postgres.external` 和 `redis.external` 部分。例如：
+
+    ```yaml
+    fleet:
+      enabled: true
+      encryptionKey: "<fleet-encryption-key>"
+      postgres:
+        external:
+          enabled: true
+          connectionUrl: "<fleet-postgres-connection-url>"
+      redis:
+        external:
+          enabled: true
+          connectionUrl: "<fleet-redis-connection-url>"
+    ```
+</Step>
+  <Step title="应用更改">
+
+</fragment>
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+
+验证 Fleet、Insights 和 Chat pods 是否正在运行：
+
+    ```bash
+    kubectl get pods -n <namespace>
+    ```
+</Step>
+</Steps>
+
+### (可选) 启用 Fleet 的 OAuth 工具和触发器
+
+要在 Fleet 中启用基于 OAuth 的工具（如 Gmail、Slack 或 Linear），请配置 `providerOrgId` 并为您想要使用的每个集成添加提供商 ID。您可以启用任意组合的提供商。
+
+#### 可用提供商
+
+| 提供商 | 已启用的工具 | 已启用的触发器 |
+|--------|---------------|----------------|
+| `googleOAuthProvider`<br />[设置指南](#google-oauth-provider) | Gmail、Google日历、<br />Google 表格、BigQuery | Gmail |
+| `linearOAuthProvider`<br />[设置指南](#linear-oauth-provider) | Linear | - |
+| `linkedinOAuthProvider`<br />[设置指南](#linkedin-oauth-provider) | LinkedIn | - |
+| `microsoftOAuthProvider`<br />[设置指南](#microsoft-oauth-provider) | Outlook、日历、Teams、SharePoint、<br />Word、Excel、PowerPoint | Outlook |
+| `salesforceOAuthProvider`<br />[设置指南](#salesforce-oauth-provider) | Salesforce | - |
+| `slackOAuthProvider`<br />[设置指南](#slack-oauth-provider) | Slack | Slack |
+
+#### 通用配置
+
+将以下内容添加到您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 中。仅包含您需要的提供商。
+
+```yaml
+fleet:
+  oauth:
+    # Organization ID where OAuth providers are configured
+    providerOrgId: "<your-org-id>"
+    # Add provider IDs for integrations you want to enable.
+    # Slack requires additional configuration.
+    slackOAuthProvider: "<provider-id>"
+    slackSigningSecret: "<signing-secret>"
+    slackBotId: "<bot-id>"
+    googleOAuthProvider: "<provider-id>"
+    linkedinOAuthProvider: "<provider-id>"
+    linearOAuthProvider: "<provider-id>"
+    microsoftOAuthProvider: "<provider-id>"
+    salesforceOAuthProvider: "<provider-id>"
+```
+
+<Warning>
+提供商 ID 必须唯一，且不能以 `-agent-builder` 或 `-oauth-provider` 结尾。
+</Warning>
+
+#### 提供商设置指南
+
+<AccordionGroup>
+<Accordion title="Google OAuth 提供商" id="google-oauth-provider">
+
+要为 Fleet 启用 Google OAuth，请在 GCP 中创建一个 OAuth 客户端，并使用所需的 URL 和凭据对其进行配置。
+
+<Steps>
+  <Step title="在 GCP 中创建 OAuth 客户端">
+    在 [Google Cloud Console](https://console.cloud.google.com/apis/credentials) 中创建一个新的 OAuth 客户端应用（Web 应用）。
+  </Step>
+
+  <Step title="将 URL 添加到 GCP">
+    将以下 URL 添加到您的 OAuth 客户端，将 `<hostname>` 替换为您的 LangSmith 主机名，将 `<provider-id>` 替换为您将使用的提供商 ID（例如 `google`）：
+
+    **已授权的 JavaScript 来源：**
+    - `https://<hostname>`
+
+    **已授权的重定向 URI：**
+    - `https://<hostname>/api-host/v2/auth/callback/<provider-id>`
+    - `https://<hostname>/host-oauth-callback/<provider-id>`
+  </Step>
+
+  <Step title="复制凭据">
+    从 GCP OAuth 应用中复制**客户端 ID**和**客户端密钥**。
+  </Step>
+
+  <Step title="在 LangSmith 中配置 OAuth 提供商">
+    在 LangSmith 中，转到**设置 > OAuth 提供商**并添加一个新提供商：
+    - **客户端 ID**：来自 GCP
+    - **客户端密钥**：来自 GCP
+    - **授权 URL**：`https://accounts.google.com/o/oauth2/auth`
+    - **令牌 URL**：`https://oauth2.googleapis.com/token`
+    - **提供商 ID**：唯一字符串，例如：`google`
+  </Step>
+
+  <Step title="应用更改">
+    将 LangSmith OAuth 提供商 ID 添加到您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 并部署：
+
+    ```yaml
+    fleet:
+      oauth:
+        providerOrgId: "<your-org-id>"
+        googleOAuthProvider: "<provider-id>"
+    ```
+
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+</Step>
+</Steps>
+
+</Accordion>
+
+<Accordion title="Microsoft OAuth 提供商" id="microsoft-oauth-provider">
+
+要为 Fleet 启用 Microsoft OAuth，请创建 Azure 应用注册，添加所需的 Microsoft Graph 委托权限，并在 LangSmith 中配置 Microsoft OAuth 提供商。
+
+<Steps>
+  <Step title="创建 Azure 应用注册">
+    在 [Microsoft Entra 管理中心](https://entra.microsoft.com/)，转到**应用程序 > 应用注册**，然后创建新的注册。
+  </Step>
+
+  <Step title="选择支持的账户类型">
+    选择与您的部署相匹配的账户类型。如果您需要多个 Microsoft Entra 租户的用户进行身份验证，请选择多租户选项。如果您的部署仅限于一个租户，则可以使用单租户应用注册。
+  </Step>
+
+  <Step title="添加重定向 URI">
+    添加以下 Web 重定向 URI，将 `<hostname>` 替换为您的 LangSmith 主机名，将 `<provider-id>` 替换为您的提供商 ID：
+
+    ```
+    https://<hostname>/host-oauth-callback/<provider-id>
+    ```
+</Step>
+
+  <Step title="创建客户端密钥">
+    在**证书和密钥**中，创建新的客户端密钥。复制**应用程序(客户端)ID**和生成的客户端密钥值。
+  </Step>
+
+  <Step title="添加 Microsoft Graph 委托权限">
+    在**API 权限**中，添加以下 Microsoft Graph 委托权限：
+    - `Mail.ReadWrite`
+    - `Mail.Send`
+    - `Calendars.ReadWrite`
+    - `Team.ReadBasic.All`
+    - `Channel.ReadBasic.All`
+    - `Channel.Create`
+    - `ChannelMessage.Send`
+    - `ChannelMessage.Read.All`
+    - `Chat.Create`
+    - `Chat.ReadWrite`
+    - `User.ReadBasic.All`
+    - `Files.ReadWrite.All`
+    - `Sites.ReadWrite.All`
+
+    <Note>
+    LangSmith 会自动为 Microsoft 提供程序请求 `offline_access`，以便用户可以接收刷新令牌。
+    </Note>
+  </Step>
+
+  <Step title="授予租户同意">
+    如果您的 Microsoft 365 策略要求这些委托权限获得管理员同意，请为租户授予管理员同意。
+  </Step>
+
+  <Step title="在 LangSmith 中配置 OAuth 提供程序">
+    在 LangSmith 中，转到**设置 > OAuth 提供程序**并添加新的提供程序：
+    - **名称**：例如，`Microsoft`
+    - **提供程序 ID**：唯一字符串，例如：`microsoft-oauth-provider`
+    - **客户端 ID**：来自 Azure 的应用程序（客户端）ID
+    - **客户端密钥**：来自 Azure 的客户端密钥值
+    - **授权 URL**：`https://login.microsoftonline.com/common/oauth2/v2.0/authorize`
+    - **令牌 URL**：`https://login.microsoftonline.com/common/oauth2/v2.0/token`
+    - **提供程序类型**：`microsoft`
+    - **令牌端点身份验证方法**：`client_secret_post`
+
+    <Note>
+    如果您创建了单租户应用注册，请将授权和令牌 URL 中的 `common` 替换为您的租户 ID。
+    </Note>
+  </Step>
+
+  <Step title="应用更改">
+    将以下内容添加到您的[`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts)并部署：
+
+
+</fragment>
+
+    ```yaml
+    fleet:
+      oauth:
+        providerOrgId: "<your-org-id>"
+        microsoftOAuthProvider: "<provider-id>"
+    ```
+
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+</Step>
+</Steps>
+
+</Accordion>
+
+<Accordion title="Linear OAuth 提供商" id="linear-oauth-provider">
+
+要为 Fleet 启用 Linear OAuth，请创建一个 Linear OAuth 应用并使用所需凭证进行配置。
+
+<Steps>
+  <Step title="创建 Linear OAuth 应用">
+    转到 [Linear Settings > API > Applications](https://linear.app/settings/api/applications/new) 并创建一个新的 OAuth 应用。
+  </Step>
+
+  <Step title="添加回调 URL">
+    设置回调 URL，将 `<hostname>` 替换为您的 LangSmith 主机名，将 `<provider-id>` 替换为您的提供商 ID：
+
+</fragment>
+
+    ```
+    https://<hostname>/host-oauth-callback/<provider-id>
+    ```
+</Step>
+
+  <Step title="复制凭证">
+    创建应用后，复制 **Client ID** 和 **Client Secret**。
+  </Step>
+
+  <Step title="在 LangSmith 中配置 OAuth 提供商">
+    在 LangSmith 中，转到 **Settings > OAuth Providers** 并添加新的提供商：
+    - **Client ID**：来自 Linear 应用
+    - **Client Secret**：来自 Linear 应用
+    - **Authorization URL**：`https://linear.app/oauth/authorize`
+    - **Token URL**：`https://api.linear.app/oauth/token`
+    - **Provider ID**：唯一字符串，例如：`linear`
+  </Step>
+
+  <Step title="应用更改">
+    将以下内容添加到您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 并部署：
+
+    ```yaml
+    fleet:
+      oauth:
+        providerOrgId: "<your-org-id>"
+        linearOAuthProvider: "<provider-id>"
+    ```
+
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+</Step>
+</Steps>
+
+</Accordion>
+
+<Accordion title="LinkedIn OAuth provider" id="linkedin-oauth-provider">
+
+要启用 Fleet 的 LinkedIn OAuth，请创建一个 LinkedIn OAuth 应用并使用所需凭证进行配置。
+
+<Steps>
+  <Step title="Create a LinkedIn OAuth app">
+    访问 [linkedin.com/developers/apps](https://www.linkedin.com/developers/apps/) 并创建一个新应用。
+  </Step>
+
+  <Step title="Add redirect URI">
+    在您的应用设置中，转到 **Auth** 标签页。添加以下重定向 URI，将 `<hostname>` 替换为您的 LangSmith 主机名，将 `<provider-id>` 替换为您的提供商 ID：
+
+</fragment>
+
+    ```
+    https://<hostname>/host-oauth-callback/<provider-id>
+    ```
+</Step>
+
+<Step title="复制凭据">
+    从 Auth 标签页复制 **Client ID** 和 **Client Secret**。
+  </Step>
+
+<Step title="在 LangSmith 中配置 OAuth 提供商">
+    在 LangSmith 中，转到 **Settings > OAuth Providers** 并添加新的提供商：
+    - **Client ID**：来自 LinkedIn 应用
+    - **Client Secret**：来自 LinkedIn 应用
+    - **Authorization URL**：`https://www.linkedin.com/oauth/v2/authorization`
+    - **Token URL**：`https://www.linkedin.com/oauth/v2/accessToken`
+    - **Provider ID**：唯一字符串，例如：`linkedin`
+  </Step>
+
+<Step title="应用更改">
+    将以下内容添加到您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 并部署：
+
+    ```yaml
+    fleet:
+      oauth:
+        providerOrgId: "<your-org-id>"
+        linkedinOAuthProvider: "<provider-id>"
+    ```
+
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+</Step>
+</Steps>
+
+</Accordion>
+
+<Accordion title="Salesforce OAuth 提供商" id="salesforce-oauth-provider">
+
+要为 Fleet 启用 Salesforce OAuth，请创建一个 Salesforce 外部客户端应用，配置其 OAuth 设置和策略，获取其凭证，然后在 LangSmith 中配置 Salesforce OAuth 提供商。
+
+<Steps>
+  <Step title="创建外部客户端应用">
+    在 Salesforce **设置**中，使用**快速查找**打开**外部客户端应用管理器**，然后点击**新建外部客户端应用**。
+
+    在**基本信息**下，设置：
+    - **外部客户端应用名称**：例如，`LangSmith Fleet`
+    - **联系人电子邮件**：管理员电子邮件地址
+    - **分发状态**：**本地**
+
+    <Note>
+    外部客户端应用是 Salesforce 当前用于 OAuth 集成的框架。如果**新建外部客户端应用**不可用，请在**设置 > 外部客户端应用设置**下确认是否为您的组织启用了应用创建。
+    </Note>
+  </Step>
+
+  <Step title="启用 OAuth 并配置 OAuth 设置">
+    展开**API（启用 OAuth 设置）**并选择**启用 OAuth**。然后配置：
+
+    - **回调 URL**，将 `<hostname>` 替换为您的 LangSmith 主机名，将 `<provider-id>` 替换为您的提供商 ID：
+
+
+</fragment>
+
+    ```
+    https://<hostname>/host-oauth-callback/<provider-id>
+    ```
+
+<Step title="设置 OAuth 策略">
+    打开应用，选择 **策略** 选项卡，然后点击 **编辑**：
+
+    - **刷新令牌策略**：选择 **刷新令牌在撤销前有效**。
+    - **允许的用户**：保留 **所有用户均可自行授权**。如果选择 **管理员批准的用户已预先授权**，则必须先将应用分配给权限集或配置文件，否则授权将失败。
+
+    点击 **保存**。
+
+    <Note>
+    外部客户端应用需要在两个位置进行配置：**设置**（上一步中的 OAuth 定义）和 **策略**（此步骤）。两个位置都必须保存。
+    </Note>
+  </Step>
+
+  <Step title="复制凭据">
+    在 **设置** 选项卡的 **OAuth 设置** 下，选择 **Consumer Key 和 Secret**。**Consumer Key** 是您的 Client ID，**Consumer Secret** 是您的 Client Secret。
+
+    <Note>
+    创建应用后，请等待最多 30 分钟以完成传播，然后再进行首次连接尝试。
+    </Note>
+  </Step>
+
+  <Step title="在 LangSmith 中配置 OAuth 提供商">
+    在 LangSmith 中，转到 **设置 > OAuth 提供商**，点击 **OAuth 提供商**，然后填写：
+    - **提供商 ID**：唯一字符串，例如：`salesforce-oauth-provider`。在下一步中，将此值用于 `salesforceOAuthProvider`。
+    - **显示名称**：例如，`Salesforce`
+    - **客户端 ID**：来自 Salesforce 的 Consumer Key
+    - **客户端密钥**：来自 Salesforce 的 Consumer Secret
+    - **授权 URL**：`https://<MyDomain>.my.salesforce.com/services/oauth2/authorize`
+    - **令牌 URL**：`https://<MyDomain>.my.salesforce.com/services/oauth2/token`
+
+    LangSmith 从令牌 URL 自动识别 Salesforce，因此无需设置 provider-type 或 token-auth-method 字段。保持 **启用 PKCE** 关闭，以匹配上述配置的 Web 服务器流程。
+
+    <Note>
+    将 `<MyDomain>` 替换为组织的 My Domain，可在 **设置 > My Domain** 中找到。对于沙箱环境，请使用 `https://<MyDomain>--<SandboxName>.sandbox.my.salesforce.com/services/oauth2/authorize` 和相应的令牌 URL。
+    </Note>
+  </Step>
+
+  <Step title="应用更改">
+    将以下内容添加到您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 并部署：
+
+</Step>
+
+    ```yaml
+    fleet:
+      oauth:
+        providerOrgId: "<your-langsmith-org-id>"
+        salesforceOAuthProvider: "<provider-id>"
+    ```
+
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+</Step>
+</Steps>
+
+<Warning>
+如果登录失败：请确认 Salesforce 中的 **Callback URL** 与 `https://<hostname>/host-oauth-callback/<provider-id>` 完全匹配（HTTPS，无尾部斜杠）；如果您选择了 **Admin approved users are pre-authorized**，请通过权限集分配应用；如果您的组织强制执行登录 IP 范围，请在用户配置文件上允许列 Fleet 服务器的出口 IP，或在应用策略中将 **IP Relaxation** 设置为 **Relax IP restrictions**。
+</Warning>
+
+</Accordion>
+
+<Accordion title="Slack OAuth 提供商" id="slack-oauth-provider">
+
+要为 Fleet 启用 Slack OAuth，请创建一个 Slack 应用并使用所需的作用域、凭据和事件订阅对其进行配置。
+
+<Steps>
+  <Step title="创建 Slack 应用">
+    前往 [api.slack.com/apps](https://api.slack.com/apps) 并点击 **Create New App**。
+  </Step>
+
+  <Step title="添加作用域">
+    在 **OAuth & Permissions** 中，添加以下作用域：
+    - `channels:history`
+    - `channels:read`
+    - `chat:write`
+    - `groups:history`
+    - `groups:read`
+    - `im:history`
+    - `im:read`
+    - `im:write`
+    - `mpim:history`
+    - `team:read`
+    - `users:read`
+    - `users:read.email`
+  </Step>
+
+  <Step title="从 Slack 复制凭据">
+    从 Slack 应用设置中复制 **Client ID**、**Client Secret** 和 **Signing Secret**。
+  </Step>
+
+  <Step title="在 LangSmith 中配置 OAuth 提供商">
+    在 LangSmith 中，前往 **Settings > OAuth Providers** 并添加一个新的提供商：
+    - **Client ID**：来自 Slack 应用
+    - **Client Secret**：来自 Slack 应用
+    - **Authorization URL**：`https://slack.com/oauth/v2/authorize`
+    - **Token URL**：`https://slack.com/api/oauth.v2.access`
+    - **Provider ID**：唯一字符串，例如：`slack`
+  </Step>
+
+  <Step title="向 Slack 添加重定向 URI">
+    在 **OAuth & Permissions > Redirect URLs** 下，将以下重定向 URI 添加到您的 Slack 应用，将 `<hostname>` 替换为您的 LangSmith 主机名，将 `<provider-id>` 替换为您的提供商 ID（例如 `slack`）：
+
+
+</fragment>
+
+    ```
+    https://<hostname>/host-oauth-callback/<provider-id>
+    ```
+</Step>
+
+  <Step title="获取机器人 ID">
+    1. 从 Slack 应用中的 **OAuth & Permissions** 获取机器人令牌。
+    2. 运行以下命令：
+
+</fragment>
+
+    ```bash
+    curl -X POST https://slack.com/api/auth.test \
+      -H "Authorization: Bearer <bot-token>"
+    ```
+
+3. 从响应中复制 `bot_id`。
+  </Step>
+
+  <Step title="应用更改">
+    将以下内容添加到您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 并部署：
+
+    ```yaml
+    fleet:
+      oauth:
+        providerOrgId: "<your-org-id>"
+        slackOAuthProvider: "<provider-id>"
+        slackSigningSecret: "<signing-secret>"
+        slackBotId: "<bot-id>"
+    ```
+
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+</Step>
+
+  <Step title="Enable event subscriptions">
+    1. 部署后，转到 Slack 应用中的 **Event Subscriptions**，并启用事件。
+    2. 将 **Request URL** 设置为：
+
+       ```
+       https://<hostname>/v1/triggers/webhooks/d809e66e-0000-4000-8000-000000000002
+       ```
+
+UUID 是固定的 LangSmith 标识符 — 请勿替换。
+
+    3. 添加以下 bot 事件：
+       - `message.channels`
+       - `message.groups`
+       - `message.im`
+       - `message.mpim`
+  </Step>
+
+  <Step title="设置触发器和工具">
+    1. 将 Slack bot 添加到要读取的频道。
+    2. 在 Fleet 中配置 Slack 工具或触发器时，提供 **channel ID** 和 **channel name**。
+  </Step>
+</Steps>
+
+</Accordion>
+</AccordionGroup>
+
+### （可选）为 Fleet 启用 GitHub App
+
+Fleet 通过专用 **GitHub App**（而非 OAuth 应用）与 GitHub 集成。GitHub App 为 Fleet 的 GitHub 工具提供仓库访问权限，并支持私有仓库访问所需的用户授权流程。
+
+设置包括创建 GitHub App、收集其凭证、将凭证存储为 Kubernetes Secret，以及从 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 中引用它们。
+
+<Steps>
+  <Step title="创建 GitHub App">
+    前往 [GitHub Settings > Developer settings > GitHub Apps](https://github.com/settings/apps) 并点击 **New GitHub App**。
+
+    <Note>
+    可以在个人账户或组织下创建该应用。如果有多人需要管理此集成，建议使用组织拥有的应用。
+    </Note>
+  </Step>
+
+  <Step title="填写基本信息">
+    - **GitHub App name**：任意唯一名称，例如 `acme-langsmith-fleet`。请记下 GitHub 生成的 slug（名称的小写、连字符形式），因为这是 `FLEET_GITHUB_APP_SLUG` 使用的值。
+    - **Homepage URL**：您的 LangSmith 主机名，例如 `https://langsmith.acme.com`。
+    - 在 **Webhook** 下取消选择 **Active**，稍后会在生成 webhook secret 后启用。
+  </Step>
+
+  <Step title="设置回调 URL">
+    在 **Identifying and authorizing users** 下，添加以下 **Callback URL**，将 `<hostname>` 替换为您的 LangSmith 主机名：
+
+    ```
+    https://<hostname>/v1/platform/fleet/providers/github-app/auth/callback
+    ```
+
+选择 **Redirect on update**。
+
+在 **Post installation** 下，添加以下 **Setup URL**：
+
+    ```
+    https://<hostname>/v1/platform/fleet/providers/github-app/callback
+    ```
+
+<Step title="设置 webhook URL 并生成 webhook 密钥">
+    选择 **Redirect on update**。
+  </Step>
+
+  <Step title="设置 webhook URL 并生成 webhook 密钥">
+    生成一个随机的 webhook 密钥：
+
+
+</Step>
+
+    ```bash
+    python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+    ```
+
+在 **Webhook** 下：
+    - 选择 **Active**。
+    - 将 **Webhook URL** 设置为：
+
+      ```
+      https://<hostname>/v1/platform/fleet/providers/github-app/webhooks
+      ```
+
+- 将生成的值粘贴到 **Webhook secret** 中并保存，因为在后续步骤中创建 Kubernetes secret 时需要使用相同的值。
+  </Step>
+
+  <Step title="设置仓库权限">
+    在 **Permissions > Repository permissions** 下，授予以下权限：
+
+    - **Contents**：读写
+    - **Issues**：读写
+    - **Pull requests**：读写
+    - **Metadata**：只读（自动选中）
+
+    在 **Permissions > Account permissions** 下，授予 **Email addresses: Read-only** 权限。
+
+    <Note>
+    这些是 Fleet 内置 GitHub 工具（问题管理、拉取请求创建、仓库内容访问）所需的最低权限。如需其他工具功能，请进行调整。
+    </Note>
+  </Step>
+
+  <Step title="选择安装可见性">
+    在 **Where can this GitHub App be installed?** 下，选择符合您分发需求的选项。对于大多数自托管部署，应选择 **Only on this account**。
+  </Step>
+
+  <Step title="创建应用">
+    点击 **Create GitHub App**。在应用设置页面中，记下以下值：
+
+    | 值 | 在哪里找到 | 环境变量 |
+    |-------|-----------------|----------------------|
+    | **App ID** | 数字，位于页面顶部 | `FLEET_GITHUB_APP_ID` |
+    | **Public link** | 例如，`https://github.com/apps/acme-langsmith-fleet` | `FLEET_GITHUB_APP_PUBLIC_LINK` |
+    | App slug | 公共链接的最后一段路径 | `FLEET_GITHUB_APP_SLUG` |
+    | **Client ID** | 在 **About** 下 | `FLEET_GITHUB_APP_CLIENT_ID` |
+  </Step>
+
+  <Step title="生成客户端密钥">
+    在 **Client secrets** 下，点击 **Generate a new client secret** 并复制该值。这就是 `FLEET_GITHUB_APP_CLIENT_SECRET`。GitHub 仅显示一次。
+  </Step>
+
+  <Step title="生成私钥">
+    滚动到 **Private keys** 并点击 **Generate a private key**。GitHub 会下载一个 `.pem` 文件。请妥善保管此文件，因为它授予对 GitHub App 的完全访问权限。PEM 内容就是 `FLEET_GITHUB_APP_PRIVATE_KEY`。
+  </Step>
+
+  <Step title="生成状态 JWT 密钥">
+    LangSmith 使用 HMAC 密钥对短期 OAuth 状态令牌进行签名。生成一个：
+
+    ```bash
+    python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+    ```
+
+<fragment>
+
+    This is `FLEET_GITHUB_APP_STATE_JWT_SECRET`.
+  </Step>
+
+  <Step title="创建 Kubernetes 密钥">
+    将敏感值存储在 Kubernetes 密钥中：
+
+
+</fragment>
+
+    ```bash
+    kubectl create secret generic fleet-github-app \
+      --namespace <your-langsmith-namespace> \
+      --from-literal=client_secret="<client-secret>" \
+      --from-literal=webhook_secret="<webhook-secret>" \
+      --from-literal=state_jwt_secret="<state-jwt-secret>" \
+      --from-file=private_key=/path/to/fleet-app.private-key.pem
+    ```
+
+<Step title="Add the configuration to your langsmith_config.yaml">
+    添加以下内容，将占位符值替换为上面收集的非敏感值：
+
+</Step>
+
+    ```yaml
+    commonEnv:
+      - name: FLEET_GITHUB_APP_ID
+        value: "<app-id>"
+      - name: FLEET_GITHUB_APP_SLUG
+        value: "<app-slug>"
+      - name: FLEET_GITHUB_APP_PUBLIC_LINK
+        value: "https://github.com/apps/<app-slug>"
+      - name: FLEET_GITHUB_APP_CLIENT_ID
+        value: "<client-id>"
+      - name: FLEET_GITHUB_APP_CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: fleet-github-app
+            key: client_secret
+      - name: FLEET_GITHUB_APP_PRIVATE_KEY
+        valueFrom:
+          secretKeyRef:
+            name: fleet-github-app
+            key: private_key
+      - name: FLEET_GITHUB_APP_WEBHOOK_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: fleet-github-app
+            key: webhook_secret
+      - name: FLEET_GITHUB_APP_STATE_JWT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: fleet-github-app
+            key: state_jwt_secret
+
+    fleetToolServer:
+      deployment:
+        extraEnv:
+          - name: FLEET_GITHUB_APP_ENABLED
+            value: "true"
+    ```
+
+<Note>
+`FLEET_GITHUB_APP_ENABLED` 必须在工具服务器上设置，以便注册 GitHub 工具。其余的 `FLEET_GITHUB_APP_*` 变量由平台后端使用，位于 `commonEnv` 下。
+</Note>
+</Step>
+
+<Step title="在仓库上部署并安装应用">
+运行以下命令来应用更改：
+
+</Step>
+
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+
+Pod 启动成功后：
+
+1. 在 LangSmith 中，打开一个 Fleet agent，进入 agent 编辑器中的 GitHub 集成。
+2. 点击 **Connect GitHub** 在 Fleet 需要访问的仓库上安装应用。
+3. 对于私有仓库，在安装过程中必须显式选择每个仓库。
+
+<Note>
+每个用户还必须使用 LangSmith 中的重新认证流程，将其 GitHub 账户授权给 GitHub App。这允许 Fleet 为代表用户执行操作的工具解析每个用户的令牌。
+</Note>
+
+### 禁用功能
+
+要禁用 Fleet、Insights 和 Chat 的任意组合，请在您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts)中将相应标志设置为 `false`：
+
+```yaml
+fleet:
+  enabled: false
+
+insights:
+  enabled: false
+
+polly:
+  enabled: false
+```
+
+## 可选配置
+
+### 配置额外的数据平面
+
+<Warning>
+**不推荐；计划弃用。** 通过控制平面配置额外的数据平面不是推荐做法，将在未来的版本中弃用。请改为部署[独立 Agent Server](/langsmith/deploy-standalone-server)，并配置它们向您的自托管 LangSmith 实例进行追踪。
+</Warning>
+
+除了上面创建的数据平面外，您还可以在不同的 Kubernetes 集群或同一集群的不同命名空间下创建更多数据平面。有多种方式可以实现这一点，因此请实施最适合您使用场景的解决方案。
+
+#### 前置要求
+
+<Steps>
+  <Step title="审查集群组织">
+    阅读[混合（遗留）文档](/langsmith/hybrid-legacy#listeners)中的集群组织指南，了解如何为您的使用场景进行组织。
+  </Step>
+
+  <Step title="验证混合前置要求">
+    验证新集群[混合部分](/langsmith/hybrid-legacy#prerequisites)中的前置要求。在[前置要求](/langsmith/hybrid-legacy#prerequisites)的第 5 步中，将出口配置到您的[自托管 LangSmith 实例](/langsmith/self-host-usage#configuring-the-application-you-want-to-use-with-langsmith)，而不是 `https://api.host.langchain.com` 和 `https://api.smith.langchain.com`。
+  </Step>
+
+  <Step title="在 Postgres 中启用该功能">
+    针对您的 LangSmith Postgres 实例运行以下命令以启用此功能。请记下工作区 ID 以便后续步骤使用。
+
+</Steps>
+
+    ```sql
+    update organizations set config = config || '{"enable_lgp_listeners_page": true}' where id = '<org id here>';
+    update tenants set config = config || '{"langgraph_remote_reconciler_enabled": true}' where id = '<workspace id here>';
+    ```
+</Step>
+</Steps>
+
+#### 部署到不同的集群
+
+<Steps>
+  <Step title="按照混合设置指南操作">
+    按照[混合设置指南](/langsmith/hybrid-legacy#setup)中的步骤 2 到 6 进行操作。将 `config.langsmithWorkspaceId` 设置为上一步中的工作区 ID。
+  </Step>
+  <Step title="（可选）在同一集群中添加更多数据平面">
+    若要在同一集群中添加多个数据平面，请按照[在同一集群中配置额外数据平面](/langsmith/hybrid-legacy#configuring-additional-data-planes-in-the-same-cluster)的说明操作。
+  </Step>
+</Steps>
+
+#### 部署到同一集群中的不同命名空间
+
+<Steps>
+  <Step title="更新您的配置">
+    在您的 [`langsmith_config.yaml`](/langsmith/kubernetes#configure-your-helm-charts) 中，进行以下修改：
+    - 将 `operator.watchNamespaces` 设置为您的自托管 LangSmith 实例当前运行所在的命名空间。这可以防止与新数据平面添加的 operator 发生冲突。
+    - 使用 [Gateway API](/langsmith/self-host-ingress#option-2%3A-gateway-api) 或 [Istio Gateway](/langsmith/self-host-ingress#option-3%3A-istio-gateway)。相应地调整您的 `langsmith_config.yaml`。
+  </Step>
+  <Step title="应用更改">
+
+</fragment>
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+</Step>
+<Step title="按照混合设置指南操作">
+    按照[混合设置指南](/langsmith/hybrid-legacy#setup)中的步骤2到6进行操作。将 `config.langsmithWorkspaceId` 设置为上一步中的工作区ID。将 `config.watchNamespaces` 设置为与现有数据平面使用的命名空间不同的命名空间。
+  </Step>
+  <Step title="（可选）配置日志访问权限">
+    配置控制平面的访问权限，使其能够从新命名空间读取 Agent Server 部署日志。请参阅[从其他命名空间读取 Agent Server 日志](#read-agent-server-logs-from-other-namespaces)。
+  </Step>
+</Steps>
+
+### 为私有镜像仓库配置身份验证
+
+如果您的 [Agent Server 部署](/langsmith/agent-server) 将使用来自私有容器镜像仓库（例如 AWS ECR、Azure ACR 或 GCP Artifact Registry）的镜像，请配置镜像拉取密钥。此配置会自动应用到所有部署，使它们能够通过私有镜像仓库进行身份验证。
+
+<Steps>
+  <Step title="创建 Kubernetes 镜像拉取密钥">
+
+</Steps>
+    ```bash
+    kubectl create secret docker-registry langsmith-registry-secret \
+        --docker-server=myregistry.com \
+        --docker-username=your-username \
+        --docker-password=your-password \
+        --docker-email=your-email@example.com \
+        -n langsmith
+    ```
+
+替换以下值为您的镜像仓库凭据：
+    - `myregistry.com`：您的镜像仓库 URL
+    - `your-username`：您的镜像仓库用户名
+    - `your-password`：您的镜像仓库密码或访问令牌
+    - `langsmith`：LangSmith 安装所在的 Kubernetes 命名空间
+  </Step>
+  <Step title="在 langsmith_config.yaml 中配置部署模板">
+    要使代理服务器部署能够使用私有镜像仓库密钥，请在操作符的部署模板中添加 `imagePullSecrets`：
+
+</fragment>
+
+    ```yaml {21-22}
+    operator:
+      templates:
+        deployment: |
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${name}
+            namespace: ${namespace}
+          spec:
+            replicas: ${replicas}
+            revisionHistoryLimit: 10
+            selector:
+              matchLabels:
+                app: ${name}
+            template:
+              metadata:
+                labels:
+                  app: ${name}
+              spec:
+                enableServiceLinks: false
+                imagePullSecrets:
+                - name: langsmith-registry-secret
+                containers:
+                - name: api-server
+                  image: ${image}
+                  ports:
+                  - name: api-server
+                    containerPort: 8000
+                    protocol: TCP
+                  livenessProbe:
+                    httpGet:
+                      path: /ok
+                      port: 8000
+                    periodSeconds: 15
+                    timeoutSeconds: 5
+                    failureThreshold: 6
+                  readinessProbe:
+                    httpGet:
+                      path: /ok
+                      port: 8000
+                    periodSeconds: 15
+                    timeoutSeconds: 5
+                    failureThreshold: 6
+    ```
+</Step>
+<Step title="应用更改">
+
+</fragment>
+    ```bash
+    helm upgrade -i langsmith langchain/langsmith --values langsmith_config.yaml --version <version> -n <namespace> --wait --debug
+    ```
+
+所有通过 LangSmith UI 创建的用户部署都将继承这些注册表凭证。
+  </Step>
+</Steps>
+
+有关注册表特定的认证方法，请参阅 [Kubernetes 文档：从私有注册表拉取镜像](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/)。
+
+### 从其他命名空间读取 Agent Server 日志
+
+<Warning>
+对于控制平面（`host-backend`）和数据平面（`listener`）部署在不同 Kubernetes 集群中的自托管部署，不支持检索服务器日志。
+</Warning>
+
+对于控制平面和数据平面在同一集群中的部署，请确保控制平面 Kubernetes 部署（`host-backend`）有权限从 Agent Server 部署所在的命名空间 `get`、`list` 和 `watch` Kubernetes `deployments`、`pods`、`replicasets` 和 `logs`。实现此目的有多种方式。以下示例使用 Kubernetes RBAC，但请使用最适合您使用场景的方法：
+
+<Steps>
+  <Step title="创建具有所需权限的 Role">
+    在 Agent Server 命名空间中创建 `Role`。请替换 `<data_plane_namespace>`：
+
+    ```bash
+    kubectl apply -n <data_plane_namespace> -f - <<EOF
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: read-agent-server-logs-role
+    rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get","list","watch"]
+    - apiGroups: [""]
+      resources: ["pods/log"]
+      verbs: ["get","watch"]
+    - apiGroups: ["apps"]
+      resources: ["deployments"]
+      verbs: ["get","list","watch"]
+    - apiGroups: ["apps"]
+      resources: ["replicasets"]
+      verbs: ["get","list","watch"]
+    EOF
+    ```
+</Step>
+  <Step title="获取控制平面 ServiceAccount">
+    将 `<control_plane_namespace>` 替换为：
+
+</Step>
+
+    ```bash
+    kubectl get serviceaccounts -n <control_plane_namespace> | grep host-backend
+    ```
+</Step>
+  <Step title="将 Role 绑定到控制平面 ServiceAccount">
+    替换 `<data_plane_namespace>`、`<control_plane_namespace>` 和 `<control_plane_service_account>`：
+
+
+</fragment>
+
+    ```bash
+    kubectl apply -n <data_plane_namespace> -f - <<EOF
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: read-agent-server-logs-role-binding
+    subjects:
+    - kind: ServiceAccount
+      name: <control_plane_service_account>
+      namespace: <control_plane_namespace>
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: Role
+      name: read-agent-server-logs-role
+    EOF
+    ```
+</Step>
+</Steps>
+
+<Note>
+在此示例中，Role 和 RoleBinding 定义在与 Agent Server 部署相同的 Kubernetes 命名空间中。您可以为 Role 和 RoleBinding 指定任意名称，并按需进行自定义。
+</Note>
+
+## 后续步骤
+
+启用 LangSmith Deployment 后，请参阅[通过控制平面部署](/langsmith/deploy-with-control-plane)，通过 LangSmith UI 构建和部署您的应用程序。

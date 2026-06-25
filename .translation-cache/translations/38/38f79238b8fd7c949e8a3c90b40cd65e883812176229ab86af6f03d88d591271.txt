@@ -1,0 +1,151 @@
+---
+title: "Mariadb integration"
+description: "使用 LangChain Python 与 Mariadb 向量存储集成。"
+---
+
+LangChain 的 MariaDB 集成（langchain-mariadb）提供了向量功能，支持使用 MariaDB 11.7.1 及以上版本，采用 MIT 许可证分发。用户可以按原样使用提供的实现，也可以根据特定需求进行定制。
+主要功能包括：
+
+* 内置向量相似性搜索
+* 支持余弦和欧几里得距离度量
+* 强大的元数据过滤选项
+* 通过连接池进行性能优化
+* 可配置的表和列设置
+
+## 设置
+
+使用以下命令启动 MariaDB Docker 容器：
+
+```python
+!docker run --name mariadb-container -e MARIADB_ROOT_PASSWORD=langchain -e MARIADB_DATABASE=langchain -p 3306:3306 -d mariadb:11.7
+```
+
+### 安装软件包
+
+该软件包使用 SQLAlchemy，但与 MariaDB 连接器配合使用效果最佳，需要 C/C++ 组件：
+
+```python
+# Debian, Ubuntu
+!sudo apt install libmariadb3 libmariadb-dev
+
+# CentOS, RHEL, Rocky Linux
+!sudo yum install MariaDB-shared MariaDB-devel
+
+# Install Python connector
+!pip install -U mariadb
+```
+
+然后安装 `langchain-mariadb` 包
+
+```python
+pip install -U langchain-mariadb
+
+```
+
+VectorStore 与 LLM 模型配合使用，这里以 `langchain-openai` 为例。
+
+```python
+pip install langchain-openai
+export OPENAI_API_KEY=...
+
+```
+
+## 初始化
+
+```python
+from langchain_core.documents import Document
+from langchain_mariadb import MariaDBStore
+from langchain_openai import OpenAIEmbeddings
+
+# connection string
+url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/langchain"
+
+# Initialize vector store
+vectorstore = MariaDBStore(
+    embeddings=OpenAIEmbeddings(),
+    embedding_length=1536,
+    datasource=url,
+    collection_name="my_docs",
+)
+```
+
+## 管理向量存储库
+
+### 添加数据
+
+您可以将数据添加为带有元数据的文档：
+
+```python
+docs = [
+    Document(
+        page_content="there are cats in the pond",
+        metadata={"id": 1, "location": "pond", "topic": "animals"},
+    ),
+    Document(
+        page_content="ducks are also found in the pond",
+        metadata={"id": 2, "location": "pond", "topic": "animals"},
+    ),
+    # More documents...
+]
+vectorstore.add_documents(docs)
+```
+
+或以纯文本形式提供，并附带可选元数据：
+
+```python
+texts = [
+    "a sculpture exhibit is also at the museum",
+    "a new coffee shop opened on Main Street",
+]
+metadatas = [
+    {"id": 6, "location": "museum", "topic": "art"},
+    {"id": 7, "location": "Main Street", "topic": "food"},
+]
+
+vectorstore.add_texts(texts=texts, metadatas=metadatas)
+```
+
+## 查询向量存储
+
+```python
+# Basic similarity search
+results = vectorstore.similarity_search("Hello", k=2)
+
+# Search with metadata filtering
+results = vectorstore.similarity_search("Hello", filter={"category": "greeting"})
+```
+
+### 筛选选项
+
+系统支持多种元数据筛选操作：
+
+* 相等：$eq
+* 不相等：$ne
+* 比较运算：$lt, $lte, $gt, $gte
+* 列表操作：$in, $nin
+* 文本匹配：$like, $nlike
+* 逻辑运算：$and, $or, $not
+
+示例：
+
+```
+
+```python
+# Search with simple filter
+results = vectorstore.similarity_search(
+    "kitty", k=10, filter={"id": {"$in": [1, 5, 2, 9]}}
+)
+
+# Search with multiple conditions (AND)
+results = vectorstore.similarity_search(
+    "ducks",
+    k=10,
+    filter={"id": {"$in": [1, 5, 2, 9]}, "location": {"$in": ["pond", "market"]}},
+)
+```
+
+---
+
+## API 参考
+
+参见 [langchain-mariadb API 文档](https://mariadb.com/docs/connectors/other/langchain-mariadb/api-reference) 了解更多详情。

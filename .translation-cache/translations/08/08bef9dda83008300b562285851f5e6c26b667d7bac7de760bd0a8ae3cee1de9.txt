@@ -1,0 +1,323 @@
+---
+title: "WeaviateStore 集成"
+description: "使用 LangChain JavaScript 与 WeaviateStore 集成。"
+---
+
+[Weaviate](https://weaviate.io/) 是一个开源向量数据库，可存储对象和向量，支持将向量搜索与结构化过滤相结合。LangChain 通过 weaviate-client 包（Weaviate 官方 TypeScript 客户端）连接 Weaviate。
+
+本指南简要介绍如何开始使用 Weaviate [向量存储](/oss/integrations/vectorstores)。有关 WeaviateStore 所有功能和配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-weaviate/WeaviateStore)。
+
+## 概述
+
+### 集成详情
+
+| 类 | 包 | [Python 支持](https://python.langchain.com/docs/integrations/vectorstores/weaviate/) | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: | :---: |
+| [`WeaviateStore`](https://reference.langchain.com/javascript/langchain-weaviate/WeaviateStore) | [`@langchain/weaviate`](https://www.npmjs.com/package/@langchain/weaviate) | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/weaviate?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/weaviate?style=flat-square&label=%20&) |
+
+## 设置
+
+要使用 Weaviate 向量存储，请设置一个 Weaviate 实例并安装 `@langchain/weaviate`、`@langchain/core` 和 `weaviate-client` 以连接到您的部署。
+
+本指南使用 [OpenAI 嵌入](/oss/integrations/embeddings/openai) 作为示例。您也可以使用[其他支持的嵌入模型](/oss/integrations/embeddings)。
+
+<CodeGroup>
+
+</fragment>
+```bash npm
+npm install @langchain/weaviate @langchain/core weaviate-client @langchain/openai
+```
+```bash yarn
+yarn add @langchain/weaviate @langchain/core weaviate-client @langchain/openai
+```
+```bash pnpm
+pnpm add @langchain/weaviate @langchain/core weaviate-client @langchain/openai
+```
+</CodeGroup>
+
+在本地或服务器上运行 Weaviate。有关更多信息，请参阅 [Weaviate 文档](https://weaviate.io/developers/weaviate/installation)。
+
+### 凭证
+
+设置以下环境变量：
+
+```typescript
+// If running locally, include port e.g. "localhost:8080"
+process.env.WEAVIATE_URL = "YOUR_WEAVIATE_URL";
+// Optional, for cloud deployments
+process.env.WEAVIATE_API_KEY = "YOUR_API_KEY";
+```
+
+如果您使用的是 OpenAI 嵌入来完成本指南，还需要设置您的 OpenAI API 密钥：
+
+```typescript
+process.env.OPENAI_API_KEY = "YOUR_API_KEY";
+```
+
+如果您想自动追踪模型调用，您也可以通过取消下面的注释来设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```typescript
+// process.env.LANGSMITH_TRACING="true"
+// process.env.LANGSMITH_API_KEY="your-api-key"
+```
+
+## 实例化
+
+### 连接 Weaviate 客户端
+
+在大多数情况下，您应该使用以下连接辅助函数之一来连接到您的 Weaviate 实例：
+
+- connectToWeaviateCloud
+- connectToLocal
+- connectToCustom
+
+```typescript
+import { WeaviateStore } from "@langchain/weaviate";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import weaviate, {
+  dataType,
+  Filters,
+  generativeParameters,
+  vectorizer,
+} from "weaviate-client";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-small",
+});
+
+const weaviateClient = await weaviate.connectToWeaviateCloud(
+  process.env.WEAVIATE_URL!,
+  {
+    authCredentials: new weaviate.ApiKey(process.env.WEAVIATE_API_KEY || ""),
+    headers: {
+      "X-OpenAI-Api-Key": process.env.OPENAI_API_KEY || "",
+      "X-Cohere-Api-Key": process.env.COHERE_API_KEY || "",
+    },
+  },
+);
+```
+
+### 初始化 vectorStore
+
+要创建集合，至少需要指定集合名称。如果没有指定任何属性，`auto-schema` 会自动创建。
+
+```typescript
+let vectorStore = new WeaviateStore(embeddings, {
+  client: weaviateClient,
+  indexName: "Langchainjs_test",
+});
+```
+
+要使用 Weaviate 的命名向量、向量化器、重排序器、生成模型等，请在启用向量存储时使用 `schema` 属性。集合名称和 `schema` 中的其他属性将在创建向量存储时优先。
+
+```typescript
+vectorStore = new WeaviateStore(embeddings, {
+  client: weaviateClient,
+  schema: {
+    name: "Langchainjs_test",
+    description: "A simple dataset",
+    properties: [
+      {
+        name: "title",
+        dataType: dataType.TEXT,
+      },
+      {
+        name: "foo",
+        dataType: dataType.TEXT,
+      },
+    ],
+    vectorizers: [
+      vectorizer.text2VecOpenAI({
+        name: "title",
+        sourceProperties: ["title"], // (Optional) Set the source property(ies)
+        // vectorIndexConfig: configure.vectorIndex.hnsw()   // (Optional) Set the vector index configuration
+      }),
+    ],
+    generative: weaviate.configure.generative.openAI(),
+    reranker: weaviate.configure.reranker.cohere(),
+  },
+});
+```
+
+## 管理向量存储
+
+### 向向量存储添加项目
+
+**注意：** 如果您想为索引文档关联 id，则它们必须是 UUID。
+
+```typescript
+import type { Document } from "@langchain/core/documents";
+
+const document1: Document = {
+  pageContent: "The powerhouse of the cell is the mitochondria",
+  metadata: { source: "https://example.com" }
+};
+
+const document2: Document = {
+  pageContent: "Buildings are made out of brick",
+  metadata: { source: "https://example.com" }
+};
+
+const document3: Document = {
+  pageContent: "Mitochondria are made out of lipids",
+  metadata: { source: "https://example.com" }
+};
+
+const document4: Document = {
+  pageContent: "The 2024 Olympics are in Paris",
+  metadata: { source: "https://example.com" }
+}
+
+const documents = [document1, document2, document3, document4];
+const uuids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+
+await vectorStore.addDocuments(documents, { ids: uuids });
+```
+
+```text
+[
+  '610f9b92-9bee-473f-a4db-8f2ca6e3442d',
+  '995160fa-441e-41a0-b476-cf3785518a0d',
+  '0cdbe6d4-0df8-4f99-9b67-184009fee9a2',
+  '18a8211c-0649-467b-a7c5-50ebb4b9ca9d'
+]
+```
+
+### 从向量存储中删除项目
+
+您可以通过 ID 删除，也可以通过传递 `filter` 参数：
+
+```typescript
+await vectorStore.delete({ ids: [uuids[3]] });
+```
+
+## 查询向量存储
+
+一旦创建了向量存储并添加了相关文档，您很可能希望在链或代理运行期间对其进行查询。
+在 Weaviate 的 v3 版本中，客户端通过与 `collections` 交互作为在数据库中操作对象的主要方式。`collection` 对象可以在整个代码库中重复使用。
+
+### 直接查询
+
+执行简单的相似性搜索可以按如下方式进行。`Filter` 辅助类使使用带条件的过滤器变得更加容易。v3 客户端简化了 `Filter` 的使用方式，使您的代码更加简洁明了。
+
+有关 Weaviate 过滤语法的更多信息，请参阅[此页面](https://weaviate.io/developers/weaviate/api/graphql/filters)。
+
+```typescript
+const collection = weaviateClient.collections.use("Langchainjs_test");
+
+const filter = Filters.and(collection.filter.byProperty("source").equal("https://example.com"))
+
+const similaritySearchResults = await vectorStore.similaritySearch("biology", 2, filter);
+
+for (const doc of similaritySearchResults) {
+  console.log(`* ${doc.pageContent} [${JSON.stringify(doc.metadata, null)}]`);
+}
+```
+
+```text
+* The powerhouse of the cell is the mitochondria [{"source":"https://example.com"}]
+* Mitochondria are made out of lipids [{"source":"https://example.com"}]
+```
+
+如果您想执行相似性搜索并接收对应的分数，您可以运行：
+
+```typescript
+const similaritySearchWithScoreResults = await vectorStore.similaritySearchWithScore("biology", 2, filter)
+
+for (const [doc, score] of similaritySearchWithScoreResults) {
+  console.log(`* [SIM=${score.toFixed(3)}] ${doc.pageContent} [${JSON.stringify(doc.metadata)}]`);
+}
+```
+
+```text
+* [SIM=0.835] The powerhouse of the cell is the mitochondria [{"source":"https://example.com"}]
+* [SIM=0.852] Mitochondria are made out of lipids [{"source":"https://example.com"}]
+```
+
+### 混合搜索
+
+在 Weaviate 中，`Hybrid search` 通过合并两个结果集，将向量搜索和关键词（BM25F）搜索的结果结合起来。要更改关键词和向量组件的相对权重，请在查询中设置 `alpha` 值。
+
+查看 **[文档](https://weaviate.io/developers/weaviate/search/hybrid)** 获取混合搜索选项的完整列表。
+
+```typescript
+const results = await vectorStore.hybridSearch("biology",
+  {
+    limit: 1,
+    alpha: 0.25,
+    targetVector: ["title"],
+    rerank: {
+      property: "title",
+      query: "greeting",
+    },
+});
+```
+
+### 检索增强生成 (RAG)
+
+检索增强生成 (RAG) 将信息检索与生成式 AI 模型相结合。
+
+在 Weaviate 中，RAG 查询由两部分组成：一个搜索查询和一个模型提示词。Weaviate 首先执行搜索，然后将搜索结果和您的提示词一起传递给生成式 AI 模型，最后返回生成的响应。
+
+- @param query 要搜索的查询。
+- @param options 用于执行混合搜索的可用选项
+- @param generate 生成的可用选项。请参阅文档以获取完整列表
+
+```typescript
+const results = await vectorStore.generate("hello world",
+    {
+        singlePrompt: {
+            prompt: "Translate this into German: {title}",
+        },
+        config: generativeParameters.openAI({
+            model: "gpt-3.5-turbo",
+        }),
+    },
+    {
+        limit: 2,
+        targetVector: ["title"],
+    }
+);
+```
+
+### 将向量存储转换为检索器进行查询
+
+您还可以将向量存储转换为[检索器](/oss/langchain/retrieval)，以便于在链中更方便地使用。
+
+```typescript
+const retriever = vectorStore.asRetriever({
+  // Optional filter
+  filter: filter,
+  k: 2,
+});
+await retriever.invoke("biology");
+```
+
+```javascript
+[
+  Document {
+    pageContent: 'The powerhouse of the cell is the mitochondria',
+    metadata: { source: 'https://example.com' },
+    id: undefined
+  },
+  Document {
+    pageContent: 'Mitochondria are made out of lipids',
+    metadata: { source: 'https://example.com' },
+    id: undefined
+  }
+]
+```
+
+### 检索增强生成用法
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下部分：
+
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [代理式 RAG](/oss/langgraph/agentic-rag)
+- [检索文档](/oss/langchain/retrieval)
+
+---
+
+## API 参考
+
+有关所有 `WeaviateStore` 功能配置的详细文档，请访问 [API 参考](https://reference.langchain.com/javascript/langchain-weaviate/WeaviateStore)。

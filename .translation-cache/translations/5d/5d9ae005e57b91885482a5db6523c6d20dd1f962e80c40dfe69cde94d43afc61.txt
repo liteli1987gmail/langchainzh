@@ -1,0 +1,871 @@
+---
+title: 以编程方式管理提示词
+sidebarTitle: 以编程方式管理提示词
+---
+
+import ManagePromptsPushJava from '/snippets/code-samples/manage-prompts-push-java.mdx';
+import ManagePromptsPullJava from '/snippets/code-samples/manage-prompts-pull-java.mdx';
+import ManagePromptsPullCommitJava from '/snippets/code-samples/manage-prompts-pull-commit-java.mdx';
+import ManagePromptsPullPublicJava from '/snippets/code-samples/manage-prompts-pull-public-java.mdx';
+import ManagePromptsOpenAIJava from '/snippets/code-samples/manage-prompts-openai-java.mdx';
+import ManagePromptsAnthropicJava from '/snippets/code-samples/manage-prompts-anthropic-java.mdx';
+import ManagePromptsListDeleteJava from '/snippets/code-samples/manage-prompts-list-delete-java.mdx';
+
+您可以使用 LangSmith Python、TypeScript 和 Java SDK 以编程方式管理提示词。
+
+<Note>
+此功能之前位于现已弃用的 `langchainhub` 包中。未来所有功能都将迁移到 `langsmith` 包中。
+</Note>
+
+## 安装包
+
+在 Python 中，您可以直接使用 LangSmith SDK（*推荐，功能完整*），也可以通过 LangChain 包使用（仅限于推送和拉取提示词）。
+
+在 TypeScript 中，必须使用 LangChain npm 包来拉取提示词（该包也支持推送）。对于其他所有功能，请使用 LangSmith 包。
+
+<CodeGroup>
+
+</CodeGroup>
+```bash pip
+pip install -U langsmith # version >= 0.1.99
+```
+
+```bash uv
+uv add langsmith  # version >= 0.1.99
+```
+
+```bash TypeScript
+yarn add langsmith langchain # langsmith version >= 0.1.99 and langchain version >= 0.2.14
+```
+
+```kotlin Java/Kotlin (Gradle)
+implementation("com.langchain.smith:langsmith-java:0.1.0-beta.4")
+```
+</CodeGroup>
+
+## 配置环境变量
+
+如果您已经将 `LANGSMITH_API_KEY` 设置为您当前工作空间的 API 密钥，则可以跳过此步骤。
+
+否则，请通过导航至 LangSmith 中的 `Settings > API Keys > Create API Key` 来获取工作空间的 API 密钥。
+
+设置您的环境变量。
+
+```bash
+export LANGSMITH_API_KEY="lsv2_..."
+```
+
+<Note>
+我们所说的 "prompts" 之前被称为 "repos"，因此代码中对 "repo" 的任何引用都是指一个 prompt。
+</Note>
+
+## 推送 prompt
+
+要创建新的 prompt 或更新现有的 prompt，你可以使用 `push prompt` 方法。
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langsmith import Client
+from langchain_core.prompts import ChatPromptTemplate
+
+client = Client()
+prompt = ChatPromptTemplate.from_template("tell me a joke about {topic}")
+url = client.push_prompt("joke-generator", object=prompt)
+# url is a link to the prompt in the UI
+print(url)
+```
+
+```python LangChain (Python)
+from langchain_classic import hub as prompts
+from langchain_core.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_template("tell me a joke about {topic}")
+url = prompts.push("joke-generator", prompt)
+# url is a link to the prompt in the UI
+print(url)
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+
+const prompt = ChatPromptTemplate.fromTemplate("tell me a joke about {topic}");
+const url = hub.push("joke-generator", {
+  object: prompt,
+});
+// url is a link to the prompt in the UI
+console.log(url);
+```
+
+<ManagePromptsPushJava />
+
+</CodeGroup>
+
+您还可以将提示作为提示和模型的 RunnableSequence 进行推送。这对于存储您想与此提示一起使用的模型配置非常有用。该提供商必须受 Playground 支持，请参阅[支持的模型提供商](/langsmith/playground-model-providers)。
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+client = Client()
+model = ChatOpenAI(model="gpt-5.4-mini")
+prompt = ChatPromptTemplate.from_template("tell me a joke about {topic}")
+chain = prompt | model
+client.push_prompt("joke-generator-with-model", object=chain)
+```
+
+```python LangChain (Python)
+from langchain_classic import hub as prompts
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+model = ChatOpenAI(model="gpt-5.4-mini")
+prompt = ChatPromptTemplate.from_template("tell me a joke about {topic}")
+chain = prompt | model
+url = prompts.push("joke-generator-with-model", chain)
+# url is a link to the prompt in the UI
+print(url)
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { ChatOpenAI } from "@langchain/openai";
+
+const model = new ChatOpenAI({ model: "gpt-5.4-mini" });
+const prompt = ChatPromptTemplate.fromTemplate("tell me a joke about {topic}");
+const chain = prompt.pipe(model);
+await hub.push("joke-generator-with-model", {
+  object: chain,
+});
+```
+
+</CodeGroup>
+
+## 推送 StructuredPrompt
+
+`StructuredPrompt` 将提示词模板与输出模式相结合，确保模型返回的数据具有定义良好的结构。使用 `StructuredPrompt.from_messages_and_schema`（Python）或 `StructuredPrompt.fromMessagesAndSchema`（TypeScript）创建一个实例，然后像推送其他提示词一样将其推送到 hub。
+
+### 无模型时
+
+当您希望独立于任何模型配置来存储模板和模式时，可以单独推送结构化提示词。
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+from langchain_core.prompts.structured import StructuredPrompt
+from pydantic import BaseModel, Field
+
+class ResponseSchema(BaseModel):
+    positive_sentiment: bool = Field(description="Was the user sentiment positive?")
+
+prompt = StructuredPrompt.from_messages_and_schema(
+    [
+        ("system", "Evaluate the sentiment of the following conversation."),
+        ("human", "{conversation}"),
+    ],
+    schema=ResponseSchema.model_json_schema(),
+)
+
+client = Client()
+url = client.push_prompt("sentiment-evaluator", object=prompt)
+print(url)
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { StructuredPrompt } from "@langchain/core/prompts";
+
+const schema = {
+  title: "ResponseSchema",
+  type: "object",
+  properties: {
+    positive_sentiment: {
+      type: "boolean",
+      description: "Was the user sentiment positive?",
+    },
+  },
+  required: ["positive_sentiment"],
+};
+
+const prompt = StructuredPrompt.fromMessagesAndSchema(
+  [
+    ["system", "Evaluate the sentiment of the following conversation."],
+    ["human", "{conversation}"],
+  ],
+  schema
+);
+
+const url = await hub.push("sentiment-evaluator", prompt);
+console.log(url);
+```
+
+</CodeGroup>
+
+### 配合模型
+
+将结构化提示词作为 RunnableSequence 与模型一起推送，以在 Hub 中存储包括模型配置在内的完整管道。
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+from langchain_core.prompts.structured import StructuredPrompt
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+class ResponseSchema(BaseModel):
+    positive_sentiment: bool = Field(description="Was the user sentiment positive?")
+
+prompt = StructuredPrompt.from_messages_and_schema(
+    [
+        ("system", "Evaluate the sentiment of the following conversation."),
+        ("human", "{conversation}"),
+    ],
+    schema=ResponseSchema.model_json_schema(),
+)
+
+model = ChatOpenAI(model="gpt-4o-mini")
+chain = prompt | model
+
+client = Client()
+url = client.push_prompt("sentiment-evaluator-with-model", object=chain)
+print(url)
+```
+
+<CodeGroup>
+
+</CodeGroup>
+
+## 拉取提示词
+
+要拉取提示词，你可以使用 `pull prompt` 方法，该方法将提示词作为 LangChain `PromptTemplate` 返回。
+
+要拉取**私有提示词**，你不需要指定所有者句柄（尽管如果有设置的话，你可以指定）。
+
+要从 LangChain Hub 拉取**公共提示词**，你需要指定提示词作者的句柄。
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langsmith import Client
+from langchain_openai import ChatOpenAI
+
+client = Client()
+prompt = client.pull_prompt("joke-generator")
+model = ChatOpenAI(model="gpt-5.4-mini")
+chain = prompt | model
+chain.invoke({"topic": "cats"})
+```
+
+```python LangChain (Python)
+from langchain_classic import hub as prompts
+from langchain_openai import ChatOpenAI
+
+prompt = prompts.pull("joke-generator")
+model = ChatOpenAI(model="gpt-5.4-mini")
+chain = prompt | model
+chain.invoke({"topic": "cats"})
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { ChatOpenAI } from "@langchain/openai";
+
+const prompt = await hub.pull("joke-generator");
+const model = new ChatOpenAI({ model: "gpt-5.4-mini" });
+const chain = prompt.pipe(model);
+await chain.invoke({"topic": "cats"});
+```
+
+<ManagePromptsPullJava />
+
+</CodeGroup>
+
+与推送 prompt 类似，你也可以将 prompt 作为 prompt 和模型的 RunnableSequence 进行拉取。只需在拉取 prompt 时指定 include_model。如果存储的 prompt 包含模型，它将作为 RunnableSequence 返回。请确保为你使用的模型设置了正确的环境变量。
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+
+client = Client()
+chain = client.pull_prompt("joke-generator-with-model", include_model=True)
+chain.invoke({"topic": "cats"})
+```
+
+```python LangChain (Python)
+from langchain_classic import hub as prompts
+
+chain = prompts.pull("joke-generator-with-model", include_model=True)
+chain.invoke({"topic": "cats"})
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { Runnable } from "@langchain/core/runnables";
+
+const chain = await hub.pull<Runnable>("joke-generator-with-model", { includeModel: true });
+await chain.invoke({"topic": "cats"});
+```
+
+</CodeGroup>
+
+拉取提示词时，您还可以指定特定的提交哈希值或[提交标签](/langsmith/manage-prompts#commit-tags)来拉取提示词的特定版本。
+
+<CodeGroup>
+
+```python Python
+prompt = client.pull_prompt("joke-generator:12344e88")
+```
+
+```python LangChain (Python)
+prompt = prompts.pull("joke-generator:12344e88")
+```
+
+```typescript TypeScript
+const prompt = await hub.pull("joke-generator:12344e88")
+```
+
+<ManagePromptsPullCommitJava />
+
+</CodeGroup>
+
+要从 LangChain Hub 拉取公共提示词，您需要指定提示词作者的句柄。
+
+<CodeGroup>
+
+```python Python
+prompt = client.pull_prompt("efriis/my-first-prompt")
+```
+
+```python LangChain (Python)
+prompt = prompts.pull("efriis/my-first-prompt")
+```
+
+```typescript TypeScript
+const prompt = await hub.pull("efriis/my-first-prompt")
+```
+
+<ManagePromptsPullPublicJava />
+
+</CodeGroup>
+
+<Note>
+对于拉取提示词，如果您使用的是 Node.js 或支持动态导入的环境，我们建议使用 `langchain/hub/node` 入口点，因为它会自动处理与提示词配置关联的模型的反序列化。
+
+如果您在非 Node 环境中，"includeModel" 不支持非 OpenAI 模型，您应该使用基础 `langchain/hub` 入口点。
+</Note>
+
+## 提示词缓存
+
+LangSmith SDK 包含内置的提示词内存缓存。启用后，LangSmith 会在内存中缓存拉取的提示词，减少频繁使用提示词的延迟和 API 调用。缓存使用全局单例实例，在所有客户端之间共享，并在进程生命周期内持久化。它实现了 stale-while-revalidate 模式，确保您的应用程序始终获得快速响应，同时在后台保持提示词的最新状态。
+
+**要求：**
+- Python SDK：`langchain >= 0.7.0`
+- TypeScript SDK：`langsmith >= 0.5.0`
+
+### 默认行为
+
+缓存默认**已启用**。启用后，默认设置如下：
+
+| 设置 | 默认值 | 描述 |
+|---------|---------|-------------|
+| `max_size` | 100 | 缓存的最大提示词数量 |
+| `ttl_seconds` | 300（5 分钟） | 缓存的提示词被视为过期的时长 |
+| `refresh_interval_seconds` | 60 | 检查过期提示词并在后台刷新它们的频率 |
+
+刷新时，全局缓存将使用上次请求给定提示词的客户端来获取新数据。
+
+### 使用缓存
+
+默认情况下，所有客户端都使用全局提示词缓存。无需任何配置：
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+# Obtain a reference to the global cache just for logging metrics
+from langsmith.prompt_cache import prompt_cache_singleton
+
+# Caching is enabled by default using the global singleton
+client = Client()
+
+# First pull - fetches from API and caches
+prompt = client.pull_prompt("joke-generator")
+
+# Subsequent pulls - returns cached version instantly
+prompt = client.pull_prompt("joke-generator")
+
+# Check cache metrics
+print(f"Cache hits: {prompt_cache_singleton.metrics.hits}")
+print(f"Cache misses: {prompt_cache_singleton.metrics.misses}")
+print(f"Hit rate: {prompt_cache_singleton.metrics.hit_rate:.1%}")
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+// Obtain a reference to the global cache just for logging metrics
+import { promptCacheSingleton } from "langsmith";
+
+// Caching is enabled by default
+// First pull - fetches from API and caches
+const prompt = await hub.pull("joke-generator");
+
+// Subsequent pulls - returns cached version instantly
+const prompt2 = await hub.pull("joke-generator");
+
+// Check cache metrics
+console.log(`Cache hits: ${promptCacheSingleton.metrics.hits}`);
+console.log(`Cache misses: ${promptCacheSingleton.metrics.misses}`);
+console.log(`Hit rate: ${(promptCacheSingleton.hitRate * 100).toFixed(1)}%`);
+```
+
+</CodeGroup>
+
+### 配置全局缓存
+
+您可以配置所有客户端默认使用的全局提示词缓存。当您想要自定义整个应用程序的缓存行为时，这非常有用：
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+from langsmith.prompt_cache import (
+    configure_global_prompt_cache,
+    prompt_cache_singleton,
+)
+
+# Configure global cache before creating any clients
+configure_global_prompt_cache(
+    max_size=200,  # Cache up to 200 prompts
+    ttl_seconds=7200,  # Consider prompts stale after 2 hours
+    refresh_interval_seconds=600,  # Check for stale prompts every 10 minutes
+)
+
+# All clients will use these settings
+client1 = Client()
+client2 = Client()
+
+# Both clients share the same global cache with your custom settings
+prompt1 = client1.pull_prompt("prompt-1")
+prompt2 = client2.pull_prompt("prompt-2")
+
+# Check global cache metrics
+print(f"Global cache hits: {prompt_cache_singleton.metrics.hits}")
+print(f"Global cache misses: {prompt_cache_singleton.metrics.misses}")
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import {
+  configureGlobalPromptCache,
+  promptCacheSingleton,
+} from "langsmith";
+
+// Configure global cache before pulling prompts
+configureGlobalPromptCache({
+  maxSize: 200,  // Cache up to 200 prompts
+  ttlSeconds: 7200,  // Consider prompts stale after 2 hours
+  refreshIntervalSeconds: 600,  // Check for stale prompts every 10 minutes
+});
+
+// All hub.pull calls will use these settings
+const prompt1 = await hub.pull("prompt-1");
+const prompt2 = await hub.pull("prompt-2");
+
+// Check global cache metrics
+console.log(`Global cache hits: ${promptCacheSingleton.metrics.hits}`);
+console.log(`Global cache misses: ${promptCacheSingleton.metrics.misses}`);
+```
+
+</CodeGroup>
+
+### 禁用缓存
+
+要为特定客户端禁用缓存，请传递 `disable_prompt_cache=True`。你也可以全局配置最大大小为零：
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+from langsmith import Client
+
+# Disable caching for this client
+client = Client(disable_prompt_cache=True)
+
+# Every pull will fetch from the API
+prompt = client.pull_prompt("joke-generator")
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { configureGlobalPromptCache } from "langsmith";
+
+// Disable caching globally
+configureGlobalPromptCache({ maxSize: 0 });
+
+// Every pull will fetch from the API
+const prompt = await hub.pull("joke-generator");
+```
+
+</CodeGroup>
+
+### 跳过缓存
+
+要绕过缓存并为单个请求从 API 获取新的提示词，请使用 `skip_cache` 参数：
+
+<CodeGroup>
+
+```python Python
+# Force a fresh fetch, ignoring any cached version
+prompt = client.pull_prompt("joke-generator", skip_cache=True)
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+
+// Force a fresh fetch, ignoring any cached version
+const prompt = await hub.pull("joke-generator", { skipCache: true });
+```
+
+</CodeGroup>
+
+当您需要确保使用的是最新版本的提示词时（例如在 LangSmith UI 中进行更改后），这会非常有用。
+
+### 离线模式
+
+对于网络连接受限或无网络连接的环境，您可以预先填充缓存并在离线状态下使用。将 `ttl_seconds` 设置为 `None`（Python）或 `null`（TypeScript）可以防止缓存条目过期并禁用后台刷新。
+
+**步骤 1：在联网时将提示词导出到缓存文件**
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langsmith import Client
+from langsmith.prompt_cache import prompt_cache_singleton
+
+# Create client (caching is enabled by default)
+client = Client()
+
+# Pull the prompts you need
+client.pull_prompt("prompt-1")
+client.pull_prompt("prompt-2")
+client.pull_prompt("prompt-3")
+
+# Export cache to a file
+prompt_cache_singleton.dump("prompts_cache.json")
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { promptCacheSingleton } from "langsmith";
+
+// Caching is enabled by default
+
+// Pull the prompts you need
+await hub.pull("prompt-1");
+await hub.pull("prompt-2");
+await hub.pull("prompt-3");
+
+// Export cache to a file
+promptCacheSingleton.dump("prompts_cache.json");
+```
+
+</CodeGroup>
+
+**第 2 步：在离线环境中加载缓存文件**
+
+<CodeGroup>
+
+```python Python
+from langsmith import Client
+from langsmith.prompt_cache import (
+    configure_global_prompt_cache,
+    prompt_cache_singleton,
+)
+
+# Configure cache with infinite TTL (never expire, no background refresh)
+configure_global_prompt_cache(ttl_seconds=None)
+
+# Load the cache file
+prompt_cache_singleton.load("prompts_cache.json")
+
+# Create client (uses the loaded cache)
+client = Client()
+
+# Uses cached version without any API calls
+prompt = client.pull_prompt("prompt-1")
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import {
+  configureGlobalPromptCache,
+  promptCacheSingleton,
+} from "langsmith";
+
+// Configure cache with infinite TTL (never expire, no background refresh)
+configureGlobalPromptCache({ ttlSeconds: null });
+
+// Load the cache file
+promptCacheSingleton.load("prompts_cache.json");
+
+// Uses cached version without any API calls
+const prompt = await hub.pull("prompt-1");
+```
+
+<CodeGroup>
+
+### 缓存操作
+
+缓存支持多种用于管理缓存提示的操作：
+
+<CodeGroup>
+
+</fragment>
+
+```python Python
+from langsmith import Client
+from langsmith.prompt_cache import prompt_cache_singleton
+
+client = Client()
+
+# Invalidate a specific prompt from cache
+prompt_cache_singleton.invalidate("joke-generator:latest")
+
+# Clear all cached prompts
+prompt_cache_singleton.clear()
+
+# Reset metrics
+prompt_cache_singleton.reset_metrics()
+
+# Check if cache is running background refresh
+# (only runs if ttl_seconds is not None)
+if prompt_cache_singleton._refresh_thread is not None:
+    print("Background refresh is active")
+```
+
+```typescript TypeScript
+import { promptCacheSingleton } from "langsmith";
+
+// Invalidate a specific prompt from cache
+promptCacheSingleton.invalidate("joke-generator:latest");
+
+// Clear all cached prompts
+promptCacheSingleton.clear();
+
+// Reset metrics
+promptCacheSingleton.resetMetrics();
+```
+
+</CodeGroup>
+
+### 清理
+
+您可以手动调用 `stop()` 来停止后台刷新任务：
+
+<CodeGroup>
+
+</fragment>
+
+```python Python
+prompt_cache_singleton.stop()
+```
+
+```typescript TypeScript
+promptCacheSingleton.stop();
+```
+
+</CodeGroup>
+
+<Note>
+后台刷新任务仅在您首次设置缓存值时启动，且仅在 `ttl_seconds` 不为 `None` 时启动。如果 `ttl_seconds` 为 `None`（离线模式），则不会创建后台任务。
+</Note>
+
+## 不使用 LangChain 使用提示词
+
+如果您想在 LangSmith 中存储提示词，但直接使用模型提供商的 API，则可以使用我们的转换方法。这些方法可以将您的提示词转换为 OpenAI 或 Anthropic API 所需的载荷。
+
+这些转换方法依赖于 LangChain 集成包中的逻辑，您需要在官方 SDK 之外额外安装相应的包作为依赖。以下是一些示例：
+
+### OpenAI
+
+<CodeGroup>
+
+```bash Python
+pip install -U langchain_openai
+```
+
+```bash TypeScript
+yarn add @langchain/openai @langchain/core # @langchain/openai version >= 0.3.2
+```
+
+</CodeGroup>
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+from openai import OpenAI
+from langsmith.client import Client, convert_prompt_to_openai_format
+
+# langsmith client
+client = Client()
+# openai client
+oai_client = OpenAI()
+
+# pull prompt and invoke to populate the variables
+prompt = client.pull_prompt("joke-generator")
+prompt_value = prompt.invoke({"topic": "cats"})
+openai_payload = convert_prompt_to_openai_format(prompt_value)
+openai_response = oai_client.chat.completions.create(**openai_payload)
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { convertPromptToOpenAI } from "@langchain/openai";
+import OpenAI from "openai";
+
+const prompt = await hub.pull("jacob/joke-generator");
+const formattedPrompt = await prompt.invoke({
+  topic: "cats",
+});
+const { messages } = convertPromptToOpenAI(formattedPrompt);
+
+const openAIClient = new OpenAI();
+const openAIResponse = await openAIClient.chat.completions.create({
+  model: "gpt-5.4-mini",
+  messages,
+});
+```
+
+<ManagePromptsOpenAIJava />
+
+</CodeGroup>
+
+### Anthropic
+
+<CodeGroup>
+
+```bash Python
+pip install -U langchain_anthropic
+```
+
+```bash TypeScript
+yarn add @langchain/anthropic @langchain/core # @langchain/anthropic version >= 0.3.3
+```
+
+<CodeGroup>
+
+</CodeGroup>
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from anthropic import Anthropic
+from langsmith.client import Client, convert_prompt_to_anthropic_format
+
+# langsmith client
+client = Client()
+# anthropic client
+anthropic_client = Anthropic()
+
+# pull prompt and invoke to populate the variables
+prompt = client.pull_prompt("joke-generator")
+prompt_value = prompt.invoke({"topic": "cats"})
+anthropic_payload = convert_prompt_to_anthropic_format(prompt_value)
+anthropic_response = anthropic_client.messages.create(**anthropic_payload)
+```
+
+```typescript TypeScript
+import * as hub from "langchain/hub";
+import { convertPromptToAnthropic } from "@langchain/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
+
+const prompt = await hub.pull("jacob/joke-generator");
+const formattedPrompt = await prompt.invoke({
+  topic: "cats",
+});
+const { messages, system } = convertPromptToAnthropic(formattedPrompt);
+
+const anthropicClient = new Anthropic();
+const anthropicResponse = await anthropicClient.messages.create({
+  model: "claude-haiku-4-5-20251001",
+  system,
+  messages,
+  max_tokens: 1024,
+  stream: false,
+});
+```
+
+<ManagePromptsAnthropicJava />
+
+</CodeGroup>
+
+## 列出、删除和收藏提示词
+
+您还可以使用 `list prompts`、`delete prompt`、`like prompt` 和 `unlike prompt` 方法来列出、删除和收藏/取消收藏提示词。请参阅 [LangSmith SDK 客户端](https://github.com/langchain-ai/langsmith-sdk) 获取这些方法的详细文档。
+
+<CodeGroup>
+
+```python Python
+# List all prompts in my workspace
+prompts = client.list_prompts()
+
+# List my private prompts that include "joke"
+prompts = client.list_prompts(query="joke", is_public=False)
+
+# Delete a prompt
+client.delete_prompt("joke-generator")
+
+# Like a prompt
+client.like_prompt("efriis/my-first-prompt")
+
+# Unlike a prompt
+client.unlike_prompt("efriis/my-first-prompt")
+```
+
+```typescript TypeScript
+// List all prompts in my workspace
+import Client from "langsmith";
+
+const client = new Client({ apiKey: "lsv2_..." });
+const prompts = client.listPrompts();
+
+for await (const prompt of prompts) {
+  console.log(prompt);
+}
+
+// List my private prompts that include "joke"
+const private_joke_prompts = client.listPrompts({ query: "joke", isPublic: false});
+
+// Delete a prompt
+client.deletePrompt("joke-generator");
+
+// Like a prompt
+client.likePrompt("efriis/my-first-prompt");
+
+// Unlike a prompt
+client.unlikePrompt("efriis/my-first-prompt");
+```
+
+<ManagePromptsListDeleteJava />
+</CodeGroup>

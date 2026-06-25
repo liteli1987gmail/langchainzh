@@ -1,0 +1,170 @@
+---
+title: "Oracle AI 向量搜索文档处理集成"
+description: "使用 LangChain Python 与 Oracle AI 向量搜索文档处理文档加载器集成。"
+---
+
+Oracle AI Database 通过将非结构化内容的语义搜索与业务数据的关系查询结合在单一系统中，支持以文档为中心的 AI 工作流。这使得构建检索工作流（如 RAG）变得更加容易，而无需将数据和向量拆分到多个数据库中。
+
+在本指南中，您将学习如何：
+
+- 从 Python 连接到 Oracle Database
+- 使用 `OracleDocLoader` 加载文档（从数据库表、文件或目录）
+- 使用 `OracleTextSplitter` 分块内容，为嵌入和检索做准备
+
+> **为什么选择数据库内文档处理？**
+> 您可以将 Oracle Database 的功能——安全性、事务、可扩展性和高可用性——应用到相同的流水线中，该流水线负责加载、分块和存储用于 AI 搜索和检索的内容。
+
+如果您刚开始接触 Oracle Database，可以考虑探索 [免费 Oracle 26 AI](https://www.oracle.com/database/free/#resources)，它提供了简单的设置方式。在使用数据库时，通常建议避免使用 `SYSTEM` 用户进行应用工作负载；相反，应创建具有最小所需权限的专用用户。有关端到端设置演练，请参阅 [Oracle AI 向量搜索演示笔记本](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb)。有关用户管理的背景知识，请参阅官方 [Oracle 指南](https://docs.oracle.com/en/database/oracle/oracle-database/19/admqs/administering-user-accounts-and-security.html#GUID-36B21D72-1BBB-46C9-A0C9-F0D2A8591B8D)。
+
+### 前置条件
+
+安装 `langchain-oracledb`。`python-oracledb` 驱动程序将作为依赖项自动安装。
+
+<CodeGroup>
+
+</fragment>
+```bash pip
+pip install -qU langchain-oracledb
+```
+```bash uv
+uv add langchain-oracledb
+```
+</CodeGroup>
+
+### 连接 Oracle 数据库
+
+以下示例代码将演示如何连接 Oracle 数据库。默认情况下，python-oracledb 以「瘦」模式运行，直接连接到 Oracle 数据库。此模式不需要 Oracle Client 库。但是，当 python-oracledb 使用 Oracle Client 库时，可以获得一些额外的功能。当使用 Oracle Client 库时，python-oracledb 被称为处于「厚」模式。两种模式都提供了全面的功能，支持 Python Database API v2.0 规范。请参阅以下[指南](https://python-oracledb.readthedocs.io/en/latest/user_guide/appendix_a.html#featuresummary)，了解每种模式支持的功能。如果您无法使用瘦模式，可能需要切换到厚模式。
+
+```python
+import sys
+
+import oracledb
+
+# Please update with your username, password, hostname, port and service_name
+username = "<username>"
+password = "<password>"
+dsn = "<hostname>:<port>/<service_name>"
+
+connection = oracledb.connect(user=username, password=password, dsn=dsn)
+print("Connection successful!")
+```
+
+现在让我们创建一个表并插入一些示例文档来测试。
+
+```python
+try:
+    cursor = conn.cursor()
+
+    drop_table_sql = """drop table if exists demo_tab"""
+    cursor.execute(drop_table_sql)
+
+    create_table_sql = """create table demo_tab (id number, data clob)"""
+    cursor.execute(create_table_sql)
+
+    insert_row_sql = """insert into demo_tab values (:1, :2)"""
+    rows_to_insert = [
+        (
+            1,
+            "If the answer to any preceding questions is yes, then the database stops the search and allocates space from the specified tablespace; otherwise, space is allocated from the database default shared temporary tablespace.",
+        ),
+        (
+            2,
+            "A tablespace can be online (accessible) or offline (not accessible) whenever the database is open.\nA tablespace is usually online so that its data is available to users. The SYSTEM tablespace and temporary tablespaces cannot be taken offline.",
+        ),
+        (
+            3,
+            "The database stores LOBs differently from other data types. Creating a LOB column implicitly creates a LOB segment and a LOB index. The tablespace containing the LOB segment and LOB index, which are always stored together, may be different from the tablespace containing the table.\nSometimes the database can store small amounts of LOB data in the table itself rather than in a separate LOB segment.",
+        ),
+    ]
+    cursor.executemany(insert_row_sql, rows_to_insert)
+
+    conn.commit()
+
+    print("Table created and populated.")
+    cursor.close()
+except Exception as e:
+    print("Table creation failed.")
+    cursor.close()
+    conn.close()
+    sys.exit(1)
+```
+
+### 加载文档
+
+用户可以灵活地从 Oracle 数据库、文件系统或两者加载文档，通过适当配置加载器参数。有关这些参数的详细信息，请参阅 [Oracle AI Vector Search Guide](https://docs.oracle.com/en/database/oracle/oracle-database/23/arpls/dbms_vector_chain1.html#GUID-73397E89-92FB-48ED-94BB-1AD960C4EA1F)。
+
+使用 `OracleDocLoader` 的一个显著优势是其能够处理超过 150 种不同的文件格式，无需为不同文档类型使用多个加载器。有关支持的格式完整列表，请参阅 [Oracle Text Supported Document Formats](https://docs.oracle.com/en/database/oracle/oracle-database/23/ccref/oracle-text-supported-document-formats.html)。
+
+以下是演示如何使用 `OracleDocLoader` 的示例代码片段：
+
+```python
+from langchain_oracledb.document_loaders.oracleai import OracleDocLoader
+from langchain_core.documents import Document
+
+"""
+# loading a local file
+loader_params = {}
+loader_params["file"] = "<file>"
+
+# loading from a local directory
+loader_params = {}
+loader_params["dir"] = "<directory>"
+"""
+
+# loading from Oracle Database table
+loader_params = {
+    "owner": "<owner>",
+    "tablename": "demo_tab",
+    "colname": "data",
+}
+
+""" load the docs """
+loader = OracleDocLoader(conn=conn, params=loader_params)
+docs = loader.load()
+
+""" verify """
+print(f"Number of docs loaded: {len(docs)}")
+# print(f"Document-0: {docs[0].page_content}") # content
+```
+
+### 拆分文档
+
+文档的大小可能会有所不同，从小型到大型不等。用户通常更喜欢将文档拆分为较小的部分，以方便生成嵌入向量。此拆分过程提供了多种自定义选项。如需了解这些参数的详细信息，请参阅 [Oracle AI 向量搜索指南](https://docs.oracle.com/en/database/oracle/oracle-database/23/arpls/dbms_vector_chain1.html#GUID-4E145629-7098-4C7C-804F-FC85D1F24240)。
+
+以下是展示如何实现此操作的示例代码：
+
+```python
+from langchain_oracledb.document_loaders.oracleai import OracleTextSplitter
+from langchain_core.documents import Document
+
+"""
+# Some examples
+# split by chars, max 500 chars
+splitter_params = {"split": "chars", "max": 500, "normalize": "all"}
+
+# split by words, max 100 words
+splitter_params = {"split": "words", "max": 100, "normalize": "all"}
+
+# split by sentence, max 20 sentences
+splitter_params = {"split": "sentence", "max": 20, "normalize": "all"}
+"""
+
+# split by default parameters
+splitter_params = {"normalize": "all"}
+
+# get the splitter instance
+splitter = OracleTextSplitter(conn=conn, params=splitter_params)
+
+list_chunks = []
+for doc in docs:
+    chunks = splitter.split_text(doc.page_content)
+    list_chunks.extend(chunks)
+
+""" verify """
+print(f"Number of Chunks: {len(list_chunks)}")
+# print(f"Chunk-0: {list_chunks[0]}") # content
+```
+
+### 端到端演示
+
+请参阅我们完整的演示指南 [Oracle AI 向量搜索端到端演示指南](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb) 来构建一个端到端 RAG 管道，借助 Oracle AI 向量搜索。

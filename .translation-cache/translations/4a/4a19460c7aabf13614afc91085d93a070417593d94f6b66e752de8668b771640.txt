@@ -1,0 +1,108 @@
+---
+title: "ChatAnthropicVertex 集成"
+description: "使用 LangChain Python 与 ChatAnthropicVertex 聊天模型集成。"
+---
+
+<Warning>
+    **Claude 3 Haiku 弃用：** 从 2026 年 8 月 23 日起，Anthropic 将终止对 Claude 3 Haiku 的支持。请迁移到 Claude Haiku 4.5（`claude-haiku-4-5@20251001`），该版本已在 Vertex AI 上正式发布。详见 [Anthropic 的模型弃用政策](https://docs.anthropic.com/en/docs/resources/model-deprecations)。
+</Warning>
+
+> Vertex AI 上的 [Anthropic Claude](https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude) 模型提供完全托管且无服务器的模型作为 API。要在 Vertex AI 上使用 Claude 模型，请直接向 Vertex AI API 端点发送请求。由于 Anthropic Claude 模型使用托管 API，因此无需配置或管理基础设施。
+
+NOTE : Vertex 上的 Anthropic 模型通过类 `ChatAnthropicVertex` 实现为聊天模型
+
+```python
+!pip install -U langchain-google-vertexai anthropic[vertex]
+```
+
+```python
+from langchain.messages import (
+    AIMessage,
+    AIMessageChunk,
+    HumanMessage,
+    SystemMessage,
+)
+from langchain_core.outputs import LLMResult
+from langchain_google_vertexai.model_garden import ChatAnthropicVertex
+```
+
+<Note>
+    指定正确的 [Claude 模型版本](https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude#claude-opus)。请尽可能使用包含日期后缀的模型标识符（例如 `claude-haiku-4-5@20251001`）。
+</Note>
+
+```python
+# TODO : Replace below with your project id and region
+project = "<project_id>"
+location = "<region>"
+
+# Initialise the Model
+model = ChatAnthropicVertex(
+    model_name="claude-haiku-4-5@20251001",
+    project=project,
+    location=location,
+)
+```
+
+```python
+# prepare input data for the model
+raw_context = (
+    "My name is Peter. You are my personal assistant. My favorite movies "
+    "are Lord of the Rings and Hobbit."
+)
+question = (
+    "Hello, could you recommend a good movie for me to watch this evening, please?"
+)
+context = SystemMessage(content=raw_context)
+message = HumanMessage(content=question)
+```
+
+```python
+# Invoke the model
+response = model.invoke([context, message])
+print(response.content)
+```
+
+```text
+Since your favorite movies are the Lord of the Rings and Hobbit trilogies, I would recommend checking out some other epic fantasy films that have a similar feel:
+
+1. The Chronicles of Narnia series - These films are based on the beloved fantasy novels by C.S. Lewis and have a great blend of adventure, magic, and memorable characters.
+
+2. Stardust - This 2007 fantasy film, based on the Neil Gaiman novel, has an excellent cast and a charming, whimsical tone.
+
+3. The Golden Compass - The first film adaptation of Philip Pullman's His Dark Materials series, with stunning visuals and a compelling story.
+
+4. Pan's Labyrinth - Guillermo del Toro's dark, fairy tale-inspired masterpiece set against the backdrop of the Spanish Civil War.
+
+5. The Princess Bride - A classic fantasy adventure film with humor, romance, and unforgettable characters.
+
+Let me know if any of those appeal to you or if you'd like me to suggest something else! I'm happy to provide more personalized recommendations.
+```
+
+```python
+# You can choose to initialize/ override the model name on Invoke method as well
+response = model.invoke([context, message], model_name="claude-sonnet-4-6")
+print(response.content)
+```
+
+```text
+Sure, I'd be happy to recommend a movie for you! Since you mentioned that The Lord of the Rings and The Hobbit are among your favorite movies, I'll suggest some other epic fantasy/adventure films you might enjoy:
+
+1. The Princess Bride (1987) - A classic fairy tale with adventure, romance, and a lot of wit and humor. It has an all-star cast and very quotable lines.
+
+2. Willow (1988) - A fun fantasy film produced by George Lucas with fairies, dwarves, and brownies going on an epic quest. Has a similar tone to the Lord of the Rings movies.
+
+3. Stardust (2007) - An underrated fantasy adventure based on the Neil Gaiman novel about a young man entering a magical kingdom to retrieve a fallen star. Great cast and visuals.
+
+4. The Chronicles of Narnia series - The Lion, The Witch and The Wardrobe is the best known, but the other Narnia films are also very well done fantasy epics.
+
+5. The Golden Compass (2007) - First installment of the His Dark Materials trilogy, set in a parallel universe with armored polar bears and truth-seeking devices.
+
+Let me know if you'd like any other suggestions or have a particular style of movie in mind! I aimed for entertaining fantasy/adventure flicks similar to Lord of the Rings.
+```
+
+```python
+# Use streaming responses
+stream = model.stream_events([context, message], version="v3", model_name="claude-haiku-4-5@20251001")
+for token in stream.text:
+    print(token, end="", flush=True)
+```

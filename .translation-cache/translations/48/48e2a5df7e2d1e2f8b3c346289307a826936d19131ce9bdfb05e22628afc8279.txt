@@ -1,0 +1,68 @@
+---
+title: "Bedrock 集成"
+description: "使用 LangChain Python 与 Bedrock LLM 集成。"
+---
+
+<Warning>
+**您目前所在的页面记录了使用 Amazon Bedrock 模型作为文本补全模型的方法。Bedrock 上许多流行的模型是[聊天补全模型](/oss/langchain/models)。**
+
+您可能想查找[这个页面](/oss/integrations/chat/bedrock/)。
+</Warning>
+
+>[Amazon Bedrock](https://aws.amazon.com/bedrock/) 是一项完全托管的服务，通过单一 API 提供来自领先 AI 公司（如 `AI21 Labs`、`Anthropic`、`Cohere`、`Meta`、`Stability AI` 和 `Amazon`）的高性能基础模型（FM），并配备构建生成式 AI 应用程序所需的全套功能，包括安全性、隐私性和负责任的 AI。使用 `Amazon Bedrock`，您可以轻松试验和评估适合您用例的顶级 FM，使用微调和 `检索增强生成`（`RAG`）等技术利用您的数据私下自定义它们，并构建能够使用您的企业系统和数据源执行任务的智能体。由于 `Amazon Bedrock` 是无服务器架构，您无需管理任何基础设施，并且可以使用您熟悉的 AWS 服务安全地集成和部署生成式 AI 功能到您的应用程序中。
+
+```python
+pip install -qU langchain-aws
+```
+
+```python
+from langchain_aws import BedrockLLM
+
+llm = BedrockLLM(
+    credentials_profile_name="bedrock-admin", model_id="amazon.titan-text-express-v1"
+)
+```
+
+### 自定义模型
+
+```python
+custom_llm = BedrockLLM(
+    credentials_profile_name="bedrock-admin",
+    provider="cohere",
+    model_id="<Custom model ARN>",  # ARN like 'arn:aws:bedrock:...' obtained via provisioning the custom model
+    model_kwargs={"temperature": 1},
+    streaming=True,
+)
+
+custom_llm.invoke(input="What is the recipe of mayonnaise?")
+```
+
+## Amazon Bedrock 的防护栏
+
+[Guardrails for Amazon Bedrock](https://aws.amazon.com/bedrock/guardrails/) 评估用户输入和模型响应，基于特定用例的策略提供额外的安全保障层，无论底层模型是什么。防护栏可应用于各种模型，包括 Anthropic Claude、Meta Llama 2、Cohere Command、AI21 Labs Jurassic 和 Amazon Titan Text，以及微调模型。
+在本节中，我们将设置一个配置了特定防护栏的 Bedrock 语言模型，这些防护栏包含追踪功能。
+
+```python
+from typing import Any
+
+from langchain_core.callbacks import AsyncCallbackHandler
+
+
+class BedrockAsyncCallbackHandler(AsyncCallbackHandler):
+    # Async callback handler that can be used to handle callbacks from langchain.
+
+    async def on_llm_error(self, error: BaseException, **kwargs: Any) -> Any:
+        reason = kwargs.get("reason")
+        if reason == "GUARDRAIL_INTERVENED":
+            print(f"Guardrails: {kwargs}")
+
+
+# Guardrails for Amazon Bedrock with trace
+llm = BedrockLLM(
+    credentials_profile_name="bedrock-admin",
+    model_id="<Model_ID>",
+    model_kwargs={},
+    guardrails={"id": "<Guardrail_ID>", "version": "<Version>", "trace": True},
+    callbacks=[BedrockAsyncCallbackHandler()],
+)
+```

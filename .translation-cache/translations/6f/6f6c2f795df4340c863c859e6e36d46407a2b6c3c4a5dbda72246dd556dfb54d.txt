@@ -1,0 +1,194 @@
+---
+title: "ScraperAPI 集成"
+description: "使用 LangChain Python 与 ScraperAPI 工具集成。"
+---
+
+仅用两行代码，让你的 AI 代理具备浏览网站、搜索 Google 和 Amazon 的能力。
+
+`langchain-scraperapi` 包添加了三个由 [ScraperAPI](https://www.scraperapi.com/) 服务支持的即用型 LangChain 工具：
+
+| 工具类 | 用途 |
+|------------|------------------|
+| `ScraperAPITool` | 获取任意网页的 HTML/text/markdown |
+| `ScraperAPIGoogleSearchTool` | 获取结构化的 Google 搜索 SERP 数据 |
+| `ScraperAPIAmazonSearchTool` | 获取结构化的 Amazon 商品搜索数据 |
+
+## 概述
+
+### 集成详情
+
+| 包 | 可序列化 | JS 支持 |  最新包版本 |
+| :--- | :---: | :---: | :---: |
+| [`langchain-scraperapi`](https://pypi.org/project/langchain-scraperapi/) | ❌ | ❌ |  ![PyPI - Version](https://img.shields.io/pypi/v/langchain-scraperapi?style=flat-square&label=%20) |
+
+## 安装
+
+安装 `langchain-scraperapi` 包：
+
+```python
+pip install -qU langchain-scraperapi
+```
+
+### 凭据
+
+在 [ScraperAPI](https://www.scraperapi.com/) 创建一个账户并获取一个 API 密钥：
+
+```python
+import os
+
+if not os.environ.get("SCRAPERAPI_API_KEY"):
+    os.environ["SCRAPERAPI_API_KEY"] = "your-api-key"
+```
+
+## 实例化
+
+```python
+from langchain_scraperapi.tools import ScraperAPITool
+
+tool = ScraperAPITool()
+```
+
+## 调用
+
+### 直接使用参数调用
+
+```python
+output = tool.invoke(
+    {
+        "url": "https://langchain.com",
+        "output_format": "markdown",
+        "render": True,
+    }
+)
+print(output)
+```
+
+## 功能
+
+### 1. `ScraperAPITool` — 浏览任意网站
+
+调用原始 ScraperAPI 端点，获取 HTML、渲染后的 DOM、文本或 markdown。
+
+**调用参数：**
+
+* **`url`** **(必填)** – 目标页面 URL
+* **可选（镜像 ScraperAPI 查询参数）：**
+  * `output_format`: `"text"` | `"markdown"`（默认返回原始 HTML）
+  * `country_code`: 例如 `"us"`, `"de"`
+  * `device_type`: `"desktop"` | `"mobile"`
+  * `premium`: `bool` – 使用高级代理
+  * `render`: `bool` – 返回 HTML 前运行 JS
+  * `keep_headers`: `bool` – 包含响应头
+
+有关完整的修饰符集，请参阅 [ScraperAPI 请求定制文档](https://docs.scraperapi.com/python/making-requests/customizing-requests)。
+
+```python
+from langchain_scraperapi.tools import ScraperAPITool
+
+tool = ScraperAPITool()
+
+html_text = tool.invoke(
+    {
+        "url": "https://langchain.com",
+        "output_format": "markdown",
+        "render": True,
+    }
+)
+print(html_text[:300], "…")
+```
+
+### 2. `ScraperAPIGoogleSearchTool` — 结构化 Google 搜索
+
+通过 `/structured/google/search` 获取结构化 SERP 数据。
+
+**调用参数：**
+
+* **`query`** **（必填）** – 自然语言搜索字符串
+* **可选：** `country_code`、`tld`、`uule`、`hl`、`gl`、`ie`、`oe`、`start`、`num`
+* `output_format`：`"json"`（默认）或 `"csv"`
+
+```python
+from langchain_scraperapi.tools import ScraperAPIGoogleSearchTool
+
+google_search = ScraperAPIGoogleSearchTool()
+
+results = google_search.invoke(
+    {
+        "query": "what is langchain",
+        "num": 20,
+        "output_format": "json",
+    }
+)
+print(results)
+```
+
+### 3. `ScraperAPIAmazonSearchTool` — 结构化 Amazon 搜索
+
+通过 `/structured/amazon/search` 获取结构化产品结果。
+
+**调用参数：**
+
+* **`query`** **(必填)** – 产品搜索词
+* **可选：** `country_code`、`tld`、`page`
+* `output_format`：`"json"`（默认）或 `"csv"`
+
+```python
+from langchain_scraperapi.tools import ScraperAPIAmazonSearchTool
+
+amazon_search = ScraperAPIAmazonSearchTool()
+
+products = amazon_search.invoke(
+    {
+        "query": "noise cancelling headphones",
+        "tld": "co.uk",
+        "page": 2,
+    }
+)
+print(products)
+```
+
+## 在智能体中使用
+
+以下是在 AI 智能体中使用这些工具的示例。`ScraperAPITool` 使 AI 能够浏览任何网站、摘要文章内容，以及点击链接在页面之间导航。
+
+```python
+pip install -qU langchain-openai langchain
+```
+
+```python
+import os
+
+from langchain.agents import create_agent
+from langchain_openai import ChatOpenAI
+from langchain_scraperapi.tools import ScraperAPITool
+
+
+os.environ["SCRAPERAPI_API_KEY"] = "your-api-key"
+os.environ["OPENAI_API_KEY"] = "your-api-key"
+
+tools = [ScraperAPITool(output_format="markdown")]
+model = ChatOpenAI(model="gpt-5.5", temperature=0)
+
+agent = create_agent(
+    model=model,
+    tools=tools,
+    system_prompt="You are a helpful assistant that can browse websites for users. When asked to browse a website or a link, do so with the ScraperAPITool, then provide information based on the website based on the user's needs.",
+)
+
+response = agent.invoke(
+    {"messages": [{"role": "user", "content": "can you browse hacker news and summarize the first website"}]}
+)
+print(response["messages"][-1].content)
+```
+
+---
+
+## API 参考
+
+您可以在下方找到有关工具的其他参数的更多信息，以自定义您的请求：
+
+* [ScraperAPITool](https://docs.scraperapi.com/python/making-requests/customizing-requests)
+* [ScraperAPIGoogleSearchTool](https://docs.scraperapi.com/python/make-requests-with-scraperapi-in-python/scraperapi-structured-data-collection-in-python/google-serp-api-structured-data-in-python)
+* [ScraperAPIAmazonSearchTool](https://docs.scraperapi.com/python/make-requests-with-scraperapi-in-python/scraperapi-structured-data-collection-in-python/amazon-search-api-structured-data-in-python)
+
+LangChain 包装器直接暴露这些参数。

@@ -1,0 +1,167 @@
+---
+title: "TurbopufferVectorStore 集成"
+description: "使用 LangChain JavaScript 与 TurbopufferVectorStore 集成。"
+---
+
+[turbopuffer](https://turbopuffer.com) 是一个快速、成本高效的向量数据库，用于搜索和检索。
+
+本指南帮助您开始使用 turbopuffer [向量存储](/oss/integrations/vectorstores)。有关所有 `TurbopufferVectorStore` 功能配置的详细文档，请参阅 [API 参考](https://reference.langchain.com/javascript/langchain-turbopuffer/TurbopufferVectorStore)。
+
+## 概述
+
+### 集成详情
+
+| Class | Package | [PY support](https://python.langchain.com/docs/integrations/vectorstores/turbopuffer/) | Downloads | Version |
+| :--- | :--- | :---: | :---: | :---: |
+| [`TurbopufferVectorStore`](https://reference.langchain.com/javascript/langchain-turbopuffer/TurbopufferVectorStore) | [`@langchain/turbopuffer`](https://www.npmjs.com/package/@langchain/turbopuffer) | ✅ | ![NPM - Downloads](https://img.shields.io/npm/dm/@langchain/turbopuffer?style=flat-square&label=%20&) | ![NPM - Version](https://img.shields.io/npm/v/@langchain/turbopuffer?style=flat-square&label=%20&) |
+
+## 设置
+
+[注册 turbopuffer 账户](https://turbopuffer.com/join)，创建 API 密钥，并安装 `@langchain/turbopuffer`（官方 `@turbopuffer/turbopuffer` 客户端）、`@langchain/core` 以及嵌入提供程序（本指南使用 [OpenAI 嵌入](/oss/integrations/embeddings/openai)）。
+
+<CodeGroup>
+
+</fragment>
+```bash npm
+npm install @langchain/turbopuffer @turbopuffer/turbopuffer @langchain/core @langchain/openai
+```
+```bash yarn
+yarn add @langchain/turbopuffer @turbopuffer/turbopuffer @langchain/core @langchain/openai
+```
+```bash pnpm
+pnpm add @langchain/turbopuffer @turbopuffer/turbopuffer @langchain/core @langchain/openai
+```
+</CodeGroup>
+
+### 凭据
+
+设置您的 API 密钥作为环境变量：
+
+```typescript
+process.env.TURBOPUFFER_API_KEY = "your-api-key";
+```
+
+（可选）设置一个[区域](https://turbopuffer.com/docs/regions)（例如 `gcp-us-central1`）。
+
+## 实例化
+
+创建一个 turbopuffer 客户端和命名空间，然后将命名空间传递给 `TurbopufferVectorStore`：
+
+```typescript
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { TurbopufferVectorStore } from "@langchain/turbopuffer";
+import { Turbopuffer } from "@turbopuffer/turbopuffer";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-small",
+});
+
+const client = new Turbopuffer({
+  apiKey: process.env.TURBOPUFFER_API_KEY,
+  region: "gcp-us-central1",
+});
+
+const vectorStore = new TurbopufferVectorStore(embeddings, {
+  namespace: client.namespace("my-namespace"),
+});
+```
+
+## 管理向量存储
+
+### 向向量存储添加项目
+
+目前，仅支持字符串元数据值。
+
+```typescript
+import type { Document } from "@langchain/core/documents";
+
+const createdAt = new Date().getTime();
+
+const ids = await vectorStore.addDocuments([
+  {
+    pageContent: "some content",
+    metadata: { created_at: createdAt.toString() },
+  },
+  { pageContent: "hi", metadata: { created_at: (createdAt + 1).toString() } },
+  { pageContent: "bye", metadata: { created_at: (createdAt + 2).toString() } },
+  {
+    pageContent: "what's this",
+    metadata: { created_at: (createdAt + 3).toString() },
+  },
+]);
+```
+
+### 从向量存储中删除项
+
+```typescript
+await vectorStore.delete({ ids: [ids[ids.length - 1]] });
+```
+
+## 查询向量存储
+
+### 直接查询
+
+```typescript
+const results = await vectorStore.similaritySearch("hello", 1);
+
+for (const doc of results) {
+  console.log(doc.pageContent, doc.metadata);
+}
+```
+
+使用 turbopuffer 过滤表达式按元数据过滤。请参阅 [turbopuffer 过滤文档](https://turbopuffer.com/docs/reference/query#filter-parameters) 了解支持的运算符。
+
+```typescript
+const results2 = await vectorStore.similaritySearch("hello", 1, [
+  "created_at",
+  "Eq",
+  (createdAt + 3).toString(),
+]);
+
+for (const doc of results2) {
+  console.log(doc.pageContent, doc.metadata);
+}
+```
+
+### 使用现有 ID 进行 Upsert
+
+```typescript
+await vectorStore.addDocuments(
+  [
+    { pageContent: "changed", metadata: { created_at: createdAt.toString() } },
+    {
+      pageContent: "hi changed",
+      metadata: { created_at: (createdAt + 1).toString() },
+    },
+    {
+      pageContent: "bye changed",
+      metadata: { created_at: (createdAt + 2).toString() },
+    },
+    {
+      pageContent: "what's this changed",
+      metadata: { created_at: (createdAt + 3).toString() },
+    },
+  ],
+  { ids }
+);
+```
+
+### 删除命名空间中的所有向量
+
+```typescript
+await vectorStore.delete({ deleteAll: true });
+```
+
+### 用于检索增强生成的使用方法
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下部分：
+
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [代理型 RAG](/oss/langgraph/agentic-rag)
+- [检索文档](/oss/langchain/retrieval)
+
+---
+
+## API 参考
+
+有关所有 `TurbopufferVectorStore` 特性和配置的详细文档，请前往 [API 参考](https://reference.langchain.com/javascript/langchain-turbopuffer/TurbopufferVectorStore)。

@@ -1,0 +1,2124 @@
+---
+title: Agent 中的上下文工程
+sidebarTitle: 上下文工程
+---
+
+## 概述
+
+构建 Agent（或任何 LLM 应用）的难点在于使其足够可靠。虽然它们可能在原型阶段工作正常，但在实际使用场景中往往会失败。
+
+### Agent 为何会失败？
+
+当 Agent 失败时，通常是因为 Agent 内部的 LLM 调用采取了错误的操作/没有做出我们期望的行为。LLM 失败的原因有以下两个：
+
+1. 底层 LLM 能力不足
+2. 没有向 LLM 传递"正确"的上下文
+
+大多数情况下——实际上第二个原因才是导致 Agent 不可靠的根本所在。
+
+**上下文工程** 是以正确的格式提供正确的信息和工具，以便 LLM 能够完成任务。这是 AI 工程师的首要工作。这种"正确"上下文的缺失是实现更可靠 Agent 的最大障碍，而 LangChain 的 Agent 抽象层专门设计用于促进上下文工程。
+
+<Tip>
+上下文工程新手？先阅读[概念概述](/oss/concepts/context)来了解不同类型的上下文及其使用场景。
+</Tip>
+
+### Agent 循环
+
+一个典型的 Agent 循环包含两个主要步骤：
+
+1. **模型调用** - 使用提示词和可用工具调用 LLM，返回响应或执行工具的请求
+2. **工具执行** - 执行 LLM 请求的工具，返回工具结果
+
+<div style={{ display: "flex", justifyContent: "center" }}>
+  <img
+    src="/oss/images/core_agent_loop.png"
+    alt="核心 Agent 循环图"
+    className="rounded-lg"
+  />
+</div>
+
+此循环会持续执行，直到 LLM 决定结束。
+
+### 你可以控制的内容
+
+要构建可靠的 Agent，你需要控制 Agent 循环中每个步骤发生的事情，以及步骤之间发生的事情。
+
+| 上下文类型 | 你控制的内容 | 瞬态还是持久态 |
+|--------------|------------------|-------------------------|
+| **[模型上下文](#model-context)** | 模型调用的输入内容（指令、消息历史、工具、响应格式） | 瞬态 |
+| **[工具上下文](#tool-context)** | 工具可以访问和产生的内容（对状态、存储、运行时上下文的读写） | 持久态 |
+| **[生命周期上下文](#life-cycle-context)** | 模型调用和工具调用之间发生的事情（摘要、护栏、日志记录等） | 持久态 |
+
+<CardGroup>
+  <Card title="瞬态上下文" icon="bolt" iconType="duotone">
+    LLM 在单次调用中看到的内容。你可以修改消息、工具或提示词，而不会更改状态中保存的内容。
+  </Card>
+  <Card title="持久态上下文" icon="database" iconType="duotone">
+    跨轮次保存到状态中的内容。生命周期钩子和工具写入会永久修改此上下文。
+  </Card>
+</CardGroup>
+
+### 数据源
+
+在整个过程中，你的 Agent 会访问（读取/写入）不同的数据源：
+
+| 数据源 | 也称为 | 范围 | 示例 |
+|-------------|---------------|-------|----------|
+| **运行时上下文** | 静态配置 | 对话级别 | 用户 ID、API 密钥、数据库连接、权限、环境设置 |
+| **状态** | 短期记忆 | 对话级别 | 当前消息、上传的文件、认证状态、工具结果 |
+| **存储** | 长期记忆 | 跨对话 | 用户偏好、提取的洞察、记忆、历史数据 |
+
+### 工作原理
+
+LangChain [中间件](/oss/langchain/middleware) 是在底层使开发者使用 LangChain 进行上下文工程变得实用的机制。
+
+中间件允许你钩入 Agent 生命周期的任何步骤并：
+
+* 更新上下文
+* 跳转到 Agent 生命周期中的不同步骤
+
+在本指南中，你将频繁看到中间件 API 作为上下文工程手段的使用。
+
+## 模型上下文
+
+控制每个模型调用的输入内容——指令、可用的工具、使用的模型以及输出格式。这些决策直接影响可靠性和成本。
+
+<CardGroup cols={2}>
+    <Card title="系统提示词" icon="message-2" href="#system-prompt">
+        开发者向 LLM 提供的基础指令。
+    </Card>
+    <Card title="消息" icon="messages" href="#messages">
+        发送给 LLM 的完整消息列表（对话历史）。
+    </Card>
+    <Card title="工具" icon="tool" href="#tools">
+        Agent 可用于执行操作的实用工具。
+    </Card>
+    <Card title="模型" icon="cpu" href="#model">
+        实际要调用的模型（包括配置）。
+    </Card>
+    <Card title="响应格式" icon="braces" href="#response-format">
+        模型最终响应的模式规范。
+    </Card>
+</CardGroup>
+
+所有这些类型的模型上下文都可以从**状态**（短期记忆）、**存储**（长期记忆）或**运行时上下文**（静态配置）中获取。
+
+### 系统提示词
+
+系统提示词设定了 LLM 的行为和能力。不同的用户、上下文或对话阶段需要不同的指令。成功的 Agent 会利用记忆、偏好和配置来为当前对话状态提供正确的指令。
+
+<Tabs>
+  <Tab title="状态">
+    从状态中访问消息计数或对话上下文：
+
+    :::python
+
+    ```python
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import dynamic_prompt, ModelRequest
+
+    @dynamic_prompt
+    def state_aware_prompt(request: ModelRequest) -> str:
+        # request.messages is a shortcut for request.state["messages"]
+        message_count = len(request.messages)
+
+        base = "You are a helpful assistant."
+
+        if message_count > 10:
+            base += "\nThis is a long conversation - be extra concise."
+
+        return base
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[state_aware_prompt]
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import { createAgent } from "langchain";
+
+    const agent = createAgent({
+      model: "gpt-5.5",
+      tools: [...],
+      middleware: [
+        dynamicSystemPromptMiddleware((state) => {
+          // Read from State: check conversation length
+          const messageCount = state.messages.length;
+
+          let base = "You are a helpful assistant.";
+
+          if (messageCount > 10) {
+            base += "\nThis is a long conversation - be extra concise.";
+          }
+
+          return base;
+        }),
+      ],
+    });
+    ```
+<fragment>
+    :::
+  </Tab>
+
+  <Tab title="Store">
+    从长期记忆中访问用户偏好设置：
+
+    :::python
+
+
+</fragment>
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import dynamic_prompt, ModelRequest
+    from langgraph.store.memory import InMemoryStore
+
+    @dataclass
+    class Context:
+        user_id: str
+
+    @dynamic_prompt
+    def store_aware_prompt(request: ModelRequest) -> str:
+        user_id = request.runtime.context.user_id
+
+        # Read from Store: get user preferences
+        store = request.runtime.store
+        user_prefs = store.get(("preferences",), user_id)
+
+        base = "You are a helpful assistant."
+
+        if user_prefs:
+            style = user_prefs.value.get("communication_style", "balanced")
+            base += f"\nUser prefers {style} responses."
+
+        return base
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[store_aware_prompt],
+        context_schema=Context,
+        store=InMemoryStore()
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import * as z from "zod";
+    import { createAgent, dynamicSystemPromptMiddleware } from "langchain";
+
+    const contextSchema = z.object({
+      userId: z.string(),
+    });
+
+    type Context = z.infer<typeof contextSchema>;
+
+    const agent = createAgent({
+      model: "gpt-5.5",
+      tools: [...],
+      contextSchema,
+      middleware: [
+        dynamicSystemPromptMiddleware<Context>(async (state, runtime) => {
+          const userId = runtime.context.userId;
+
+          // Read from Store: get user preferences
+          const store = runtime.store;
+          const userPrefs = await store.get(["preferences"], userId);
+
+          let base = "You are a helpful assistant.";
+
+          if (userPrefs) {
+            const style = userPrefs.value?.communicationStyle || "balanced";
+            base += `\nUser prefers ${style} responses.`;
+          }
+
+          return base;
+        }),
+      ],
+    });
+    ```
+```
+:::
+  </Tab>
+
+  <Tab title="Runtime Context">
+    从运行时上下文获取用户 ID 或配置：
+
+    :::python
+
+```
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import dynamic_prompt, ModelRequest
+
+    @dataclass
+    class Context:
+        user_role: str
+        deployment_env: str
+
+    @dynamic_prompt
+    def context_aware_prompt(request: ModelRequest) -> str:
+        # Read from Runtime Context: user role and environment
+        user_role = request.runtime.context.user_role
+        env = request.runtime.context.deployment_env
+
+        base = "You are a helpful assistant."
+
+        if user_role == "admin":
+            base += "\nYou have admin access. You can perform all operations."
+        elif user_role == "viewer":
+            base += "\nYou have read-only access. Guide users to read operations only."
+
+        if env == "production":
+            base += "\nBe extra careful with any data modifications."
+
+        return base
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[context_aware_prompt],
+        context_schema=Context
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import * as z from "zod";
+    import { createAgent, dynamicSystemPromptMiddleware } from "langchain";
+
+    const contextSchema = z.object({
+      userRole: z.string(),
+      deploymentEnv: z.string(),
+    });
+
+    type Context = z.infer<typeof contextSchema>;
+
+    const agent = createAgent({
+      model: "gpt-5.5",
+      tools: [...],
+      contextSchema,
+      middleware: [
+        dynamicSystemPromptMiddleware<Context>((state, runtime) => {
+          // Read from Runtime Context: user role and environment
+          const userRole = runtime.context.userRole;
+          const env = runtime.context.deploymentEnv;
+
+          let base = "You are a helpful assistant.";
+
+          if (userRole === "admin") {
+            base += "\nYou have admin access. You can perform all operations.";
+          } else if (userRole === "viewer") {
+            base += "\nYou have read-only access. Guide users to read operations only.";
+          }
+
+          if (env === "production") {
+            base += "\nBe extra careful with any data modifications.";
+          }
+
+          return base;
+        }),
+      ],
+    });
+    ```
+<fragment>
+    :::
+  </Tab>
+
+</Tabs>
+
+### 消息
+
+消息构成了发送给 LLM 的提示词。
+管理消息的内容至关重要，这能确保 LLM 拥有正确的信息来做出良好的响应。
+
+<Tabs>
+  <Tab title="State">
+    在相关当前查询时，从 State 注入上传的文件上下文：
+
+    :::python
+
+
+</fragment>
+
+    ```python
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from typing import Callable
+
+    @wrap_model_call
+    def inject_file_context(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Inject context about files user has uploaded this session."""
+        # Read from State: get uploaded files metadata
+        uploaded_files = request.state.get("uploaded_files", [])  # [!code highlight]
+
+        if uploaded_files:
+            # Build context about available files
+            file_descriptions = []
+            for file in uploaded_files:
+                file_descriptions.append(
+                    f"- {file['name']} ({file['type']}): {file['summary']}"
+                )
+
+            file_context = f"""Files you have access to in this conversation:
+{chr(10).join(file_descriptions)}
+
+Reference these files when answering questions."""
+
+            # Inject file context before recent messages
+            messages = [  # [!code highlight]
+                *request.messages,
+                {"role": "user", "content": file_context},
+            ]
+            request = request.override(messages=messages)  # [!code highlight]
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[inject_file_context]
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import { createMiddleware } from "langchain";
+
+    const injectFileContext = createMiddleware({
+      name: "InjectFileContext",
+      wrapModelCall: (request, handler) => {
+        // request.state is a shortcut for request.state.messages
+        const uploadedFiles = request.state.uploadedFiles || [];  // [!code highlight]
+
+        if (uploadedFiles.length > 0) {
+          // Build context about available files
+          const fileDescriptions = uploadedFiles.map(file =>
+            `- ${file.name} (${file.type}): ${file.summary}`
+          );
+
+          const fileContext = `Files you have access to in this conversation:
+${fileDescriptions.join("\n")}
+
+Reference these files when answering questions.`;
+
+          // Inject file context before recent messages
+          const messages = [  // [!code highlight]
+            ...request.messages,  // Rest of conversation
+            { role: "user", content: fileContext }
+          ];
+          request = request.override({ messages });  // [!code highlight]
+        }
+
+        return handler(request);
+      },
+    });
+
+    const agent = createAgent({
+      model: "gpt-5.5",
+      tools: [...],
+      middleware: [injectFileContext],
+    });
+    ```
+:::
+  </Tab>
+
+  <Tab title="Store">
+    从 Store 注入用户的邮件写作风格以指导起草：
+
+    :::python
+
+</fragment>
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from typing import Callable
+    from langgraph.store.memory import InMemoryStore
+
+    @dataclass
+    class Context:
+        user_id: str
+
+    @wrap_model_call
+    def inject_writing_style(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Inject user's email writing style from Store."""
+        user_id = request.runtime.context.user_id  # [!code highlight]
+
+        # Read from Store: get user's writing style examples
+        store = request.runtime.store  # [!code highlight]
+        writing_style = store.get(("writing_style",), user_id)  # [!code highlight]
+
+        if writing_style:
+            style = writing_style.value
+            # Build style guide from stored examples
+            style_context = f"""Your writing style:
+- Tone: {style.get('tone', 'professional')}
+- Typical greeting: "{style.get('greeting', 'Hi')}"
+- Typical sign-off: "{style.get('sign_off', 'Best')}"
+- Example email you've written:
+{style.get('example_email', '')}"""
+
+            # Append at end - models pay more attention to final messages
+            messages = [
+                *request.messages,
+                {"role": "user", "content": style_context}
+            ]
+            request = request.override(messages=messages)  # [!code highlight]
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[inject_writing_style],
+        context_schema=Context,
+        store=InMemoryStore()
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import * as z from "zod";
+    import { createMiddleware } from "langchain";
+
+    const contextSchema = z.object({
+      userId: z.string(),
+    });
+
+    const injectWritingStyle = createMiddleware({
+      name: "InjectWritingStyle",
+      contextSchema,
+      wrapModelCall: async (request, handler) => {
+        const userId = request.runtime.context.userId;  // [!code highlight]
+
+        // Read from Store: get user's writing style examples
+        const store = request.runtime.store;  // [!code highlight]
+        const writingStyle = await store.get(["writing_style"], userId);  // [!code highlight]
+
+        if (writingStyle) {
+          const style = writingStyle.value;
+          // Build style guide from stored examples
+          const styleContext = `Your writing style:
+- Tone: ${style.tone || 'professional'}
+- Typical greeting: "${style.greeting || 'Hi'}"
+- Typical sign-off: "${style.signOff || 'Best'}"
+- Example email you've written:
+${style.exampleEmail || ''}`;
+
+          // Append at end - models pay more attention to final messages
+          const messages = [
+            ...request.messages,
+            { role: "user", content: styleContext }
+          ];
+          request = request.override({ messages });  // [!code highlight]
+        }
+
+        return handler(request);
+      },
+    });
+    ```
+<fragment>
+    :::
+  </Tab>
+
+  <Tab title="Runtime Context">
+    根据用户管辖区域从运行时上下文注入合规规则：
+
+    :::python
+
+
+</fragment>
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from typing import Callable
+
+    @dataclass
+    class Context:
+        user_jurisdiction: str
+        industry: str
+        compliance_frameworks: list[str]
+
+    @wrap_model_call
+    def inject_compliance_rules(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Inject compliance constraints from Runtime Context."""
+        # Read from Runtime Context: get compliance requirements
+        jurisdiction = request.runtime.context.user_jurisdiction  # [!code highlight]
+        industry = request.runtime.context.industry  # [!code highlight]
+        frameworks = request.runtime.context.compliance_frameworks  # [!code highlight]
+
+        # Build compliance constraints
+        rules = []
+        if "GDPR" in frameworks:
+            rules.append("- Must obtain explicit consent before processing personal data")
+            rules.append("- Users have right to data deletion")
+        if "HIPAA" in frameworks:
+            rules.append("- Cannot share patient health information without authorization")
+            rules.append("- Must use secure, encrypted communication")
+        if industry == "finance":
+            rules.append("- Cannot provide financial advice without proper disclaimers")
+
+        if rules:
+            compliance_context = f"""Compliance requirements for {jurisdiction}:
+{chr(10).join(rules)}"""
+
+            # Append at end - models pay more attention to final messages
+            messages = [
+                *request.messages,
+                {"role": "user", "content": compliance_context}
+            ]
+            request = request.override(messages=messages)  # [!code highlight]
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[inject_compliance_rules],
+        context_schema=Context
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import * as z from "zod";
+    import { createMiddleware } from "langchain";
+
+    const contextSchema = z.object({
+      userJurisdiction: z.string(),
+      industry: z.string(),
+      complianceFrameworks: z.array(z.string()),
+    });
+
+    type Context = z.infer<typeof contextSchema>;
+
+    const injectComplianceRules = createMiddleware<Context>({
+      name: "InjectComplianceRules",
+      contextSchema,
+      wrapModelCall: (request, handler) => {
+        // Read from Runtime Context: get compliance requirements
+        const { userJurisdiction, industry, complianceFrameworks } = request.runtime.context;  // [!code highlight]
+
+        // Build compliance constraints
+        const rules = [];
+        if (complianceFrameworks.includes("GDPR")) {
+          rules.push("- Must obtain explicit consent before processing personal data");
+          rules.push("- Users have right to data deletion");
+        }
+        if (complianceFrameworks.includes("HIPAA")) {
+          rules.push("- Cannot share patient health information without authorization");
+          rules.push("- Must use secure, encrypted communication");
+        }
+        if (industry === "finance") {
+          rules.push("- Cannot provide financial advice without proper disclaimers");
+        }
+
+        if (rules.length > 0) {
+          const complianceContext = `Compliance requirements for ${userJurisdiction}:
+${rules.join("\n")}`;
+
+          // Append at end - models pay more attention to final messages
+          const messages = [
+            ...request.messages,
+            { role: "user", content: complianceContext }
+          ];
+          request = request.override({ messages });  // [!code highlight]
+        }
+
+        return handler(request);
+      },
+    });
+    ```
+:::
+  </Tab>
+
+</Tabs>
+
+<Note>
+**瞬时更新与持久更新：**
+
+上面的示例使用 `wrap_model_call` 进行**瞬时**更新 - 修改发送给模型的单次调用消息，但不会更改状态中保存的内容。
+
+要进行修改状态的**持久**更新，你可以：
+
+:::python
+- 从 `wrap_model_call` 返回带有 @[`Command`] 的 @[`ExtendedModelResponse`]，以从模型调用层注入状态更新。
+- 使用生命周期钩子（如 `before_model`、`after_model` 或 `wrap_tool_call`（用于工具返回））来更新对话历史。有关更多详细信息，请参阅[中间件文档](/oss/langchain/middleware)。
+:::
+
+:::js
+- 直接从 `wrapModelCall` 返回 @[`Command`]，以从模型调用层注入状态更新。
+- 使用生命周期钩子（如 `beforeModel`、`afterModel` 或 `wrapToolCall`（用于工具返回））来更新对话历史。有关更多详细信息，请参阅[中间件文档](/oss/langchain/middleware)。
+:::
+
+有关更多信息，请参阅[状态更新](/oss/langchain/middleware/custom#state-updates)。
+</Note>
+
+### 工具
+
+工具允许模型与数据库、API 和外部系统进行交互。定义和选择工具的方式直接影响模型是否能有效完成任务。
+
+#### 定义工具
+
+每个工具都需要清晰的名称、描述、参数名称和参数描述。这些不仅仅是元数据——它们指导模型推理何时以及如何使用该工具。
+
+:::python
+
+</fragment>
+```python
+from langchain.tools import tool
+
+@tool(parse_docstring=True)
+def search_orders(
+    user_id: str,
+    status: str,
+    limit: int = 10
+) -> str:
+    """Search for user orders by status.
+
+    Use this when the user asks about order history or wants to check
+    order status. Always filter by the provided status.
+
+    Args:
+        user_id: Unique identifier for the user
+        status: Order status: 'pending', 'shipped', or 'delivered'
+        limit: Maximum number of results to return
+    """
+    # Implementation here
+    pass
+```
+:::
+
+:::js
+```typescript
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+
+const searchOrders = tool(
+  async ({ userId, status, limit }) => {
+    // Implementation here
+  },
+  {
+    name: "search_orders",
+    description: `Search for user orders by status.
+
+    Use this when the user asks about order history or wants to check
+    order status. Always filter by the provided status.`,
+    schema: z.object({
+      userId: z.string().describe("Unique identifier for the user"),
+      status: z.enum(["pending", "shipped", "delivered"]).describe("Order status to filter by"),
+      limit: z.number().default(10).describe("Maximum number of results to return"),
+    }),
+  }
+);
+```
+:::
+
+#### 选择工具
+
+并非每种工具都适用于每种情况。工具过多可能会让模型不堪重负（上下文过载）并增加错误；工具过少则会限制功能。动态工具选择根据身份验证状态、用户权限、功能标志或对话阶段来调整可用的工具集。
+
+<Tabs>
+  <Tab title="状态">
+    仅在达到特定对话里程碑后启用高级工具：
+
+    :::python
+
+</Tab>
+</Tabs>
+
+    ```python
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from typing import Callable
+
+    @wrap_model_call
+    def state_based_tools(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Filter tools based on conversation State."""
+        # Read from State: check if user has authenticated
+        state = request.state  # [!code highlight]
+        is_authenticated = state.get("authenticated", False)  # [!code highlight]
+        message_count = len(state["messages"])
+
+        # Only enable sensitive tools after authentication
+        if not is_authenticated:
+            tools = [t for t in request.tools if t.name.startswith("public_")]
+            request = request.override(tools=tools)  # [!code highlight]
+        elif message_count < 5:
+            # Limit tools early in conversation
+            tools = [t for t in request.tools if t.name != "advanced_search"]
+            request = request.override(tools=tools)  # [!code highlight]
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[public_search, private_search, advanced_search],
+        middleware=[state_based_tools]
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import { createMiddleware } from "langchain";
+
+    const stateBasedTools = createMiddleware({
+      name: "StateBasedTools",
+      wrapModelCall: (request, handler) => {
+        // Read from State: check authentication and conversation length
+        const state = request.state;  // [!code highlight]
+        const isAuthenticated = state.authenticated || false;  // [!code highlight]
+        const messageCount = state.messages.length;
+
+        let filteredTools = request.tools;
+
+        // Only enable sensitive tools after authentication
+        if (!isAuthenticated) {
+          filteredTools = request.tools.filter(t => t.name.startsWith("public_"));  // [!code highlight]
+        } else if (messageCount < 5) {
+          filteredTools = request.tools.filter(t => t.name !== "advanced_search");  // [!code highlight]
+        }
+
+        return handler({ ...request, tools: filteredTools });  // [!code highlight]
+      },
+    });
+    ```
+:::
+  </Tab>
+
+  <Tab title="Store">
+    根据用户偏好或功能标志在 Store 中过滤工具：
+
+    :::python
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from typing import Callable
+    from langgraph.store.memory import InMemoryStore
+
+    @dataclass
+    class Context:
+        user_id: str
+
+    @wrap_model_call
+    def store_based_tools(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Filter tools based on Store preferences."""
+        user_id = request.runtime.context.user_id
+
+        # Read from Store: get user's enabled features
+        store = request.runtime.store
+        feature_flags = store.get(("features",), user_id)
+
+        if feature_flags:
+            enabled_features = feature_flags.value.get("enabled_tools", [])
+            # Only include tools that are enabled for this user
+            tools = [t for t in request.tools if t.name in enabled_features]
+            request = request.override(tools=tools)
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[search_tool, analysis_tool, export_tool],
+        middleware=[store_based_tools],
+        context_schema=Context,
+        store=InMemoryStore()
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import * as z from "zod";
+    import { createMiddleware } from "langchain";
+
+    const contextSchema = z.object({
+      userId: z.string(),
+    });
+
+    const storeBasedTools = createMiddleware({
+      name: "StoreBasedTools",
+      contextSchema,
+      wrapModelCall: async (request, handler) => {
+        const userId = request.runtime.context.userId;  // [!code highlight]
+
+        // Read from Store: get user's enabled features
+        const store = request.runtime.store;  // [!code highlight]
+        const featureFlags = await store.get(["features"], userId);  // [!code highlight]
+
+        let filteredTools = request.tools;
+
+        if (featureFlags) {
+          const enabledFeatures = featureFlags.value?.enabledTools || [];
+          filteredTools = request.tools.filter(t => enabledFeatures.includes(t.name));  // [!code highlight]
+        }
+
+        return handler({ ...request, tools: filteredTools });  // [!code highlight]
+      },
+    });
+    ```
+```
+:::
+  </Tab>
+
+  <Tab title="运行时上下文">
+    基于运行时上下文中的用户权限过滤工具：
+
+    :::python
+
+
+```
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from typing import Callable
+
+    @dataclass
+    class Context:
+        user_role: str
+
+    @wrap_model_call
+    def context_based_tools(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Filter tools based on Runtime Context permissions."""
+        # Read from Runtime Context: get user role
+        user_role = request.runtime.context.user_role
+
+        if user_role == "admin":
+            # Admins get all tools
+            pass
+        elif user_role == "editor":
+            # Editors can't delete
+            tools = [t for t in request.tools if t.name != "delete_data"]
+            request = request.override(tools=tools)
+        else:
+            # Viewers get read-only tools
+            tools = [t for t in request.tools if t.name.startswith("read_")]
+            request = request.override(tools=tools)
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[read_data, write_data, delete_data],
+        middleware=[context_based_tools],
+        context_schema=Context
+    )
+    ```
+    :::
+
+    :::js
+    ```typescript
+    import * as z from "zod";
+    import { createMiddleware } from "langchain";
+
+    const contextSchema = z.object({
+      userRole: z.string(),
+    });
+
+    const contextBasedTools = createMiddleware({
+      name: "ContextBasedTools",
+      contextSchema,
+      wrapModelCall: (request, handler) => {
+        // Read from Runtime Context: get user role
+        const userRole = request.runtime.context.userRole;  // [!code highlight]
+
+        let filteredTools = request.tools;
+
+        if (userRole === "admin") {
+          // Admins get all tools
+        } else if (userRole === "editor") {
+          filteredTools = request.tools.filter(t => t.name !== "delete_data");  // [!code highlight]
+        } else {
+          filteredTools = request.tools.filter(t => t.name.startsWith("read_"));  // [!code highlight]
+        }
+
+        return handler({ ...request, tools: filteredTools });  // [!code highlight]
+      },
+    });
+    ```
+<fragment>
+    :::
+  </Tab>
+</Tabs>
+
+有关过滤预注册工具和在运行时注册工具（例如来自 MCP 服务器）的信息，请参阅[动态工具](/oss/langchain/tools#dynamic-tool-selection)。
+
+### 模型
+
+不同的模型有不同的优势、成本和上下文窗口。选择适合当前任务的模型，这可能会在代理运行期间发生变化。
+
+<Tabs>
+  <Tab title="State">
+    根据状态中的对话长度使用不同的模型：
+
+    :::python
+
+
+</fragment>
+
+    ```python
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from langchain.chat_models import init_chat_model
+    from typing import Callable
+
+    # Initialize models once outside the middleware
+    large_model = init_chat_model("claude-sonnet-4-6")
+    standard_model = init_chat_model("gpt-5.5")
+    efficient_model = init_chat_model("gpt-5.4-mini")
+
+    @wrap_model_call
+    def state_based_model(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Select model based on State conversation length."""
+        # request.messages is a shortcut for request.state["messages"]
+        message_count = len(request.messages)  # [!code highlight]
+
+        if message_count > 20:
+            # Long conversation - use model with larger context window
+            model = large_model
+        elif message_count > 10:
+            # Medium conversation
+            model = standard_model
+        else:
+            # Short conversation - use efficient model
+            model = efficient_model
+
+        request = request.override(model=model)  # [!code highlight]
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.4-mini",
+        tools=[...],
+        middleware=[state_based_model]
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import { createMiddleware, initChatModel } from "langchain";
+
+    // Initialize models once outside the middleware
+    const largeModel = initChatModel("claude-sonnet-4-6");
+    const standardModel = initChatModel("gpt-5.5");
+    const efficientModel = initChatModel("gpt-5.4-mini");
+
+    const stateBasedModel = createMiddleware({
+      name: "StateBasedModel",
+      wrapModelCall: (request, handler) => {
+        // request.messages is a shortcut for request.state.messages
+        const messageCount = request.messages.length;  // [!code highlight]
+        let model;
+
+        if (messageCount > 20) {
+          model = largeModel;
+        } else if (messageCount > 10) {
+          model = standardModel;
+        } else {
+          model = efficientModel;
+        }
+
+        return handler({ ...request, model });  // [!code highlight]
+      },
+    });
+    ```
+:::
+  </Tab>
+
+  <Tab title="Store">
+    使用用户 Store 中首选的模型：
+
+    :::python
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from langchain.chat_models import init_chat_model
+    from typing import Callable
+    from langgraph.store.memory import InMemoryStore
+
+    @dataclass
+    class Context:
+        user_id: str
+
+    # Initialize available models once
+    MODEL_MAP = {
+        "gpt-5.5": init_chat_model("gpt-5.5"),
+        "gpt-5.4-mini": init_chat_model("gpt-5.4-mini"),
+        "claude-sonnet": init_chat_model("claude-sonnet-4-6"),
+    }
+
+    @wrap_model_call
+    def store_based_model(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Select model based on Store preferences."""
+        user_id = request.runtime.context.user_id
+
+        # Read from Store: get user's preferred model
+        store = request.runtime.store
+        user_prefs = store.get(("preferences",), user_id)
+
+        if user_prefs:
+            preferred_model = user_prefs.value.get("preferred_model")
+            if preferred_model and preferred_model in MODEL_MAP:
+                request = request.override(model=MODEL_MAP[preferred_model])
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[store_based_model],
+        context_schema=Context,
+        store=InMemoryStore()
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { createMiddleware, initChatModel } from "langchain";
+
+    const contextSchema = z.object({
+      userId: z.string(),
+    });
+
+    // Initialize available models once
+    const MODEL_MAP = {
+      "gpt-5.5": initChatModel("gpt-5.5"),
+      "gpt-5.4-mini": initChatModel("gpt-5.4-mini"),
+      "claude-sonnet": initChatModel("claude-sonnet-4-6"),
+    };
+
+    const storeBasedModel = createMiddleware({
+      name: "StoreBasedModel",
+      contextSchema,
+      wrapModelCall: async (request, handler) => {
+        const userId = request.runtime.context.userId;  // [!code highlight]
+
+        // Read from Store: get user's preferred model
+        const store = request.runtime.store;  // [!code highlight]
+        const userPrefs = await store.get(["preferences"], userId);  // [!code highlight]
+
+        let model = request.model;
+
+        if (userPrefs) {
+          const preferredModel = userPrefs.value?.preferredModel;
+          if (preferredModel && MODEL_MAP[preferredModel]) {
+            model = MODEL_MAP[preferredModel];  // [!code highlight]
+          }
+        }
+
+        return handler({ ...request, model });  // [!code highlight]
+      },
+    });
+    ```
+::::
+  </Tab>
+
+  <Tab title="运行时上下文">
+    根据成本限制或环境从运行时上下文中选择模型：
+
+    :::python
+
+
+</fragment>
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from langchain.chat_models import init_chat_model
+    from typing import Callable
+
+    @dataclass
+    class Context:
+        cost_tier: str
+        environment: str
+
+    # Initialize models once outside the middleware
+    premium_model = init_chat_model("claude-sonnet-4-6")
+    standard_model = init_chat_model("gpt-5.5")
+    budget_model = init_chat_model("gpt-5.4-mini")
+
+    @wrap_model_call
+    def context_based_model(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Select model based on Runtime Context."""
+        # Read from Runtime Context: cost tier and environment
+        cost_tier = request.runtime.context.cost_tier
+        environment = request.runtime.context.environment
+
+        if environment == "production" and cost_tier == "premium":
+            # Production premium users get best model
+            model = premium_model
+        elif cost_tier == "budget":
+            # Budget tier gets efficient model
+            model = budget_model
+        else:
+            # Standard tier
+            model = standard_model
+
+        request = request.override(model=model)
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[context_based_model],
+        context_schema=Context
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { createMiddleware, initChatModel } from "langchain";
+
+    const contextSchema = z.object({
+      costTier: z.string(),
+      environment: z.string(),
+    });
+
+    // Initialize models once outside the middleware
+    const premiumModel = initChatModel("claude-sonnet-4-6");
+    const standardModel = initChatModel("gpt-5.5");
+    const budgetModel = initChatModel("gpt-5.4-mini");
+
+    const contextBasedModel = createMiddleware({
+      name: "ContextBasedModel",
+      contextSchema,
+      wrapModelCall: (request, handler) => {
+        // Read from Runtime Context: cost tier and environment
+        const costTier = request.runtime.context.costTier;  // [!code highlight]
+        const environment = request.runtime.context.environment;  // [!code highlight]
+
+        let model;
+
+        if (environment === "production" && costTier === "premium") {
+          model = premiumModel;
+        } else if (costTier === "budget") {
+          model = budgetModel;
+        } else {
+          model = standardModel;
+        }
+
+        return handler({ ...request, model });  // [!code highlight]
+      },
+    });
+    ```
+::::
+</Tab>
+</Tabs>
+
+请参阅 [Dynamic model](/oss/langchain/models#dynamic-model-selection) 获取更多示例。
+
+### 响应格式
+
+结构化输出将非结构化文本转换为经过验证的结构化数据。在提取特定字段或返回供下游系统使用的数据时，自由格式的文本是不够的。
+
+**工作原理：** 当您提供 schema 作为响应格式时，模型的最终响应将保证符合该 schema。代理运行模型 / 工具调用循环，直到模型完成工具调用，然后将最终响应强制转换为提供的格式。
+
+#### 定义格式
+
+Schema 定义指导模型。字段名称、类型和描述明确指定输出应遵循的确切格式。
+
+:::python
+
+</fragment>
+```python
+from pydantic import BaseModel, Field
+
+class CustomerSupportTicket(BaseModel):
+    """Structured ticket information extracted from customer message."""
+
+    category: str = Field(
+        description="Issue category: 'billing', 'technical', 'account', or 'product'"
+    )
+    priority: str = Field(
+        description="Urgency level: 'low', 'medium', 'high', or 'critical'"
+    )
+    summary: str = Field(
+        description="One-sentence summary of the customer's issue"
+    )
+    customer_sentiment: str = Field(
+        description="Customer's emotional tone: 'frustrated', 'neutral', or 'satisfied'"
+    )
+```
+:::
+
+:::js
+```typescript
+import { z } from "zod";
+
+const customerSupportTicket = z.object({
+  category: z.enum(["billing", "technical", "account", "product"]).describe(
+    "Issue category"
+  ),
+  priority: z.enum(["low", "medium", "high", "critical"]).describe(
+    "Urgency level"
+  ),
+  summary: z.string().describe(
+    "One-sentence summary of the customer's issue"
+  ),
+  customerSentiment: z.enum(["frustrated", "neutral", "satisfied"]).describe(
+    "Customer's emotional tone"
+  ),
+}).describe("Structured ticket information extracted from customer message");
+```
+:::
+
+#### 选择格式
+
+动态响应格式选择根据用户偏好、对话阶段或角色调整模式——在早期返回简单格式，随着复杂性增加返回详细格式。
+
+<Tabs>
+  <Tab title="状态">
+    根据对话状态配置结构化输出：
+
+    :::python
+    @agent.state_provider
+    def get_conversation_state() -> ConversationState:
+        """Determine appropriate output format based on conversation progression."""
+        if self.turn_count <= 2:
+            return ConversationState.INITIAL
+        elif self.turn_count <= 5:
+            return ConversationState.EXPLORING
+        else:
+            return ConversationState.COMPLEX
+
+    @agent.output_formatter
+    def format_for_state(state: ConversationState, data: dict) -> str:
+        """Apply format complexity matching conversation state."""
+        schemas = {
+            ConversationState.INITIAL: minimal_schema,
+            ConversationState.EXPLORING: standard_schema,
+            ConversationState.COMPLEX: comprehensive_schema,
+        }
+        return render_with_schema(data, schemas[state])</Tab>
+</Tabs>
+
+The `state_provider` returns the conversation's current complexity level, while `output_formatter` maps that state to an appropriate schema.
+
+    ```python
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from pydantic import BaseModel, Field
+    from typing import Callable
+
+    class SimpleResponse(BaseModel):
+        """Simple response for early conversation."""
+        answer: str = Field(description="A brief answer")
+
+    class DetailedResponse(BaseModel):
+        """Detailed response for established conversation."""
+        answer: str = Field(description="A detailed answer")
+        reasoning: str = Field(description="Explanation of reasoning")
+        confidence: float = Field(description="Confidence score 0-1")
+
+    @wrap_model_call
+    def state_based_output(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Select output format based on State."""
+        # request.messages is a shortcut for request.state["messages"]
+        message_count = len(request.messages)  # [!code highlight]
+
+        if message_count < 3:
+            # Early conversation - use simple format
+            request = request.override(response_format=SimpleResponse)  # [!code highlight]
+        else:
+            # Established conversation - use detailed format
+            request = request.override(response_format=DetailedResponse)  # [!code highlight]
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[state_based_output]
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import { createMiddleware } from "langchain";
+    import { z } from "zod";
+
+    const simpleResponse = z.object({
+      answer: z.string().describe("A brief answer"),
+    });
+
+    const detailedResponse = z.object({
+      answer: z.string().describe("A detailed answer"),
+      reasoning: z.string().describe("Explanation of reasoning"),
+      confidence: z.number().describe("Confidence score 0-1"),
+    });
+
+    const stateBasedOutput = createMiddleware({
+      name: "StateBasedOutput",
+      wrapModelCall: (request, handler) => {
+        // request.state is a shortcut for request.state.messages
+        const messageCount = request.messages.length;  // [!code highlight]
+
+        let responseFormat;
+        if (messageCount < 3) {
+          // Early conversation - use simple format
+          responseFormat = simpleResponse; // [!code highlight]
+        } else {
+          // Established conversation - use detailed format
+          responseFormat = detailedResponse; // [!code highlight]
+        }
+
+        return handler({ ...request, responseFormat });
+      },
+    });
+    ```
+:::
+  </Tab>
+
+  <Tab title="商店">
+    根据商店中的用户偏好配置输出格式：
+
+    :::python
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from pydantic import BaseModel, Field
+    from typing import Callable
+    from langgraph.store.memory import InMemoryStore
+
+    @dataclass
+    class Context:
+        user_id: str
+
+    class VerboseResponse(BaseModel):
+        """Verbose response with details."""
+        answer: str = Field(description="Detailed answer")
+        sources: list[str] = Field(description="Sources used")
+
+    class ConciseResponse(BaseModel):
+        """Concise response."""
+        answer: str = Field(description="Brief answer")
+
+    @wrap_model_call
+    def store_based_output(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Select output format based on Store preferences."""
+        user_id = request.runtime.context.user_id
+
+        # Read from Store: get user's preferred response style
+        store = request.runtime.store
+        user_prefs = store.get(("preferences",), user_id)
+
+        if user_prefs:
+            style = user_prefs.value.get("response_style", "concise")
+            if style == "verbose":
+                request = request.override(response_format=VerboseResponse)
+            else:
+                request = request.override(response_format=ConciseResponse)
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[store_based_output],
+        context_schema=Context,
+        store=InMemoryStore()
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { createMiddleware } from "langchain";
+
+    const contextSchema = z.object({
+      userId: z.string(),
+    });
+
+    const verboseResponse = z.object({
+      answer: z.string().describe("Detailed answer"),
+      sources: z.array(z.string()).describe("Sources used"),
+    });
+
+    const conciseResponse = z.object({
+      answer: z.string().describe("Brief answer"),
+    });
+
+    const storeBasedOutput = createMiddleware({
+      name: "StoreBasedOutput",
+      wrapModelCall: async (request, handler) => {
+        const userId = request.runtime.context.userId;  // [!code highlight]
+
+        // Read from Store: get user's preferred response style
+        const store = request.runtime.store;  // [!code highlight]
+        const userPrefs = await store.get(["preferences"], userId);  // [!code highlight]
+
+        const style = userPrefs?.value?.responseStyle || "concise";
+        const responseFormat =
+          style === "verbose" ? verboseResponse : conciseResponse;  // [!code highlight]
+
+        return handler({
+          ...request,
+          responseFormat,
+        });
+      },
+    });
+    ```
+:::
+  </Tab>
+
+  <Tab title="运行时上下文">
+    根据运行时上下文（如用户角色或环境）配置输出格式：
+
+    :::python
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse
+    from pydantic import BaseModel, Field
+    from typing import Callable
+
+    @dataclass
+    class Context:
+        user_role: str
+        environment: str
+
+    class AdminResponse(BaseModel):
+        """Response with technical details for admins."""
+        answer: str = Field(description="Answer")
+        debug_info: dict = Field(description="Debug information")
+        system_status: str = Field(description="System status")
+
+    class UserResponse(BaseModel):
+        """Simple response for regular users."""
+        answer: str = Field(description="Answer")
+
+    @wrap_model_call
+    def context_based_output(
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], ModelResponse]
+    ) -> ModelResponse:
+        """Select output format based on Runtime Context."""
+        # Read from Runtime Context: user role and environment
+        user_role = request.runtime.context.user_role
+        environment = request.runtime.context.environment
+
+        if user_role == "admin" and environment == "production":
+            # Admins in production get detailed output
+            request = request.override(response_format=AdminResponse)
+        else:
+            # Regular users get simple output
+            request = request.override(response_format=UserResponse)
+
+        return handler(request)
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[...],
+        middleware=[context_based_output],
+        context_schema=Context
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { createMiddleware } from "langchain";
+
+    const contextSchema = z.object({
+      userRole: z.string(),
+      environment: z.string(),
+    });
+
+    const adminResponse = z.object({
+      answer: z.string().describe("Answer"),
+      debugInfo: z.record(z.any()).describe("Debug information"),
+      systemStatus: z.string().describe("System status"),
+    });
+
+    const userResponse = z.object({
+      answer: z.string().describe("Answer"),
+    });
+
+    const contextBasedOutput = createMiddleware({
+      name: "ContextBasedOutput",
+      wrapModelCall: (request, handler) => {
+        // Read from Runtime Context: user role and environment
+        const userRole = request.runtime.context.userRole;  // [!code highlight]
+        const environment = request.runtime.context.environment;  // [!code highlight]
+
+        let responseFormat;
+        if (userRole === "admin" && environment === "production") {
+          responseFormat = adminResponse;  // [!code highlight]
+        } else {
+          responseFormat = userResponse;  // [!code highlight]
+        }
+
+        return handler({ ...request, responseFormat });
+      },
+    });
+    ```
+:::
+  </Tab>
+</Tabs>
+
+## 工具上下文
+
+工具的特殊之处在于它们既读取也写入上下文。
+
+在最基本的情况下，当工具执行时，它接收 LLM 的请求参数并返回工具消息。工具完成其工作并产生结果。
+
+工具还可以为模型获取重要信息，使其能够执行和完成任务。
+
+### 读取
+
+大多数实际工具需要的不仅仅是 LLM 的参数。它们需要用于数据库查询的用户 ID、用于外部服务的 API 密钥，或当前的会话状态来做出决策。工具从状态、存储和运行时上下文读取以访问此信息。
+
+<Tabs>
+  <Tab title="状态">
+    从状态读取以检查当前会话信息：
+
+    :::python
+
+</fragment>
+
+    ```python
+    from langchain.tools import tool, ToolRuntime
+    from langchain.agents import create_agent
+
+    @tool
+    def check_authentication(
+        runtime: ToolRuntime
+    ) -> str:
+        """Check if user is authenticated."""
+        # Read from State: check current auth status
+        current_state = runtime.state
+        is_authenticated = current_state.get("authenticated", False)
+
+        if is_authenticated:
+            return "User is authenticated"
+        else:
+            return "User is not authenticated"
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[check_authentication]
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { createAgent, tool, type ToolRuntime } from "langchain";
+
+    const checkAuthentication = tool(
+      async (_, runtime: ToolRuntime) => {
+        // Read from State: check current auth status
+        const currentState = runtime.state;
+        const isAuthenticated = currentState.authenticated || false;
+
+        if (isAuthenticated) {
+          return "User is authenticated";
+        } else {
+          return "User is not authenticated";
+        }
+      },
+      {
+        name: "check_authentication",
+        description: "Check if user is authenticated",
+        schema: z.object({}),
+      }
+    );
+    ```
+:::
+  </Tab>
+
+  <Tab title="Store">
+    从 Store 读取数据以访问持久化的用户偏好设置：
+
+    :::python
+
+</fragment>
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.tools import tool, ToolRuntime
+    from langchain.agents import create_agent
+    from langgraph.store.memory import InMemoryStore
+
+    @dataclass
+    class Context:
+        user_id: str
+
+    @tool
+    def get_preference(
+        preference_key: str,
+        runtime: ToolRuntime[Context]
+    ) -> str:
+        """Get user preference from Store."""
+        user_id = runtime.context.user_id
+
+        # Read from Store: get existing preferences
+        store = runtime.store
+        existing_prefs = store.get(("preferences",), user_id)
+
+        if existing_prefs:
+            value = existing_prefs.value.get(preference_key)
+            return f"{preference_key}: {value}" if value else f"No preference set for {preference_key}"
+        else:
+            return "No preferences found"
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[get_preference],
+        context_schema=Context,
+        store=InMemoryStore()
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { createAgent, tool, type ToolRuntime } from "langchain";
+
+    const contextSchema = z.object({
+      userId: z.string(),
+    });
+
+    const getPreference = tool(
+      async ({ preferenceKey }, runtime: ToolRuntime) => {
+        const userId = runtime.context.userId;
+
+        // Read from Store: get existing preferences
+        const store = runtime.store;
+        const existingPrefs = await store.get(["preferences"], userId);
+
+        if (existingPrefs) {
+          const value = existingPrefs.value?.[preferenceKey];
+          return value ? `${preferenceKey}: ${value}` : `No preference set for ${preferenceKey}`;
+        } else {
+          return "No preferences found";
+        }
+      },
+      {
+        name: "get_preference",
+        description: "Get user preference from Store",
+        schema: z.object({
+          preferenceKey: z.string(),
+        }),
+      }
+    );
+    ```
+:::
+  </Tab>
+
+  <Tab title="Runtime Context">
+    从 Runtime Context 读取配置，如 API keys 和 user IDs：
+
+    :::python
+
+</Tab>
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.tools import tool, ToolRuntime
+    from langchain.agents import create_agent
+
+    @dataclass
+    class Context:
+        user_id: str
+        api_key: str
+        db_connection: str
+
+    @tool
+    def fetch_user_data(
+        query: str,
+        runtime: ToolRuntime[Context]
+    ) -> str:
+        """Fetch data using Runtime Context configuration."""
+        # Read from Runtime Context: get API key and DB connection
+        user_id = runtime.context.user_id
+        api_key = runtime.context.api_key
+        db_connection = runtime.context.db_connection
+
+        # Use configuration to fetch data
+        results = perform_database_query(db_connection, query, api_key)
+
+        return f"Found {len(results)} results for user {user_id}"
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[fetch_user_data],
+        context_schema=Context
+    )
+
+    # Invoke with runtime context
+    result = agent.invoke(
+        {"messages": [{"role": "user", "content": "Get my data"}]},
+        context=Context(
+            user_id="user_123",
+            api_key="sk-...",
+            db_connection="postgresql://..."
+        )
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { tool } from "@langchain/core/tools";
+    import { createAgent } from "langchain";
+
+    const contextSchema = z.object({
+      userId: z.string(),
+      apiKey: z.string(),
+      dbConnection: z.string(),
+    });
+
+    const fetchUserData = tool(
+      async ({ query }, runtime: ToolRuntime<any, typeof contextSchema>) => {
+        // Read from Runtime Context: get API key and DB connection
+        const { userId, apiKey, dbConnection } = runtime.context;
+
+        // Use configuration to fetch data
+        const results = await performDatabaseQuery(dbConnection, query, apiKey);
+
+        return `Found ${results.length} results for user ${userId}`;
+      },
+      {
+        name: "fetch_user_data",
+        description: "Fetch data using Runtime Context configuration",
+        schema: z.object({
+          query: z.string(),
+        }),
+      }
+    );
+
+    const agent = createAgent({
+      model: "gpt-5.5",
+      tools: [fetchUserData],
+      contextSchema,
+    });
+    ```
+<fragment>
+    :::
+  </Tab>
+</Tabs>
+
+### 写入
+
+工具结果可用于帮助代理完成给定任务。工具既可以将结果直接返回给模型，也可以更新代理的记忆，使重要上下文对未来步骤可用。
+
+<Tabs>
+  <Tab title="State">
+    写入 State 以使用 Command 跟踪会话特定信息：
+
+    :::python
+
+</fragment>
+
+    ```python
+    from langchain.tools import tool, ToolRuntime
+    from langchain.agents import create_agent
+    from langgraph.types import Command
+
+    @tool
+    def authenticate_user(
+        password: str,
+        runtime: ToolRuntime
+    ) -> Command:
+        """Authenticate user and update State."""
+        # Perform authentication (simplified)
+        if password == "correct":
+            # Write to State: mark as authenticated using Command
+            return Command(
+                update={"authenticated": True},
+            )
+        else:
+            return Command(update={"authenticated": False})
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[authenticate_user]
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { tool } from "@langchain/core/tools";
+    import { createAgent } from "langchain";
+    import { Command } from "@langchain/langgraph";
+
+    const authenticateUser = tool(
+      async ({ password }) => {
+        // Perform authentication
+        if (password === "correct") {
+          // Write to State: mark as authenticated using Command
+          return new Command({
+            update: { authenticated: true },
+          });
+        } else {
+          return new Command({ update: { authenticated: false } });
+        }
+      },
+      {
+        name: "authenticate_user",
+        description: "Authenticate user and update State",
+        schema: z.object({
+          password: z.string(),
+        }),
+      }
+    );
+    ```
+:::
+  </Tab>
+
+  <Tab title="Store">
+    写入 Store 以跨会话持久化数据：
+
+    :::python
+
+    ```python
+    from dataclasses import dataclass
+    from langchain.tools import tool, ToolRuntime
+    from langchain.agents import create_agent
+    from langgraph.store.memory import InMemoryStore
+
+    @dataclass
+    class Context:
+        user_id: str
+
+    @tool
+    def save_preference(
+        preference_key: str,
+        preference_value: str,
+        runtime: ToolRuntime[Context]
+    ) -> str:
+        """Save user preference to Store."""
+        user_id = runtime.context.user_id
+
+        # Read existing preferences
+        store = runtime.store
+        existing_prefs = store.get(("preferences",), user_id)
+
+        # Merge with new preference
+        prefs = existing_prefs.value if existing_prefs else {}
+        prefs[preference_key] = preference_value
+
+        # Write to Store: save updated preferences
+        store.put(("preferences",), user_id, prefs)
+
+        return f"Saved preference: {preference_key} = {preference_value}"
+
+    agent = create_agent(
+        model="gpt-5.5",
+        tools=[save_preference],
+        context_schema=Context,
+        store=InMemoryStore()
+    )
+    ```
+    :::
+
+    :::js
+
+    ```typescript
+    import * as z from "zod";
+    import { createAgent, tool, type ToolRuntime } from "langchain";
+
+    const savePreference = tool(
+      async ({ preferenceKey, preferenceValue }, runtime: ToolRuntime<any, typeof contextSchema>) => {
+        const userId = runtime.context.userId;
+
+        // Read existing preferences
+        const store = runtime.store;
+        const existingPrefs = await store.get(["preferences"], userId);
+
+        // Merge with new preference
+        const prefs = existingPrefs?.value || {};
+        prefs[preferenceKey] = preferenceValue;
+
+        // Write to Store: save updated preferences
+        await store.put(["preferences"], userId, prefs);
+
+        return `Saved preference: ${preferenceKey} = ${preferenceValue}`;
+      },
+      {
+        name: "save_preference",
+        description: "Save user preference to Store",
+        schema: z.object({
+          preferenceKey: z.string(),
+          preferenceValue: z.string(),
+        }),
+      }
+    );
+    ```
+:::
+  </Tab>
+</Tabs>
+
+有关在工具中访问状态、存储和运行时上下文的完整示例，请参阅[工具](/oss/langchain/tools)。
+
+## 生命周期上下文
+
+控制核心代理步骤**之间**发生的事情——拦截数据流以实现跨领域关注点，如摘要生成、护栏和日志记录。
+
+正如您在[模型上下文](#model-context)和[工具上下文](#tool-context)中所见，[中间件](/oss/langchain/middleware)是使上下文工程变得实用的机制。中间件允许您挂钩到代理生命周期的任何步骤，并可以：
+
+1. **更新上下文** - 修改状态和存储以保留更改、更新对话历史或保存洞察
+2. **跳入生命周期** - 根据上下文移动到代理循环中的不同步骤（例如，如果满足条件则跳过工具执行，使用修改后的上下文重复模型调用）
+
+<div style={{ display: "flex", justifyContent: "center" }}>
+  <img
+    src="/oss/images/middleware_final.png"
+    alt="代理循环中的中间件钩子"
+    className="rounded-lg"
+  />
+</div>
+
+### 示例：摘要生成
+
+最常见的生命周期模式之一是当对话历史过长时自动压缩对话历史。与[模型上下文](#messages)中所示的临时消息修剪不同，摘要生成**持久更新状态**——用摘要永久替换旧消息，该摘要会被保存以供所有未来轮次使用。
+
+LangChain 为此提供了内置中间件：
+
+:::python
+```python
+from langchain.agents import create_agent
+from langchain.agents.middleware import SummarizationMiddleware
+
+agent = create_agent(
+    model="gpt-5.5",
+    tools=[...],
+    middleware=[
+        SummarizationMiddleware(
+            model="gpt-5.4-mini",
+            trigger={"tokens": 4000},
+            keep={"messages": 20},
+        ),
+    ],
+)
+```
+:::
+
+:::js
+```typescript
+import { createAgent, summarizationMiddleware } from "langchain";
+
+const agent = createAgent({
+  model: "gpt-5.5",
+  tools: [...],
+  middleware: [
+    summarizationMiddleware({
+      model: "gpt-5.4-mini",
+      trigger: { tokens: 4000 },
+      keep: { messages: 20 },
+    }),
+  ],
+});
+```
+当对话超出 token 限制时，`SummarizationMiddleware` 会自动：
+
+1. 使用单独的 LLM 调用来总结较早的消息
+2. 用摘要消息替换它们（在 State 中永久替换）
+3. 保持最近的消息完整以保留上下文
+
+总结后的对话历史会被永久更新——后续轮次将看到摘要而非原始消息。
+
+<Note>
+有关内置中间件的完整列表、可用的钩子以及如何创建自定义中间件，请参阅[中间件文档](/oss/langchain/middleware)。
+</Note>
+
+## 最佳实践
+
+1. **从简单开始** - 从静态提示词和工具开始，仅在需要时才添加动态内容
+2. **增量测试** - 每次添加一个上下文工程功能
+3. **监控性能** - 跟踪模型调用、token 使用量和延迟
+4. **使用内置中间件** - 利用 [`SummarizationMiddleware`](/oss/langchain/middleware#summarization)、[`LLMToolSelectorMiddleware`](/oss/langchain/middleware#llm-tool-selector) 等
+5. **记录你的上下文策略** - 明确说明传递了哪些上下文以及原因
+6. **理解瞬态与持久化的区别**：模型上下文变更是瞬态的（每次调用），而生命周期上下文变更会持久化到 state
+
+## 相关资源
+
+- [上下文概念概述](/oss/concepts/context) - 了解上下文类型及适用场景
+- [中间件](/oss/langchain/middleware) - 完整中间件指南
+- [工具](/oss/langchain/tools) - 工具创建和上下文访问
+- [内存](/oss/concepts/memory) - 短期和长期内存模式
+- [代理](/oss/langchain/agents) - 核心代理概念

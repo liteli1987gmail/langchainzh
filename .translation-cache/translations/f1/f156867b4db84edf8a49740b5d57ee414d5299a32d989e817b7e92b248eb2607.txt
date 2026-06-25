@@ -1,0 +1,104 @@
+---
+title: "AIMlAPIEmbeddings 集成"
+description: "使用 LangChain Python 与 AIMlAPIEmbeddings 嵌入模型集成。"
+---
+
+本指南帮助你开始使用 LangChain 的 AI/ML API 嵌入模型。
+
+## 概览
+
+### 集成详情
+
+| 类 | 包 | 本地 | JS 支持 | 下载量 | 版本 |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| `AIMLAPIEmbeddings` | [`langchain-aimlapi`](https://reference.langchain.com/python/langchain-aimlapi) | ❌ | ❌ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-aimlapi?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-aimlapi?style=flat-square&label=%20) |
+
+## 设置
+
+要访问 AI/ML API 嵌入模型，你需要创建一个账户、获取 API 密钥，并安装 `langchain-aimlapi` 集成包。
+
+### 凭据
+
+前往 [aimlapi.com](https://aimlapi.com/app/?utm_source=langchain&utm_medium=github&utm_campaign=integration) 注册并生成 API 密钥。完成后，设置 `AIMLAPI_API_KEY` 环境变量：
+
+```python
+import getpass
+import os
+
+if not os.getenv("AIMLAPI_API_KEY"):
+    os.environ["AIMLAPI_API_KEY"] = getpass.getpass("Enter your AI/ML API key: ")
+```
+
+要启用对模型调用的自动追踪，请设置您的 [LangSmith](/langsmith/observability) API 密钥：
+
+```python
+os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
+os.environ["LANGSMITH_TRACING"] = "true"
+```
+
+### 安装
+
+LangChain AI/ML API 集成位于 `langchain-aimlapi` 包中：
+
+```python
+pip install -qU langchain-aimlapi
+```
+
+## 实例化
+
+现在我们可以实例化我们的嵌入模型并执行嵌入操作：
+
+```python
+from langchain_aimlapi import AIMLAPIEmbeddings
+
+embeddings = AIMLAPIEmbeddings(
+    model="text-embedding-ada-002",
+)
+```
+
+## 索引与检索
+
+嵌入模型通常用于检索增强生成（RAG）流程中。以下是如何使用我们上面初始化的 `embeddings` 对象和 `InMemoryVectorStore` 来索引和检索数据。
+
+```python
+from langchain_core.vectorstores import InMemoryVectorStore
+
+text = "LangChain is the framework for building context-aware reasoning applications"
+
+vectorstore = InMemoryVectorStore.from_texts(
+    [text],
+    embedding=embeddings,
+)
+
+retriever = vectorstore.as_retriever()
+
+retrieved_documents = retriever.invoke("What is LangChain?")
+retrieved_documents[0].page_content
+```
+
+```text
+'LangChain is the framework for building context-aware reasoning applications'
+```
+
+## 直接使用
+
+您可以直接调用 `embed_query` 和 `embed_documents` 来实现自定义嵌入场景。
+
+### 嵌入单个文本
+
+```python
+single_vector = embeddings.embed_query(text)
+print(str(single_vector)[:100])
+```
+
+### 嵌入多个文本
+
+```python
+text2 = "LangGraph is a library for building stateful, multi-actor applications with LLMs"
+
+vectors = embeddings.embed_documents([text, text2])
+for vector in vectors:
+    print(str(vector)[:100])
+```
+
+---

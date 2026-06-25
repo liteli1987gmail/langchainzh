@@ -1,0 +1,401 @@
+---
+title: 使用 LangSmith 和 Vite 部署
+sidebarTitle: LangSmith + Vite
+description: 将 LangChain 深度代理部署到 LangSmith Deployment，并从 Vercel、Netlify 或 Cloudflare Pages 上的 Vite React 聊天 UI 进行流式传输。
+---
+
+此示例帮助你从一个本地检出的项目，部署一个带有可工作聊天 UI 的 LangChain 深度代理。后端作为 [LangSmith Deployment](/langsmith/deployment) 运行，前端是一个 Vite + React 应用，从中获取流式数据。
+
+当你想要在本地运行代理、将其部署到 LangSmith，并让 UI 指向已部署的 Agent Server 时，请使用本指南。
+
+源代码：[`js-langsmith`](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-langsmith) 部署 Cookbook 中的源代码。
+
+## 部署内容
+
+**LangSmith Deployment** 在 LangSmith 托管的 Agent Server 上运行一个 LangGraph 图。在此示例中：
+
+- `agent/` 包含深度代理图、子代理、中间件和工具。
+- `langgraph.json` 告诉 LangGraph CLI 要提供和部署哪个图。
+- `src/` 包含 React 聊天 UI。
+- UI 通过 LangGraph SDK 和 `@langchain/react` 与 Agent Server API 进行通信。
+
+已部署的代理是一个包含两个子代理的协调器：
+
+- `researcher` 使用本地 `search_web` 工具。
+- `math-whiz` 使用本地 `calculator` 工具。
+
+### 各部分如何配合
+
+```mermaid
+%%{init: {"themeVariables": {"lineColor": "#40668D", "primaryColor": "#E5F4FF", "primaryTextColor": "#030710", "primaryBorderColor": "#006DDD"}}}%%
+flowchart LR
+  A["agent/<br/>createDeepAgent graph"] -->|"pnpm run deploy"| B["LangSmith Deployment<br/>Agent Server"]
+  C["React chat UI<br/>src/"] -->|"LangGraph SDK<br/>threads + streaming"| B
+
+  classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+  classDef output fill:#EBD0F0,stroke:#885270,stroke-width:2px,color:#441E33
+  class A,C process
+  class B output
+```
+
+在本地开发期间，`pnpm run dev` 会同时启动 LangGraph 开发服务器和 Vite 应用。在生产环境中，LangSmith 托管代理，一个静态主机服务 Vite 构建的 UI。
+
+### 前置要求
+
+- 一个具有部署访问权限的 [LangSmith API 密钥](/langsmith/create-account-api-key)。
+- 用于代理模型的 OpenAI API 密钥。
+- `pnpm`。
+
+## 本地运行
+
+<Steps>
+
+<Step title="安装依赖">
+
+
+</Step>
+
+```bash
+cd js-langsmith
+pnpm install
+```
+
+</Step>
+
+<Step title="创建您的环境文件">
+
+```bash
+cp .env.example .env
+```
+
+打开 `.env` 并设置：
+
+```bash
+OPENAI_API_KEY=<your OpenAI API key>
+```
+
+<Step>
+
+在本地开发时，请将 `LANGSMITH_API_KEY` 和 `VITE_AGENT_API_URL` 保留为空。仅在针对远程 LangSmith 部署进行部署或测试 UI 时，才需要 `LANGSMITH_API_KEY`。
+
+</Step>
+
+<Step title="启动 Agent 和 UI">
+
+</Step>
+
+```bash
+pnpm run dev
+```
+
+</Step>
+
+<Step title="打开聊天">
+
+这将同时启动两个进程：
+
+- LangGraph 开发服务器位于 [http://localhost:2024](http://localhost:2024)。
+- Vite 开发服务器位于 [http://localhost:5173](http://localhost:5173)。
+
+</Step>
+
+<Step title="打开聊天">
+
+打开 [http://localhost:5173](http://localhost:5173)。尝试一个同时使用两个子代理的提示词：
+
+```text
+Research LangGraph streaming, and separately calculate 42 * 17.
+```
+
+当 `VITE_AGENT_API_URL` 为空时，Vite 应用使用其本地代理 `/api/langgraph`，该代理将请求转发到 LangGraph 开发服务器并避免 CORS 问题。
+
+</Step>
+
+</Steps>
+
+## 将 agent 部署到 LangSmith
+
+<Steps>
+
+<Step title="确认您的环境">
+
+您的 `.env` 必须包含：
+
+```bash
+OPENAI_API_KEY=<your OpenAI API key>
+LANGSMITH_API_KEY=<your LangSmith API key>
+```
+
+可选项：设置部署名称：
+
+```bash
+LANGSMITH_DEPLOYMENT_NAME=deployment-cookbook-agent
+```
+
+</Step>
+
+<Step title="将代理部署到 LangSmith">
+
+</Step>
+
+```bash
+pnpm run deploy
+```
+
+<Step title="Copy the deployment API URL">
+
+After deploy, open the deployment in LangSmith and copy its **API URL**. It should look like:
+
+</Step>
+
+```text
+https://your-app.us.langgraph.app/
+```
+
+<Step title="针对远程部署测试 UI">
+
+在 `.env` 中设置 `VITE_AGENT_API_URL`：
+
+</Step>
+
+<Step title="仅使用根 URL。请勿添加任何 API 路径后缀">
+
+</fragment>
+
+```bash
+VITE_AGENT_API_URL=https://your-app.us.langgraph.app
+```
+
+然后运行 UI：
+
+```bash
+pnpm run dev
+```
+
+浏览器客户端在与远程部署通信时会重用 `LANGSMITH_API_KEY`。
+
+<Warning>
+此演示将 `LANGSMITH_API_KEY` 暴露给浏览器包，以便 UI 可以直接调用 LangSmith 部署。这对于本地测试很方便，但对于生产环境不安全。对于实际应用，请通过您自己的后端代理请求，并将密钥保留在服务端。
+</Warning>
+
+</Step>
+
+</Steps>
+
+## 部署前端
+
+代理和 UI 单独部署。`pnpm run deploy` 成功后，将 Vite 构建产物（`dist/`）托管在任何静态平台上，并将其指向您的 LangSmith 部署 URL。
+
+<Tabs>
+
+<Tab title="Vercel">
+
+<Steps>
+
+<Step title="导入仓库">
+
+点击下方的 **Deploy with Vercel**，或手动导入 [`langchain-ai/deployment-cookbook`](https://github.com/langchain-ai/deployment-cookbook)。
+
+<a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flangchain-ai%2Fdeployment-cookbook&root-directory=js-langsmith&env=VITE_AGENT_API_URL,LANGSMITH_API_KEY&envDescription=LangSmith%20deployment%20URL%20and%20API%20key" target="_blank" rel="noopener noreferrer">
+  <img src="https://vercel.com/button" alt="Deploy with Vercel" />
+</a>
+
+</Step>
+
+<Step title="配置项目">
+
+1. 将**根目录**设置为 `js-langsmith`。
+2. 使用默认的 Vite 构建。构建输出为 `dist/`。
+3. 设置以下环境变量：
+   - `VITE_AGENT_API_URL`：LangSmith 部署根 URL。
+   - `LANGSMITH_API_KEY`：演示客户端使用的 LangSmith API 密钥。
+
+</Step>
+
+</Steps>
+
+</Tab>
+
+<Tab title="Netlify">
+
+<Steps>
+
+<Step title="导入仓库">
+
+点击下方的 **Deploy to Netlify**，或手动导入 [`langchain-ai/deployment-cookbook`](https://github.com/langchain-ai/deployment-cookbook)。
+
+<a href="https://app.netlify.com/start/deploy?repository=https://github.com/langchain-ai/deployment-cookbook&base=js-langsmith" target="_blank" rel="noopener noreferrer">
+  <img src="https://www.netlify.com/img/deploy/button.svg" alt="Deploy to Netlify" />
+</a>
+
+</Step>
+
+<Step title="配置项目">
+
+将**基础目录**设置为 `js-langsmith`。使用默认构建命令（`pnpm build` 或 `npm run build`）和发布目录 `dist/`。
+
+</Step>
+
+<Step title="设置环境变量">
+
+在 Netlify 上部署前添加以下变量：
+
+- `VITE_AGENT_API_URL`：LangSmith 部署根 URL。
+- `LANGSMITH_API_KEY`：演示客户端使用的 LangSmith API 密钥。
+
+</Step>
+
+</Steps>
+
+</Tab>
+
+<Tab title="Cloudflare Pages">
+
+<Steps>
+
+<Step title="连接仓库">
+
+在 [Cloudflare 仪表板](https://dash.cloudflare.com/)中，从 [`langchain-ai/deployment-cookbook`](https://github.com/langchain-ai/deployment-cookbook) 创建 **Workers & Pages** 项目。
+
+</Step>
+
+<Step title="配置构建">
+
+- **根目录**：`js-langsmith`
+- **构建命令**：`pnpm install && pnpm build`
+- **构建输出目录**：`dist`
+
+</Step>
+
+<Step title="设置环境变量">
+
+在 Pages 项目设置中添加以下变量：
+
+- `VITE_AGENT_API_URL`：LangSmith 部署根 URL。
+- `LANGSMITH_API_KEY`：演示客户端使用的 LangSmith API 密钥。
+
+</Step>
+
+</Steps>
+
+</Tab>
+
+</Tabs>
+
+## 故障排除
+
+- `pnpm run dev` 启动但 UI 无法连接：本地开发时将 `VITE_AGENT_API_URL` 留空，然后重启 `pnpm run dev`。
+- 代理在本地无法回答：确认 `.env` 中设置了 `OPENAI_API_KEY`。
+- `pnpm run deploy` 因认证错误失败：确认 `LANGSMITH_API_KEY` 具有部署访问权限。
+- 远程 UI 无法连接：确认 `VITE_AGENT_API_URL` 是部署根 URL，没有路径后缀。
+- 重启本地开发后线程消失：本地 `langgraph dev` 使用内存中的 `MemorySaver`；LangSmith 部署在生产环境中提供持久化存储。
+- 您更改了 `agent/` 中的文件但生产环境没有变化：再次运行 `pnpm run deploy`。
+
+## 了解项目
+
+<AccordionGroup>
+
+<Accordion title="代理文件">
+
+LangSmith 后端位于 `agent/` 中：
+
+```text
+agent/
+├── index.ts       # createDeepAgent graph
+├── middleware.ts  # response middleware
+└── tools.ts       # custom code tools
+```
+
+`agent/index.ts` 导出 LangGraph 本地运行的图以及 LangSmith 部署的图。本地的 `MemorySaver` 检查点仅由 `langgraph dev` 使用。LangSmith 部署在生产环境中会用 Postgres 支持的持久化存储替换它，无需更改代码。
+
+</Accordion>
+
+<Accordion title="LangGraph 配置">
+
+`langgraph.json` 将 CLI 指向该图：
+
+</fragment>
+
+```json
+{
+  "graphs": {
+    "agent": "./agent/index.ts:agent"
+  },
+  "env": ".env"
+}
+```
+
+<Accordion title="图表 ID">
+
+图表 ID 是 `agent`。前端在流式传输时使用该 ID 作为助手 ID。
+
+</Accordion>
+
+<Accordion title="聊天 UI">
+
+`src/` 中的 React 应用提供流式聊天、线程历史、子代理渲染和工具调用渲染。
+
+前端使用：
+
+- `client.threads.search()` 用于线程侧边栏。
+- `client.threads.create()` 和 `client.threads.delete()` 用于对话管理。
+- 带 `assistantId: "agent"` 的 `StreamProvider` 用于流式聊天。
+
+有关底层线程和流式传输 API，请参阅 [Agent Server API 参考文档](/langsmith/server-api-ref)。
+
+</Accordion>
+
+<Accordion title="本地命令">
+
+运行两个本地进程：
+
+```bash
+pnpm run dev
+```
+
+请分别运行它们：
+
+```bash
+pnpm run dev:agent
+pnpm run dev:web
+```
+
+构建并预览前端：
+
+```bash
+pnpm build
+pnpm preview
+```
+
+</Accordion>
+
+<Accordion title="CI/CD">
+
+当 `js-langsmith/agent/` 下的文件或共享配置文件发生变更时，智能体会通过 GitHub Actions 进行部署：
+
+- 工作流：[`.github/workflows/deploy-langsmith-agent.yml`](https://github.com/langchain-ai/deployment-cookbook/blob/main/.github/workflows/deploy-langsmith-agent.yml)
+- Action：`langgraphjs deploy` 到 LangSmith。
+- 必需密钥：`LANGSMITH_API_KEY`。
+- 可选变量：`LANGSMITH_DEPLOYMENT_NAME`。
+
+前端通过静态托管服务的 Git 集成进行部署（例如 Vercel、Netlify 或 Cloudflare Pages）。
+
+</Accordion>
+
+</AccordionGroup>
+
+{/* Not yet supported. */}
+{/* ## LangSmith Deployment vs. Managed Deep Agent
+
+This example is a **LangSmith Deployment**. You define the graph in code, deploy it to the LangGraph Agent Server, and stream from the standard Agent Server API.
+
+The sibling [`js-langsmith-managed`](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-langsmith-managed) example deploys the same agent as a **Managed Deep Agent**. In that version, LangChain hosts the agent runtime and you deploy declarative files like `agent.json`, `AGENTS.md`, and `subagents/`.
+
+Use this example when you want full control over graph code, middleware, custom code tools, checkpointing behavior, or the standard Agent Server API. Use `js-langsmith-managed` when you want the least infrastructure and your tools can come from MCP servers. */}
+
+## 另请参见
+
+- [框架和平台概览](/langsmith/deploy-frameworks-and-platforms)
+- [LangSmith 部署概览](/langsmith/deployment)
+- [LangGraph CLI](/langsmith/cli)
+- [深度智能体投入生产](/oss/deepagents/going-to-production)

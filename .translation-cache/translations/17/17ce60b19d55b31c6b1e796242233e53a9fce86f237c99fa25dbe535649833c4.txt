@@ -1,0 +1,170 @@
+---
+title: "YDB 集成"
+description: "使用 LangChain JavaScript 与 YDBVectorStore 向量存储集成。"
+---
+
+> [YDB](https://ydb.tech/) 是一个多功能的开源分布式 SQL 数据库，它将高可用性和可扩展性与强一致性和 ACID 事务相结合。它同时支持事务性 (OLTP)、分析性 (OLAP) 和流式工作负载。
+
+本指南提供快速入门 `YDBVectorStore` [向量存储](/oss/integrations/vectorstores) 的概述。有关所有功能和配置的详细文档，请参阅 [YDB LangChain.js 指南](https://ydb.js.org/guide/langchain/)。
+
+## 设置
+
+使用 Docker 设置本地 YDB 实例：
+
+```bash
+docker run -d -p 2136:2136 --name ydb-langchain -e YDB_USE_IN_MEMORY_PDISKS=true -h localhost ydbplatform/local-ydb:trunk
+```
+
+安装 `@ydbjs/langchain` 和 `@langchain/core` 以使用此集成。
+
+本指南使用 [OpenAI 嵌入](/oss/integrations/embeddings/openai) 作为示例。您可以使用 [其他受支持的嵌入模型](/oss/integrations/embeddings) 代替。
+
+<CodeGroup>
+```bash npm
+npm install @ydbjs/langchain @langchain/openai @langchain/core
+```
+```bash yarn
+yarn add @ydbjs/langchain @langchain/openai @langchain/core
+```
+```bash pnpm
+pnpm add @ydbjs/langchain @langchain/openai @langchain/core
+```
+</CodeGroup>
+
+### 凭证
+
+本地 YDB 实例不需要凭证。请确保已安装上面显示的软件包。
+
+如果本指南使用 OpenAI 嵌入，请设置您的 OpenAI 密钥：
+
+```typescript
+process.env.OPENAI_API_KEY = "YOUR_API_KEY";
+```
+
+如果你想获得模型调用的自动追踪，你也可以通过取消下面的注释来设置你的 [LangSmith](/langsmith/observability) API 密钥：
+
+```typescript
+// process.env.LANGSMITH_TRACING="true"
+// process.env.LANGSMITH_API_KEY="your-api-key"
+```
+
+## 实例化
+
+要实例化向量存储，请传入一个嵌入模型和一个连接字符串。当存储创建驱动时，它还会管理其生命周期：
+
+```typescript
+import { YDBVectorStore } from "@ydbjs/langchain";
+import { OpenAIEmbeddings } from "@langchain/openai";
+
+const embeddings = new OpenAIEmbeddings({
+  model: "text-embedding-3-small",
+});
+
+await using vectorStore = new YDBVectorStore(embeddings, {
+  connectionString: "grpc://localhost:2136/local",
+});
+```
+
+`await using` 语法会在变量超出作用域时自动释放存储并关闭其驱动程序。如果你不使用 `await using`，请在完成操作后手动调用 `close()`：
+
+```typescript
+const vectorStore = new YDBVectorStore(embeddings, {
+  connectionString: "grpc://localhost:2136/local",
+});
+// ...
+vectorStore.close();
+```
+
+## 管理向量存储
+
+### 向向量存储添加内容
+
+使用 `addDocuments` 方法添加文档。未提供 ID 的文档会自动生成 UUID，已存在 ID 的文档再次插入时会替换原文档。
+
+```typescript
+import { Document } from "@langchain/core/documents";
+
+const document1 = new Document({
+  pageContent: "The powerhouse of the cell is the mitochondria",
+  metadata: { source: "https://example.com" },
+});
+
+const document2 = new Document({
+  pageContent: "Buildings are made out of brick",
+  metadata: { source: "https://example.com" },
+});
+
+const document3 = new Document({
+  pageContent: "Mitochondria are made out of lipids",
+  metadata: { source: "https://example.com" },
+});
+
+const documents = [document1, document2, document3];
+
+const ids = await vectorStore.addDocuments(documents);
+```
+
+### 从向量存储中删除项目
+
+按 ID 删除特定文档：
+
+```typescript
+await vectorStore.delete({ ids: [ids[ids.length - 1]] });
+```
+
+## 查询向量存储
+
+一旦您的向量存储创建完成并添加了相关文档，您很可能会希望在链或代理运行时对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索如下：
+
+```typescript
+const results = await vectorStore.similaritySearch("biology", 2);
+
+for (const doc of results) {
+  console.log(`* ${doc.pageContent} [${JSON.stringify(doc.metadata)}]`);
+}
+```
+
+要执行相似性搜索并获取相应的分数，请运行：
+
+```typescript
+const resultsWithScore = await vectorStore.similaritySearchWithScore("biology", 2);
+
+for (const [doc, score] of resultsWithScore) {
+  console.log(`* [SIM=${score.toFixed(3)}] ${doc.pageContent} [${JSON.stringify(doc.metadata)}]`);
+}
+```
+
+您还可以按元数据筛选结果。筛选条件以键值对的形式传递，并使用 `AND` 逻辑组合：
+
+```typescript
+const filteredResults = await vectorStore.similaritySearch("biology", 2, {
+  source: "https://example.com",
+});
+```
+
+### 通过转换为检索器进行查询
+
+您还可以将向量存储转换为[检索器](/oss/langchain/retrieval)以便在链中更轻松地使用：
+
+```typescript
+const retriever = vectorStore.asRetriever({
+  k: 2,
+});
+await retriever.invoke("biology");
+```
+
+## 用于检索增强生成
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下章节：
+
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [代理型 RAG](/oss/langgraph/agentic-rag)
+- [检索文档](/oss/langchain/retrieval)
+
+## API 参考
+
+有关 `YDBVectorStore` 所有功能和配置的详细文档，包括搜索策略、近似最近邻索引和列自定义，请参阅 [YDB LangChain.js 指南](https://ydb.js.org/guide/langchain/)。

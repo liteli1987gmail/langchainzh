@@ -1,0 +1,82 @@
+---
+title: Trace Instructor 应用
+sidebarTitle: Instructor（仅 Python）
+---
+
+LangSmith 与 [Instructor](https://python.useinstructor.com/) 提供了便捷的集成，后者是一个用于通过 LLM 生成结构化输出的热门开源库。
+
+要使用此功能，您首先需要设置您的 LangSmith API 密钥。
+
+```shell
+export LANGSMITH_API_KEY=<your-api-key>
+# For LangSmith API keys linked to multiple workspaces, set the LANGSMITH_WORKSPACE_ID environment variable to specify which workspace to use.
+export LANGSMITH_WORKSPACE_ID=<your-workspace-id>
+```
+
+接下来，你需要安装 LangSmith SDK：
+
+<CodeGroup>
+```bash pip
+pip install -U langsmith
+```
+
+```bash uv
+uv add langsmith
+```
+</CodeGroup>
+
+使用 `langsmith.wrappers.wrap_openai` 包装你的 OpenAI 客户端
+
+```python
+from openai import OpenAI
+from langsmith import wrappers
+
+client = wrappers.wrap_openai(OpenAI())
+```
+
+这之后，你可以使用 `instructor` 修补包装好的 OpenAI 客户端：
+
+```python
+import instructor
+
+client = instructor.patch(client)
+```
+
+现在，你可以像往常一样使用 `instructor`，但现在一切都记录到 LangSmith！
+
+```python
+from pydantic import BaseModel
+
+
+class UserDetail(BaseModel):
+    name: str
+    age: int
+
+
+user = client.chat.completions.create(
+    model="gpt-5.4-mini",
+    response_model=UserDetail,
+    messages=[
+        {"role": "user", "content": "Extract Jason is 25 years old"},
+    ]
+)
+```
+
+通常情况下，你在其他函数内部使用 `instructor`。
+你可以通过使用这个包装后的客户端并用 `@traceable` 装饰这些函数来获得嵌套追踪。
+有关如何使用 `@traceable` 装饰器为代码添加追踪标注的更多信息，请参阅[自定义插桩](/langsmith/annotate-code)。
+
+```python {highlight={2}}
+# You can customize the run name with the `name` keyword argument
+@traceable(name="Extract User Details")
+def my_function(text: str) -> UserDetail:
+    return client.chat.completions.create(
+        model="gpt-5.4-mini",
+        response_model=UserDetail,
+        messages=[
+            {"role": "user", "content": f"Extract {text}"},
+        ]
+    )
+
+my_function("Jason is 25 years old")
+```

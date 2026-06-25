@@ -1,0 +1,100 @@
+---
+title: 追踪生成器函数
+sidebarTitle: 追踪生成器函数
+---
+
+在大多数 LLM 应用中，您会希望流式传输输出，以最大程度地减少用户看到第一个 token 所需的时间。
+
+LangSmith 的追踪功能原生支持通过 `generator` 函数进行流式输出。下面是一个示例。
+
+<CodeGroup>
+
+
+</CodeGroup>
+
+```python Python
+from langsmith import traceable
+@traceable
+def my_generator():
+  for chunk in ["Hello", "World", "!"]:
+      yield chunk
+# Stream to the user
+for output in my_generator():
+  print(output)
+# It also works with async functions
+import asyncio
+@traceable
+async def my_async_generator():
+  for chunk in ["Hello", "World", "!"]:
+      yield chunk
+# Stream to the user
+async def main():
+  async for output in my_async_generator():
+      print(output)
+asyncio.run(main())
+```
+
+```typescript TypeScript
+import { traceable } from "langsmith/traceable";
+const myGenerator = traceable(function* () {
+  for (const chunk of ["Hello", "World", "!"]) {
+      yield chunk;
+  }
+});
+for (const output of myGenerator()) {
+  console.log(output);
+}
+```
+
+</CodeGroup>
+
+## 聚合结果[ ](#aggregate-results "Direct link to aggregate results")
+
+默认情况下，追踪函数的 `outputs` 会在 LangSmith 中聚合为一个数组。如果你想自定义存储方式（例如，将输出连接成单个字符串），可以使用 `aggregate` 选项（Python 中为 `reduce_fn`）。这对于聚合流式 LLM 输出特别有用。
+
+<Note>
+聚合输出 **仅** 影响输出的追踪表示。它不会改变函数返回的值。
+</Note>
+
+<CodeGroup>
+
+```python Python
+from langsmith import traceable
+def concatenate_strings(outputs: list):
+  return "".join(outputs)
+@traceable(reduce_fn=concatenate_strings)
+def my_generator():
+  for chunk in ["Hello", "World", "!"]:
+      yield chunk
+# Stream to the user
+for output in my_generator():
+  print(output)
+# It also works with async functions
+import asyncio
+@traceable(reduce_fn=concatenate_strings)
+async def my_async_generator():
+  for chunk in ["Hello", "World", "!"]:
+      yield chunk
+# Stream to the user
+async def main():
+  async for output in my_async_generator():
+      print(output)
+asyncio.run(main())
+```
+
+```typescript TypeScript
+import { traceable } from "langsmith/traceable";
+const concatenateStrings = (outputs: string[]) => outputs.join("");
+const myGenerator = traceable(function* () {
+  for (const chunk of ["Hello", "World", "!"]) {
+      yield chunk;
+  }
+}, { aggregator: concatenateStrings });
+for (const output of await myGenerator()) {
+  console.log(output);
+}
+```
+
+<CodeGroup>
+
+</CodeGroup>

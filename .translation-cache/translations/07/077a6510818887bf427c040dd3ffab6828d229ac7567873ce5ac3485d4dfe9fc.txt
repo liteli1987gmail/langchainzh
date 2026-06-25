@@ -1,0 +1,306 @@
+---
+title: 如何使用 RemoteGraph 与部署进行交互
+sidebarTitle: 使用 RemoteGraph 与部署进行交互
+---
+
+@[`RemoteGraph`] 是一个客户端接口，允许您像与本地图一样与您的[部署](/langsmith/deployment)进行交互。它提供与 [`CompiledGraph`](/oss/langgraph/graph-api#compiling-your-graph) 的 API 对齐，这意味着您可以在开发和生产环境中使用相同的方法（`invoke()`、`stream()`、`get_state()` 等）。本页介绍如何初始化 `RemoteGraph` 并与其进行交互。
+
+`RemoteGraph` 适用于以下场景：
+
+- 开发与部署分离：使用 `CompiledGraph` 在本地构建和测试图，将其部署到 LangSmith，然后[使用 `RemoteGraph`](#initialize-the-graph) 在生产环境中调用它，同时使用相同的 API 接口。
+- 线程级持久化：使用线程 ID 在多次调用之间[持久化和获取](#persist-state-at-the-thread-level)对话状态。
+- 子图嵌入：通过将 `RemoteGraph` 作为[子图](#use-as-a-subgraph)嵌入到另一个图中，组合模块化图以实现多代理工作流。
+- 可复用工作流：将部署的图作为节点或 @[工具][RemoteGraph.as_tool] 使用，以便复用和公开复杂逻辑。
+
+<Warning>
+**重要：避免调用同一部署**
+
+`RemoteGraph` 旨在调用其他部署上的图。请勿使用 `RemoteGraph` 调用自身或同一部署上的另一个图，因为这可能导致死锁和资源耗尽。相反，请使用本地图组合或[子图](/oss/langgraph/use-subgraphs)来处理同一部署内的图。
+</Warning>
+
+## 前置条件
+
+在开始使用 `RemoteGraph` 之前，请确保您已具备以下条件：
+
+- [LangSmith](/langsmith/observability) 的访问权限，您可以在其中开发和管理您的图。
+- 一个正在运行的 [Agent Server](/langsmith/agent-server)，它托管您的部署图以供远程交互。
+
+## 初始化图
+
+初始化 `RemoteGraph` 时，必须始终指定：
+
+- `name`：您要交互的图的名称**或**助手 ID。如果您指定图名称，将使用默认助手。如果您指定助手 ID，将使用该特定助手。图名称与您在部署的 `langgraph.json` 配置文件中使用的名称相同。
+- `api_key`：有效的 [LangSmith API 密钥](/langsmith/create-account-api-key)。您可以将其设置为环境变量（`LANGSMITH_API_KEY`）或直接在 `api_key` 参数中传递。如果 `LangGraphClient` / `SyncLangGraphClient` 在初始化时已传入 `api_key` 参数，您也可以在 `client` / `sync_client` 参数中提供 API 密钥。
+
+此外，您必须提供以下参数之一：
+
+- [`url`](#use-a-url)：您要交互的部署的 URL。如果您传入 `url` 参数，将使用提供的 URL、请求头（如果提供）和默认配置值（例如超时时间）来创建同步和异步客户端。
+- [`client`](#use-a-client)：用于与部署进行异步交互的 `LangGraphClient` 实例（例如使用 `.astream()`、`.ainvoke()`、`.aget_state()`、`.aupdate_state()`）。
+- `sync_client`：用于与部署进行同步交互的 `SyncLangGraphClient` 实例（例如使用 `.stream()`、`.invoke()`、`.get_state()`、`.update_state()`）。
+
+<Note>
+如果您同时传入 `client` 或 `sync_client` 以及 `url` 参数，则它们将优先于 `url` 参数。如果未提供任何 `client` / `sync_client` / `url` 参数，`RemoteGraph` 将在运行时抛出 `ValueError`。
+</Note>
+
+### 使用 URL
+
+<CodeGroup>
+
+```python Python
+from langgraph.pregel.remote import RemoteGraph
+
+url = "<DEPLOYMENT_URL>"
+
+# Using graph name (uses default assistant)
+graph_name = "agent"
+remote_graph = RemoteGraph(graph_name, url=url)
+
+# Using assistant ID
+assistant_id = "<ASSISTANT_ID>"
+remote_graph = RemoteGraph(assistant_id, url=url)
+```
+
+```typescript JavaScript
+import { RemoteGraph } from "@langchain/langgraph/remote";
+
+const url = "<DEPLOYMENT_URL>";
+
+// Using graph name (uses default assistant)
+const graphName = "agent";
+const remoteGraph = new RemoteGraph({ graphId: graphName, url });
+
+// Using assistant ID
+const assistantId = "<ASSISTANT_ID>";
+const remoteGraph = new RemoteGraph({ graphId: assistantId, url });
+```
+
+</CodeGroup>
+
+### 使用客户端
+
+<CodeGroup>
+
+```python Python
+from langgraph_sdk import get_client, get_sync_client
+from langgraph.pregel.remote import RemoteGraph
+
+url = "<DEPLOYMENT_URL>"
+client = get_client(url=url)
+sync_client = get_sync_client(url=url)
+
+# Using graph name (uses default assistant)
+graph_name = "agent"
+remote_graph = RemoteGraph(graph_name, client=client, sync_client=sync_client)
+
+# Using assistant ID
+assistant_id = "<ASSISTANT_ID>"
+remote_graph = RemoteGraph(assistant_id, client=client, sync_client=sync_client)
+```
+
+```typescript JavaScript
+import { Client } from "@langchain/langgraph-sdk";
+import { RemoteGraph } from "@langchain/langgraph/remote";
+
+const client = new Client({ apiUrl: "<DEPLOYMENT_URL>" });
+
+// Using graph name (uses default assistant)
+const graphName = "agent";
+const remoteGraph = new RemoteGraph({ graphId: graphName, client });
+
+// Using assistant ID
+const assistantId = "<ASSISTANT_ID>";
+const remoteGraph = new RemoteGraph({ graphId: assistantId, client });
+```
+
+</CodeGroup>
+
+## 调用图
+
+`RemoteGraph` 实现了与 `CompiledGraph` 相同的 Runnable 接口，因此你可以像使用编译后的图一样使用它。它支持完整的标准方法集，包括 `.invoke()`、`.stream()`、`.get_state()` 和 `.update_state()`，以及它们的异步变体。
+
+### 异步调用
+
+<Note>
+要异步使用图，在初始化 `RemoteGraph` 时必须提供 `url` 或 `client`。
+</Note>
+
+<CodeGroup>
+
+```python Python
+# invoke the graph
+result = await remote_graph.ainvoke({
+    "messages": [{"role": "user", "content": "what's the weather in sf"}]
+})
+
+# stream outputs from the graph
+async for chunk in remote_graph.astream({
+    "messages": [{"role": "user", "content": "what's the weather in la"}]
+}):
+    print(chunk)
+```
+
+```typescript JavaScript
+// invoke the graph
+const result = await remoteGraph.invoke({
+    messages: [{role: "user", content: "what's the weather in sf"}]
+})
+
+// stream outputs from the graph
+for await (const chunk of await remoteGraph.stream({
+    messages: [{role: "user", content: "what's the weather in la"}]
+})):
+    console.log(chunk)
+```
+
+</CodeGroup>
+
+### 同步地
+
+<Note>
+要同步使用该图，在初始化 `RemoteGraph` 时必须提供 `url` 或 `sync_client`。
+</Note>
+
+<CodeGroup>
+
+```python Python
+# invoke the graph
+result = remote_graph.invoke({
+    "messages": [{"role": "user", "content": "what's the weather in sf"}]
+})
+
+# stream outputs from the graph
+for chunk in remote_graph.stream({
+    "messages": [{"role": "user", "content": "what's the weather in la"}]
+}):
+    print(chunk)
+```
+
+</CodeGroup>
+
+## 在线程级别持久化状态
+
+默认情况下，图运行（例如使用 `.invoke()` 或 `.stream()` 发起的调用）是无状态的，这意味着中间检查点和最终状态在运行后不会持久化。
+
+如果您想保留运行输出（例如，支持人机协作工作流），您可以创建一个线程并通过 `config` 参数传递其 ID。这与常规编译图的工作方式相同：
+
+<CodeGroup>
+
+```python Python
+from langgraph_sdk import get_sync_client
+
+url = "<DEPLOYMENT_URL>"
+graph_name = "agent"
+sync_client = get_sync_client(url=url)
+remote_graph = RemoteGraph(graph_name, url=url)
+
+# create a thread (or use an existing thread instead)
+thread = sync_client.threads.create()
+
+# invoke the graph with the thread config
+config = {"configurable": {"thread_id": thread["thread_id"]}}
+result = remote_graph.invoke({
+    "messages": [{"role": "user", "content": "what's the weather in sf"}]
+}, config=config)
+
+# verify that the state was persisted to the thread
+thread_state = remote_graph.get_state(config)
+print(thread_state)
+```
+
+```typescript JavaScript
+import { Client } from "@langchain/langgraph-sdk";
+import { RemoteGraph } from "@langchain/langgraph/remote";
+
+const url = "<DEPLOYMENT_URL>";
+const graphName = "agent";
+const client = new Client({ apiUrl: url });
+const remoteGraph = new RemoteGraph({ graphId: graphName, url });
+
+// create a thread (or use an existing thread instead)
+const thread = await client.threads.create();
+
+// invoke the graph with the thread config
+const config = { configurable: { thread_id: thread.thread_id }};
+const result = await remoteGraph.invoke({
+  messages: [{ role: "user", content: "what's the weather in sf" }],
+}, config);
+
+// verify that the state was persisted to the thread
+const threadState = await remoteGraph.getState(config);
+console.log(threadState);
+```
+
+</CodeGroup>
+
+## 作为子图使用
+
+<Note>
+如果你需要在具有 `RemoteGraph` 子图节点的图中使用 `checkpointer`，请确保使用 UUID 作为线程 ID。
+</Note>
+
+图也可以将多个 `RemoteGraph` 实例作为[_子图_](/oss/langgraph/use-subgraphs)节点来调用。这允许构建模块化、可扩展的工作流，其中不同的职责被拆分到独立的图中。
+
+`RemoteGraph` 暴露与普通 `CompiledGraph` 相同的接口，因此你可以直接将其作为子图用于另一个图中。例如：
+
+<CodeGroup>
+
+```python Python
+from langgraph_sdk import get_sync_client
+from langgraph.graph import StateGraph, MessagesState, START
+from typing import TypedDict
+
+url = "<DEPLOYMENT_URL>"
+graph_name = "agent"
+remote_graph = RemoteGraph(graph_name, url=url)
+
+# define parent graph
+builder = StateGraph(MessagesState)
+# add remote graph directly as a node
+builder.add_node("child", remote_graph)
+builder.add_edge(START, "child")
+graph = builder.compile()
+
+# invoke the parent graph
+result = graph.invoke({
+    "messages": [{"role": "user", "content": "what's the weather in sf"}]
+})
+print(result)
+
+# stream outputs from both the parent graph and subgraph
+for chunk in graph.stream({
+    "messages": [{"role": "user", "content": "what's the weather in sf"}]
+}, subgraphs=True):
+    print(chunk)
+```
+
+```typescript JavaScript
+import { MessagesAnnotation, StateGraph, START } from "@langchain/langgraph";
+import { RemoteGraph } from "@langchain/langgraph/remote";
+
+const url = "<DEPLOYMENT_URL>";
+const graphName = "agent";
+const remoteGraph = new RemoteGraph({ graphId: graphName, url });
+
+// define parent graph and add remote graph directly as a node
+const graph = new StateGraph(MessagesAnnotation)
+  .addNode("child", remoteGraph)
+  .addEdge(START, "child")
+  .compile()
+
+// invoke the parent graph
+const result = await graph.invoke({
+  messages: [{ role: "user", content: "what's the weather in sf" }]
+});
+console.log(result);
+
+// stream outputs from both the parent graph and subgraph
+for await (const chunk of await graph.stream({
+  messages: [{ role: "user", content: "what's the weather in la" }]
+}, { subgraphs: true })) {
+  console.log(chunk);
+}
+```
+
+<CodeGroup>
+
+</CodeGroup>

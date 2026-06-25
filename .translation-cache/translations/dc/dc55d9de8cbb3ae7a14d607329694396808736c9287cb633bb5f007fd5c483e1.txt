@@ -1,0 +1,251 @@
+---
+title: "Graph RAG 集成"
+description: "使用 LangChain Python 与 Graph RAG 检索器集成。"
+---
+
+本指南介绍 Graph RAG 的基本概念。如需了解所有支持的功能和配置的详细文档，请参阅 [Graph RAG 项目页面](https://datastax.github.io/graph-rag/)。
+
+## 概述
+
+`langchain-graph-retriever` 包中的 `GraphRetriever` 提供了一个 LangChain [检索器](/oss/langchain/retrieval/)，它将向量上的 **非结构化** 相似性搜索与元数据属性的 **结构化** 遍历相结合。这使得在**现有**向量存储上进行基于图的检索成为可能。
+
+### 集成详情
+
+| 检索器 | 源代码 | PyPI 包 | 最新版本 | 项目页面 |
+| :--- | :--- | :--- | :--- | :--- |
+| `GraphRetriever` | [github.com/datastax/graph-rag](https://github.com/datastax/graph-rag/tree/main/packages/langchain-graph-retriever) | [`langchain-graph-retriever`](https://pypi.org/project/langchain-graph-retriever/) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-graph-retriever?style=flat-square&label=%20&color=orange) | [Graph RAG](https://datastax.github.io/graph-rag/) |
+
+## 优势
+
+* [**基于现有元数据的链接：**](https://datastax.github.io/graph-rag/guide/get-started/)
+  无需额外处理即可使用现有元数据字段。从现有向量存储中获取更多信息！
+
+* [**按需更改链接：**](https://datastax.github.io/graph-rag/guide/edges/)
+  可以动态指定边，允许根据问题遍历不同的关系。
+
+* [**可插拔的遍历策略：**](https://datastax.github.io/graph-rag/guide/strategies/)
+  使用内置遍历策略（如 Eager 或 MMR），或定义自定义逻辑来选择要探索的节点。
+
+* [**广泛的兼容性：**](https://datastax.github.io/graph-rag/guide/adapters/)
+  可用于多种向量存储的适配器，并可轻松添加对其他存储的支持。
+
+## 设置
+
+### 安装
+
+此检索器位于 `langchain-graph-retriever` 包中。
+
+<CodeGroup>
+```bash pip
+pip install -qU langchain-graph-retriever
+```
+
+```bash uv
+uv add langchain-graph-retriever
+```
+</CodeGroup>
+## 实例化
+
+以下示例将展示如何对一些关于动物的示例文档执行图遍历。
+
+### 前提条件
+
+<details>
+    <summary>点击查看详情</summary>
+    <div>
+    1. 确保已安装 Python 3.10+
+
+    1. 安装以下提供示例数据的包。
+
+</details>
+        ```bash
+        pip install -qU graph_rag_example_helpers
+        ```
+
+1. 下载测试文档：
+        ```python
+        from graph_rag_example_helpers.datasets.animals import fetch_documents
+        animals = fetch_documents()
+        ```
+
+<EmbeddingTabs/>
+</div>
+</details>
+
+### 填充向量存储
+
+本节展示如何使用示例数据填充各种向量存储。
+
+关于如何选择以下向量存储之一，或为您的向量存储添加支持方面的帮助，请参阅以下文档
+[Adapters and Supported Stores](https://datastax.github.io/graph-rag/guide/adapters/)。
+
+<Tabs groupId="vector-store" queryString>
+    <Tab title="AstraDB">
+        <div style={{ paddingLeft: '30px' }}>
+      安装带有 `astra` 额外依赖的 `langchain-graph-retriever` 包：
+
+      ```bash
+      pip install "langchain-graph-retriever[astra]"
+      ```
+
+然后创建一个向量存储并加载测试文档：
+
+      ```python
+      from langchain_astradb import AstraDBVectorStore
+
+      vector_store = AstraDBVectorStore.from_documents(
+          documents=animals,
+          embedding=embeddings,
+          collection_name="animals",
+          api_endpoint=ASTRA_DB_API_ENDPOINT,
+          token=ASTRA_DB_APPLICATION_TOKEN,
+      )
+      ```
+对于 `ASTRA_DB_API_ENDPOINT` 和 `ASTRA_DB_APPLICATION_TOKEN` 凭证，请参阅 [AstraDB Vector Store 指南](/oss/integrations/vectorstores/astradb)。
+
+:::note
+为了更快地进行初始测试，请考虑使用 **InMemory** Vector Store。
+:::
+        </div>
+    </Tab>
+    <Tab title="Chroma">
+        <div style={{ paddingLeft: '30px' }}>
+      安装带有 `chroma` 额外依赖的 `langchain-graph-retriever` 包：
+
+      ```bash
+      pip install "langchain-graph-retriever[chroma]"
+      ```
+
+然后创建一个向量存储并加载测试文档：
+
+      ```python
+      from langchain_chroma.vectorstores import Chroma
+      from langchain_graph_retriever.transformers import ShreddingTransformer
+
+      vector_store = Chroma.from_documents(
+          documents=list(ShreddingTransformer().transform_documents(animals)),
+          embedding=embeddings,
+          collection_name="animals",
+      )
+      ```
+
+有关创建 Chroma 连接的帮助，请参阅 [Chroma 向量存储指南](/oss/integrations/vectorstores/chroma)。
+
+:::note
+Chroma 不支持在嵌套元数据中进行搜索。因此，在插入文档时需要使用 [`ShreddingTransformer`](https://datastax.github.io/graph-rag/reference/langchain_graph_retriever/transformers/#langchain_graph_retriever.transformers.shredding.ShreddingTransformer)。
+:::
+        </div>
+    </Tab>
+    <Tab title="InMemory">
+        <div style={{ paddingLeft: '30px' }}>
+安装 `langchain-graph-retriever` 包：</div>
+
+      ```bash
+      pip install "langchain-graph-retriever"
+      ```
+
+然后创建一个向量存储并加载测试文档：
+
+      ```python
+      from langchain_core.vectorstores import InMemoryVectorStore
+
+      vector_store = InMemoryVectorStore.from_documents(
+          documents=animals,
+          embedding=embeddings,
+      )
+      ```
+
+:::tip
+使用 `InMemoryVectorStore` 是快速开始使用 Graph RAG 的最快方式，但不建议用于生产环境。建议使用 **AstraDB** 或 **OpenSearch**。
+:::
+        </div>
+    </Tab>
+</Tabs>
+
+### 图遍历
+
+此图检索器从与查询最匹配的单个动物开始，然后遍历共享相同 `habitat` 和/或 `origin` 的其他动物。
+
+  ```python
+  from graph_retriever.strategies import Eager
+  from langchain_graph_retriever import GraphRetriever
+
+  traversal_retriever = GraphRetriever(
+      store = vector_store,
+      edges = [("habitat", "habitat"), ("origin", "origin")],
+      strategy = Eager(k=5, start_k=1, max_depth=2),
+  )
+  ```
+
+上述代码创建了一个图遍历检索器，它从最近的动物开始（`start_k=1`），检索5个文档（`k=5`），并将搜索范围限制在距离第一个动物最多2步的文档内（`max_depth=2`）。
+
+`edges` 定义了如何将元数据值用于遍历。在这种情况下，每个动物都与具有相同 `habitat` 和/或 `origin` 的其他动物相连。
+
+```python
+results = traversal_retriever.invoke("what animals could be found near a capybara?")
+
+for doc in results:
+    print(f"{doc.id}: {doc.page_content}")
+```
+```text
+capybara: capybaras are the largest rodents in the world and are highly social animals.
+heron: herons are wading birds known for their long legs and necks, often seen near water.
+crocodile: crocodiles are large reptiles with powerful jaws and a long lifespan, often living over 70 years.
+frog: frogs are amphibians known for their jumping ability and croaking sounds.
+duck: ducks are waterfowl birds known for their webbed feet and quacking sounds.
+```
+
+图遍历通过利用数据中的结构化关系来提升检索质量。与标准相似性搜索不同（见下文），它为文档的选择提供了清晰、可解释的依据。
+
+在此例中，文档 `capybara`、`heron`、`frog`、`crocodile` 和 `newt` 都共享相同的 `habitat=wetlands`，这是由其元数据定义的。这应该会提升文档相关性以及来自 LLM 的回答质量。
+
+### 与标准检索的比较
+
+当 `max_depth=0` 时，图遍历检索器的行为与标准检索器相同：
+
+```python
+standard_retriever = GraphRetriever(
+    store = vector_store,
+    edges = [("habitat", "habitat"), ("origin", "origin")],
+    strategy = Eager(k=5, start_k=5, max_depth=0),
+)
+```
+
+这将创建一个检索器，它从最近的 5 个动物开始（`start_k=5`），
+并在没有任何遍历的情况下返回它们（`max_depth=0`）。在这种情况下，
+边缘定义会被忽略。
+
+这与以下内容基本相同：
+
+```python
+standard_retriever = vector_store.as_retriever(search_kwargs={"k":5})
+```
+
+对于任一情况，调用检索器会返回：
+
+```python
+results = standard_retriever.invoke("what animals could be found near a capybara?")
+
+for doc in results:
+    print(f"{doc.id}: {doc.page_content}")
+```
+
+```text
+capybara: capybaras are the largest rodents in the world and are highly social animals.
+iguana: iguanas are large herbivorous lizards often found basking in trees and near water.
+guinea pig: guinea pigs are small rodents often kept as pets due to their gentle and social nature.
+hippopotamus: hippopotamuses are large semi-aquatic mammals known for their massive size and territorial behavior.
+boar: boars are wild relatives of pigs, known for their tough hides and tusks.
+```
+
+这些文档仅基于相似性进行连接。存储中存在的任何结构数据都会被忽略。与图检索相比，这可能会降低文档相关性，因为返回结果不太可能有助于回答查询。
+
+## 用法
+
+遵循上面的示例，`invoke` 用于对查询发起检索。
+
+---
+
+## API 参考
+
+要了解所有可用参数和高级配置，请参阅 [Graph RAG API 参考](https://datastax.github.io/graph-rag/reference/)。

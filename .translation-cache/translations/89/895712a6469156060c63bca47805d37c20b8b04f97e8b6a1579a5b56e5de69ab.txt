@@ -1,0 +1,751 @@
+---
+title: "Microsoft 集成"
+description: "使用 LangChain Python 与 Microsoft 集成。"
+sidebarTitle: "Microsoft"
+---
+
+本页面涵盖 LangChain 与 [Microsoft Azure](https://portal.azure.com) 及 [Microsoft](https://www.microsoft.com) 其他产品的所有集成。
+
+<Tip>
+    **推荐：Azure OpenAI**
+
+    我们推荐在[聊天模型](#chat-models)、[LLMs](#llms)和[嵌入模型](#embedding-models)中使用 @[Azure OpenAI][AzureOpenAI]。通过 [v1 API](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/api-version-lifecycle?tabs=python)（2025 年 8 月正式发布），您可以直接使用 Azure 端点和 API 密钥，通过 @[`langchain-openai`] 包调用部署在 [Microsoft Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/) 中的任何模型（包括 OpenAI、Llama、DeepSeek、Mistral 和 Phi），通过单一界面即可完成。您还可以获得对 Microsoft Entra ID 身份验证的原生支持，以及访问最新功能，包括 [Responses API](#responses-api) 和[推理模型](/oss/integrations/chat/azure_chat_openai)。[从这里开始](#azure-openai)。
+
+    **示例和教程：**
+    - [Azure-Samples/langchain-azure-openai-starter](https://github.com/Azure-Samples/langchain-azure-openai-starter)：从生产就绪的 LangChain 和 Azure OpenAI 应用模板开始，只需一个 `azd` 命令即可直接部署到 Azure。
+    - [microsoft/langchain-for-beginners](https://github.com/microsoft/langchain-for-beginners)：一门介绍 LangChain 与 Azure OpenAI 配合使用的手把手课程。
+    - [Azure-Samples/langchain-agent-python](https://github.com/Azure-Samples/langchain-agent-python)：在 Azure 上构建和部署 LangChain 智能体。
+</Tip>
+
+<Note>
+    **Azure 上的 Claude**
+
+    Microsoft Foundry 还提供对所有 [Anthropic Claude 模型](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/how-to/use-foundry-models-claude)的访问，包括 Opus、Sonnet 和 Haiku。Claude 模型通过专用的 Anthropic 原生端点提供服务，而非 Azure OpenAI v1 API。使用指向 Foundry Anthropic 端点的 [`langchain-anthropic`](/oss/integrations/chat/anthropic)。
+</Note>
+
+## 聊天模型
+
+Microsoft 提供三种主要方式通过 Azure 访问聊天模型：
+
+1. **[Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/)**（推荐）— 通过单一界面访问部署在 Microsoft Foundry 中的任何模型（包括 OpenAI、Llama、DeepSeek、Mistral 和 Phi），并提供企业级功能，例如通过 [Microsoft Entra ID](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/managed-identity) 实现无密钥身份验证、区域数据驻留和私有网络。使用 v1 API 上的 @[`ChatOpenAI`]，或使用传统部署的 @[`AzureChatOpenAI`]。
+
+    Azure OpenAI 还支持 [Responses API](#responses-api)，让您可以直接从聊天模型访问服务器端工具，如代码解释器、图像生成和文件搜索。
+2. **[Azure AI](https://learn.microsoft.com/en-us/azure/ai-studio/how-to/deploy-models)** — 推荐用于在聊天模型旁边访问更广泛 Azure 生态系统中的工具、存储和自定义中间件。
+3. **[Azure ML](https://learn.microsoft.com/en-us/azure/machine-learning/)** — 允许通过 Azure Machine Learning 部署和管理自定义或微调的开源模型。
+
+### Azure OpenAI
+
+要开始使用 Azure OpenAI，请[创建 Azure 部署](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/create-resource)并安装 `langchain-openai` 包：
+
+<CodeGroup>
+    ```bash pip
+    pip install -U langchain-openai
+    ```
+
+    ```bash uv
+    uv add langchain-openai
+    ```
+</CodeGroup>
+
+在 v1 API 上，直接使用 @[`ChatOpenAI`] 访问你的 Azure 端点——无需 `api_version`：
+
+<Tabs>
+    <Tab title="Entra ID（推荐）">
+        ```bash
+        pip install azure-identity
+        ```
+
+        ```python
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        from langchain_openai import ChatOpenAI
+
+        token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default",
+        )
+
+        llm = ChatOpenAI(
+            model="gpt-5.4-mini",  # your Azure deployment name
+            base_url="https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+            api_key=token_provider,  # callable that handles token refresh
+        )
+        ```
+</Tab>
+    <Tab title="API 密钥">
+        ```python
+        from langchain_openai import ChatOpenAI
+
+        llm = ChatOpenAI(
+            model="gpt-5.4-mini",  # your Azure deployment name
+            base_url="https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+            api_key="your-azure-api-key",
+        )
+        ```
+</Tab>
+</Tabs>
+
+对于传统 Azure OpenAI API 版本，请使用 @[`AzureChatOpenAI`]：
+
+```python
+from langchain_openai import AzureChatOpenAI
+```
+
+请参阅 [Azure ChatOpenAI 集成页面](/oss/integrations/chat/azure_chat_openai) 获取端到端设置、Entra ID 身份验证、工具调用和推理示例。
+
+#### Responses API
+
+Azure OpenAI 支持 [Responses API](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/responses)，它提供有状态对话、内置工具（网络搜索、文件搜索、代码解释器）以及结构化推理摘要。当你设置 `reasoning` 参数时，[`ChatOpenAI`] 会自动路由到 Responses API，或者你可以使用 `use_responses_api=True` 显式选择加入：
+
+<Tabs>
+    <Tab title="Entra ID（推荐）">
+
+</Tab>
+        ```python
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        from langchain_openai import ChatOpenAI
+
+        token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default",
+        )
+
+        llm = ChatOpenAI(
+            model="gpt-5.4-mini",
+            base_url="https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+            api_key=token_provider,
+            use_responses_api=True,
+        )
+
+        response = llm.invoke("Summarize the bitter lesson.")
+        print(response.text)
+        ```
+</Tab>
+    <Tab title="API 密钥">
+
+</fragment>
+        ```python
+        from langchain_openai import ChatOpenAI
+
+        llm = ChatOpenAI(
+            model="gpt-5.4-mini",
+            base_url="https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/",
+            api_key="your-azure-api-key",
+            use_responses_api=True,
+        )
+
+        response = llm.invoke("Summarize the bitter lesson.")
+        print(response.text)
+        ```
+</Tab>
+</Tabs>
+
+有关使用 Responses API 进行推理工作、推理摘要和流式处理的详细指南，请参阅 [Azure ChatOpenAI 集成页面](/oss/integrations/chat/azure_chat_openai)。
+
+### Azure AI
+
+>[Azure AI Foundry](https://learn.microsoft.com/en-us/azure/developer/python/get-started) 是更广泛的 Azure AI 平台。`langchain-azure-ai` 包让你可以将 Azure 原生工具、存储和自定义中间件引入你的 LangChain 应用，并通过 `AzureAIOpenAIApiChatModel` 类公开 Foundry 中部署的聊天模型。
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install -U langchain-azure-ai
+    ```
+
+    ```bash uv
+    uv add langchain-azure-ai
+    ```
+</CodeGroup>
+
+请参阅[使用示例](/oss/integrations/chat/azure_ai)。
+
+## 大语言模型
+
+Microsoft 提供两种通过 Azure 访问大语言模型的主要方式：
+
+1. **[Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/)**（推荐）— 通过 @[`AzureOpenAI`] 访问部署在 Microsoft Foundry 中的任何模型（包括 OpenAI、Llama、DeepSeek、Mistral 和 Phi）作为补全大语言模型。
+2. **[Azure ML](https://learn.microsoft.com/en-us/azure/machine-learning/)** — 使用托管在 Azure Machine Learning 在线端点上的自定义或开源模型。
+
+### Azure OpenAI
+
+请参阅[使用示例](/oss/integrations/llms/azure_openai)。
+
+<CodeGroup>
+    ```bash pip
+    pip install -U langchain-openai
+    ```
+
+    ```bash uv
+    uv add langchain-openai
+    ```
+</CodeGroup>
+
+<Tabs>
+    <Tab title="Entra ID (推荐)">
+        ```python
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        from langchain_openai import AzureOpenAI
+
+        token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default",
+        )
+
+        llm = AzureOpenAI(
+            azure_deployment="gpt-5.4-mini",  # your Azure deployment name
+            api_version="2025-04-01-preview",
+            azure_ad_token_provider=token_provider,
+        )
+
+        print(llm.invoke("Write a haiku about the ocean."))
+        ```
+</Tab>
+    <Tab title="API 密钥">
+        ```python
+        from langchain_openai import AzureOpenAI
+
+        llm = AzureOpenAI(
+            azure_deployment="gpt-5.4-mini",  # your Azure deployment name
+            api_version="2025-04-01-preview",
+            azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com/",
+            api_key="your-azure-api-key",
+        )
+
+        print(llm.invoke("Write a haiku about the ocean."))
+        ```
+## Embedding 模型
+
+Microsoft 提供两种主要选项，用于通过 Azure 访问 embedding 模型：
+
+1. **[Azure OpenAI](https://learn.microsoft.com/en-us/azure/ai-services/openai/)**（推荐）— 使用部署在 Microsoft Foundry 中的 embedding 模型（包括 OpenAI `text-embedding-3-small`、`text-embedding-3-large` 和 Cohere），并配合 @[`AzureOpenAIEmbeddings`] 使用。
+2. **[Azure AI](https://learn.microsoft.com/en-us/azure/ai-studio/how-to/deploy-models)** — 适合在访问 embedding 模型的同时，从更广泛的 Azure 生态系统中获取工具、存储和自定义中间件。
+
+### Azure OpenAI
+
+查看[使用示例](/oss/integrations/embeddings/azure_openai)。
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install -U langchain-openai
+    ```
+
+    ```bash uv
+    uv add langchain-openai
+    ```
+</CodeGroup>
+
+<Tabs>
+    <Tab title="Entra ID (推荐)">
+
+</Tabs>
+        ```python
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        from langchain_openai import AzureOpenAIEmbeddings
+
+        token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default",
+        )
+
+        embeddings = AzureOpenAIEmbeddings(
+            azure_deployment="text-embedding-3-small",  # your Azure deployment name
+            api_version="2025-04-01-preview",
+            azure_ad_token_provider=token_provider,
+        )
+
+        vector = embeddings.embed_query("LangChain makes agents easy.")
+        ```
+</Tab>
+    <Tab title="API 密钥">
+
+</Tab>
+        ```python
+        from langchain_openai import AzureOpenAIEmbeddings
+
+        embeddings = AzureOpenAIEmbeddings(
+            azure_deployment="text-embedding-3-small",  # your Azure deployment name
+            api_version="2025-04-01-preview",
+            azure_endpoint="https://YOUR-RESOURCE-NAME.openai.azure.com/",
+            api_key="your-azure-api-key",
+        )
+
+        vector = embeddings.embed_query("LangChain makes agents easy.")
+        ```
+<Tab>
+</Tab>
+</Tabs>
+
+### Azure AI
+
+<CodeGroup>
+    ```bash pip
+    pip install -U langchain-azure-ai
+    ```
+
+    ```bash uv
+    uv add langchain-azure-ai
+    ```
+</CodeGroup>
+
+查看[使用示例](/oss/integrations/providers/azure_ai#azure-ai-model-inference-for-embeddings)。
+
+## 中间件
+
+### Azure AI 内容安全中间件
+
+>[Azure AI 内容安全](https://learn.microsoft.com/en-us/azure/ai-services/content-safety/overview)提供了可应用于 LangChain 代理的防护措施，通过中间件实现。`langchain-azure-ai` 包目前导出用于文本审核、图像审核、提示注入检测、受保护材料检测和接地评估的中间件。
+
+安装中间件包：
+
+<CodeGroup>
+    ```bash pip
+    pip install -U langchain-azure-ai
+    ```
+
+    ```bash uv
+    uv add langchain-azure-ai
+    ```
+</CodeGroup>
+
+请参阅 [Microsoft Foundry 中间件指南](/oss/integrations/middleware/azure_ai)。
+
+```python
+from langchain_azure_ai.agents.middleware import AzureContentModerationMiddleware
+```
+
+## 文档加载器
+
+### Azure Blob 存储
+
+>[Azure Blob 存储](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blobs-introduction) 是微软为云提供的对象存储解决方案。Blob 存储专为存储海量非结构化数据而优化。非结构化数据是不遵循特定数据模型或定义的数据，例如文本或二进制数据。
+
+`Azure Blob 存储` 适用于：
+
+- 直接向浏览器提供图像或文档。
+- 存储文件以供分布式访问。
+- 流式传输视频和音频。
+- 写入日志文件。
+- 存储数据以进行备份和还原、灾难恢复和存档。
+- 存储数据以供本地或 Azure 托管服务进行分析。
+
+<CodeGroup>
+    ```bash pip
+    pip install langchain-azure-storage
+    ```
+
+    ```bash uv
+    uv add langchain-azure-storage
+    ```
+</CodeGroup>
+
+请参阅 [Azure Blob Storage Loader 使用示例](/oss/integrations/document_loaders/azure_blob_storage)。
+
+```python
+from langchain_azure_storage.document_loaders import AzureBlobStorageLoader
+```
+
+## 内存
+
+### Azure Cosmos DB 聊天消息历史
+
+>[Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/) 为对话式 AI 应用提供聊天消息历史存储，使您能够以低延迟和高可用性持久化并检索对话历史。
+
+<AzureCosmosDBChatMessageHistory />
+
+<CodeGroup>
+    ```bash pip
+    pip install langchain-azure-cosmosdb
+    ```
+
+    ```bash uv
+    uv add langchain-azure-cosmosdb
+    ```
+</CodeGroup>
+
+配置 Azure Cosmos DB 连接（同步或异步，使用访问密钥或 Microsoft Entra ID）：
+
+```python
+from langchain_azure_cosmosdb import CosmosDBChatMessageHistory
+
+history = CosmosDBChatMessageHistory(
+    cosmos_endpoint="https://<your-account>.documents.azure.com:443/",
+    cosmos_database="<your-database>",
+    cosmos_container="<your-container>",
+    session_id="<session-id>",
+    user_id="<user-id>",
+    credential="<your-key-or-token-credential>",
+    ttl=3600,  # optional: messages expire after 1 hour
+)
+history.prepare_cosmos()
+
+history.add_user_message("Hello!")
+history.add_ai_message("Hi there!")
+```
+
+如需使用异步版本，请从同一包中导入 `AsyncCosmosDBChatMessageHistory`。
+
+### Azure Cosmos DB 语义缓存
+
+>[`AzureCosmosDBNoSqlSemanticCache`](https://github.com/langchain-ai/langchain-azure/tree/main/libs/azure-cosmosdb) 使用向量相似性在 Azure Cosmos DB for NoSQL 中缓存 LLM 响应，当再次遇到语义相似的提示时返回缓存结果。
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install langchain-azure-cosmosdb
+    ```
+
+    ```bash uv
+    uv add langchain-azure-cosmosdb
+    ```
+</CodeGroup>
+
+```python
+from azure.cosmos import CosmosClient, PartitionKey
+from langchain_core.globals import set_llm_cache
+from langchain_azure_cosmosdb import AzureCosmosDBNoSqlSemanticCache
+
+cosmos_client = CosmosClient("<endpoint>", "<key>")
+
+cache = AzureCosmosDBNoSqlSemanticCache(
+    cosmos_client=cosmos_client,
+    embedding=embedding,
+    vector_embedding_policy=vector_embedding_policy,
+    indexing_policy=indexing_policy,
+    cosmos_container_properties={"partition_key": PartitionKey(path="/id")},
+    cosmos_database_properties={"id": "cache-db"},
+    vector_search_fields={"text_field": "text", "embedding_field": "embedding"},
+    database_name="cache-db",
+    container_name="cache-container",
+)
+
+set_llm_cache(cache)
+```
+
+如需异步使用，请导入 `AsyncAzureCosmosDBNoSqlSemanticCache`。
+
+## 向量存储
+
+### Azure Cosmos DB
+
+AI 代理可以将 Azure Cosmos DB 作为统一的[记忆系统](https://learn.microsoft.com/en-us/azure/cosmos-db/ai-agents#memory-can-make-or-break-agents)解决方案，享受速度、规模和简单性。这项服务成功地为 OpenAI 的 ChatGPT 服务实现了高可靠性和低维护成本的动态扩展。由原子-记录-序列引擎驱动，它是全球首个提供无服务器模式的分布式 [NoSQL](https://learn.microsoft.com/en-us/azure/cosmos-db/distributed-nosql)、[关系型](https://learn.microsoft.com/en-us/azure/cosmos-db/distributed-relational) 和[向量数据库](https://learn.microsoft.com/en-us/azure/cosmos-db/vector-database)服务。
+
+以下是两个可提供向量存储功能的 Azure Cosmos DB API。
+
+#### 适用于 MongoDB 的 Azure Cosmos DB (vCore)
+
+>[Azure Cosmos DB for MongoDB vCore](https://learn.microsoft.com/en-us/azure/cosmos-db/mongodb/vcore/) 使创建具有完整原生 MongoDB 支持的数据库变得轻而易举。
+> 您可以运用您的 MongoDB 经验，通过将应用程序指向 MongoDB vCore 账户的连接字符串，继续使用您喜爱的 MongoDB 驱动程序、SDK 和工具。
+> 在 Azure Cosmos DB for MongoDB vCore 中使用向量搜索，将您的 AI 应用程序与存储在 Azure Cosmos DB 中的数据无缝集成。
+
+##### 安装和设置
+
+请参阅[详细配置说明](/oss/integrations/vectorstores/azure_cosmos_db_mongo_vcore)。
+
+需要安装 `langchain-azure-ai` 和 `pymongo` Python 包。
+
+<CodeGroup>
+    ```bash pip
+    pip install langchain-azure-ai pymongo
+    ```
+
+    ```bash uv
+    uv add langchain-azure-ai pymongo
+    ```
+</CodeGroup>
+
+##### 在 Microsoft Azure 上部署 Azure Cosmos DB
+
+Azure Cosmos DB for MongoDB vCore 为开发者提供了一个完全托管的 MongoDB 兼容数据库服务，可用于使用熟悉的架构构建现代应用程序。
+
+通过 Cosmos DB for MongoDB vCore，开发者可以享受原生 Azure 集成、低总拥有成本 (TCO) 以及熟悉的 vCore 架构的优势，无论是迁移现有应用程序还是构建新应用程序。
+
+[立即注册](https://azure.microsoft.com/en-us/free/) 免费开始使用。
+
+请参阅[使用示例](/oss/integrations/vectorstores/azure_cosmos_db_mongo_vcore)。
+
+```python
+from langchain_azure_ai.vectorstores import AzureCosmosDBMongoVCoreVectorSearch
+```
+
+#### Azure Cosmos DB NoSQL
+
+>[Azure Cosmos DB for NoSQL](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/vector-search) 现已提供向量索引和搜索功能，目前处于预览阶段。
+此功能专为处理高维向量而设计，能够实现任意规模的高效准确向量搜索。您现在可以直接在文档中随数据一起存储向量。这意味着数据库中的每个文档不仅可以包含传统的无模式数据，
+还可以包含高维向量作为文档的其他属性。数据和向量的这种共存实现了高效的索引和搜索，因为向量与其所代表的数据存储在同一逻辑单元中。这简化了数据管理、AI 应用架构以及基于向量的操作效率。
+
+##### 安装和设置
+
+请参阅[详细配置说明](/oss/integrations/vectorstores/azure_cosmos_db_no_sql)。
+
+我们需要安装 `langchain-azure-cosmosdb` 和 `azure-cosmos` python 包。
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install langchain-azure-cosmosdb azure-cosmos
+    ```
+
+    ```bash uv
+    uv add langchain-azure-cosmosdb azure-cosmos
+    ```
+</CodeGroup>
+
+##### 在 Microsoft Azure 上部署 Azure Cosmos DB
+
+Azure Cosmos DB 为现代应用和智能工作负载提供解决方案，具有极高的响应能力，支持动态和弹性自动缩放。它在每个 Azure 区域均可用，可以自动将数据复制到更接近用户的位置。它提供 SLA 保障的低延迟和高可用性。
+
+[立即注册](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/quickstart-python?pivots=devcontainer-codespace) 免费开始使用。
+
+查看[使用示例](/oss/integrations/vectorstores/azure_cosmos_db_no_sql)。
+
+```python
+from langchain_azure_cosmosdb import AzureCosmosDBNoSqlVectorSearch
+```
+
+### Azure Database for PostgreSQL
+
+>[Azure Database for PostgreSQL - Flexible Server](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/service-overview) 是一种基于开源 Postgres 数据库引擎的关系型数据库服务。它是一个完全托管的数据库即服务，可处理具有可预测性能、安全性、高可用性和动态可扩展性的关键任务工作负载。
+
+请参阅 Azure Database for PostgreSQL 的[设置说明](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/quickstart-create-server-portal)。
+
+只需使用 Azure 门户中的[连接字符串](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/connect-python?tabs=cmd%2Cpassword#add-authentication-code)。
+
+由于 Azure Database for PostgreSQL 基于开源 Postgres，因此您可以使用 [LangChain 的 Postgres 支持](/oss/integrations/vectorstores/pgvector/) 连接到 Azure Database for PostgreSQL。
+
+### Azure SQL Database
+
+>[Azure SQL Database](https://learn.microsoft.com/azure/azure-sql/database/sql-database-paas-overview?view=azuresql) 是一项强大的服务，结合了可扩展性、安全性和高可用性，提供了现代化数据库解决方案的所有优势。它还提供专用的 Vector 数据类型和内置函数，可简化向量嵌入在关系型数据库中的存储和查询。这消除了对独立向量数据库和相关集成的需求，增强了解决方案的安全性，同时降低了整体复杂性。
+
+通过利用现有的 SQL Server 数据库进行向量搜索，您可以增强数据能力，同时最大限度地降低成本并避免过渡到新系统的挑战。
+
+##### 安装和设置
+
+请参阅[详细配置说明](/oss/integrations/vectorstores/sqlserver)。
+
+我们需要安装 `langchain-sqlserver` Python 包。
+
+```bash
+!pip install langchain-sqlserver==0.1.1
+```
+
+##### 在 Microsoft Azure 上部署 Azure SQL DB
+
+[注册](https://learn.microsoft.com/azure/azure-sql/database/free-offer?view=azuresql)免费试用，立即开始使用。
+
+查看[使用示例](/oss/integrations/vectorstores/sqlserver)。
+
+```python
+from langchain_sqlserver import SQLServer_VectorStore
+```
+
+## 向量存储
+
+### Azure Database for PostgreSQL
+
+>[Azure Database for PostgreSQL - 灵活服务器](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/service-overview) 是一种基于开源 Postgres 数据库引擎的关系型数据库服务。这是一个完全托管的数据库即服务，可以处理具有可预测性能、安全性、高可用性和动态可扩展性的关键任务工作负载。
+
+请参阅 Azure Database for PostgreSQL 的[设置说明](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/quickstart-create-server-portal)。
+
+您需要在数据库中[启用 pgvector 扩展](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/how-to-use-pgvector) 才能将 Postgres 用作向量存储。启用扩展后，您可以使用 [LangChain 中的 PGVector](/oss/integrations/vectorstores/pgvector/) 连接到 Azure Database for PostgreSQL。
+
+请参阅[使用示例](/oss/integrations/vectorstores/pgvector/)。只需使用 Azure 门户中的[连接字符串](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/connect-python?tabs=cmd%2Cpassword#add-authentication-code)。
+
+## 工具
+
+### Microsoft Foundry 工具
+
+Microsoft Foundry 公开了用于 Azure AI 内容理解、文档智能、图像分析和文本分析健康服务的 LangChain 服务工具。
+
+使用 `tools` extra 安装包：
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install -U "langchain-azure-ai[tools]"
+    ```
+
+    ```bash uv
+    uv add "langchain-azure-ai[tools]"
+    ```
+</CodeGroup>
+
+请参阅 [Microsoft Foundry 工具指南](/oss/integrations/tools/azure_ai_services)。
+
+```python
+from langchain_azure_ai.tools import AzureAIDocumentIntelligenceTool
+```
+
+### 图像生成工具
+
+Microsoft Foundry Models 在目录中提供了多个可用于图像生成的模型。
+
+请参阅 [Microsoft Foundry 工具指南](/oss/integrations/tools/azure_ai)。
+
+```python
+from langchain_azure_ai.tools import AzureOpenAIModelImageGenTool
+```
+
+### 转录工具
+
+Microsoft Foundry Models 在目录中提供 Whisper 模型，用于语音转文本转录。
+
+请参阅 [Microsoft Foundry 工具指南](/oss/integrations/tools/azure_ai)。
+
+```python
+from langchain_azure_ai.tools import AzureOpenAITranscriptionsTool
+```
+
+### 代码解释器工具（服务端）
+
+使用代码解释器工具在沙盒容器中服务端运行 Python 代码。
+
+请参阅 [Microsoft Foundry 工具指南](/oss/integrations/tools/azure_ai)。
+
+```python
+from langchain_azure_ai.tools.builtin import CodeInterpreterTool
+```
+
+### Web 搜索工具（服务端）
+
+搜索互联网以获取当前信息来源。
+
+请参阅 [Microsoft Foundry 工具指南](/oss/integrations/tools/azure_ai)。
+
+```python
+from langchain_azure_ai.tools.builtin import WebSearchTool
+```
+
+### 文件搜索工具（服务器端）
+
+在向量存储中搜索相关文档内容。
+
+参阅 [Microsoft Foundry 工具指南](/oss/integrations/tools/azure_ai)。
+
+```python
+from langchain_azure_ai.tools.builtin import FileSearchTool
+```
+
+### 图像生成工具（服务端）
+
+使用 Azure AI Foundry 在服务端通过 GPT 图像模型生成或编辑图像。
+
+请参阅 [Microsoft Foundry 工具指南](/oss/integrations/tools/azure_ai)。
+
+```python
+from langchain_azure_ai.tools.builtin import ImageGenerationTool
+```
+
+### MCP 工具（服务端）
+
+访问外部 Model Context Protocol (MCP) 服务器。
+
+请参阅 [Microsoft Foundry 工具指南](/oss/integrations/tools/azure_ai)。
+
+```python
+from langchain_azure_ai.tools.builtin import McpTool
+```
+
+### Azure Container Apps 动态会话
+
+我们需要从 Azure Container Apps 服务获取 `POOL_MANAGEMENT_ENDPOINT` 环境变量。
+请参阅 [Azure 动态会话设置说明](/oss/integrations/tools/azure_dynamic_sessions/#setup)。
+
+我们需要安装一个 python 包。
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install langchain-azure-dynamic-sessions
+    ```
+
+    ```bash uv
+    uv add langchain-azure-dynamic-sessions
+    ```
+</CodeGroup>
+
+查看[使用示例](/oss/integrations/tools/azure_dynamic_sessions)。
+
+```python
+from langchain_azure_dynamic_sessions import SessionsPythonREPLTool
+```
+
+### Azure Logic Apps
+
+触发 Azure Logic Apps 工作流，自动执行业务流程和集成。
+
+使用 `tools` extra 安装包：
+
+<CodeGroup>
+
+</CodeGroup>
+    ```bash pip
+    pip install -U "langchain-azure-ai[tools]"
+    ```
+
+    ```bash uv
+    uv add "langchain-azure-ai[tools]"
+    ```
+</CodeGroup>
+
+请参阅 [Azure Logic Apps 集成指南](/oss/integrations/tools/azure_logic_apps)。
+
+```python
+from langchain_azure_ai.tools import AzureLogicAppTool
+```
+
+## 工具包
+
+### Microsoft Foundry 项目工具箱
+
+通过模型上下文协议 (MCP) 从 Azure AI Foundry 工具箱动态加载工具。
+
+使用 `tools` extra 安装包：
+
+<CodeGroup>
+    ```bash pip
+    pip install -U "langchain-azure-ai[tools]" langchain-mcp-adapters httpx
+    ```
+
+    ```bash uv
+    uv add "langchain-azure-ai[tools]" langchain-mcp-adapters httpx
+    ```
+</CodeGroup>
+
+请参阅 [Azure AI Foundry 工具箱指南](/oss/integrations/tools/azure_ai#azureaiprojecttoolbox)。
+
+```python
+from langchain_azure_ai.tools import AzureAIProjectToolbox
+```
+
+### Microsoft Foundry 工具（原 Azure AI Services）
+
+安装集成包：
+
+<CodeGroup>
+    ```bash pip
+    pip install -U "langchain-azure-ai[tools]"
+    ```
+    ```bash uv
+    uv add "langchain-azure-ai[tools]"
+    ```
+</CodeGroup>
+
+请参阅[使用示例](/oss/integrations/tools/azure_ai_services)。
+
+```python
+from langchain_azure_ai.tools import AzureAIServicesToolkit
+```
+
+`AzureAIServicesToolkit` 工具包包含以下工具：
+
+- 图像分析：[AzureAIImageAnalysisTool](/oss/integrations/tools/azure_ai_services#azureaiimageanalysistool)
+- 文档智能：[AzureAIDocumentIntelligenceTool](/oss/integrations/tools/azure_ai_services#azureaidocumentintelligencetool)
+- 语音转文本：[AzureAISpeechToTextTool](/oss/integrations/tools/azure_ai_services#azureaispeechtotexttool)
+- 文本转语音：[AzureAITextToSpeechTool](/oss/integrations/tools/azure_ai_services#azureaitexttospeechtool)
+- 健康文本分析：[AzureAITextAnalyticsHealthTool](/oss/integrations/tools/azure_ai_services#azureaitextanalyticshealthtool)

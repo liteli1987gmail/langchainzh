@@ -1,0 +1,134 @@
+---
+title: 如何添加自定义路由
+sidebarTitle: 添加自定义路由
+---
+当将代理部署到 LangSmith Deployment 时，服务器会自动暴露用于创建运行和线程、与长期记忆存储交互、管理可配置助手以及其他核心功能的路由（请参阅所有默认 API 端点）。
+
+你可以通过提供自己的 app 对象并在 `langgraph.json` 中传递其路径来添加自定义路由（例如，Python 中的 [`Starlette`](https://www.starlette.io/applications/) 应用或 TypeScript 中的 [`Hono`](https://hono.dev/) 应用）。
+
+定义自定义 app 对象可以让你添加任何你想要的路由，因此你可以做任何事情，从添加 `/login` 端点到编写一个完整的全栈 Web 应用，所有这些都部署在同一个 Agent Server 中。
+
+以下是 Python 和 TypeScript 的示例。
+
+## 创建应用
+
+从一个**现有**的 LangSmith 应用开始，将以下自定义路由代码添加到你的应用文件中。如果你是从头开始，可以使用 CLI 从模板创建新应用。
+
+<Tabs>
+    <Tab title="Python">
+
+</fragment>
+    ```bash
+    langgraph new --template=new-langgraph-project-python my_new_project
+    ```
+
+在拥有 LangGraph 项目后，添加以下应用代码：
+
+    ```python {highlight={4}}
+    # ./src/agent/webapp.py
+    from fastapi import FastAPI
+
+    app = FastAPI()
+
+
+    @app.get("/hello")
+    def read_root():
+        return {"Hello": "World"}
+    ```
+</Tab>
+    <Tab title="TypeScript">
+
+</fragment>
+    ```bash
+    yarn create langgraph
+    npm install hono
+    ```
+
+一旦你有了 LangGraph 项目，请添加以下应用代码：
+
+    ```typescript
+    // ./src/custom-routes.ts
+    import { Hono } from "hono";
+
+    export const app = new Hono()
+      .get("/custom/hello", (c) => {
+        return c.json({ hello: "world" });
+      })
+      .post("/custom/webhook", async (c) => {
+        const body = await c.req.json();
+        return c.json({ received: true, payload: body });
+      });
+    ```
+
+`hono` 包必须在您的项目依赖项中可用。
+</Tab>
+</Tabs>
+
+## 配置 `langgraph.json`
+
+将以下内容添加到您的 `langgraph.json` 配置文件中。确保路径指向您在[上一节](#create-app)中创建的应用实例。
+
+<Tabs>
+    <Tab title="Python">
+    ```json
+    {
+      "dependencies": ["."],
+      "graphs": {
+        "agent": "./src/agent/graph.py:graph"
+      },
+      "env": ".env",
+      "http": {
+        "app": "./src/agent/webapp.py:app"
+      }
+      // Other configuration options like auth, store, etc.
+    }
+    ```
+</Tab>
+    <Tab title="TypeScript">
+
+</Tab>
+    ```json
+    {
+      "node_version": "20",
+      "dependencies": ["."],
+      "graphs": { "agent": "./src/agent.ts:graph" },
+      "http": { "app": "./src/custom-routes.ts:app" },
+      "env": ".env"
+    }
+    ```
+</Tab>
+</Tabs>
+
+## 启动服务器
+
+在本地测试服务器：
+
+<Tabs>
+    <Tab title="Python">
+    ```bash
+    langgraph dev --no-browser
+    ```
+</Tab>
+<Tab title="TypeScript">
+    ```bash
+    npx @langchain/langgraph-cli@latest dev --no-browser
+    ```
+</Tab>
+</Tabs>
+
+如果在浏览器中导航到 `localhost:2024/hello`（`2024` 是默认开发端口），你应该会看到 `/hello` 端点返回 JSON 响应。对于 TypeScript 示例，请导航到 `localhost:2024/custom/hello`。
+
+TypeScript 的 `http.app` 配置在本地开发（使用 `langgraph dev`）和 Docker（使用 `langgraph up`）中都有效。
+
+<Note>
+**覆盖默认端点**
+你在应用中创建的路由优先于系统默认路由，这意味着你可以覆盖和重新定义任何默认端点的行为。
+</Note>
+
+## 部署
+
+你可以按原样将此应用部署到 LangSmith 或你自己的托管平台。
+
+## 下一步
+
+现在你已经为部署添加了自定义路由，你可以使用相同的技术来进一步自定义服务器的行为，例如定义[自定义中间件](/langsmith/custom-middleware)和[自定义生命周期事件](/langsmith/custom-lifespan)。

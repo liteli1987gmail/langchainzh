@@ -1,0 +1,128 @@
+---
+title: 查看追踪
+description: 使用 Messages 视图或 Details 视图检查 LangSmith 中的 Agent 线程。
+---
+
+从追踪项目中，使用 **Threads**、**Traces** 或 **Runs** 标签页来更改表格中显示的内容。点击任意行打开侧边面板。
+
+侧边面板以 [线程](/langsmith/observability-concepts#threads) 作为主要导航单元。与其将每个[运行](/langsmith/observability-concepts#runs)视为孤立对象，UI 会保持周围对话可见，以便您了解某个运行在 Agent 更大执行范围中的位置。
+
+<Note>
+Threads 标签页和 Turns 视图仅适用于使用 `thread_id` 元数据字段检测的运行。如果没有线程检测，运行会以单个追踪的形式显示，且无法访问 Turns 视图。
+</Note>
+
+侧边面板顶部提供三种视图：
+
+- [**Messages**](#messages-view) (**测试版**)：对话层。将完整线程扫描为输入、输出、推理、工具调用和子 Agent 活动。使用此视图来定位需要关注的内容。按 `M` 切换到此视图。
+- [**Turns**](#turns-view)：按轮次摘要。将线程中的每个轮次作为卡片查看，显示其输入和输出，可展开/折叠。当您想要结构概览而不需要完整对话渲染时使用此视图。按 `T` 切换到此视图。
+- [**Details**](#details-view)：调试层。深入研究特定运行，检查输入、输出、计时、token 数量、错误和元数据。使用此视图来了解执行中特定点发生的情况。按 `D` 切换到此视图。
+
+<Note>
+Messages 标签页对于没有可渲染消息的线程是禁用的。Messages 视图处于 **[测试版](/langsmith/release-stages)**——侧边面板默认显示 Details 视图。
+</Note>
+
+使用 Messages 视图在对话中定位自己并确定重点关注的内容，然后切换到 Details 视图检查特定运行：
+
+<Steps>
+  <Step title="从 Messages 视图开始">
+    打开一个线程并切换到 Messages 视图以查看完整线程。
+  </Step>
+  <Step title="调查">
+    扫描线程以识别意外行为，例如糟糕的工具结果、意外的子 Agent 交接或延迟峰值。
+  </Step>
+  <Step title="检查运行">
+    点击相关的消息或工具调用，在生成该消息的确切运行处打开 Details 视图。检查其输入、输出、计时、错误和元数据。
+  </Step>
+  <Step title="返回线程">
+    切换回 Messages 视图以继续扫描对话。
+  </Step>
+</Steps>
+
+## Messages 视图
+
+<Note>Messages 视图处于 **[测试版](/langsmith/release-stages)**。侧边面板默认显示 [Details 视图](#details-view)。</Note>
+
+使用 Messages 视图扫描完整线程并在深入研究特定运行之前识别意外行为——糟糕的工具结果、意外的子 Agent 交接或延迟峰值。
+
+### Messages 视图显示的内容
+
+线程中的每个轮次呈现为一个包含模型响应、触发的工具调用以及这些工具返回结果的单个块。您可以扫描完整线程并阅读 Agent 的行为，而无需打开子运行。
+
+每个块的元数据行显示：
+
+- **Token 使用量：** 调用的总 token 数
+- **成本：** 调用的总成本
+- **模型名称**
+- **LLM 调用**链接到 [Details 视图](#details-view) 中对应的运行（仅在 AI 消息有可见文本时显示）
+
+当模型使用扩展思考时，**Thought** 块会以内联方式出现在助手消息中，默认折叠。点击展开该轮次的思维链。
+
+**Subagents** 作为独立操作以内联方式出现在对话中。点击进入子 Agent 以打开该子 Agent 消息的嵌套视图。点击返回以回到父线程。
+
+**Tool calls** 出现在触发它们的助手消息旁。每个工具调用卡片包含指向 [Details 视图](#details-view) 中其运行的链接。当 Agent 一起发出多个工具调用时（无论是同一工具的重复调用还是多个不同工具的并行调用），这些调用会折叠为单个分组行。展开该组以查看每个单独的调用。
+
+LangSmith 在您切换 Messages 和 Details 标签页时会保留消息的折叠和展开状态。
+
+要下载线程为 Markdown 文件，请使用 Messages 视图中的下载按钮。导出的文件包含完整对话记录，包括人类和 AI 的轮次、工具调用和工具结果，格式适用于在任何 Markdown 查看器中阅读。
+
+### 自定义 Messages 视图
+
+您可以使用单个运行上的元数据键来控制运行在 Messages 视图中的显示方式。
+
+- `ls_agent_type`：控制类似 Agent 的运行的消息显示位置。接受的值：
+
+  | 值 | Messages 视图行为 |
+  |---|---|
+  | `"root"` | 此运行的消息显示在主 Messages 视图中。 |
+  | `"subagent"` | 此运行的消息在对话线程中显示为子 Agent 操作。 |
+
+    ```python
+    @traceable(metadata={"ls_agent_type": "root"})
+    def my_agent():
+        ...
+    ```
+
+- `ls_message_format`：覆盖自动格式检测。接受以下值：
+  - `"langchain"`：按 LangChain 消息格式解析
+  - `"anthropic"`：按 Anthropic 消息格式解析
+  - `"responses"`：按 OpenAI Responses API 格式解析
+- `LS_MESSAGE_VIEW_EXCLUDE`：从 Messages 视图中排除单个运行。从 `langsmith` 导入常量（Python 和 JS），或使用字面字符串 `"ls_message_view_exclude"`。代码示例请参阅[从 Messages 视图中排除运行](/langsmith/messages-view-integrations#exclude-runs-from-the-messages-view)。
+  - 对于 `@traceable` / `traceable()`：在带标签运行的追踪上下文中执行的子运行会继承排除设置。
+  - 对于 `wrap_openai` / `wrapOpenAI`、`wrapAISDK`、`RunTree.createChild` 和 LangChain `RunnableConfig`：在每个要隐藏的运行上设置该键。这些表面上不保证子运行的继承。
+
+## Turns 视图
+
+使用 Turns 视图可以逐轮扫描线程结构，而无需 Messages 视图的完整对话渲染。线程中的每轮都显示为一个卡片，展示根运行的输入和输出。点击卡片的 chevron 可展开或折叠其内容。
+
+Turns 视图适用于以下场景：
+
+- 线程没有可渲染的消息（例如，来自不受 Messages 视图支持的集成的追踪）。
+- 你想在深入了解之前快速了解线程的结构概览。
+- 你想查看每轮的原始输入和输出，而无需规范化为聊天风格的对话。
+
+点击任意一轮可打开该轮产生的运行的[详情视图](#details-view)。
+
+### 自定义 Turns 视图
+
+默认情况下，LangSmith 使用启发式方法选择要在每轮卡片上显示的输入和输出字段。若要覆盖显示的字段，请点击线程顶部的 **Format** 按钮打开格式窗格，选择要显示的特定输入和输出路径，然后保存。你的选择将对该项目保持不变。
+
+## Details 视图
+
+Details 视图是调试层。点击特定运行时，周围的线程上下文仍然可用，以便你了解该运行在更广泛对话中的位置。检查输入、输出、元数据、时间、错误和子运行，而不会失去对线程的追踪。
+
+### 自定义 Details 视图
+
+在运行上设置 `run_type="llm"` 会使 Details 视图渲染该运行的令牌数和延迟。完整的消息格式规范请参阅[记录 LLM 追踪](/langsmith/log-llm-trace)。
+
+当运行的 `run_type` 为 `tool` 时，工具消息会自动展开。
+
+在运行上设置 `run_type="retriever"` 会使 Details 视图以内联方式渲染每个检索到的文档及其内容和元数据。所需的返回格式请参阅[记录检索器追踪](/langsmith/log-retriever-trace)。
+
+### 操作
+
+在 Details 视图中，你还可以：
+
+- **分享追踪：** 生成指向追踪的公共链接。请参阅[管理追踪](/langsmith/manage-trace#share-a-trace)。
+- **查看服务器日志：** 访问由 LangSmith 部署生成的追踪关联的服务器日志。请参阅[管理追踪](/langsmith/manage-trace#view-server-logs)。
+- **添加到数据集：** 将运行保存为数据集中的示例，用于评估。请参阅[在应用程序中管理数据集](/langsmith/manage-datasets-in-application#manually-from-a-tracing-project)。
+- **添加到标注队列：** 将运行发送到队列以进行人工审查和反馈。请参阅[标注队列](/langsmith/annotation-queues#assign-runs-to-a-single-run-queue)。

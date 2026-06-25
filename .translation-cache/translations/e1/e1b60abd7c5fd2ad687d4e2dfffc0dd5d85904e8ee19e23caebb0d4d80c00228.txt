@@ -1,0 +1,137 @@
+---
+title: 使用控制平面部署
+sidebarTitle: 使用控制平面
+icon: "cloud-upload"
+description: 使用控制平面 UI 构建 Docker 镜像并部署应用程序到自托管 LangSmith 实例。
+---
+
+<Info>
+**本指南适用于自托管 LangSmith 客户**，已在其实例上[启用 LangSmith 部署](/langsmith/deploy-self-hosted-full-platform#enable-langsmith-deployment)。云端客户请参阅[部署到云端](/langsmith/deploy-to-cloud)。有关无控制平面的独立 Agent Server，请参阅[自托管独立服务器](/langsmith/deploy-standalone-server)。
+</Info>
+
+本指南向您展示如何将应用程序部署到使用[控制平面](/langsmith/control-plane)的[自托管](/langsmith/self-hosted) LangSmith 实例。使用控制平面时，您在本地构建 Docker 镜像，将其推送到 Kubernetes 集群可以访问的注册表，然后使用 [LangSmith UI](https://smith.langchain.com) 进行部署。
+
+## 拓扑结构
+
+在现有自托管 LangSmith 实例上启用 LangSmith 部署会添加一个控制平面、一个数据平面监听器，以及一个在集群中配置 Agent Server 的操作器。基础 LangSmith 平台继续处理可观测性、评估和提示；部署的 Agent Server 将追踪发送回平台。
+
+有关启用 LangSmith 部署添加的组件详情，请参阅[启用 LangSmith 部署](/langsmith/deploy-self-hosted-full-platform#enable-langsmith-deployment)。
+
+## 概述
+
+部署到带有控制平面的自托管 LangSmith 实例的应用程序使用 Docker 镜像。在本指南中，应用程序部署工作流程如下：
+
+1. 使用 `langgraph dev` 或 [Studio](/langsmith/studio) 在本地测试您的应用程序。
+2. 使用 `langgraph build` 命令构建 Docker 镜像。
+3. 将镜像推送到您的基础设施可以访问的容器注册表。
+4. 通过在[控制平面 UI](/langsmith/control-plane#control-plane-ui) 中指定镜像 URL 进行部署。
+
+## 前置要求
+
+在完成本指南之前，您需要满足以下条件：
+
+- 在自托管 LangSmith 实例上[启用 LangSmith 部署](/langsmith/deploy-self-hosted-full-platform#enable-langsmith-deployment)。
+- 可以访问启用了 LangSmith 部署的 [LangSmith UI](https://smith.langchain.com)。
+- Kubernetes 集群可以访问的容器注册表。如果使用需要身份验证的私有注册表，您必须将镜像拉取密钥配置到您的基础设施设置中。请参阅[私有注册表身份验证](#private-registry-authentication)。
+
+## 步骤 1. 本地测试
+
+在部署之前，先在本地测试您的应用程序。您可以使用 [LangGraph CLI](/langsmith/cli#dev) 在开发模式下运行 Agent server：
+
+```bash
+langgraph dev
+```
+
+有关本地测试的完整指南，请参阅[本地服务器快速入门](/langsmith/local-dev-testing)。
+
+## 步骤 2. 构建 Docker 镜像
+
+使用 [`langgraph build`](/langsmith/cli#build) 命令构建应用程序的 Docker 镜像：
+
+```bash
+langgraph build -t my-image
+```
+
+构建命令选项包括：
+
+| 选项 | 默认值 | 描述 |
+|--------|---------|-------------|
+| `-t, --tag TEXT` | 必填 | Docker 镜像的标签 |
+| `--platform TEXT` | | 构建的目标平台（例如 `linux/amd64,linux/arm64`） |
+| `--pull / --no-pull` | `--pull` | 使用最新的远程 Docker 镜像进行构建 |
+| `-c, --config FILE` | `langgraph.json` | 配置文件的路径 |
+
+指定平台的示例：
+
+```bash
+langgraph build --platform linux/amd64 -t my-image:v1.0.0
+```
+
+有关完整详情，请参阅 [CLI 参考文档](/langsmith/cli#build)。
+
+## 第 3 步：推送到容器注册表
+
+将您的镜像推送到 Kubernetes 集群可访问的容器注册表。具体命令取决于您的注册表提供商。
+
+<Tip>
+请使用版本信息标记您的镜像（例如 `my-registry.com/my-app:v1.0.0`），以便于回滚。
+</Tip>
+
+## 第 4 步：使用控制平面 UI 进行部署
+
+[控制平面 UI](/langsmith/control-plane#control-plane-ui) 允许您创建和管理部署、查看日志和指标以及更新配置。要在 [LangSmith UI](https://smith.langchain.com) 中创建新部署：
+
+1. 在左侧导航面板中，选择 **部署**。
+1. 在右上角，选择 **+ 新建部署**。
+1. 在部署配置面板中，提供：
+   - **镜像 URL**：您在[第 3 步](#step-3-push-to-container-registry)中推送的完整镜像 URL。
+   - **监听器/计算 ID**：选择为您的基础设施配置的监听器。
+   - **命名空间**：要部署到的 Kubernetes 命名空间。
+   - **环境变量**：任何必需的配置（API 密钥等）。
+   - 根据需要设置其他部署参数。
+1. 选择 **提交**。
+
+控制平面将协调您的[数据平面](/langsmith/data-plane)监听器来部署您的应用。
+
+创建部署后，基础设施将[异步配置](/langsmith/control-plane#asynchronous-deployment)。部署可能需要数分钟，初始部署由于数据库创建会花费更长时间。
+
+通过控制平面 UI，您可以查看构建日志、服务器日志以及部署指标，包括 CPU/内存使用量、副本数和 API 性能。如需更多详情，请参阅[控制平面监控文档](/langsmith/control-plane#monitoring)。
+
+<Note>
+系统会为每个部署自动创建一个同名[LangSmith 可观测性追踪项目](/langsmith/observability)。追踪环境变量由控制平面自动设置。
+</Note>
+
+## 更新部署
+
+要部署新版本的应用，请创建[新版本](/langsmith/control-plane#revisions)：
+
+从 LangSmith UI 开始：
+
+1. 在左侧导航面板中，选择 **部署**。
+1. 选择一个现有部署。
+1. 在部署视图中，选择右上角的 **+ 新建版本**。
+1. 更新配置：
+   - 将 **镜像 URL** 更新为新的镜像版本。
+   - 如需要，更新环境变量。
+   - 根据需要调整其他设置。
+1. 选择 **提交**。
+
+## 私有注册表认证
+
+如果您的容器注册表需要身份验证（例如 AWS ECR、Azure ACR、GCP Artifact Registry、私有 Docker 注册表），则必须在部署应用之前配置 Kubernetes 镜像拉取密钥。这是一次性基础设施配置。
+
+<Note>
+**此配置在基础设施级别完成，而非每个部署。** 一旦配置完成，所有部署将自动继承注册表凭据。
+</Note>
+
+在 LangSmith Helm 图表的 `values.yaml` 文件中配置 `imagePullSecrets`。请参阅[启用 LangSmith 部署指南](/langsmith/deploy-self-hosted-full-platform#enable-langsmith-deployment)中的详细步骤。
+
+有关为不同注册表提供商创建镜像拉取密钥的详细步骤，请参阅 [Kubernetes 关于从私有注册表拉取镜像的文档](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/)。
+
+## 后续步骤
+
+- **[控制平面](/langsmith/control-plane)**：详细了解控制平面功能。
+- **[数据平面](/langsmith/data-plane)**：了解数据平面架构。
+- **[可观测性](/langsmith/observability)**：使用自动追踪监控您的部署。
+- **[Studio](/langsmith/studio)**：测试和调试已部署的应用。
+- **[LangGraph CLI](/langsmith/cli)**：完整的 CLI 参考文档。

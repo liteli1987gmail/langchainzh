@@ -1,0 +1,77 @@
+---
+title: "Hugging Face 集成"
+sidebarTitle: HuggingFaceEmbeddings
+description: "使用 LangChain Python 与 Hugging Face 嵌入模型集成。"
+---
+
+LangChain 支持三种使用 Hugging Face 嵌入模型的方式：
+
+- **本地推理** via `HuggingFaceEmbeddings`：下载模型并通过 [Sentence Transformers](https://sbert.net) 在进程内运行。
+- **推理提供商和专用推理端点** via `HuggingFaceEndpointEmbeddings`：通过 Hugging Face 实现无服务器或专用托管推理。
+- **大规模自托管** via [Text Embeddings Inference (TEI)](/oss/integrations/embeddings/text_embeddings_inference)：Hugging Face 的生产级推理服务器，由 `HuggingFaceEndpointEmbeddings` 指向。
+
+这三种方式都使用相同的 `Embeddings` 接口，因此您可以从本地开始，过渡到托管或自托管部署，而无需更改应用程序的其余部分。
+
+## Setup
+
+```shell
+pip install -qU langchain-huggingface
+```
+
+## 本地嵌入
+
+通过 `sentence-transformers` 在本地生成嵌入向量。首次运行时会下载模型权重。
+
+```python
+from langchain_huggingface import HuggingFaceEmbeddings
+
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2",
+    encode_kwargs={"normalize_embeddings": True},
+)
+
+query_result = embeddings.embed_query("This is a test document.")
+doc_result = embeddings.embed_documents(["This is a test document."])
+```
+
+有关模型选择、GPU 配置和查询/文档提示，请参阅专门的 [Sentence Transformers 指南](/oss/integrations/embeddings/sentence_transformers)。
+
+## Hugging Face 推理端点和提供商
+
+如果您不希望在本地下载模型，可以通过 [Hugging Face 推理提供商](https://huggingface.co/docs/inference-providers) 或专用[推理端点](https://huggingface.co/inference-endpoints/dedicated)访问嵌入模型。两者都在 Hugging Face 可扩展的无服务器基础设施上提供开源嵌入模型。
+
+首先，从[您的 Hugging Face 设置](https://huggingface.co/settings/tokens)获取令牌：
+
+```python
+import os
+from getpass import getpass
+
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = getpass()
+```
+
+然后使用 `HuggingFaceEndpointEmbeddings`：
+
+```python
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
+
+embeddings = HuggingFaceEndpointEmbeddings(
+    model="sentence-transformers/all-mpnet-base-v2"
+)
+
+query_result = embeddings.embed_query("This is a test document.")
+```
+
+要通过特定的推理提供者路由（例如 `hf-inference`、`sambanova`、`together`），请传递 `provider=`：
+
+```python
+embeddings = HuggingFaceEndpointEmbeddings(
+    model="BAAI/bge-m3",
+    provider="hf-inference",
+)
+```
+
+完整的提供商列表及其支持的模型请参阅 [Inference Providers 文档](https://huggingface.co/docs/inference-providers)。
+
+## 使用 Text Embeddings Inference 自托管
+
+要在您自己的基础设施上对 Sentence Transformers 模型进行生产级服务部署，请使用 [Text Embeddings Inference (TEI)](https://github.com/huggingface/text-embeddings-inference)。TEI 处理批处理、GPU 加速，并提供 OpenAI 兼容的 API。请参阅 [TEI 集成指南](/oss/integrations/embeddings/text_embeddings_inference) 以获取详细操作指南。

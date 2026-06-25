@@ -1,0 +1,348 @@
+---
+title: Soniox
+---
+
+开始使用 LangChain 中的 [Soniox](https://soniox.com/) 音频转录加载器。
+
+## 设置
+
+安装包：
+
+```bash
+pip install langchain-soniox
+```
+
+### 凭证
+
+从 [Soniox Console](https://console.soniox.com) 获取您的 Soniox API 密钥，并将其设置为环境变量：
+
+```bash
+export SONIOX_API_KEY=your_api_key
+```
+
+## 使用
+
+### 基本转录
+
+演示如何使用 `SonioxDocumentLoader` 转录音频文件并使用 LLM 生成摘要。
+
+```python
+from langchain_soniox import SonioxDocumentLoader
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+audio_file_url = "https://soniox.com/media/examples/coffee_shop.mp3"
+loader = SonioxDocumentLoader(file_url=audio_file_url)
+
+print(f"Transcribing {audio_file_url}...")
+docs = loader.load()
+
+transcript_text = docs[0].page_content
+print(f"Transcript: {transcript_text}")
+
+# Create a chain to summarize the transcript
+prompt = ChatPromptTemplate.from_template(
+    "Write a concise summary of the following speech:\n\n{transcript}"
+)
+
+chain = prompt | ChatOpenAI(model="gpt-5-mini") | StrOutputParser()
+summary = chain.invoke({"transcript": transcript_text})
+print(summary)
+```
+
+您也可以从本地文件或字节加载音频：
+
+```python
+# Using a local file path
+loader = SonioxDocumentLoader(file_path="/path/to/audio.mp3")
+
+# Using binary data
+with open("/path/to/audio.mp3", "rb") as f:
+    audio_bytes = f.read()
+loader = SonioxDocumentLoader(file_data=audio_bytes)
+```
+
+### 异步转录
+
+对于异步操作，请使用 `aload()` 或 `alazy_load()`：
+
+```python
+import asyncio
+from langchain_soniox import SonioxDocumentLoader
+
+async def transcribe_async():
+    loader = SonioxDocumentLoader(
+        file_url="https://soniox.com/media/examples/coffee_shop.mp3"
+    )
+
+    docs = [doc async for doc in loader.alazy_load()]
+    print(docs[0].page_content)
+
+asyncio.run(transcribe_async())
+```
+
+## 高级用法
+
+### 语言提示
+
+Soniox 自动检测并转录超过 **60 种语言** 的语音。当您知道音频中可能出现的语言时，提供 `language_hints` 可以通过使识别偏向这些语言来提高准确性。
+
+语言提示 **不会限制** 识别——它们仅 **使模型偏向** 指定语言，同时仍允许检测到其他语言（如果存在）。
+
+```python
+from langchain_soniox import (
+    SonioxDocumentLoader,
+    SonioxTranscriptionOptions,
+)
+
+loader = SonioxDocumentLoader(
+    file_url="https://soniox.com/media/examples/coffee_shop.mp3",
+    options=SonioxTranscriptionOptions(
+        language_hints=["en", "es"],
+    ),
+)
+
+docs = loader.load()
+```
+
+有关详细信息，请参阅 [Soniox 语言提示文档](https://soniox.com/docs/stt/concepts/language-hints)。
+
+### 说话人分离
+
+启用说话人识别以区分不同的说话人：
+
+```python
+from langchain_soniox import (
+    SonioxDocumentLoader,
+    SonioxTranscriptionOptions,
+)
+
+loader = SonioxDocumentLoader(
+    file_url="https://soniox.com/media/examples/coffee_shop.mp3",
+    options=SonioxTranscriptionOptions(
+        enable_speaker_diarization=True,
+    ),
+)
+
+docs = loader.load()
+
+# Access speaker information in the metadata
+current_speaker = None
+output = ""
+for token in docs[0].metadata["tokens"]:
+    if current_speaker != token["speaker"]:
+        current_speaker = token["speaker"]
+        output += f"\nSpeaker {current_speaker}: {token['text'].lstrip()}"
+    else:
+        output += token["text"]
+print(output)
+
+# Analyze the conversation
+prompt = ChatPromptTemplate.from_template(
+    """
+    Analyze the following conversation between speakers.
+    Identify the intent of each speaker.
+
+    Conversation:
+    {conversation}
+    """
+)
+
+chain = prompt | ChatOpenAI(model="gpt-5-mini") | StrOutputParser()
+analysis = chain.invoke({"conversation": output})
+print(analysis)
+```
+
+### 语言识别
+
+启用自动语言检测与识别：
+
+```python
+from langchain_soniox import (
+    SonioxDocumentLoader,
+    SonioxTranscriptionOptions,
+)
+
+loader = SonioxDocumentLoader(
+    file_url="https://soniox.com/media/examples/coffee_shop.mp3",
+    options=SonioxTranscriptionOptions(
+        enable_language_identification=True,
+    ),
+)
+
+docs = loader.load()
+
+# Access language information in the metadata
+current_language = None
+output = ""
+for token in docs[0].metadata["tokens"]:
+    if current_language != token["language"]:
+        current_language = token["language"]
+        output += f"\n[{current_language}] {token['text'].lstrip()}"
+    else:
+        output += token["text"]
+print(output)
+```
+
+### 用于提高准确性的上下文
+
+提供特定领域的[上下文](https://soniox.com/docs/stt/concepts/context)以提高转录准确性。上下文帮助模型理解您的领域，识别重要术语，并应用自定义词汇。
+
+`context` 对象支持四个可选部分：
+
+```python
+from langchain_soniox import (
+    SonioxDocumentLoader,
+    SonioxTranscriptionOptions,
+    StructuredContext,
+    StructuredContextGeneralItem,
+    StructuredContextTranslationTerm,
+)
+
+loader = SonioxDocumentLoader(
+    file_url="https://soniox.com/media/examples/coffee_shop.mp3",
+    options=SonioxTranscriptionOptions(
+        context=StructuredContext(
+            # Structured key-value information (domain, topic, intent, etc.)
+            general=[
+                StructuredContextGeneralItem(key="domain", value="Healthcare"),
+                StructuredContextGeneralItem(
+                    key="topic", value="Diabetes management consultation"
+                ),
+                StructuredContextGeneralItem(key="doctor", value="Dr. Martha Smith"),
+            ],
+            # Longer free-form background text or related documents
+            text="The patient has a history of...",
+            # Domain-specific or uncommon words
+            terms=["Celebrex", "Zyrtec", "Xanax"],
+            # Custom translations for ambiguous terms
+            translation_terms=[
+                StructuredContextTranslationTerm(
+                    source="Mr. Smith", target="Sr. Smith"
+                ),
+                StructuredContextTranslationTerm(source="MRI", target="RM"),
+            ],
+        ),
+    ),
+)
+
+docs = loader.load()
+```
+
+有关更多详细信息，请参阅 [Soniox context documentation](https://soniox.com/docs/stt/concepts/context)。
+
+### 翻译
+
+从任何检测到的语言翻译到目标语言：
+
+```python
+from langchain_soniox import (
+    SonioxDocumentLoader,
+    SonioxTranscriptionOptions,
+    TranslationConfig,
+)
+
+loader = SonioxDocumentLoader(
+    file_url="https://soniox.com/media/examples/coffee_shop.mp3",
+    options=SonioxTranscriptionOptions(
+        translation=TranslationConfig(
+            type="one_way",
+            target_language="fr",
+        ),
+        language_hints=["en"],
+    ),
+)
+
+docs = list(loader.lazy_load())
+
+translated_text = ""
+original_text = ""
+
+for token in docs[0].metadata["tokens"]:
+    if token["translation_status"] == "translation":
+        translated_text += token["text"]
+    else:
+        original_text += token["text"]
+
+print(original_text)
+print(translated_text)
+```
+
+您还可以使用 `two_way` 翻译类型同时进行两种语言之间的转录和翻译。如需更多信息，请参阅[异步翻译](https://soniox.com/docs/stt/async/async-translation)。
+
+## API 参考
+
+### 构造函数参数
+
+| 参数                            | 类型                         | 必填   | 默认值                        | 描述                                              |
+| ------------------------------ | ---------------------------- | ------ | ------------------------------ | ------------------------------------------------ |
+| `file_path`                    | `str`                        | 否\*   | `None`                         | 要转录的本地音频文件路径                          |
+| `file_data`                    | `bytes`                      | 否\*   | `None`                         | 要转录的音频文件的二进制数据                       |
+| `file_url`                     | `str`                        | 否\*   | `None`                         | 要转录的音频文件 URL                              |
+| `api_key`                      | `str`                        | 否     | `SONIOX_API_KEY` 环境变量      | Soniox API 密钥                                   |
+| `base_url`                     | `str`                        | 否     | `https://api.soniox.com/v1`    | API 基础 URL（请参阅[区域端点][endpoints]）        |
+| `options`                      | `SonioxTranscriptionOptions` | 否     | `SonioxTranscriptionOptions()` | 转录选项                                          |
+| `polling_interval_seconds`     | `float`                      | 否     | `1.0`                          | 状态轮询间隔时间（秒）                             |
+| `timeout_seconds`              | `float`                      | 否     | `300.0`（5 分钟）              | 转录最大等待时间                                  |
+| `http_request_timeout_seconds` | `float`                      | 否     | `60.0`                         | 单个 HTTP 请求的超时时间                          |
+
+\* 您必须指定**恰好一个**：`file_path`、`file_data` 或 `file_url`。
+
+[endpoints]: https://soniox.com/docs/stt/data-residency#regional-endpoints
+
+### 转录选项
+
+`SonioxTranscriptionOptions` 类支持以下参数：
+
+| 参数                          | 类型                | 描述                                              |
+| ---------------------------- | ------------------- | ------------------------------------------------ |
+| `model`                      | `str`               | 要使用的异步模型（请参阅[可用模型][models]）        |
+| `language_hints`             | `list[str]`         | 转录语言提示（ISO 语言代码）                       |
+| `language_hints_strict`      | `bool`              | 启用严格的语言提示                                |
+| `enable_speaker_diarization` | `bool`              | 启用说话人识别                                    |
+| `enable_language_identification` | `bool`          | 启用语言检测                                      |
+| `translation`                | `TranslationConfig` | 翻译配置                                          |
+| `context`                    | `StructuredContext` | 用于提高准确性的上下文                            |
+| `client_reference_id`        | `str`               | 您记录的自定义引用 ID                              |
+| `webhook_url`                | `str`               | 完成通知的 Webhook URL                            |
+| `webhook_auth_header_name`   | `str`               | Webhook 自定义认证头名称                          |
+| `webhook_auth_header_value`  | `str`               | Webhook 自定义认证头值                            |
+
+浏览 [API 文档](https://soniox.com/docs/stt/api-reference/transcriptions/create_transcription) 以获取支持的完整选项列表。
+
+[models]: https://soniox.com/docs/stt/models
+
+### 返回值
+
+`lazy_load()` 和 `alazy_load()` 方法生成一个 `Document` 对象：
+
+```python
+Document(
+    page_content=str,  # The transcribed text
+    metadata={
+        "source": str,  # File URL, path, or "file_upload"
+        "transcription_id": str,  # Unique transcription ID
+        "audio_duration_ms": int,  # Audio duration in milliseconds
+        "model": str,  # Model used for transcription
+        "created_at": str,  # ISO 8601 timestamp
+        "tokens": list[dict],  # Detailed token-level information
+    }
+)
+```
+
+元数据中的 `tokens` 数组包含每个转录单词的详细信息：
+
+- `text`：转录文本
+- `start_ms`：开始时间（毫秒）
+- `end_ms`：结束时间（毫秒）
+- `speaker`：说话者 ID（如果启用了说话者分离），例如 `"1"`、`"2"` 等
+- `language`：检测到的语言（如果启用了语言识别），例如 `"en"`、`"fr"` 等
+- `translation_status`：翻译状态（`"original"`、`"translated"` 或 `"none"`）
+
+了解更多关于 [Soniox API 参考文档](https://soniox.com/docs/stt/api-reference/transcriptions/get_transcription_transcript)。
+
+## 相关资源
+
+- [Soniox API 文档](https://soniox.com/docs)
+- [Soniox Console](https://console.soniox.com)

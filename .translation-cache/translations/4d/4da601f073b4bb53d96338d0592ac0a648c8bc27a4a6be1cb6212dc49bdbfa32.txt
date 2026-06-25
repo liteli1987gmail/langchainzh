@@ -1,0 +1,334 @@
+---
+title: 工具调用
+description: 以丰富的、类型安全的 UI 卡片展示智能体工具调用
+---
+
+智能体可以调用外部工具，如天气 API、计算器、网络搜索、数据库查询等。返回的结果是原始 JSON 格式。本模式展示了如何为智能体的每次工具调用渲染结构化的、类型安全的 UI 卡片，并包含加载状态和错误处理。
+
+import { PatternEmbed } from "/snippets/pattern-embed.jsx"
+import UseStreamTypeInference from '/snippets/oss/use-stream-type-inference.mdx';
+
+<PatternEmbed pattern="tool-calling" />
+
+## 工具调用的工作原理
+
+当 LangGraph Agent 决定需要外部数据时，它会在 AI 消息中发出一或多个工具调用。每个工具调用包含：
+
+- **name**：被调用的工具（例如 `"get_weather"`、`"calculator"`）
+- **args**：传递给工具的结构化参数
+- **id**：链接调用与其结果的唯一标识符
+
+Agent 运行时执行工具，结果以 `ToolMessage` 的形式返回。@[`useStream`] 钩子将所有这些统一为一个 `toolCalls` 数组，您可以直接渲染它。
+
+## 配置 `useStream`
+
+第一步是将 @[`useStream`] 连接到您的 Agent 后端。该钩子返回响应式状态，包括一个 `toolCalls` 数组，当 Agent 流式传输时会实时更新。
+
+<UseStreamTypeInference />
+
+<CodeGroup>
+
+</CodeGroup>
+```tsx React
+import { useStream } from "@langchain/react";
+
+const AGENT_URL = "http://localhost:2024";
+
+export function Chat() {
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "tool_calling",
+  });
+
+  return (
+    <div>
+      {stream.messages.map((msg) => (
+        <Message key={msg.id} message={msg} toolCalls={stream.toolCalls} />
+      ))}
+    </div>
+  );
+}
+```
+
+```vue Vue
+<script setup lang="ts">
+import { useStream } from "@langchain/vue";
+
+const AGENT_URL = "http://localhost:2024";
+
+const stream = useStream<typeof myAgent>({
+  apiUrl: AGENT_URL,
+  assistantId: "tool_calling",
+});
+</script>
+
+<template>
+  <div>
+    <Message
+      v-for="msg in stream.messages.value"
+      :key="msg.id"
+      :message="msg"
+      :tool-calls="stream.toolCalls.value"
+    />
+  </div>
+</template>
+```
+
+```svelte Svelte
+<script lang="ts">
+  import { useStream } from "@langchain/svelte";
+
+  const AGENT_URL = "http://localhost:2024";
+
+  const stream = useStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "tool_calling",
+  });
+</script>
+
+<div>
+  {#each stream.messages as msg (msg.id)}
+    <Message message={msg} toolCalls={stream.toolCalls} />
+  {/each}
+</div>
+```
+
+```ts Angular
+import { Component } from "@angular/core";
+import { injectStream } from "@langchain/angular";
+
+const AGENT_URL = "http://localhost:2024";
+
+@Component({
+  selector: "app-chat",
+  template: `
+    @for (msg of stream.messages(); track msg.id) {
+      <app-message [message]="msg" [toolCalls]="stream.toolCalls()" />
+    }
+  `,
+})
+export class ChatComponent {
+  stream = injectStream<typeof myAgent>({
+    apiUrl: AGENT_URL,
+    assistantId: "tool_calling",
+  });
+}
+```
+</CodeGroup>
+
+## AssembledToolCall 类型
+
+`toolCalls` 数组中的每个条目都是一个 `AssembledToolCall` 对象：
+
+```ts
+interface AssembledToolCall<
+  TName extends string = string,
+  TInput = unknown,
+  TOutput = unknown,
+> {
+  name: TName;
+  callId: string;
+  id: string;
+  namespace: string[];
+  input: TInput;
+  args: TInput;
+  output: TOutput | null;
+  status: "running" | "finished" | "error";
+  error: string | undefined;
+}
+```
+
+| 属性 | 描述 |
+| --- | --- |
+| `name` | 工具名称（例如 `"get_weather"`） |
+| `callId` | 与 AI 消息的 `tool_calls` 条目匹配的唯一 ID |
+| `id` | `callId` 的别名，与消息级工具调用匹配 |
+| `namespace` | 发出工具调用的命名空间 |
+| `input` | 代理传递给工具的结构化参数 |
+| `args` | `input` 的别名，与消息级工具调用匹配 |
+| `output` | 成功调用后的工具输出，运行中或出错时为 `null` |
+| `status` | 生命周期状态：`"running"`、`"finished"` 或 `"error"` |
+| `error` | 工具调用失败时的错误详情 |
+
+## 按消息过滤工具调用
+
+AI 消息可能触发多个工具调用，您的聊天中可能包含多个 AI 消息。要在每条消息下方呈现正确的工具卡片，请通过将 `callId` 与消息的 `tool_calls` 数组进行匹配来过滤：
+
+```tsx
+function Message({
+  message,
+  toolCalls,
+}: {
+  message: AIMessage;
+  toolCalls: AssembledToolCall[];
+}) {
+  const messageToolCalls = toolCalls.filter((tc) =>
+    message.tool_calls?.find((t) => t.id === tc.callId)
+  );
+
+  return (
+    <div>
+      <p>{message.text}</p>
+      {messageToolCalls.map((tc) => (
+        <ToolCard key={tc.callId} toolCall={tc} />
+      ))}
+    </div>
+  );
+}
+```
+
+## 构建专用工具卡片
+
+不要直接转储原始 JSON，而是为每个工具构建专用的 UI 组件。使用 `name` 来选择正确的卡片：
+
+```tsx
+function ToolCard({ toolCall }: { toolCall: AssembledToolCall }) {
+  if (toolCall.status === "running") {
+    return <LoadingCard name={toolCall.name} />;
+  }
+
+  if (toolCall.status === "error") {
+    return <ErrorCard name={toolCall.name} error={toolCall.error} />;
+  }
+
+  switch (toolCall.name) {
+    case "get_weather":
+      return <WeatherCard input={toolCall.input} output={toolCall.output} />;
+    case "calculator":
+      return (
+        <CalculatorCard input={toolCall.input} output={toolCall.output} />
+      );
+    case "web_search":
+      return <SearchCard input={toolCall.input} output={toolCall.output} />;
+    default:
+      return <GenericToolCard toolCall={toolCall} />;
+  }
+}
+```
+
+### 天气卡片示例
+
+```tsx
+function WeatherCard({
+  input,
+  output,
+}: {
+  input: { location: string };
+  output: { temperature: number; condition: string };
+}) {
+  return (
+    <div className="rounded-lg border p-4">
+      <div className="flex items-center gap-2">
+        <CloudIcon />
+        <h3 className="font-semibold">{input.location}</h3>
+      </div>
+      <div className="mt-2 text-3xl font-bold">{output.temperature}°F</div>
+      <p className="text-muted-foreground">{output.condition}</p>
+    </div>
+  );
+}
+```
+
+### 加载状态和错误状态
+
+始终处理待处理状态和错误状态，以向用户提供清晰的反馈：
+
+```tsx
+function LoadingCard({ name }: { name: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border p-4 animate-pulse">
+      <Spinner />
+      <span>Running {name}...</span>
+    </div>
+  );
+}
+
+function ErrorCard({ name, error }: { name: string; error?: unknown }) {
+  return (
+    <div className="rounded-lg border border-red-300 bg-red-50 p-4">
+      <h3 className="font-semibold text-red-700">Error in {name}</h3>
+      <p className="text-sm text-red-600">
+        {String(error ?? "Tool execution failed")}
+      </p>
+    </div>
+  );
+}
+```
+
+## 类型安全的工具参数
+
+如果你的工具使用结构化模式定义，你可以使用
+`ToolCallFromTool` 工具类型来获取完全类型化的 `args`：
+
+```ts
+import { tool } from "@langchain/core/tools";
+import { z } from "zod";
+
+const getWeather = tool(async ({ location }) => { /* ... */ }, {
+  name: "get_weather",
+  description: "Get the current weather for a location",
+  schema: z.object({
+    location: z.string().describe("City name"),
+  }),
+});
+
+type WeatherToolCall = ToolCallFromTool<typeof getWeather>;
+// WeatherToolCall.input and WeatherToolCall.args are now { location: string }
+```
+
+<Tip>
+使用 `ToolCallFromTool` 可以获得编译时安全性。如果工具架构
+发生变化，UI 组件会立即标记类型错误。
+</Tip>
+
+## 在流式文本中内联渲染工具调用
+
+工具调用通常与流式文本交错到达。@[`useStream`] 钩子
+使 `toolCalls` 与流保持同步，因此代理发出调用时 pending cards会立即出现，
+在工具完成执行之前。
+
+这意味着用户会看到：
+
+1. AI 的文本在流入时
+2. 工具调用发出时立即出现加载卡片
+3. 工具完成后卡片更新显示结果
+
+<Note>
+工具调用会在原地更新。同一个 `callId` 从 `"running"` 转换到
+`"finished"`（或 `"error"`），因此您的 UI 会使用新状态重新渲染同一组件。
+</Note>
+
+## 处理多个并发工具调用
+
+代理可以并行调用多个工具。`toolCalls` 数组将包含
+多个 `status: "running"` 的条目同时存在。每个条目独立解析，
+因此您的 UI 应该优雅地处理部分完成的情况：
+
+```tsx
+function ToolCallList({ toolCalls }: { toolCalls: AssembledToolCall[] }) {
+  const pending = toolCalls.filter((tc) => tc.status === "running");
+  const completed = toolCalls.filter((tc) => tc.status === "finished");
+
+  return (
+    <div className="space-y-2">
+      {completed.map((tc) => (
+        <ToolCard key={tc.callId} toolCall={tc} />
+      ))}
+      {pending.map((tc) => (
+        <LoadingCard key={tc.callId} name={tc.name} />
+      ))}
+    </div>
+  );
+}
+```
+
+## 最佳实践
+
+构建工具调用 UI 时，请遵循以下指南：
+
+- **务必处理全部三种状态**：`running`、`finished` 和 `error`。
+  用户不应看到空白卡片。
+- **安全地验证结果**。工具输出在您为特定卡片进行类型收窄之前，其类型为 `unknown`。
+- **提供通用后备方案**。并非每个工具都需要专用卡片。为未知工具名称渲染一个可折叠的 JSON 视图。
+- **在加载期间显示工具名称和参数**。用户想知道代理正在做什么，即使在结果到达之前。
+- **保持卡片紧凑**。工具卡片内联显示在聊天消息中。避免用尺寸过大的小组件扰乱对话。

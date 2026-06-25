@@ -1,0 +1,147 @@
+---
+title: "LindormVectorStore 集成"
+description: "使用 LangChain Python 与 LindormVectorStore 进行集成。"
+---
+
+本笔记本介绍如何开始使用 Lindorm 向量存储。
+
+## 设置
+
+要访问 Lindorm 向量存储，您需要创建一个 Lindorm 账户，获取 ak/sk，并安装 `langchain-lindorm-integration` 集成包。
+
+```python
+pip install -qU "langchain-lindorm-integration"
+```
+
+### 凭证
+
+[前往 Lindorm 注册文档](https://help.aliyun.com/document_detail/2773369.html?spm=a2c4g.11186623.help-menu-172543.d_2_5_0.2a383f96gr5N3M&scm=20140722.H_2773369._.OR_help-T_cn~zh-V_1) 注册 Lindorm 并生成 ak/sk。
+
+```python
+import os
+
+
+class Config:
+    SEARCH_ENDPOINT = os.environ.get("SEARCH_ENDPOINT", "SEARCH_ENDPOINT")
+    SEARCH_USERNAME = os.environ.get("SEARCH_USERNAME", "root")
+    SEARCH_PWD = os.environ.get("SEARCH_PASSWORD", "<PASSWORD>")
+    AI_LLM_ENDPOINT = os.environ.get("AI_ENDPOINT", "<AI_ENDPOINT>")
+    AI_USERNAME = os.environ.get("AI_USERNAME", "root")
+    AI_PWD = os.environ.get("AI_PASSWORD", "<PASSWORD>")
+    AI_DEFAULT_EMBEDDING_MODEL = "bge_m3_model"  # set to your model
+```
+
+## 初始化
+
+这里我们使用部署在Lindorm AI Service上的嵌入模型。
+
+```python
+from langchain_lindorm_integration.embeddings import LindormAIEmbeddings
+from langchain_lindorm_integration.vectorstores import LindormVectorStore
+
+embeddings = LindormAIEmbeddings(
+    endpoint=Config.AI_LLM_ENDPOINT,
+    username=Config.AI_USERNAME,
+    password=Config.AI_PWD,
+    model_name=Config.AI_DEFAULT_EMBEDDING_MODEL,
+)
+
+index = "test_index"
+vector = embeddings.embed_query("hello word")
+dimension = len(vector)
+vector_store = LindormVectorStore(
+    lindorm_search_url=Config.SEARCH_ENDPOINT,
+    embedding=embeddings,
+    http_auth=(Config.SEARCH_USERNAME, Config.SEARCH_PWD),
+    dimension=dimension,
+    embeddings=embeddings,
+    index_name=index,
+)
+```
+
+## 管理向量存储
+
+### 向向量存储添加内容
+
+```python
+from langchain_core.documents import Document
+
+document_1 = Document(page_content="foo", metadata={"source": "https://example.com"})
+
+document_2 = Document(page_content="bar", metadata={"source": "https://example.com"})
+
+document_3 = Document(page_content="baz", metadata={"source": "https://example.com"})
+
+documents = [document_1, document_2, document_3]
+
+vector_store.add_documents(documents=documents, ids=["1", "2", "3"])
+```
+
+```python
+['1', '2', '3']
+```
+
+### 从向量存储中删除项目
+
+```python
+vector_store.delete(ids=["3"])
+```
+
+```text
+{'took': 400,
+ 'timed_out': False,
+ 'total': 1,
+ 'deleted': 1,
+ 'batches': 1,
+ 'version_conflicts': 0,
+ 'noops': 0,
+ 'retries': {'bulk': 0, 'search': 0},
+ 'throttled_millis': 0,
+ 'requests_per_second': -1.0,
+ 'throttled_until_millis': 0,
+ 'failures': []}
+```
+
+## 查询向量存储
+
+一旦您的向量存储已创建并且相关文档已添加，您很可能希望在链或代理运行期间对其进行查询。
+
+### 直接查询
+
+执行简单的相似性搜索可以如下进行：
+
+```python
+results = vector_store.similarity_search(query="thud", k=1)
+for doc in results:
+    print(f"* {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+* foo [{'source': 'https://example.com'}]
+```
+
+如果您想执行相似性搜索并接收相应的分数，您可以运行：
+
+```python
+results = vector_store.similarity_search_with_score(query="thud", k=1)
+for doc, score in results:
+    print(f"* [SIM={score:3f}] {doc.page_content} [{doc.metadata}]")
+```
+
+```text
+* [SIM=0.671268] foo [{'source': 'https://example.com'}]
+```
+
+## 用于检索增强生成
+
+有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下章节：
+
+- [检索文档](/oss/langchain/retrieval)
+- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
+- [代理式 RAG](/oss/langgraph/agentic-rag)
+
+---
+
+## API 参考
+
+有关所有 `LindormVectorStore` 功能配置的详细文档，请前往 [API 参考](https://pypi.org/project/langchain-lindorm-integration/)。

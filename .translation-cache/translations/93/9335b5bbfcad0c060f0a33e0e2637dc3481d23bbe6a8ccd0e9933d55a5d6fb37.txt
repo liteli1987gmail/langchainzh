@@ -1,0 +1,823 @@
+---
+title: 事件流
+description: 使用类型化投影流式传输 LangGraph 运行，包括消息、状态、子图、输出和扩展。
+---
+
+事件流是大多数 LangGraph 应用程序代码推荐的进程内流式传输模型。它返回一个运行流对象，可以同时以多种方式消费。
+
+## 快速入门
+
+:::python
+```py
+stream = graph.stream_events({
+    "messages": [{"role": "user", "content": "What is 42 * 17?"}],
+}, version="v3")
+
+for message in stream.messages:
+    for token in message.text:
+        print(token, end="", flush=True)
+
+final_state = stream.output
+```
+:::
+
+:::js
+```ts
+const stream = await graph.streamEvents(
+  { messages: [{ role: "user", content: "What is 42 * 17?" }] },
+  { version: "v3" }
+);
+
+for await (const message of stream.messages) {
+  for await (const token of message.text) {
+    process.stdout.write(token);
+  }
+}
+
+const finalState = await stream.output;
+```
+要针对部署在 Agent Server 后面的图进行流式处理，请参阅 [LangSmith Streaming API](/langsmith/streaming)。
+
+## 各部分如何协同工作
+
+流式处理栈有两个主要层：
+
+1. **流式处理** 从 Pregel 引擎发出原始图执行事件。
+2. **事件流式处理** 规范化这些事件，通过流转换器运行它们，并公开类型化投影。
+
+<div className="my-6 rounded-xl border bg-gray-50 p-4 dark:bg-gray-900">
+  <div className="mx-auto max-w-2xl space-y-2 text-sm">
+    <div className="rounded-lg border border-slate-300 bg-white p-3 text-center dark:border-slate-700 dark:bg-slate-950">
+      <div className="font-semibold text-slate-900 dark:text-slate-100">Pregel 引擎</div>
+      <div className="mt-1 text-xs text-slate-600 dark:text-slate-300">运行图步骤</div>
+    </div>
+    <div className="text-center text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">发出</div>
+    <div className="rounded-lg border border-orange-300 bg-orange-50 p-3 text-center dark:border-orange-800 dark:bg-orange-950">
+      <div className="font-semibold text-orange-900 dark:text-orange-100">原始 Pregel 事件</div>
+      <div className="mt-1 text-xs text-orange-700 dark:text-orange-300"><code>updates</code>, <code>values</code>, <code>messages</code>, <code>custom</code>, <code>checkpoints</code>, <code>tasks</code>, <code>debug</code></div>
+    </div>
+    <div className="text-center text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">发送到</div>
+    <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-center dark:border-blue-800 dark:bg-blue-950">
+      <div className="font-semibold text-blue-900 dark:text-blue-100">事件路由器</div>
+      <div className="mt-1 text-xs text-blue-700 dark:text-blue-300">通过转换器管道路由每个事件</div>
+    </div>
+    <div className="text-center text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">级联通过</div>
+    <div className="rounded-lg border border-green-300 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
+      <div className="font-semibold text-green-900 dark:text-green-100">流转换器</div>
+      <div className="mt-2 grid gap-2 text-xs text-green-800 dark:text-green-200 sm:grid-cols-4">
+        <div className="rounded border border-green-200 bg-white px-2 py-1 dark:border-green-800 dark:bg-green-950">ValuesTransformer</div>
+        <div className="rounded border border-green-200 bg-white px-2 py-1 dark:border-green-800 dark:bg-green-950">MessagesTransformer</div>
+        <div className="px-2 py-1 text-center text-green-600 dark:text-green-300">...</div>
+        <div className="rounded border border-green-200 bg-white px-2 py-1 dark:border-green-800 dark:bg-green-950">自定义转换器</div>
+      </div>
+    </div>
+    <div className="text-center text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">产生</div>
+    <div className="rounded-lg border border-purple-300 bg-purple-50 p-3 text-center dark:border-purple-800 dark:bg-purple-950">
+      <div className="font-semibold text-purple-900 dark:text-purple-100">事件流</div>
+      <div className="mt-1 text-xs text-purple-700 dark:text-purple-300">面向应用程序代码的投影事件</div>
+    </div>
+  </div>
+</div>
+
+事件路由器是两个层之间的桥梁。它接收规范化的 Pregel 事件，并将每个事件通过已注册的流转换器。内置转换器创建标准投影，如 `stream.messages`、`stream.values`、`stream.subgraphs` 和 `stream.output`。自定义转换器可以在 `stream.extensions` 下添加特定于应用程序的投影。
+
+## 事件流式处理提供的内容
+
+运行流公开了一个底层事件流之上的类型化投影：
+
+| 投影 | 用途 |
+| ---------- | --- |
+| `stream` | 遍历每个协议事件。 |
+| `stream.messages` | 流式传输聊天模型消息和令牌增量。 |
+| `stream.values` | 遍历状态快照并等待最终值。 |
+| `stream.output` | 等待最终输出。 |
+| `stream.subgraphs` | 发现并观察嵌套图执行。 |
+| `stream.interrupts` | 检查人工介入中断的有效载荷。 |
+| `stream.interrupted` | 检查运行是否因人工输入而暂停。 |
+| `stream.extensions` | 使用自定义流转换器投影。 |
+
+多个消费者可以同时读取这些投影。读取 `stream.messages` 不会消耗 `stream.values`、`stream.subgraphs` 或 `stream.output` 所需的事件。
+
+事件流式处理位于[流式处理](/oss/langgraph/streaming)之上一层，后者通过 `stream_mode` 模式（如 `updates`、`values`、`messages`、`custom`、`checkpoints`、`tasks` 和 `debug`）公开原始图执行事件。当需要低级访问这些模式时使用流式处理；当应用程序代码受益于类型化投影时使用事件流式处理。
+
+## 流式传输消息
+
+使用 `stream.messages` 获取聊天模型输出：
+
+:::python
+```py
+stream = graph.stream_events(input, version="v3")
+
+for message in stream.messages:
+    text = str(message.text)
+    usage = message.output.usage_metadata
+
+    print(text)
+    print(usage)
+```
+:::
+
+:::js
+```ts
+const stream = await graph.streamEvents(input, { version: "v3" });
+
+for await (const message of stream.messages) {
+  const text = await message.text;
+  const usage = await message.usage;
+
+  console.log(text);
+  console.log(usage);
+}
+```
+:::
+
+:::python
+`message.text` 在同步代码中是可迭代的。迭代它以获取逐 token 输出，或调用 `str(message.text)` 获取完整文本。
+
+`message.reasoning` 暴露推理增量，`message.tool_calls` 暴露工具调用参数块。如果你需要按精确到达顺序获取文本、推理和工具调用块，请迭代消息流的原始事件，而不是分别迭代每个投影。
+:::
+
+:::js
+`message.text` 既是异步可迭代对象又是类 Promise 值。迭代它以获取逐 token 输出，或 await 它以获取完整文本。
+:::
+
+## 流式子图
+
+使用 `stream.subgraphs` 观察嵌套图工作，无需解析命名空间字符串：
+
+:::python
+```py
+stream = graph.stream_events(input, version="v3")
+
+for subgraph in stream.subgraphs:
+    print(subgraph.graph_name, subgraph.path)
+
+    for message in subgraph.messages:
+        print(message.text)
+```
+:::
+
+:::js
+```ts
+const stream = await graph.streamEvents(input, { version: "v3" });
+
+for await (const subgraph of stream.subgraphs) {
+  console.log(subgraph.name, subgraph.path);
+
+  for await (const message of subgraph.messages) {
+    console.log(await message.text);
+  }
+}
+```
+`subgraph.graph_name` 是编译后的 graph 或 agent 的 `name`。从工具分派的命名 agent（例如，通过 Deep Agents `task` 工具调用的 `create_agent(name=...)`）会以该名称出现在此处，打开作用域的 `lifecycle` 事件携带一个 `cause`，链接回分派工具的调用。更多信息请参阅 [Lifecycle](#lifecycle)。
+
+有关特定产品的流，请参阅 [Deep Agents streaming](/oss/deepagents/event-streaming) 了解 subagent 流，以及 [LangChain agent streaming](/oss/langchain/streaming) 了解工具调用和中间件事件。
+
+## 流状态
+
+使用 `stream.values` 在每个步骤后流式传输完整的状态快照：
+
+:::python
+```py
+stream = graph.stream_events(input, version="v3")
+
+for snapshot in stream.values:
+    print(snapshot)
+
+final_state = stream.output
+```
+:::
+
+:::js
+```ts
+const stream = await graph.streamEvents(input, { version: "v3" });
+
+for await (const snapshot of stream.values) {
+  console.log(snapshot);
+}
+
+const finalState = await stream.output;
+```
+:::
+
+## 流式传输多个投影
+
+:::python
+要在异步代码中并发消费，请将 `astream_events` 与 `asyncio.gather` 结合使用：
+
+```py
+import asyncio
+
+stream = await graph.astream_events(input, version="v3")
+
+async def consume_messages():
+    async for message in stream.messages:
+        print(f"[llm] node={message.node}")
+
+async def consume_subgraphs():
+    async for subgraph in stream.subgraphs:
+        print(f"[subgraph] path={subgraph.path}")
+
+await asyncio.gather(consume_messages(), consume_subgraphs())
+```
+
+对于同步代码，请使用 `stream.interleave(...)` 来按严格到达顺序消费多个投影：
+
+```py
+stream = graph.stream_events(input, version="v3")
+
+for name, item in stream.interleave("values", "messages", "subgraphs"):
+    if name == "values":
+        print(f"[state] keys={list(item)}")
+    elif name == "messages":
+        print(f"[llm] node={item.node}")
+    elif name == "subgraphs":
+        print(f"[subgraph] path={item.path}")
+```
+:::：
+
+:::js
+在 JavaScript 中需要多个投影时使用并发消费者：
+
+:::
+
+```ts
+await Promise.all([
+  (async () => {
+    for await (const message of stream.messages) {
+      console.log(await message.text);
+    }
+  })(),
+  (async () => {
+    for await (const subgraph of stream.subgraphs) {
+      console.log(subgraph.path);
+    }
+  })(),
+]);
+```
+:::
+
+## 中断后恢复
+
+当图因需要人工输入而暂停时，请检查 `stream.interrupted` 和 `stream.interrupts`，然后通过再次调用 `stream_events(..., version="v3")` 并使用 `Command` 来恢复。
+
+恢复需要一个使用检查点器编译的图，以及一个包含线程 ID 的配置——参见[持久化](/oss/langgraph/persistence)。
+
+:::python
+```py
+from langgraph.types import Command
+
+stream = graph.stream_events(input, version="v3")
+
+for message in stream.messages:
+    print(message.text)
+
+if stream.interrupted:
+    print(stream.interrupts)
+
+stream = graph.stream_events(
+    Command(resume={"decisions": [{"type": "approve"}]}),
+    version="v3",
+)
+final_state = stream.output
+```
+:::
+
+:::js
+```ts
+import { Command } from "@langchain/langgraph";
+
+let stream = await graph.streamEvents(input, { version: "v3" });
+
+for await (const message of stream.messages) {
+  console.log(await message.text);
+}
+
+if (stream.interrupted) {
+  console.log(stream.interrupts);
+}
+
+stream = await graph.streamEvents(
+  new Command({ resume: { decisions: [{ type: "approve" }] } }),
+  { version: "v3" }
+);
+const finalState = await stream.output;
+```
+:::
+
+## 流式传输所有协议事件
+
+当您需要原始协议事件流时，直接使用 run 对象本身：
+
+:::python
+```py
+stream = graph.stream_events({
+    "messages": [{"role": "user", "content": "What is 42 * 17?"}],
+}, version="v3")
+
+for event in stream:
+    namespace = event["params"]["namespace"]
+    print(namespace, event["method"], event["params"]["data"])
+```
+:::
+
+:::js
+```ts
+const stream = await graph.streamEvents(
+  { messages: [{ role: "user", content: "What is 42 * 17?" }] },
+  { version: "v3" }
+);
+
+for await (const event of stream) {
+  const namespace = event.params.namespace;
+  console.log(namespace, event.method, event.params.data);
+}
+```
+:::
+
+每个事件都是一个 `ProtocolEvent` 包装器，包装着特定渠道的负载。相同的结构是转换器的 `process(event)` 所接收的。
+
+:::python
+```py
+class ProtocolEvent(TypedDict):
+    seq: int                    # strictly increasing within a run; use for ordering
+    method: str                 # channel name: "messages", "values", "updates", "custom", "tools", "lifecycle", ...
+    params: ProtocolEventParams
+
+
+class ProtocolEventParams(TypedDict):
+    namespace: list[str]        # path of "<name>:<runtime_id>" segments from the root graph; [] is the root
+    timestamp: int              # wall-clock milliseconds; can drift, don't rely on for ordering
+    data: Any                   # channel-specific payload; shape depends on `method`
+```
+:::
+
+:::js
+```ts
+interface ProtocolEvent {
+  readonly seq: number;         // strictly increasing within a run; use for ordering
+  readonly method: string;      // channel name: "messages", "values", "updates", "custom", "tools", "lifecycle", ...
+  readonly params: {
+    readonly namespace: string[];  // path of "<name>:<runtime_id>" segments from the root graph; [] is the root
+    readonly timestamp: number;    // wall-clock milliseconds; can drift, don't rely on for ordering
+    readonly node?: string;        // graph node that emitted this event, when applicable
+    readonly data: unknown;        // channel-specific payload; shape depends on `method`
+  };
+}
+```
+:::
+
+`namespace` 是从根图到发出事件的范围的路径。根是空数组 `[]`。每个子执行添加一个 `"name:runtime_id"` 段，因此子图中嵌套的工具调用看起来像 `["researcher:6f4d", "tools:91ac"]`。`:` 之前的名称是稳定的图或节点名称；后缀是每次调用的运行时 ID。当您只关心特定的子树时，请按 namespace 自行过滤原始事件——`stream.subgraphs` 已经为嵌套图执行完成了此操作。
+
+## 通道和事件生命周期
+
+原始事件在通道上流动。通道名称显示为事件的 `method`；每个通道发出特定的事件形状。
+
+| 通道 | 用途 |
+| ------- | ------- |
+| `values` | 完整图状态快照。 |
+| `updates` | 每节点状态增量。 |
+| `messages` | 内容块为中心的聊天模型输出。 |
+| `tools` | 工具调用开始、流式输出、完成和错误事件。 |
+| `lifecycle` | 运行、子图和子代理状态变更。 |
+| `checkpoints` | 用于分支和时间旅行的轻量级检查点信封。 |
+| `input` | 人工介入输入请求和响应。 |
+| `tasks` | Pregel 任务创建和结果事件。 |
+| `custom` | 来自图代码的用户定义负载。 |
+| `custom:<name>` | 应用程序定义的流转换器输出。 |
+
+类型化投影（`stream.messages`、`stream.values` 等）是从这些通道构建的。当您直接迭代运行对象时，通道名称显示为原始事件的 `method` 字段。
+
+### 消息
+
+`messages` 通道将输出建模为内容块。数据的 `event` 字段是以下之一：
+
+- `message-start`
+- `content-block-start`
+- `content-block-delta`
+- `content-block-finish`
+- `message-finish`
+
+内容块具有明确的边界：一个块开始，发出零个或多个增量，然后在同一消息中的下一个块开始之前完成。这使得令牌流式传输、推理块、工具调用块和多模态内容变得明确，而无需特定的提供者格式。`message-finish` 可能包含令牌使用量；不可恢复的模型调用失败作为消息错误事件到达。
+
+要直接使用原始内容块事件而不是使用 `stream.messages` 投影：
+
+:::python
+```py
+for event in stream:
+    if event["method"] != "messages":
+        continue
+
+    data = event["params"]["data"][0]
+    if not isinstance(data, dict):
+        continue
+    if data.get("event") != "content-block-delta":
+        continue
+
+    block = data.get("delta") or {}
+    if block.get("type") == "text-delta":
+        print(block.get("text", ""), end="", flush=True)
+    elif block.get("type") == "reasoning-delta":
+        print(f"[thinking]{block.get('reasoning', '')}", end="", flush=True)
+```
+:::
+
+:::js
+```ts
+for await (const event of stream) {
+  if (event.method !== "messages") continue;
+
+  const data = event.params.data;
+  if (data.event !== "content-block-delta") continue;
+
+  const block = data.delta ?? {};
+  if (block.type === "text-delta") {
+    process.stdout.write(block.text ?? "");
+  } else if (block.type === "reasoning-delta") {
+    process.stdout.write(`[thinking]${block.reasoning ?? ""}`);
+  }
+}
+```
+### 工具
+
+`tools` 频道用于暴露工具执行。数据的 `event` 字段为以下之一：
+
+- `tool-started`
+- `tool-output-delta`
+- `tool-finished`
+- `tool-error`
+
+工具事件通过工具调用 ID 进行关联，因此工具执行可以关联回 `messages` 频道上原始的工具调用内容块。
+
+### 生命周期
+
+`lifecycle` 频道用于跟踪根运行、子图和子代理状态。数据的 `event` 字段为以下之一：
+
+- `started`
+- `running`
+- `completed`
+- `failed`
+- `interrupted`
+
+除 `event` 外，生命周期数据还可能包含可选的 `graph_name`、`error` 和 `cause`，用于描述子作用域启动的原因（父工具调用、扇出发送、边转换）。
+
+## 构建你自己的投影
+
+流转换器是事件流中的投影层。它们观察协议事件、保持自己的状态，并暴露运行的派生视图——如工具活动、令牌总量、进度事件、工件，或用于另一个协议的消息。`StreamChannel` 是转换器用来发布这些视图的投影原语。
+
+内置投影（`stream.messages`、`stream.values`、`stream.subgraphs`、`stream.output`）和产品特定投影（LangChain 的 `stream.tool_calls`、Deep Agents 的 `stream.subagents`）本身就是使用相同契约的转换器。用户转换器通过编译时或调用时注册进行堆叠，它们的投影出现在 `stream.extensions` 下。
+
+当你需要的形状与现有投影不匹配时，可以编写一个自定义投影。
+
+### 转换器的工作原理
+
+事件流从 LangGraph Pregel 引擎的流式输出开始。运行时将这些块规范化为协议事件，然后流处理器将每个事件路由通过一系列流转换器。
+
+```mermaid
+flowchart TD
+    A[Pregel modes] --> B[Events]
+    B --> C[Built-in projections]
+    C --> D[User transformers]
+    D --> E[Run projections]
+```
+
+流处理器是一个流的核心调度器。对于每个协议事件，它会：
+
+1. 按顺序调用每个已注册变换器的 `process(event)` 钩子。
+2. 将命名的 `StreamChannel` 推送连接回协议事件流。
+3. 除非变换器抑制该事件，否则将其存储到运行流中。
+4. 当运行结束时，对每个变换器调用 `finalize()` 或 `fail()`。
+
+变换器是观察性的。它们不会回调到图运行时。相反，它们消费事件并将派生值推送到 `StreamChannel`、promise 或其他投影对象中。
+
+### 变换器形态
+
+变换器实现 `StreamTransformer` 接口：
+
+:::python
+```py
+from langgraph.stream import ProtocolEvent, StreamTransformer
+
+
+class MyTransformer(StreamTransformer):
+    def init(self) -> dict:
+        ...
+
+    def process(self, event: ProtocolEvent) -> bool:
+        ...
+
+    def finalize(self) -> None:
+        ...
+
+    def fail(self, err: BaseException) -> None:
+        ...
+```
+:::
+
+:::js
+```ts
+interface StreamTransformer<TProjection = unknown> {
+  init(): TProjection;
+  process(event: ProtocolEvent): boolean;
+  finalize?(): void | PromiseLike<void>;
+  fail?(err: unknown): void;
+}
+```
+:::
+
+- `init()` 创建投影对象。用户转换器投影出现在 `stream.extensions` 下。
+- `process()` 观察每个协议事件。参见[流式传输所有协议事件](#stream-all-protocol-events)了解 `ProtocolEvent` 的结构。仅在有意抑制原始事件时才返回 `false`。
+- `finalize()` 在成功流式传输后关闭或解析非通道投影。
+- `fail()` 将错误传播到非通道投影。
+
+### 声明必需的流模式
+
+`required_stream_modes` 控制底层图在流式传输期间发出哪些 Pregel 流模式。运行时获取每个已注册转换器的 `required_stream_modes` 的并集，并将其作为 `stream_mode` 参数传递给图的 `.stream()` 调用。**没有任何转换器请求的模式永远不会被发出** — 声明 `("custom",)` 才能导致 `custom` 事件在运行中流动。
+
+:::python
+```py
+class CustomTransformer(StreamTransformer):
+    required_stream_modes = ("custom",)  # [!code highlight]
+
+    def process(self, event: ProtocolEvent) -> bool:
+        if event["method"] == "custom":
+            ...
+        return True
+```
+`process()` 接收图发出的每个事件，并负责按 `event["method"]` 进行过滤。该声明会开启上游发送；但不会缩小 `process()` 能看到的内容。有效值为 Pregel 流模式：`"messages"`、`"tools"`、`"custom"`、`"values"`、`"updates"`、`"checkpoints"`、`"tasks"`、`"debug"`。每个转换器必须声明它所处理的每个模式——省略的模式不会由图发送，也永远不会到达 `process()`。
+
+### StreamChannel
+
+`StreamChannel` 是转换器用于流式传输值的投影原语。它始终在 `stream.extensions.<name>` 上暴露一个可迭代流。构造函数参数决定每个 `push()` 是否也作为 `custom:<name>` 事件流入运行的主事件流——即投影的值是否在迭代原始协议事件时出现。
+
+:::js
+| 需求 | 用法 |
+| ---- | --- |
+| 仅侧通道投影 | `new StreamChannel<T>()` |
+| 同时将每次推送流入主事件流 | `new StreamChannel<T>(name)` |
+:::
+
+:::python
+| 需求 | 用法 |
+| ---- | --- |
+| 仅侧通道投影 | `StreamChannel()` |
+| 同时将每次推送流入主事件流 | `StreamChannel(name)` |
+:::
+
+命名通道的有效载荷必须可序列化，因为每个推送的值也会成为主事件流中的 `custom:<name>` 协议事件。请将 promise、异步可迭代对象、类实例和其他进程内句柄保留在未命名的通道中。
+
+流处理器拥有通道的生命周期。一旦 `init()` 返回一个通道，处理器会在运行结束时为您关闭或终止它。转换器只需推送值。
+
+### 示例：命名通道
+
+将字符串名称传递给 `StreamChannel`，以通过 `stream.extensions` 公开流式投影，并将每个推送的值作为 `custom:<name>` 协议事件转发到运行的主事件流中：
+
+:::python
+```py
+from typing import TypedDict
+
+from langgraph.stream import ProtocolEvent, StreamChannel, StreamTransformer
+
+
+class ToolActivity(TypedDict):
+    name: str
+    status: str
+
+
+class ToolActivityTransformer(StreamTransformer):
+    required_stream_modes = ("tools",)
+
+    def __init__(self, scope: tuple[str, ...] = ()) -> None:
+        super().__init__(scope)
+        self.activity = StreamChannel[ToolActivity]("tool_activity")
+
+    def init(self) -> dict:
+        return {"tool_activity": self.activity}
+
+    def process(self, event: ProtocolEvent) -> bool:
+        if event["method"] != "tools":
+            return True
+
+        data = event["params"]["data"]
+        if isinstance(data, dict) and data.get("tool_name") and data.get("event"):
+            status = "error" if data["event"] == "tool-error" else "started"
+            self.activity.push({"name": data["tool_name"], "status": status})
+        return True
+```
+:::
+
+:::js
+```ts
+import { StreamChannel } from "@langchain/langgraph";
+
+const toolActivityTransformer = () => {
+  const activity = new StreamChannel<{
+    name: string;
+    status: "started" | "finished" | "error";
+  }>("toolActivity");
+
+  return {
+    init: () => ({ toolActivity: activity }),
+    process(event) {
+      if (event.method === "tools") {
+        const data = event.params.data as { tool_name?: string; event?: string };
+        if (data.tool_name && data.event) {
+          activity.push({
+            name: data.tool_name,
+            status: data.event === "tool-error" ? "error" : "started",
+          });
+        }
+      }
+      return true;
+    },
+  };
+};
+```
+:::
+
+### 示例：未命名通道
+
+没有名称的通道仅作为侧通道投影存在——可通过 `stream.extensions` 访问，但对迭代原始事件的消费者不可见。这适用于持有进程内句柄（promises、async iterables、类实例）的投影，这些句柄无法序列化到主事件流上。
+
+下面的示例将未命名通道与 `get_stream_writer` 配对，允许图形节点发出 `custom`-通道事件，然后由 transformer 排入投影中：
+
+:::python
+```py
+from langgraph.config import get_stream_writer
+from langgraph.stream import ProtocolEvent, StreamChannel, StreamTransformer
+
+
+def node(state):
+    writer = get_stream_writer()
+    writer({"kind": "progress", "message": "retrieving context"})
+    return state
+
+
+class CustomTransformer(StreamTransformer):
+    required_stream_modes = ("custom",)
+
+    def __init__(self, scope: tuple[str, ...] = ()) -> None:
+        super().__init__(scope)
+        self.log = StreamChannel()
+
+    def init(self) -> dict:
+        return {"custom": self.log}
+
+    def process(self, event: ProtocolEvent) -> bool:
+        if event["method"] == "custom":
+            self.log.push(event["params"]["data"])
+        return True
+
+
+stream = graph.stream_events(input, version="v3", transformers=[CustomTransformer])
+
+for item in stream.extensions["custom"]:
+    print(item)
+```
+:::
+
+:::js
+```ts
+import { StreamChannel } from "@langchain/langgraph";
+
+const customTransformer = () => {
+  const custom = new StreamChannel<unknown>();
+
+  return {
+    init: () => ({ custom }),
+    process(event) {
+      if (event.method === "custom") {
+        custom.push(event.params.data);
+      }
+      return true;
+    },
+  };
+};
+```
+:::
+
+### 示例：最终值投影
+
+当投影不应流入主事件流时，使用未命名流、promise 或其他进程内对象：
+
+:::python
+```py
+from langgraph.stream import ProtocolEvent, StreamChannel, StreamTransformer
+
+
+class StatsTransformer(StreamTransformer):
+    required_stream_modes = ("messages",)
+
+    def __init__(self, scope: tuple[str, ...] = ()) -> None:
+        super().__init__(scope)
+        self.total_tokens = 0
+        self.total_tokens_log = StreamChannel[int]()
+
+    def init(self) -> dict:
+        return {"total_tokens": self.total_tokens_log}
+
+    def process(self, event: ProtocolEvent) -> bool:
+        data = event["params"]["data"]
+        if isinstance(data, dict):
+            usage = data.get("usage") or {}
+            self.total_tokens += usage.get("output_tokens") or 0
+        return True
+
+    def finalize(self) -> None:
+        self.total_tokens_log.push(self.total_tokens)
+        self.total_tokens_log.close()
+```
+:::
+
+:::js
+```ts
+const statsTransformer = () => {
+  let totalTokens = 0;
+  let resolveTotal!: (value: number) => void;
+  const totalTokensPromise = new Promise<number>((resolve) => {
+    resolveTotal = resolve;
+  });
+
+  return {
+    init: () => ({ totalTokens: totalTokensPromise }),
+    process(event) {
+      if (event.method === "messages") {
+        const data = event.params.data as { usage?: { output_tokens?: number } };
+        totalTokens += data.usage?.output_tokens ?? 0;
+      }
+      return true;
+    },
+    finalize: () => resolveTotal(totalTokens),
+  };
+};
+```
+:::
+
+### 在调用时或编译时注册
+
+在调用时传递转换器以便本地实验：
+
+:::python
+```py
+stream = graph.stream_events(
+    input,
+    version="v3",
+    transformers=[StatsTransformer, ToolActivityTransformer],
+)
+```
+:::
+
+:::js
+```ts
+const stream = await graph.streamEvents(input, {
+  version: "v3",
+  transformers: [statsTransformer, toolActivityTransformer],
+});
+```
+:::
+
+当该图的每次运行都应该产生投影时，将变换器编译到图中：
+
+:::python
+
+:::
+```py
+graph = builder.compile(
+    transformers=[StatsTransformer, ToolActivityTransformer],
+)
+```
+:::
+
+:::js
+```ts
+const graph = builder.compile({
+  transformers: [statsTransformer, toolActivityTransformer],
+});
+```
+:::
+
+### 内置：`ToolCallTransformer`
+
+:::python
+LangGraph ships `ToolCallTransformer` as a built-in. Register it to expose `stream.tool_calls` on a plain `StateGraph`：
+
+:::
+
+```py
+from langgraph.prebuilt import ToolCallTransformer
+
+stream = graph.stream_events(input, version="v3", transformers=[ToolCallTransformer])
+
+for tool_call in stream.tool_calls:
+    print(tool_call.tool_name, tool_call.input)
+```
+## 相关
+
+LangGraph 定义了流式处理的基本组件。如需在 LangChain 或 Deep Agents 中使用流式处理，请查阅相关产品文档：
+
+- [LangChain Agent 流式处理](/oss/langchain/event-streaming) 涵盖 ReAct 风格 Agent 消息、工具调用和中间件更新。
+- [Deep Agents 流式处理](/oss/deepagents/event-streaming) 涵盖子 Agent、嵌套消息和子 Agent 工具调用。
+- [LangChain 前端模式](/oss/langchain/frontend/overview) 和 [LangGraph 前端模式](/oss/langgraph/frontend/overview) 展示基于流式状态构建的 UI 用例。
+- [LangSmith 流式处理 API](/langsmith/streaming) 涵盖针对部署在 Agent Server 后面的图进行流式处理。
+
+线级事件和命令格式定义在 [Agent Protocol](https://github.com/langchain-ai/agent-protocol) 仓库中，可通过 PyPI 上的 [`langchain-protocol`](https://pypi.org/project/langchain-protocol/) 和 npm 上的 [`@langchain/protocol`](https://www.npmjs.com/package/@langchain/protocol) 使用。

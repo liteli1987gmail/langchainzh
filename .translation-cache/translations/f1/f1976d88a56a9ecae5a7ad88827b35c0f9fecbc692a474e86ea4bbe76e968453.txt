@@ -1,0 +1,75 @@
+Python 中的 Anthropic 包装方法（@[`wrap_anthropic`][wrap_anthropic]）和 TypeScript 中的 ([`wrapAnthropic`](https://reference.langchain.com/javascript/functions/langsmith.wrappers_anthropic.wrapAnthropic.html)）允许您包装 Anthropic 客户端，以便自动记录追踪。使用包装器可确保消息（包括工具调用和多模态内容块）能在 LangSmith 中良好呈现。包装器可与 `@traceable` 装饰器（Python）或 `traceable` 函数（TypeScript）无缝配合，因此您可以使用包装器追踪 Anthropic 调用，并使用装饰器或函数追踪应用程序的其他部分。
+
+<Note>
+    即使使用 `wrap_anthropic` 或 `wrapAnthropic`，也必须将 `LANGSMITH_TRACING` 环境变量设置为 `'true'`，才能将追踪记录到 LangSmith。这允许您在不更改代码的情况下开启和关闭追踪功能。
+
+    此外，您还需要将 `LANGSMITH_API_KEY` 环境变量设置为您的 API 密钥（有关更多信息，请参阅[设置](/)）。
+
+    如果您的 LangSmith API 密钥关联了多个工作区，请设置 `LANGSMITH_WORKSPACE_ID` 环境变量来指定使用哪个工作区。
+
+    默认情况下，追踪将记录到名为 `default` 的项目中。要将追踪记录到不同的项目，请参阅[将追踪记录到特定项目](/langsmith/log-traces-to-project)。
+</Note>
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+import anthropic
+from langsmith import traceable
+from langsmith.wrappers import wrap_anthropic
+
+client = wrap_anthropic(anthropic.Anthropic())
+
+@traceable(run_type="tool", name="Retrieve Context")
+def my_tool(question: str) -> str:
+  return "During this morning's meeting, we solved all world conflict."
+
+@traceable(name="Chat Pipeline")
+def chat_pipeline(question: str):
+  context = my_tool(question)
+  messages = [
+      { "role": "user", "content": f"Question: {question}\nContext: {context}"}
+  ]
+  message = client.messages.create(
+      model="claude-sonnet-4-6",
+      messages=messages,
+      max_tokens=1024,
+      system="You are a helpful assistant. Please respond to the user's request only based on the given context."
+  )
+  return message
+
+chat_pipeline("Can you summarize this morning's meetings?")
+```
+
+```typescript TypeScript
+import Anthropic from "@anthropic-ai/sdk";
+import { traceable } from "langsmith/traceable";
+import { wrapAnthropic } from "langsmith/wrappers/anthropic";
+
+const client = wrapAnthropic(new Anthropic());
+
+const myTool = traceable(async (question: string) => {
+  return "During this morning's meeting, we solved all world conflict.";
+}, { name: "Retrieve Context", run_type: "tool" });
+
+const chatPipeline = traceable(async (question: string) => {
+  const context = await myTool(question);
+  const messages = [
+      { role: "user", content: `Question: ${question}\nContext: ${context}` }
+  ];
+  const message = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      messages: messages,
+      max_tokens: 1024,
+      system: "You are a helpful assistant. Please respond to the user's request only based on the given context."
+  });
+  return message;
+}, { name: "Chat Pipeline" });
+
+await chatPipeline("Can you summarize this morning's meetings?");
+```
+
+<CodeGroup>
+
+</CodeGroup>

@@ -1,0 +1,272 @@
+---
+title: "嵌入模型集成"
+sidebarTitle: "嵌入模型"
+description: "使用 LangChain Python 与嵌入模型集成。"
+---
+
+## 概述
+
+<Note>
+本概述涵盖**基于文本的嵌入模型**。LangChain 目前不支持多模态嵌入。
+
+请参阅[顶级嵌入模型](#top-integrations)。
+</Note>
+
+嵌入模型将原始文本（如句子、段落或推文）转换为固定长度的数字向量，以捕获其**语义含义**。这些向量使机器能够基于含义而非精确词汇来比较和搜索文本。
+
+在实践中，这意味着具有相似含义的文本在向量空间中会被放置在相近的位置。例如，嵌入可以找到讨论相关概念的文章，即使使用了不同的措辞，而不仅仅是匹配*"机器学习"*这个短语。
+
+### 工作原理
+
+1. **向量化** — 模型将每个输入字符串编码为高维向量。
+2. **相似度评分** — 使用数学度量比较向量，以衡量底层文本之间的相关程度。
+
+### 相似度度量
+
+几种度量指标常用于比较嵌入：
+
+* **余弦相似度** — 测量两个向量之间的角度。
+* **欧几里得距离** — 测量点与点之间的直线距离。
+* **点积** — 测量一个向量在另一个向量上的投影程度。
+
+以下是计算两个向量之间余弦相似度的示例：
+
+```python
+import numpy as np
+
+def cosine_similarity(vec1, vec2):
+    dot = np.dot(vec1, vec2)
+    return dot / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+
+similarity = cosine_similarity(query_embedding, document_embedding)
+print("Cosine Similarity:", similarity)
+```
+
+## 接口
+
+LangChain 通过 @[Embeddings] 接口为文本嵌入模型（如 OpenAI、Cohere、Hugging Face）提供标准接口。
+
+提供两个主要方法：
+
+- `embed_documents(texts: List[str]) → List[List[float]]`：嵌入一组文档。
+- `embed_query(text: str) → List[float]`：嵌入单个查询。
+
+<Note>
+该接口允许使用不同策略嵌入查询和文档，不过大多数提供商在实践中采用相同方式处理。
+</Note>
+
+## 主要集成
+
+| 模型                                                               | 包                                                                                                                                                            |
+|------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [`OpenAIEmbeddings`](/oss/integrations/embeddings/openai)                      | [`langchain-openai`](https://reference.langchain.com/python/langchain-openai)                              |
+| [`AzureOpenAIEmbeddings`](/oss/integrations/embeddings/azure_openai)       | [`langchain-openai`](https://reference.langchain.com/python/langchain-openai/embeddings/azure/AzureOpenAIEmbeddings)                    |
+| [`GoogleGenerativeAIEmbeddings`](/oss/integrations/embeddings/google_generative_ai) | [`langchain-google-genai`](https://reference.langchain.com/python/langchain-google-genai/embeddings/GoogleGenerativeAIEmbeddings) |
+| [`HuggingFaceEmbeddings`](/oss/integrations/embeddings/sentence_transformers)  | [`langchain-huggingface`](https://reference.langchain.com/python/langchain-huggingface)                                                 |
+| [`OllamaEmbeddings`](/oss/integrations/embeddings/ollama)                      | [`langchain-ollama`](https://reference.langchain.com/python/langchain-ollama/embeddings/OllamaEmbeddings)                               |
+| [`TogetherEmbeddings`](/oss/integrations/embeddings/together)                  | [`langchain-together`](https://reference.langchain.com/python/langchain-together/embeddings/TogetherEmbeddings)                       |
+| [`MistralAIEmbeddings`](/oss/integrations/embeddings/mistralai)                | [`langchain-mistralai`](https://reference.langchain.com/python/langchain-mistralai/embeddings/MistralAIEmbeddings)                   |
+| [`CohereEmbeddings`](/oss/integrations/embeddings/cohere)                      | [`langchain-cohere`](https://reference.langchain.com/python/langchain-cohere/embeddings/CohereEmbeddings)                                        |
+| [`NomicEmbeddings`](/oss/integrations/embeddings/nomic)                        | [`langchain-nomic`](https://reference.langchain.com/python/langchain-nomic/embeddings/NomicEmbeddings)                                   |
+| [`DatabricksEmbeddings`](/oss/integrations/embeddings/databricks)              | [`databricks-langchain`](https://api-docs.databricks.com/python/databricks-ai-bridge/latest/databricks_langchain.html#databricks_langchain.DatabricksEmbeddings)   |
+| [`NVIDIAEmbeddings`](/oss/integrations/embeddings/nvidia_ai_endpoints)         | [`langchain-nvidia`](https://reference.langchain.com/python/langchain-nvidia-ai-endpoints/embeddings/NVIDIAEmbeddings)     |
+| [`AIMLAPIEmbeddings`](/oss/integrations/embeddings/aimlapi)                  | `langchain-aimlapi`                         |
+| [`PerplexityEmbeddings`](/oss/integrations/embeddings/perplexity)              | [`langchain-perplexity`](https://reference.langchain.com/python/langchain-perplexity/embeddings/PerplexityEmbeddings) |
+
+### 常见部署模式
+
+在实践中，大多数团队最终会采用四种模式之一：
+
+1. **托管、旗舰级**：OpenAI `text-embedding-3-large`、Cohere `embed-english-v3`、Google `gemini-embedding-001`、Voyage `voyage-3`。一次 API 调用，开箱即用的顶级质量，无需本地基础设施。按调用计费，且存在数据出口依赖。
+2. **本地、开源**：`BAAI/bge-*`、`mixedbread-ai/mxbai-embed-*`、`Qwen/Qwen3-Embedding-*`、`nomic-ai/modernbert-embed-*`、`sentence-transformers/all-*`。下载一次，随处运行。无按调用计费成本，数据永不离开您的环境。在小规模下使用 CPU 可能比托管 API 慢；使用 GPU 则具有竞争力或更快。
+3. **本地、开源、专业化**：针对您的特定领域、语言或任务的微调模型。从强大的开源基础模型（如 `BAAI/bge-m3`）开始，即使在少量领域内查询/文档对上微调，也常常能在该领域的检索准确率上超越托管旗舰模型。
+4. **生产规模自托管**：通过 [Text Embeddings Inference (TEI)](https://github.com/huggingface/text-embeddings-inference) 或 Ollama 提供服务相同的开源模型（基础或微调）。兼具本地推理的经济性和托管提供商的水平扩展及 API 体验。
+
+LangChain 对这四种模式一视同仁：您实例化一个 `Embeddings` 子类，然后将其交给向量存储或检索器。模式（2）和（3）使用 `HuggingFaceEmbeddings`；模式（4）使用 `HuggingFaceEndpointEmbeddings` 或 `OllamaEmbeddings`。
+
+### 需要权衡的因素
+
+#### 质量
+
+从 [MTEB 排行榜](https://huggingface.co/spaces/mteb/leaderboard) 开始。MTEB 在检索、聚类、分类和重排序任务上对嵌入模型进行基准测试，是事实上的行业参考。按您的语言和任务进行筛选（检索是 RAG 最常见的任务）。
+
+排行榜数据并不总是能直接迁移，所以在确定之前请在您自己的数据上进行小规模评估。LangSmith 提供了相关工具；请参阅[评估指南](/langsmith/evaluation-concepts)。
+
+#### 成本
+
+托管嵌入的定价通常在每百万 Token 几分钱到约 0.15 美元之间。对于嵌入一次并每天查询数千次的语料库，成本通常由查询端主导。
+
+本地推理没有按调用计费的成本，但需要 CPU（速度慢）或 GPU（资本成本或云成本）。交叉点取决于工作负载：低容量的个人项目在 CPU 上基本免费；对于中等规模的生产环境，通过 TEI 使用单块 GPU 提供本地模型服务往往在单位经济效益上优于托管服务。
+
+#### 延迟
+
+托管嵌入 API 每个请求大约增加 50-200ms 的网络延迟。本地模型在 CPU 上处理短查询和小模型（`all-MiniLM-L6-v2` 级别）需要 10-100ms，更大的模型需要 50-500ms。在 GPU 上，本地推理通常比往返托管 API 更快。
+
+对于批量索引，每请求延迟不如吞吐量重要。TEI 和多进程本地推理会进行大批量处理。在 GPU 上运行时，考虑在 `HuggingFaceEmbeddings` 上设置更高的 `encode_kwargs={"batch_size": 64}` 或更高值。
+
+#### 维度
+
+嵌入维度会影响向量存储的存储和查询计算。典型大小：
+
+- 384（小型 Sentence Transformers 模型，`all-MiniLM-L6-v2`）
+- 768（中型 ST 模型，`all-mpnet-base-v2`、`bge-base`）
+- 1024（`bge-large`、Cohere v3、Voyage）
+- 1536（OpenAI `text-embedding-3-small`、Qwen3-Embedding-0.6B）
+- 3072+（OpenAI `text-embedding-3-large`、Qwen3-Embedding-4B/8B）
+
+更大的向量通常更准确，但会消耗更多存储和查询计算资源。多个现代模型（OpenAI `text-embedding-3-*`、`mixedbread-ai/mxbai-embed-large-v1`、Matryoshka 训练的 ST 模型、Qwen3-Embedding）支持**截断**：将向量切片到更小的维度，同时保持优雅的质量降级。这对于将更多向量放入更小的索引中很有用。
+
+#### 上下文长度
+
+大多数经典嵌入模型的上下文上限为 512 个 Token（`all-mpnet-base-v2`、经典 BGE）。较新的模型支持更长的上下文：
+
+- `nomic-ai/modernbert-embed-base`：8192 个 Token
+- `Alibaba-NLP/gte-multilingual-base`：8192 个 Token
+- `BAAI/bge-m3`：8192 个 Token
+- OpenAI `text-embedding-3-*`：8191 个 Token
+
+如果您的文本块较长（整页技术文档、法律段落），请优先选择长上下文模型。对于短文本块，512 个 Token 的限制很少会成为约束。
+
+#### 多语言支持
+
+对于多语言检索，请选择针对您的语言训练的模型。推荐的强力选择：
+
+- 开源：`BAAI/bge-m3`、`intfloat/multilingual-e5-*`、`Alibaba-NLP/gte-multilingual-*`、`Qwen/Qwen3-Embedding-*`（通过 `HuggingFaceEmbeddings`）
+- 托管：Cohere `embed-multilingual-v3`、OpenAI `text-embedding-3-*`
+
+#### 查询和文档提示词
+
+多个现代开源模型（E5、BGE、Qwen3-Embedding、GTE）使用不同的文本前缀来区分查询和文档。在查询时使用错误的前缀是常见的质量回归问题。使用 `HuggingFaceEmbeddings` 时，请显式传递提示词：
+
+```python
+from langchain_huggingface import HuggingFaceEmbeddings
+
+embeddings = HuggingFaceEmbeddings(
+    model_name="intfloat/e5-large-v2",
+    encode_kwargs={"prompt": "passage: "},
+    query_encode_kwargs={"prompt": "query: "},
+)
+```
+
+请查看每个模型在 Hugging Face 上的模型卡，了解推荐的提示词字符串。
+
+#### 许可协议
+
+大多数流行的开源嵌入模型采用宽松的许可协议（Apache 2.0、MIT）。少数最新的专业模型在生产环境中使用需要商业许可。在发布前请查看每个模型的许可协议。
+
+### 单向量密集嵌入之外
+
+每个块一个密集向量是默认选项，但不是唯一的选择。
+
+#### 稀疏检索和混合检索
+
+密集嵌入在处理精确匹配查询（产品代码、命名实体、代码标识符）方面不如基于关键词的索引。混合检索将密集索引与 BM25 或稀疏神经索引（SPLADE、`BAAI/bge-m3` 的稀疏输出）相结合，以覆盖两种情况。
+
+#### 后期交互和多向量
+
+ColBERT 风格的模型为每个标记生成一个向量而不是每个块生成一个向量，然后通过后期交互对查询和文档进行评分。这通常比单向量密集检索在复杂查询上更准确，但代价是更高的存储需求和更复杂的索引。当前这个领域的开源模型包括 `jinaai/jina-colbert-v2`、`answerdotai/answerai-colbert-small-v1`，以及更新的后期交互变体如 `lightonai/LateOn`。LangChain 的内置检索器针对单向量嵌入；后期交互通常需要专门的索引（Vespa、Qdrant 的多向量支持或 PyLate）。
+
+### 起点
+
+如果您只需要一个可用的起点：
+
+- 快速原型，托管服务：`OpenAIEmbeddings(model="text-embedding-3-small")`
+- 快速原型，本地运行，无需 API 密钥：`HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2", encode_kwargs={"normalize_embeddings": True})`
+- 生产环境，托管服务，质量优先：`VoyageAIEmbeddings(model="voyage-3")` 或 `OpenAIEmbeddings(model="text-embedding-3-large")`
+- 生产环境，开源，质量优先：通过 TEI 服务的 `HuggingFaceEmbeddings(model_name="BAAI/bge-m3", encode_kwargs={"normalize_embeddings": True})`
+- 多语言，开源：配置了查询和文档提示词的 `HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")`
+
+在您自己的数据上评估检索质量，然后迭代改进。
+
+## 缓存
+
+嵌入可以存储或临时缓存以避免重复计算。
+
+可以使用 `CacheBackedEmbeddings` 来缓存嵌入。这个包装器将嵌入存储在键值存储中，其中文本被哈希，哈希值用作缓存中的键。
+
+初始化 `CacheBackedEmbeddings` 的主要支持方式是 `from_bytes_store`。它接受以下参数：
+
+- **`underlying_embedder`**：用于生成嵌入的嵌入器。
+- **`document_embedding_cache`**：用于缓存文档嵌入的任何 [`ByteStore`](/oss/integrations/stores/)。
+- **`batch_size`**：（可选，默认为 `None`）在存储更新之间要嵌入的文档数量。
+- **`namespace`**：（可选，默认为 `""`）用于文档缓存的命名空间。有助于避免冲突（例如，将其设置为嵌入模型名称）。
+- **`query_embedding_cache`**：（可选，默认为 `None`）用于缓存查询嵌入的 [`ByteStore`](/oss/integrations/stores/)，或设置为 `True` 以重用与 `document_embedding_cache` 相同的存储。
+
+<Important>
+- 使用不同的嵌入模型时，请务必设置 `namespace` 参数以避免冲突。
+- `CacheBackedEmbeddings` 默认不缓存查询嵌入。要启用此功能，请指定 `query_embedding_cache`。
+</Important>
+
+```python
+import time
+from langchain_classic.embeddings import CacheBackedEmbeddings  # [!code highlight]
+from langchain_classic.storage import LocalFileStore # [!code highlight]
+from langchain_core.vectorstores import InMemoryVectorStore
+
+# Create your underlying embeddings model
+underlying_embeddings = ... # e.g., OpenAIEmbeddings(), HuggingFaceEmbeddings(), etc.
+
+# Store persists embeddings to the local filesystem
+# This isn't for production use, but is useful for local
+store = LocalFileStore("./cache/") # [!code highlight]
+
+cached_embedder = CacheBackedEmbeddings.from_bytes_store(
+    underlying_embeddings,
+    store,
+    namespace=underlying_embeddings.model
+)
+
+# Example: caching a query embedding
+tic = time.time()
+print(cached_embedder.embed_query("Hello, world!"))
+print(f"First call took: {time.time() - tic:.2f} seconds")
+
+# Subsequent calls use the cache
+tic = time.time()
+print(cached_embedder.embed_query("Hello, world!"))
+print(f"Second call took: {time.time() - tic:.2f} seconds")
+```
+
+在生产环境中，您通常会使用更可靠的持久化存储，例如数据库或云存储。请参阅[存储集成](/oss/integrations/stores/)了解相关选项。
+
+## 所有嵌入模型
+
+<Columns cols={3}>
+<Card title="AI/ML API" icon="link" href="/oss/integrations/embeddings/aimlapi" arrow="true" cta="查看指南" />
+<Card title="AzureOpenAI" icon="link" href="/oss/integrations/embeddings/azure_openai" arrow="true" cta="查看指南" />
+<Card title="Baseten" icon="link" href="/oss/integrations/embeddings/baseten" arrow="true" cta="查看指南" />
+<Card title="Bedrock" icon="link" href="/oss/integrations/embeddings/bedrock" arrow="true" cta="查看指南" />
+<Card title="BGE on Hugging Face" icon="link" href="/oss/integrations/embeddings/bge_huggingface" arrow="true" cta="查看指南" />
+<Card title="Cloudflare Workers AI" icon="link" href="/oss/integrations/embeddings/cloudflare_workersai" arrow="true" cta="查看指南" />
+<Card title="Cohere" icon="link" href="/oss/integrations/embeddings/cohere" arrow="true" cta="查看指南" />
+<Card title="Databricks" icon="link" href="/oss/integrations/embeddings/databricks" arrow="true" cta="查看指南" />
+<Card title="Elasticsearch" icon="link" href="/oss/integrations/embeddings/elasticsearch" arrow="true" cta="查看指南" />
+<Card title="Google Gemini" icon="link" href="/oss/integrations/embeddings/google_generative_ai" arrow="true" cta="查看指南" />
+<Card title="Google Vertex AI" icon="link" href="/oss/integrations/embeddings/google_vertex_ai" arrow="true" cta="查看指南" />
+<Card title="GreenNode" icon="link" href="/oss/integrations/embeddings/greennode" arrow="true" cta="查看指南" />
+<Card title="Hugging Face" icon="link" href="/oss/integrations/embeddings/huggingfacehub" arrow="true" cta="查看指南" />
+<Card title="IBM watsonx.ai" icon="link" href="/oss/integrations/embeddings/ibm_watsonx" arrow="true" cta="查看指南" />
+<Card title="Instruct Embeddings" icon="link" href="/oss/integrations/embeddings/instruct_embeddings" arrow="true" cta="查看指南" />
+<Card title="Isaacus" icon="link" href="/oss/integrations/embeddings/isaacus" arrow="true" cta="查看指南" />
+<Card title="Lindorm" icon="link" href="/oss/integrations/embeddings/lindorm" arrow="true" cta="查看指南" />
+<Card title="LocalAI" icon="link" href="/oss/integrations/embeddings/localai" arrow="true" cta="查看指南" />
+<Card title="MistralAI" icon="link" href="/oss/integrations/embeddings/mistralai" arrow="true" cta="查看指南" />
+<Card title="ModelScope" icon="link" href="/oss/integrations/embeddings/modelscope_embedding" arrow="true" cta="查看指南" />
+<Card title="Naver" icon="link" href="/oss/integrations/embeddings/naver" arrow="true" cta="查看指南" />
+<Card title="Nebius" icon="link" href="/oss/integrations/embeddings/nebius" arrow="true" cta="查看指南" />
+<Card title="Netmind" icon="link" href="/oss/integrations/embeddings/netmind" arrow="true" cta="查看指南" />
+<Card title="Nomic" icon="link" href="/oss/integrations/embeddings/nomic" arrow="true" cta="查看指南" />
+<Card title="NVIDIA NIMs" icon="link" href="/oss/integrations/embeddings/nvidia_ai_endpoints" arrow="true" cta="查看指南" />
+<Card title="Oracle Cloud Infrastructure" icon="link" href="/oss/integrations/embeddings/oci_generative_ai" arrow="true" cta="查看指南" />
+<Card title="Ollama" icon="link" href="/oss/integrations/embeddings/ollama" arrow="true" cta="查看指南" />
+<Card title="OpenAI" icon="link" href="/oss/integrations/embeddings/openai" arrow="true" cta="查看指南" />
+<Card title="Oracle AI Database" icon="link" href="/oss/integrations/embeddings/oracleai" arrow="true" cta="查看指南" />
+<Card title="Pinecone Embeddings" icon="link" href="/oss/integrations/embeddings/pinecone" arrow="true" cta="查看指南" />
+<Card title="PredictionGuard" icon="link" href="/oss/integrations/embeddings/predictionguard" arrow="true" cta="查看指南" />
+<Card title="Perplexity" icon="link" href="/oss/integrations/embeddings/perplexity" arrow="true" cta="查看指南" />
+<Card title="SambaNova" icon="link" href="/oss/integrations/embeddings/sambanova" arrow="true" cta="查看指南" />
+<Card title="Sentence Transformers" icon="link" href="/oss/integrations/embeddings/sentence_transformers" arrow="true" cta="查看指南" />
+<Card title="Text Embeddings Inference" icon="link" href="/oss/integrations/embeddings/text_embeddings_inference" arrow="true" cta="查看指南" />
+<Card title="Together AI" icon="link" href="/oss/integrations/embeddings/together" arrow="true" cta="查看指南" />
+<Card title="Upstage" icon="link" href="/oss/integrations/embeddings/upstage" arrow="true" cta="查看指南" />
+</Columns>

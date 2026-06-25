@@ -1,0 +1,160 @@
+---
+title: "Jigsawstack 集成"
+description: "使用 LangChain JavaScript 与 Jigsawstack 工具集成。"
+---
+
+JigsawStack 工具为您的代理提供以下功能：
+
+- JigsawStackAIScrape：使用高级 AI 抓取网页内容。
+
+- JigsawStackAISearch：执行 AI 驱动的网络搜索并获取高质量结果。
+
+- JigsawStackSpeechToText - 使用 Whisper large V3 AI 模型转录视频和音频文件。
+
+- JigsawStackVOCR - 使用提示词识别、描述和提取图像中的数据。
+
+- JigsawStackTextToSQL - 从文本生成语义正确的 SQL 查询。
+
+## 设置
+
+- 设置一个[账户](https://jigsawstack.com/dashboard)（免费开始使用）
+- 创建并获取您的 [API key](https://jigsawstack.com/dashboard)
+
+## 凭证
+
+```bash
+export JIGSAWSTACK_API_KEY="your-api-key"
+```
+
+## 独立使用
+
+<Tip>
+请参阅[安装 LangChain 包的一般说明部分](/oss/langchain/install)。
+</Tip>
+
+```bash npm
+npm install @langchain/openai
+```
+```js
+import {
+  JigsawStackAIScrape,
+  JigsawStackAISearch,
+  JigsawStackSpeechToText,
+  JigsawStackVOCR,
+  JigsawStackTextToSQL,
+} from "@langchain/jigsawstack";
+
+export const run = async () => {
+  // AI Scrape Tool
+  const aiScrapeTool = new JigsawStackAIScrape({
+    params: {
+      element_prompts: ["Pro plan"],
+    },
+  });
+  const result = await aiScrapeTool.invoke("https://jigsawstack.com/pricing");
+
+  console.log({ result });
+
+  // AI Search Tool
+
+  const aiSearchTool = new JigsawStackAISearch();
+  const doc = await aiSearchTool.invoke("The leaning tower of pisa");
+  console.log({ doc });
+
+  // VOCR Tool
+
+  const vocrTool = new JigsawStackVOCR({
+    params: {
+      prompt: "Describe the image in detail",
+    },
+  });
+  const data = await vocrTool.invoke(
+    "https://rogilvkqloanxtvjfrkm.supabase.co/storage/v1/object/public/demo/Collabo%201080x842.jpg?t=2024-03-22T09%3A22%3A48.442Z"
+  );
+
+  console.log({ data });
+
+  // Speech-to-Text Tool
+  const sttTool = new JigsawStackSpeechToText();
+  await sttTool.invoke(
+    "https://rogilvkqloanxtvjfrkm.supabase.co/storage/v1/object/public/demo/Video%201737458382653833217.mp4?t=2024-03-22T09%3A50%3A49.894"
+  );
+
+  // Text-to-SQL Tool
+  const sqlTool = new JigsawStackTextToSQL({
+    params: {
+      sql_schema:
+        "CREATE TABLE Transactions (transaction_id INT PRIMARY KEY, user_id INT NOT NULL,total_amount DECIMAL(10, 2 NOT NULL, transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,status VARCHAR(20) DEFAULT 'pending',FOREIGN KEY(user_id) REFERENCES Users(user_id))",
+    },
+  });
+
+  await sqlTool.invoke(
+    "Generate a query to get transactions that amount exceed 10000 and sort by when created"
+  );
+};
+```
+
+## 在 Agent 中使用
+
+```js
+import { ChatOpenAI } from "@langchain/openai";
+import { initializeAgentExecutorWithOptions } from "@langchain/classic/agents";
+import {
+  JigsawStackAIScrape,
+  JigsawStackAISearch,
+  JigsawStackVOCR,
+  JigsawStackSpeechToText,
+  JigsawStackTextToSQL,
+} from "@langchain/jigsawstack";
+
+const model = new ChatOpenAI({
+  model: "gpt-5.4-mini",
+  temperature: 0,
+});
+
+//  add the tools that you need
+const tools = [
+  new JigsawStackAIScrape(),
+  new JigsawStackAISearch(),
+  new JigsawStackVOCR(),
+  new JigsawStackSpeechToText(),
+  new JigsawStackTextToSQL(),
+];
+
+const executor = await initializeAgentExecutorWithOptions(tools, model, {
+  agentType: "zero-shot-react-description",
+  verbose: true,
+});
+
+const res = await executor.invoke({
+  input: `Kokkalo Restaurant Santorini`,
+});
+
+console.log(res.output);
+
+/*
+{
+  "query": "Kokkalo Restaurant Santorini",
+  "ai_overview": "Kokkalo Restaurant, located in Fira, Santorini, offers a unique dining experience that blends traditional Greek cuisine with modern culinary trends. Here are some key details about the restaurant:\n\n- **Location**: Situated on the main road of Firostefani, Kokkalo is surrounded by the picturesque Cycladic architecture and provides stunning views of the Aegean Sea.\n- **Cuisine**: The restaurant specializes in authentic Greek dishes, crafted from high-quality, locally sourced ingredients. The menu is designed to engage all senses and features a variety of Mediterranean flavors.\n- **Ambiance**: Kokkalo boasts a chic and modern décor, creating a welcoming atmosphere for guests. The staff is known for their professionalism and attentiveness, enhancing the overall dining experience.\n- **Culinary Experience**: The name \"Kokkalo,\" meaning \"bone\" in Greek, symbolizes the strong foundation of the restaurant's culinary philosophy. Guests can expect a bold and unforgettable culinary journey.\n- **Cooking Classes**: Kokkalo also offers cooking lessons, allowing visitors to learn how to prepare traditional Greek dishes, providing a unique souvenir of their time in Santorini.\n- **Contact Information**: \n  - Address: 25 Martiou str, Fira, Santorini 84 700, Cyclades, Greece\n  - Phone: +30 22860 25407\n  - Email: reservation@kokkalosantorini.com\n\nFor more information, you can visit their [official website](https://www.santorini-view.com/restaurants/kokkalo-restaurant/) or their [Facebook page](https://www.facebook.com/kokkalorestaurant/).",
+  "is_safe": true,
+  "results": [
+    {
+      "title": "Kokkalo restaurant, Restaurants in Firostefani Santorini Greece",
+      "url": "http://www.travel-to-santorini.com/restaurants/firostefani/thebonerestaurant/",
+      "description": "Details Contact : George Grafakos Address : Firostefani, Opposite of Fira Primary School Zipcode : 84700 City : Santorni Phone : +30 22860 25407 Send an email",
+      "content": null,
+      "site_name": "Travel-to-santorini",
+      "site_long_name": "travel-to-santorini.com",
+      "language": "en",
+      "is_safe": true,
+      "favicon": "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://travel-to-santorini.com&size=96"
+    }
+  ]
+}
+*/
+```
+
+## 相关
+
+- Tool [概念指南](/oss/langchain/tools)
+- Tool [操作指南](/oss/langchain/tools)

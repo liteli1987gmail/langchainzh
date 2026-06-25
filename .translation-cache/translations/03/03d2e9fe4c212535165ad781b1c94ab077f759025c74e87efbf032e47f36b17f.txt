@@ -1,0 +1,71 @@
+---
+title: "时间加权集成"
+description: "使用 LangChain JavaScript 与时间加权检索器集成。"
+---
+
+时间加权检索器是一种在考虑相似性的同时还考虑时间相关性的检索器。评分算法如下：
+
+```typescript
+let score = (1.0 - this.decayRate) ** hoursPassed + vectorRelevance;
+```
+
+值得注意的是，上面的 `hoursPassed` 指的是自检索器中对象上次访问以来的时间，而不是自创建以来的时间。这意味着频繁访问的对象保持"新鲜"，得分更高。
+
+`this.decayRate` 是一个可配置的 0 到 1 之间的小数。数字越低，文档被"记住"的时间越长，而数字越高则越倾向于最近访问的文档。
+
+请注意，将衰减率设置为恰好 0 或 1 会使 `hoursPassed` 变得无关紧要，并使此检索器等同于标准向量查找。
+
+## 使用方法
+
+此示例展示了如何使用向量存储初始化 `TimeWeightedVectorStoreRetriever`。
+需要注意的是，由于所需的元数据，所有文档必须使用**检索器**上的 `addDocuments` 方法添加到后备向量存储中，而不是直接添加到向量存储本身。
+
+```typescript
+import { TimeWeightedVectorStoreRetriever } from "@langchain/classic/retrievers/time_weighted";
+import { MemoryVectorStore } from "@langchain/classic/vectorstores/memory";
+import { OpenAIEmbeddings } from "@langchain/openai";
+
+const vectorStore = new MemoryVectorStore(new OpenAIEmbeddings());
+
+const retriever = new TimeWeightedVectorStoreRetriever({
+  vectorStore,
+  memoryStream: [],
+  searchKwargs: 2,
+});
+
+const documents = [
+  "My name is John.",
+  "My name is Bob.",
+  "My favourite food is pizza.",
+  "My favourite food is pasta.",
+  "My favourite food is sushi.",
+].map((pageContent) => ({ pageContent, metadata: {} }));
+
+// All documents must be added using this method on the retriever (not the vector store!)
+// so that the correct access history metadata is populated
+await retriever.addDocuments(documents);
+
+const results1 = await retriever.invoke("What is my favourite food?");
+
+console.log(results1);
+
+/*
+[
+  Document { pageContent: 'My favourite food is pasta.', metadata: {} }
+]
+ */
+
+const results2 = await retriever.invoke("What is my favourite food?");
+
+console.log(results2);
+
+/*
+[
+  Document { pageContent: 'My favourite food is pasta.', metadata: {} }
+]
+ */
+```
+
+## 相关
+
+- [检索指南](/oss/langchain/retrieval)

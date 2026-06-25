@@ -1,0 +1,191 @@
+---
+title: "Google BigQuery 向量搜索集成"
+description: "使用 LangChain Python 与 Google BigQuery 向量搜索向量存储集成。"
+---
+
+> [Google Cloud BigQuery Vector Search](https://cloud.google.com/bigquery/docs/vector-search-intro) 使您能够使用 GoogleSQL 进行语义搜索，使用向量索引进行快速近似搜索，或使用暴力搜索进行精确搜索。
+
+本教程演示了如何在 LangChain 中使用端到端的数据和嵌入管理系统，并使用 `BigQueryVectorStore` 类在 BigQuery 中提供可扩展的语义搜索。此类是一组 2 个类的一部分，这些类能够在 Google Cloud 中提供统一的数据存储和灵活的向量搜索：
+
+- **BigQuery Vector Search**：使用 `BigQueryVectorStore` 类，无需基础设施设置即可快速进行原型设计和批量检索。
+- **Feature Store Online Store**：使用 `VertexFSVectorStore` 类，支持低延迟检索，可手动或按计划同步数据。非常适合面向用户的生产级 GenAI 应用。
+
+![BQ-VertexFS 图](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABzkAAANuCAYAAACFQLTUAAABUGlDQ1BJQ0MgUHJvZmlsZQAAGJV1kLFLAnEUxz+WJVRQRm0NBwUpWIhFY2AaETWIGWbbeV5noHacRjS3NAZBk3MQFOTk2hD9A0VBU6NbQ+BScr3TSi168Ph++P6+vN/jQQ+qaebcQL5QsuIrS8pWalvx1OjHy7A8+1StaIZjsXWJ8K3dVX/E5ej9jDPraDxRvoqejlYqyeT04uTJ33xXDWT0oib6Ie3TTKsErinh2EHJdFiaMUuWEj522Ghx2eF0i6+bmUQ8InwrPKJl1Yzwg3Ag3eEbHZzP7WtfOzjbD+mFzQ1HpSdYZo0Q8wRJ/ZObb+Yi7GFyiMUuBllKKITFMcmhC69SQGOWgHBIpslM576/79b2jAtYeBG4bHt6FKqv8rXa9vw18AbhTjFVS/25pqruLu7MhVo8WIW+M9t+S4LHD40n236v2nbjHHqf4ab+CTagYL2ZriuvAAAAVmVYSWZNTQAqAAAACAABh2kABAAAAAEAAAAaAAAAAAADkoYABwAAABIAAABEoAIABAAAAAEAAAc5oAMABAAAAAEAAANuAAAAAEFTQ0lJAAAAU2NyZWVuc2hvdEKmRkMAAAHXaVRYdFhNTDpjb20uYWRvYmUueG1wAAAAAAA8eDp4bXBtZXRhIHhtbG5zOng9ImFkb2JlOm5zOm1ldGEvIiB4OnhtcHRrPSJYTVAgQ29yZSA2LjAuMCI+CiAgIDxyZGY6UkRGIHhtbG5zOnJkZj0iaHR0cDovL3d3dy53My5vcmcvMTk5OS8wMi8yMi1yZGYtc3ludGF4LW5zIyI+CiAgICAgIDxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIj4KICAgICAgICAgPGV4aWY6UGl4ZWxZRGltZW5zaW9uPjg3ODwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlBpeGVsWERpbWVuc2lvbj4xODQ5PC9leGlmOlBpeGVsWERpbWVuc2lvbj4KICAgICAgICAgPGV4aWY6VXNlckNvbW1lbnQ+U2NyZWVuc2hvdDwvZXhpZjpVc2VyQ29tbWVudD4KICAgICAgPC9yZGY6RGVzY3JpcHRpb24+CiAgIDwvcmRmOlJERj4KPC94OnhtcG1ldGE+CkBslAkAAEAASURBVHgB7N0HnBT1+fjx53q/owkCCqiAiICIXVHU2HuLvcSSX6LGNDXVdPNP15jEGGOJvWLvFcWuCKJURboI0q6X3Sv/55ljdmfmdu/2uL2yd59vXufuTv3Oe47ZyzzzPN+0Jm1CQwBBBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBFJEID1F+kk3EUAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQIAYKe/AaAAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAIpJUCQM6VOF51FAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAGCAjnwGYAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQRSSoAgZ0qdLjqLAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAIECXjNAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQCClBAhypuSpo+MIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAIIIEBAIJX+UNkXAggggAACCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAgggQBCA3wEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAgpQQIcqbsCaPjCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAQAkQEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQRSSoAgZ0qdLjqLAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAIECPjwIYAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAiklQJCz4E4XHUUAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQI+PBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEUkqAIGdBnS46igACCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACBAX4EEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQRSSoAgZ8GdLjqKAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAII5PDxUwYBBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBFJKgCBnwZ0uOooAAggggAACCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAgjk8BFUBgEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEgpAYKcBXe66CgCCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCQw0dQGQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQCClBAhyFtzpoqMIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAIIIIDAPjnIkEIAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQSE6Ak1NwYoo+AggggAACCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAgggkJwAQc7kXOkZAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQSE6AIGdyrvSMAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAIIJCdAkDM5V3pGAAEEEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEhOgCBnAY4++Y9aCjKAAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAJ7owBBTj4aEEAAAQQQQAABBBBAAAEEEEAAAQQQQAABBBBAAAEEEEAAAQTyIECQkw8EBAgggAACCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAgggkAcBgpx8ICCAAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCCCAAAL5ECDIyYcCAggggAACCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAgggkA8Bgpx8ICCAQA4Ffl63w1av22nbd/9kJUtk/l1v6bYd1mbFptg+9IoAAggggAACCCCAAAIIIIAAAgggkHsBgpw5J2QDBBAoPIF3vllnI99cZU++t94+WbHZdu3+Nbfn0n0EEEEAAAQQQQAABBBBAAAEEEEAAgWwECHJmo8QyCCCAQL0SdnfH/eyq3pWtetlS6XbXKwIIIIAAAggggAACCCCAAAIIIIBAHgUIcvKhgAACCCCAAAIIIIAAAggggAACCCCAAAIIIIAAAggggAACCHj/H0U6BAgh3m0AAAAASUVORK5CYII=)
+
+## 开始使用
+
+### 安装库
+
+```python
+pip install -qU  langchain langchain-google-vertexai "langchain-google-community[featurestore]"
+```
+
+要在此 Jupyter 运行时中使用新安装的包，必须重新启动该运行时。您可以通过运行下面的单元格来执行此操作，这会重新启动当前内核。
+
+```python
+import IPython
+
+app = IPython.Application.instance()
+app.kernel.do_shutdown(True)
+```
+
+## 准备工作
+
+#### 设置项目 ID
+
+如果您不知道项目 ID，请尝试以下操作：
+- 运行 `gcloud config list`。
+- 运行 `gcloud projects list`。
+- 请参阅支持页面：[查找项目 ID](https://support.google.com/googleapi/answer/7014113)。
+
+```python
+PROJECT_ID = ""  # @param {type:"string"}
+
+# Set the project id
+! gcloud config set project {PROJECT_ID}
+```
+
+#### 设置区域
+
+您还可以更改 BigQuery 使用的 `REGION` 变量。了解有关 [BigQuery regions](https://cloud.google.com/bigquery/docs/locations#supported_locations) 的更多信息。
+
+```python
+REGION = "us-central1"  # @param {type: "string"}
+```
+
+#### 设置数据集和表名称
+
+它们将成为你的 BigQuery 向量存储。
+
+```python
+DATASET = "my_langchain_dataset"  # @param {type: "string"}
+TABLE = "doc_and_vectors"  # @param {type: "string"}
+```
+
+### 验证笔记本环境身份
+
+- 如果您使用的是 **Colab** 来运行此笔记本，请取消注释下面的单元格并继续。
+- 如果您使用的是 **Vertex AI Workbench**，请查看 [Vertex AI Workbench 设置说明](https://github.com/GoogleCloudPlatform/generative-ai/tree/main/setup-env)。
+
+```python
+# from google.colab import auth as google_auth
+
+# google_auth.authenticate_user()
+```
+
+## 示例：BigQueryVectorStore
+
+### 创建嵌入类实例
+
+您可能需要在项目中启用 Vertex AI API，方法是运行
+`gcloud services enable aiplatform.googleapis.com --project {PROJECT_ID}`
+（将 `{PROJECT_ID}` 替换为您的项目名称）。
+
+您可以使用任何 [LangChain 嵌入模型](/oss/integrations/embeddings/)。
+
+```python
+from langchain_google_vertexai import VertexAIEmbeddings
+
+embedding = VertexAIEmbeddings(
+    model_name="textembedding-gecko@latest", project=PROJECT_ID
+)
+```
+
+### 初始化 BigQueryVectorStore
+
+如果 BigQuery 数据集和表不存在，将自动创建。请参阅[类定义](https://github.com/langchain-ai/langchain-google/blob/main/libs/community/langchain_google_community/bq_storage_vectorstores/bigquery.py#L26)了解所有可选 paremeters。
+
+```python
+from langchain_google_community import BigQueryVectorStore
+
+store = BigQueryVectorStore(
+    project_id=PROJECT_ID,
+    dataset_name=DATASET,
+    table_name=TABLE,
+    location=REGION,
+    embedding=embedding,
+)
+```
+
+### 添加文本
+
+```python
+all_texts = ["Apples and oranges", "Cars and airplanes", "Pineapple", "Train", "Banana"]
+metadatas = [{"len": len(t)} for t in all_texts]
+
+store.add_texts(all_texts, metadatas=metadatas)
+```
+
+### 搜索文档
+
+```python
+query = "I'd like a fruit."
+docs = store.similarity_search(query)
+print(docs)
+```
+
+### 按向量搜索文档
+
+```python
+query_vector = embedding.embed_query(query)
+docs = store.similarity_search_by_vector(query_vector, k=2)
+print(docs)
+```
+
+### 使用元数据过滤器搜索文档
+
+向量存储支持两种在文档搜索时对元数据字段应用过滤器的方法：
+
+- 基于字典的过滤器
+  - 您可以传递一个字典（dict），其中键表示元数据字段，值指定过滤条件。此方法在键和相应值之间应用相等过滤。当提供多个键值对时，它们使用逻辑 AND 操作进行组合。
+- 基于 SQL 的过滤器
+  - 或者，您可以提供一个表示 SQL WHERE 子句的字符串来定义更复杂的过滤条件。这提供了更大的灵活性，支持 SQL 表达式（如比较运算符和逻辑运算符）。详细了解 [BigQuery 运算符](https://cloud.google.com/bigquery/docs/reference/standard-sql/operators)。
+
+```python
+# Dictionary-based Filters
+# This should only return "Banana" document.
+docs = store.similarity_search_by_vector(query_vector, filter={"len": 6})
+print(docs)
+```
+
+```python
+# SQL-based Filters
+# This should return "Banana", "Apples and oranges" and "Cars and airplanes" documents.
+docs = store.similarity_search_by_vector(query_vector, filter="len = 6 AND len > 17")
+print(docs)
+```
+
+### 批量搜索
+
+BigQueryVectorStore 提供了一个 `batch_search` 方法，用于可扩展的向量相似性搜索。
+
+```python
+results = store.batch_search(
+    embeddings=None,  # can pass embeddings or
+    queries=["search_query", "search_query"],  # can pass queries
+)
+```
+
+### 使用嵌入添加文本
+
+你也可以使用 `add_texts_with_embeddings` 方法自带嵌入内容。
+这对于多模态数据特别有用，因为这些数据在生成嵌入之前可能需要自定义预处理。
+
+```python
+items = ["some text"]
+embs = embedding.embed(items)
+
+ids = store.add_texts_with_embeddings(
+    texts=["some text"], embs=embs, metadatas=[{"len": 1}]
+)
+```
+
+### 使用特征存储实现低延迟服务
+
+您可以简单地使用 `.to_vertex_fs_vector_store()` 方法来获取 VertexFSVectorStore 对象，它为在线用例提供低延迟。所有必需参数将从现有的 BigQueryVectorStore 类自动传递。请参阅[类定义](https://github.com/langchain-ai/langchain-google/blob/main/libs/community/langchain_google_community/bq_storage_vectorstores/featurestore.py#L33)了解所有其他可用参数。
+
+使用 `.to_bq_vector_store()` 方法返回 BigQueryVectorStore 同样简单。
+
+```python
+store.to_vertex_fs_vector_store()  # pass optional VertexFSVectorStore parameters as arguments
+```

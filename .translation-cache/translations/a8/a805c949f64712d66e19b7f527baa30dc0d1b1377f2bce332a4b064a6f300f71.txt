@@ -1,0 +1,97 @@
+---
+title: 如何处理模型速率限制
+sidebarTitle: 处理模型速率限制
+---
+
+运行大型评估任务时，一个常见问题是遇到第三方 API 速率限制，通常来自模型提供商。有几种方法可以处理速率限制。
+
+## 使用 `langchain` RateLimiter（仅限 Python）
+
+如果您在应用程序或评估器中使用 `langchain` Python 聊天模型，您可以向模型添加速率限制器，以添加客户端控制向模型提供商 API 发送请求的频率，从而避免速率限制错误。
+
+```python
+from langchain.chat_models import init_chat_model
+from langchain_core.rate_limiters import InMemoryRateLimiter
+
+rate_limiter = InMemoryRateLimiter(
+    requests_per_second=0.1,  # <-- Super slow! We can only make a request once every 10 seconds!!
+    check_every_n_seconds=0.1,  # Wake up every 100 ms to check whether allowed to make a request,
+    max_bucket_size=10,  # Controls the maximum burst size.
+)
+
+model = init_chat_model("gpt-5.5", rate_limiter=rate_limiter)
+
+def app(inputs: dict) -> dict:
+    response = model.invoke(...)
+    ...
+
+def evaluator(inputs: dict, outputs: dict, reference_outputs: dict) -> dict:
+    response = model.invoke(...)
+    ...
+```
+
+有关配置速率限制器的更多信息，请参阅 [`langchain`](/oss/langchain/models#rate-limiting) 文档。
+
+## 使用指数退避重试
+
+处理速率限制错误的一种非常常见的方式是使用指数退避重试。使用指数退避重试意味着在每次重试之间以（指数级）增加的等待时间反复重试失败的请求。这一过程会持续进行，直到请求成功或达到最大请求次数。
+
+#### 使用 `langchain`
+
+如果您使用的是 `langchain` 组件，可以使用 `.with_retry(...)` / `.withRetry()` 方法为所有模型调用添加重试功能：
+
+<CodeGroup>
+
+</CodeGroup>
+
+```python Python
+from langchain import init_chat_model
+
+model_with_retry = init_chat_model("gpt-5.4-mini").with_retry(stop_after_attempt=6)
+```
+
+```typescript TypeScript
+import { initChatModel } from "langchain";
+
+const model = await initChatModel("gpt-5.5", {
+    modelProvider: "openai",
+});
+
+const modelWithRetry = model.withRetry({ stopAfterAttept: 2 });
+```
+
+</CodeGroup>
+
+请参阅 `langchain` @[Python][BaseChatModel.with_retry] 和 [JS](https://reference.langchain.com/javascript/langchain-core/language_models/chat_models/BaseChatModel/withRetry) API 参考文档了解更多。
+
+#### 不使用 `langchain`
+
+如果你不使用 `langchain`，你可以使用其他库，如 `tenacity`（Python）或 `backoff`（Python）来实现指数退避重试，或者你可以从零开始实现。请参阅 [OpenAI 文档](https://platform.openai.com/docs/guides/rate-limits#retrying-with-exponential-backoff)中的相关示例。
+
+## 限制 `max_concurrency`
+
+限制你对应用程序和评估器进行的并发调用数量是另一种减少模型调用频率的方式，从而避免速率限制错误。`max_concurrency` 可以直接在 [evaluate()](https://docs.smith.langchain.com/reference/python/evaluation/langsmith.evaluation._runner.evaluate) / [aevaluate()](https://docs.smith.langchain.com/reference/python/evaluation/langsmith.evaluation._arunner.aevaluate) 函数上设置。这通过将数据集有效地分散到各个线程来实现并行评估。
+
+<CodeGroup>
+
+```python Python
+from langsmith import aevaluate
+
+results = await aevaluate(
+    ...
+    max_concurrency=4,
+)
+```
+
+```typescript TypeScript
+import { evaluate } from "langsmith/evaluation";
+
+await evaluate(..., {
+  ...,
+  maxConcurrency: 4,
+});
+```
+
+<CodeGroup>
+
+</CodeGroup>
