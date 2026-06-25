@@ -91,7 +91,12 @@ class TranslationConfig:
 class MiniMaxClient:
     def __init__(self, config: TranslationConfig) -> None:
         self.config = config
-        self.endpoint = config.base_url.rstrip("/") + "/chat/completions"
+        self.endpoint = resolve_endpoint(config.base_url)
+        self.opener = (
+            urllib.request.build_opener()
+            if os.environ.get("MINIMAX_USE_PROXY", "").lower() in {"1", "true", "yes"}
+            else urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        )
 
     def translate(self, fragment: str, *, content_type: str) -> str:
         if self.config.mock:
@@ -127,9 +132,7 @@ class MiniMaxClient:
                 method="POST",
             )
             try:
-                with urllib.request.urlopen(
-                    request, timeout=self.config.timeout
-                ) as response:
+                with self.opener.open(request, timeout=self.config.timeout) as response:
                     body = response.read().decode("utf-8")
                 parsed = json.loads(body)
                 return parsed["choices"][0]["message"]["content"].strip()
@@ -153,7 +156,7 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def load_dotenv(path: Path = Path(".env")) -> None:
+def load_dotenv(path: Path) -> None:
     if not path.exists():
         return
     for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -164,6 +167,28 @@ def load_dotenv(path: Path = Path(".env")) -> None:
         key = key.strip()
         value = value.strip().strip('"').strip("'")
         os.environ.setdefault(key, value)
+
+
+def load_env_files() -> None:
+    load_dotenv(Path(".env"))
+    load_dotenv(Path.home() / ".serenity_env")
+
+
+def resolve_endpoint(base_url: str) -> str:
+    value = base_url.rstrip("/")
+    if value.endswith("/chat/completions"):
+        return value
+    return value + "/chat/completions"
+
+
+def default_base_url() -> str:
+    if os.environ.get("MINIMAX_BASE_URL"):
+        return os.environ["MINIMAX_BASE_URL"]
+    if os.environ.get("MINIMAX_URL"):
+        endpoint = os.environ["MINIMAX_URL"].rstrip("/")
+        suffix = "/chat/completions"
+        return endpoint[: -len(suffix)] if endpoint.endswith(suffix) else endpoint
+    return "https://api.minimaxi.com/v1"
 
 
 def load_cache(path: Path) -> dict[str, Any]:
@@ -407,7 +432,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.io/v1"),
+        default=default_base_url(),
     )
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--timeout", type=int, default=180)
@@ -418,7 +443,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
-    load_dotenv()
+    load_env_files()
     args = parse_args()
     api_key = os.environ.get("MINIMAX_API_KEY")
     if not api_key and not args.dry_run and not args.mock:

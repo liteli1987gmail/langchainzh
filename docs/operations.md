@@ -25,10 +25,12 @@
 在 GitHub 仓库 `Settings -> Secrets and variables -> Actions` 中添加：
 
 - Secret: `MINIMAX_API_KEY`
-- Variable: `MINIMAX_BASE_URL`，默认 `https://api.minimax.io/v1`
+- Variable: `MINIMAX_BASE_URL`，默认 `https://api.minimaxi.com/v1`
 - Variable: `MINIMAX_MODEL`，默认 `MiniMax-M2.7-highspeed`
 
-MiniMax 官方 OpenAI-compatible 文档使用的 base URL 是 `https://api.minimax.io/v1`。
+本机 `~/.serenity_env` 已有 `MINIMAX_API_KEY`。本仓库脚本会依次读取 `.env` 和 `~/.serenity_env`。
+这台机器的 Token Plan key 已验证可用的 OpenAI-compatible base URL 是 `https://api.minimaxi.com/v1`。
+脚本默认禁用系统代理调用 MiniMax；如需走代理，可设置 `MINIMAX_USE_PROXY=1`。
 
 ## 手动试跑
 
@@ -37,6 +39,7 @@ MiniMax 官方 OpenAI-compatible 文档使用的 base URL 是 `https://api.minim
 ```bash
 export MINIMAX_API_KEY=...
 python -m pip install -r requirements-docs.txt
+python scripts/check_minimax.py
 python scripts/sync_langchain_docs.py --force --limit 3
 ```
 
