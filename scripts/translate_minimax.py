@@ -359,6 +359,12 @@ def has_translatable_english(text: str) -> bool:
     return bool(re.search(r"[A-Za-z]{3,}", text))
 
 
+def restore_edge_newlines(source: str, translated: str) -> str:
+    leading = len(source) - len(source.lstrip("\n"))
+    trailing = len(source) - len(source.rstrip("\n"))
+    return ("\n" * leading) + translated.strip("\n") + ("\n" * trailing)
+
+
 def translate_markdown(text: str, client: MiniMaxClient, max_chars: int) -> str:
     translated_units: list[str] = []
     for unit_type, unit_text in split_fenced_blocks(text):
@@ -371,7 +377,10 @@ def translate_markdown(text: str, client: MiniMaxClient, max_chars: int) -> str:
                 translated_units.append(nested_text)
                 continue
             translated_units.extend(
-                client.translate(chunk, content_type="Markdown/MDX")
+                restore_edge_newlines(
+                    chunk,
+                    client.translate(chunk, content_type="Markdown/MDX"),
+                )
                 for chunk in chunk_text(nested_text, max_chars)
             )
     return "".join(translated_units).rstrip() + "\n"

@@ -17,6 +17,9 @@ from pathlib import Path
 
 UPSTREAM_URL = "https://github.com/langchain-ai/docs.git"
 TARBALL_URL = "https://github.com/langchain-ai/docs/archive/refs/heads/{ref}.tar.gz"
+DOWNLOAD_CHUNK_BYTES = 1024 * 1024
+DOWNLOAD_LOG_BYTES = 25 * 1024 * 1024
+DOWNLOAD_READ_TIMEOUT_SECONDS = 60
 
 
 def run(
@@ -97,8 +100,39 @@ def download_tarball(upstream_dir: Path, ref: str) -> None:
     url = TARBALL_URL.format(ref=ref)
     request = urllib.request.Request(url, method="GET")
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    with opener.open(request, timeout=600) as response:
-        archive_path.write_bytes(response.read())
+    print(f"Downloading upstream docs tarball: {url}", file=sys.stderr)
+    with opener.open(request, timeout=DOWNLOAD_READ_TIMEOUT_SECONDS) as response:
+        expected_size = response.headers.get("Content-Length")
+        expected = int(expected_size) if expected_size and expected_size.isdigit() else None
+        downloaded = 0
+        next_log = DOWNLOAD_LOG_BYTES
+        with archive_path.open("wb") as archive_file:
+            while True:
+                chunk = response.read(DOWNLOAD_CHUNK_BYTES)
+                if not chunk:
+                    break
+                archive_file.write(chunk)
+                downloaded += len(chunk)
+                if downloaded >= next_log:
+                    if expected:
+                        print(
+                            f"Downloaded {downloaded // (1024 * 1024)} MiB"
+                            f" / {expected // (1024 * 1024)} MiB",
+                            file=sys.stderr,
+                        )
+                    else:
+                        print(
+                            f"Downloaded {downloaded // (1024 * 1024)} MiB",
+                            file=sys.stderr,
+                        )
+                    next_log += DOWNLOAD_LOG_BYTES
+
+    if archive_path.stat().st_size == 0:
+        raise RuntimeError("Downloaded empty upstream tarball")
+    print(
+        f"Downloaded upstream docs tarball: {archive_path.stat().st_size // (1024 * 1024)} MiB",
+        file=sys.stderr,
+    )
 
     extract_dir = upstream_dir.parent / "tarball"
     if extract_dir.exists():
