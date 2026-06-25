@@ -28,6 +28,7 @@ from typing import Any
 
 TEXT_EXTENSIONS = {".md", ".mdx", ".txt"}
 CACHE_VERSION = 2
+JSON_BATCH_MAX_CHARS = 20_000
 JSON_DISPLAY_KEYS = {
     "anchor",
     "description",
@@ -318,6 +319,134 @@ def translate_json_value(value: Any, client: MiniMaxClient, key: str = "") -> An
     return value
 
 
+def collect_json_strings(
+    value: Any,
+    *,
+    key: str = "",
+    path: tuple[str | int, ...] = (),
+) -> list[tuple[tuple[str | int, ...], str]]:
+    if isinstance(value, dict):
+        items: list[tuple[tuple[str | int, ...], str]] = []
+        for item_key, item_value in value.items():
+            items.extend(
+                collect_json_strings(
+                    item_value,
+                    key=item_key,
+                    path=(*path, item_key),
+                )
+            )
+        return items
+    if isinstance(value, list):
+        items = []
+        for index, item in enumerate(value):
+            items.extend(collect_json_strings(item, key=key, path=(*path, index)))
+        return items
+    if isinstance(value, str) and should_translate_json_string(key, value):
+        return [(path, value)]
+    return []
+
+
+def set_json_path(root: Any, path: tuple[str | int, ...], value: str) -> None:
+    current = root
+    for part in path[:-1]:
+        current = current[part]
+    current[path[-1]] = value
+
+
+def json_batches(
+    items: list[tuple[tuple[str | int, ...], str]],
+    max_chars: int,
+) -> list[list[tuple[int, tuple[str | int, ...], str]]]:
+    batches: list[list[tuple[int, tuple[str | int, ...], str]]] = []
+    current: list[tuple[int, tuple[str | int, ...], str]] = []
+    current_chars = 0
+    for index, (path, text) in enumerate(items):
+        entry_chars = len(text) + 80
+        if current and current_chars + entry_chars > max_chars:
+            batches.append(current)
+            current = []
+            current_chars = 0
+        current.append((index, path, text))
+        current_chars += entry_chars
+    if current:
+        batches.append(current)
+    return batches
+
+
+def parse_json_batch_response(text: str) -> Any:
+    stripped = text.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.DOTALL)
+    if fenced:
+        stripped = fenced.group(1).strip()
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        start = stripped.find("[")
+        end = stripped.rfind("]")
+        if start == -1 or end == -1 or end <= start:
+            raise
+        return json.loads(stripped[start : end + 1])
+
+
+def translate_json_batch(
+    batch: list[tuple[int, tuple[str | int, ...], str]],
+    client: MiniMaxClient,
+) -> dict[int, str]:
+    if client.config.mock:
+        return {item_id: text for item_id, _, text in batch}
+
+    payload = [{"id": item_id, "text": text} for item_id, _, text in batch]
+    fragment = (
+        "Translate only the text values to Simplified Chinese. "
+        "Return valid JSON only: an array with the same id values and translated text values. "
+        "Do not translate keys or id values.\n\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+    )
+    response = client.translate(fragment, content_type="JSON string batch")
+    parsed = parse_json_batch_response(response)
+
+    if isinstance(parsed, list) and all(isinstance(item, str) for item in parsed):
+        if len(parsed) != len(batch):
+            raise RuntimeError("MiniMax JSON batch returned a string list with the wrong length")
+        return {
+            item_id: translated
+            for (item_id, _, _), translated in zip(batch, parsed, strict=True)
+        }
+
+    if not isinstance(parsed, list):
+        raise RuntimeError("MiniMax JSON batch did not return a JSON array")
+
+    translations: dict[int, str] = {}
+    for item in parsed:
+        if not isinstance(item, dict) or "id" not in item or "text" not in item:
+            raise RuntimeError("MiniMax JSON batch returned an unexpected item shape")
+        translations[int(item["id"])] = str(item["text"])
+
+    expected_ids = {item_id for item_id, _, _ in batch}
+    if set(translations) != expected_ids:
+        raise RuntimeError("MiniMax JSON batch returned mismatched ids")
+    return translations
+
+
+def translate_json_values_batched(
+    parsed: Any,
+    client: MiniMaxClient,
+    max_chars: int,
+) -> Any:
+    items = collect_json_strings(parsed)
+    batch_limit = min(max_chars, JSON_BATCH_MAX_CHARS)
+    batches = json_batches(items, batch_limit)
+    print(
+        f"translate-json: strings={len(items)} batches={len(batches)}",
+        file=sys.stderr,
+    )
+    for batch in batches:
+        translations = translate_json_batch(batch, client)
+        for item_id, path, _ in batch:
+            set_json_path(parsed, path, translations[item_id])
+    return parsed
+
+
 def translate_json_document(text: str, client: MiniMaxClient, max_chars: int) -> str:
     if len(text) <= max_chars:
         translated = client.translate(text, content_type="JSON document")
@@ -325,7 +454,7 @@ def translate_json_document(text: str, client: MiniMaxClient, max_chars: int) ->
         return translated.rstrip() + "\n"
 
     parsed = json.loads(text)
-    translated = translate_json_value(parsed, client)
+    translated = translate_json_values_batched(parsed, client, max_chars)
     return json.dumps(translated, ensure_ascii=False, indent=2) + "\n"
 
 
