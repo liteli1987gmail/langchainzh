@@ -29,6 +29,15 @@
 - Variable: `MINIMAX_BASE_URL`，默认 `https://api.minimaxi.com/v1`
 - Variable: `MINIMAX_MODEL`，默认 `MiniMax-M2.7-highspeed`
 
+如果要让 GitHub Actions 直接发布到 Cloudflare Pages，再添加：
+
+- Secret: `CLOUDFLARE_API_TOKEN`
+- Variable: `CLOUDFLARE_ACCOUNT_ID`
+- Variable: `CLOUDFLARE_PROJECT_NAME`，默认 `langchainzh`
+
+如果只使用 Cloudflare Pages 的 GitHub 集成，上述 Cloudflare token 可以不配；Pages 会在
+`main` 更新后自行构建 `site/`。
+
 本机 `~/.serenity_env` 已有 `MINIMAX_API_KEY`。本仓库脚本会依次读取 `.env` 和 `~/.serenity_env`。
 这台机器的 Token Plan key 已验证可用的 OpenAI-compatible base URL 是 `https://api.minimaxi.com/v1`。
 脚本默认禁用系统代理调用 MiniMax；如需走代理，可设置 `MINIMAX_USE_PROXY=1`。
@@ -116,6 +125,10 @@ python scripts/translate_minimax.py \
 
 Cloudflare Pages 免费计划有单文件大小限制。本仓库会在同步导出后运行
 `scripts/optimize_site_assets.py`，自动压缩超限 GIF，并保持原路径不变。
+
+GitHub Actions 中也包含一个可选的 Cloudflare Pages 直传步骤。只有当
+`CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 都存在时才会执行；否则会跳过，
+不影响翻译、构建和提交。
 
 如果使用 Wrangler 直传，可在 `site/` 生成后执行：
 
