@@ -19,7 +19,7 @@
 4. 运行官方 pipeline 生成 `build/`。
 5. 将 `build/` 转成可直接部署的静态站点 `site/`。
 6. 压缩超过免费静态托管单文件限制的 GIF 资源。
-7. GitHub Actions 提交 `site/`，Vercel 或 Cloudflare Pages 通过 Git 集成自动部署。
+7. GitHub Actions 提交 `site/`，Cloudflare Pages 通过 Git 集成自动部署。
 
 ## 需要配置的密钥
 
@@ -105,13 +105,28 @@ python scripts/translate_minimax.py \
 当 `site/` 推送到 `main` 时会自动运行；也可以在 GitHub Actions 页面手动运行，用来在补齐
 Cloudflare 配置后立即发布现有静态站。
 
-## Vercel 部署
+## 当前生产域名
+
+生产域名使用：
+
+- `https://langchain.asia`
+- `https://www.langchain.asia`
+
+如果访问返回 `402 DEPLOYMENT_DISABLED`，说明域名仍然落在已停用的 Vercel 项目上。
+切换到 Cloudflare Pages 后，用下面命令验证：
+
+```bash
+npm run verify:domain
+```
+
+## Vercel 旧部署
 
 仓库包含 `vercel.json`，会让 Vercel 跳过旧 Nextra 依赖安装，并从 `site/` 发布。
 第一轮 Actions 成功后，`site/` 会从占位页替换成完整中文文档。
 `package.json` 的 `build` 脚本也只会确保 `site/` 存在，不再运行旧 Next/Nextra 构建。
 
-注意：完整静态导出版较大，Vercel Hobby 静态上传额度可能不够；Vercel Pro 或 Cloudflare Pages 更合适。
+注意：当前 `langchain.asia` 的 Vercel 部署已被停用。后续生产环境以 Cloudflare Pages 免费版为准。
+完整静态导出版较大，Vercel Hobby 静态上传额度可能不够；Vercel Pro 或 Cloudflare Pages 更合适。
 
 在 Vercel 项目中设置：
 
@@ -121,11 +136,19 @@ Cloudflare 配置后立即发布现有静态站。
 
 ## Cloudflare Pages 部署
 
-仓库包含 `wrangler.toml`，输出目录为 `site`。GitHub 已连通 Cloudflare 时，Pages 项目建议设置：
+仓库包含 `wrangler.toml`，输出目录为 `site`。GitHub 已连通 Cloudflare 时，Pages 项目设置：
+
+- Project name: `langchainzh`
+- Repository: `liteli1987gmail/langchainzh`
 
 - Production branch: `main`
 - Build command: `python3 scripts/ensure_site.py`
 - Build output directory: `site`
+
+在 Cloudflare Pages 项目中添加 Custom domains：
+
+- `langchain.asia`
+- `www.langchain.asia`
 
 Cloudflare Pages 免费计划有单文件大小限制。本仓库会在同步导出后运行
 `scripts/optimize_site_assets.py`，自动压缩超限 GIF，并保持原路径不变。

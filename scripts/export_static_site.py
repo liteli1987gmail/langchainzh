@@ -454,6 +454,36 @@ input?.addEventListener('input', () => {
 """
 
 
+def normalize_site_url(site_url: str) -> str:
+    return site_url.rstrip("/")
+
+
+def render_sitemap(pages: list[Page], site_url: str) -> str:
+    base_url = normalize_site_url(site_url)
+    entries = []
+    for page in pages:
+        entries.append(
+            "  <url>\n"
+            f"    <loc>{html.escape(base_url + page.url, quote=True)}</loc>\n"
+            "  </url>"
+        )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(entries)
+        + "\n</urlset>\n"
+    )
+
+
+def render_robots(site_url: str) -> str:
+    base_url = normalize_site_url(site_url)
+    return f"User-agent: *\nAllow: /\nSitemap: {base_url}/sitemap.xml\n"
+
+
+def strip_trailing_whitespace(text: str) -> str:
+    return "\n".join(line.rstrip() for line in text.splitlines()) + "\n"
+
+
 def copy_assets(build_dir: Path, out_dir: Path) -> None:
     for path in build_dir.rglob("*"):
         if not path.is_file():
@@ -508,7 +538,7 @@ def build_pages(build_dir: Path, out_dir: Path, title: str) -> list[Page]:
         output = out_dir / page.out_path
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(
-            render_shell(page, ordered_pages, content_html, title),
+            strip_trailing_whitespace(render_shell(page, ordered_pages, content_html, title)),
             encoding="utf-8",
         )
     return ordered_pages
@@ -519,6 +549,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, default=Path("site"))
     parser.add_argument("--title", default="LangChain 中文文档")
+    parser.add_argument("--site-url", default="https://langchain.asia")
     return parser.parse_args()
 
 
@@ -537,7 +568,14 @@ def main() -> int:
     (assets_dir / "site.css").write_text(site_css(), encoding="utf-8")
     (assets_dir / "site.js").write_text(site_js(), encoding="utf-8")
     (args.out_dir / ".nojekyll").write_text("", encoding="utf-8")
-    (args.out_dir / "robots.txt").write_text("User-agent: *\nAllow: /\n", encoding="utf-8")
+    (args.out_dir / "robots.txt").write_text(
+        render_robots(args.site_url),
+        encoding="utf-8",
+    )
+    (args.out_dir / "sitemap.xml").write_text(
+        render_sitemap(pages, args.site_url),
+        encoding="utf-8",
+    )
     (args.out_dir / "search-index.json").write_text(
         json.dumps(
             [
