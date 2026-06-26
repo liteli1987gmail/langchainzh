@@ -16,12 +16,14 @@ import json
 import os
 import re
 import shutil
+import signal
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -138,8 +140,9 @@ class MiniMaxClient:
                 method="POST",
             )
             try:
-                with self.opener.open(request, timeout=self.config.timeout) as response:
-                    body = response.read().decode("utf-8")
+                with wall_clock_timeout(self.config.timeout):
+                    with self.opener.open(request, timeout=self.config.timeout) as response:
+                        body = response.read().decode("utf-8")
                 parsed = json.loads(body)
                 return strip_thinking(
                     parsed["choices"][0]["message"]["content"].strip()
@@ -158,6 +161,30 @@ class MiniMaxClient:
                 time.sleep(sleep_for)
 
         raise RuntimeError(f"MiniMax request failed after retries: {last_error}")
+
+
+@contextmanager
+def wall_clock_timeout(seconds: int):
+    if (
+        seconds <= 0
+        or threading.current_thread() is not threading.main_thread()
+        or not hasattr(signal, "SIGALRM")
+    ):
+        yield
+        return
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def handle_timeout(signum, frame):  # type: ignore[no-untyped-def]
+        raise TimeoutError(f"MiniMax request exceeded {seconds}s wall-clock timeout")
+
+    signal.signal(signal.SIGALRM, handle_timeout)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 
 def sha256_text(text: str) -> str:
@@ -574,6 +601,7 @@ def restore_edge_newlines(source: str, translated: str) -> str:
 
 def translate_markdown(text: str, client: MiniMaxClient, max_chars: int) -> str:
     translated_units: list[str] = []
+    chunk_index = 0
     for unit_type, unit_text in split_fenced_blocks(text):
         if unit_type == "literal":
             translated_units.append(unit_text)
@@ -583,13 +611,15 @@ def translate_markdown(text: str, client: MiniMaxClient, max_chars: int) -> str:
             if nested_type == "literal" or not has_translatable_english(nested_text):
                 translated_units.append(nested_text)
                 continue
-            translated_units.extend(
-                restore_edge_newlines(
-                    chunk,
-                    client.translate(chunk, content_type="Markdown/MDX"),
+            chunks = chunk_text(nested_text, max_chars)
+            for chunk in chunks:
+                chunk_index += 1
+                print(
+                    f"translate-chunk: {chunk_index} chars={len(chunk)}",
+                    file=sys.stderr,
                 )
-                for chunk in chunk_text(nested_text, max_chars)
-            )
+                translated = client.translate(chunk, content_type="Markdown/MDX")
+                translated_units.append(restore_edge_newlines(chunk, translated))
     return "".join(translated_units).rstrip() + "\n"
 
 

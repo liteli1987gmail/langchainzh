@@ -238,6 +238,11 @@ def parse_args() -> argparse.Namespace:
         default=float(os.environ.get("TRANSLATION_RETRY_DELAY", "5")),
     )
     parser.add_argument(
+        "--translation-timeout",
+        type=int,
+        default=int(os.environ.get("TRANSLATION_TIMEOUT", "90")),
+    )
+    parser.add_argument(
         "--failure-log",
         type=Path,
         default=Path(".translation-cache/failures.json"),
@@ -288,6 +293,8 @@ def main() -> int:
         str(args.translation_retries),
         "--retry-delay",
         str(args.translation_retry_delay),
+        "--timeout",
+        str(args.translation_timeout),
         "--keep-going",
         "--failure-log",
         str(args.failure_log),

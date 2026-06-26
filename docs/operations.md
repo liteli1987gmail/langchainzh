@@ -70,7 +70,7 @@ python scripts/sync_langchain_docs.py --force
 更稳的完整同步参数：
 
 ```bash
-TRANSLATION_WORKERS=2 TRANSLATION_MAX_CHARS=6000 \
+TRANSLATION_WORKERS=1 TRANSLATION_MAX_CHARS=6000 TRANSLATION_TIMEOUT=90 \
 python scripts/sync_langchain_docs.py --force
 ```
 

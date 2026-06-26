@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 
 export const PatternEmbed = ({
   pattern,
+  id,
   theme,
   height,
   minHeight = 400,
@@ -313,6 +314,24 @@ var langCache = globalThis[LANG_CACHE_KEY] ?? (() => {
   globalThis[LANG_CACHE_KEY] = m;
   return m;
 })();
+var INSTANCE_COUNTER_KEY = "__lcPlaygroundInstanceCounter";
+function nextAutoInstanceIndex() {
+  const g = globalThis;
+  const state = g[INSTANCE_COUNTER_KEY] ?? (() => {
+    const s = { n: 0, resetScheduled: false };
+    g[INSTANCE_COUNTER_KEY] = s;
+    return s;
+  })();
+  const index = state.n++;
+  if (!state.resetScheduled) {
+    state.resetScheduled = true;
+    queueMicrotask(() => {
+      state.n = 0;
+      state.resetScheduled = false;
+    });
+  }
+  return index;
+}
 var VIEW_EYE_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 var VIEW_CODE_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
 var CHEVRON_DOWN_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
@@ -376,16 +395,21 @@ var EMBED_CSS = `
   const cardRef = useRef(null);
   const placeholderRef = useRef(null);
   const cachedRef = useRef(null);
+  const autoInstanceRef = useRef(null);
+  if (!id && autoInstanceRef.current === null) {
+    autoInstanceRef.current = `auto-${nextAutoInstanceIndex()}`;
+  }
+  const instanceKey = id ?? autoInstanceRef.current;
   const useLocalPreview = agentServer === "local" || agentServer === "prod" && isLocalhost();
   const agentQuery = agentServer !== "local" && agentServer !== "prod" ? `?agentServer=${encodeURIComponent(agentServer)}` : "";
-  const sdkCacheKey = `${agentServer}|${pattern}`;
+  const sdkCacheKey = `${agentServer}|${pattern}|${instanceKey}`;
   const [sdk, setSdkRaw] = useState(() => {
     const fromCache = sdkCache.get(sdkCacheKey);
     if (fromCache) return fromCache;
     const hosts = useLocalPreview ? SDK_LOCAL_HOSTS : SDK_PROD_HOSTS;
     let best = null;
     for (const [s, url] of Object.entries(hosts)) {
-      const entry = iframeCache.get(`${url}|${agentQuery}`);
+      const entry = iframeCache.get(`${url}|${agentQuery}|${instanceKey}`);
       if (entry?.lastActiveAt && (!best || entry.lastActiveAt > best.at)) {
         best = { sdk: s, at: entry.lastActiveAt };
       }
@@ -401,7 +425,7 @@ var EMBED_CSS = `
     [sdkCacheKey]
   );
   const [sdkDropdownOpen, setSdkDropdownOpen] = useState(false);
-  const langCacheKey = `${agentServer}|${pattern}`;
+  const langCacheKey = `${agentServer}|${pattern}|${instanceKey}`;
   const [agentLang, setAgentLangRaw] = useState(
     () => langCache.get(langCacheKey) ?? defaultLanguage
   );
@@ -413,7 +437,7 @@ var EMBED_CSS = `
     [langCacheKey]
   );
   const previewUrl = useLocalPreview ? SDK_LOCAL_HOSTS[sdk] : SDK_PROD_HOSTS[sdk];
-  const cacheKey = `${previewUrl}|${agentQuery}`;
+  const cacheKey = `${previewUrl}|${agentQuery}|${instanceKey}`;
   const [ready, setReady] = useState(() => iframeCache.get(cacheKey)?.ready ?? false);
   const [iframeHeight, setIframeHeight] = useState(
     () => iframeCache.get(cacheKey)?.lastHeight ?? minHeight
@@ -467,7 +491,7 @@ var EMBED_CSS = `
       const iframe2 = document.createElement("iframe");
       iframe2.src = `${previewUrl}/${agentQuery}#/${patternRef.current}`;
       iframe2.setAttribute("sandbox", "allow-scripts allow-same-origin allow-forms");
-      iframe2.setAttribute("allow", "clipboard-write; geolocation");
+      iframe2.setAttribute("allow", "clipboard-write");
       iframe2.title = `${patternRef.current} pattern`;
       iframe2.setAttribute("data-cache-key", cacheKey);
       Object.assign(iframe2.style, {
