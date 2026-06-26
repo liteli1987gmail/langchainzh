@@ -1,0 +1,85 @@
+---
+title: 使用 Harbor 运行评估
+sidebarTitle: Harbor
+description: 使用 harbor[langsmith] extra 在 LangSmith 沙盒上运行 Harbor 评估和发布。
+---
+
+[Harbor](https://harborframework.com/docs) 是一个框架，用于在沙盒环境中评估和优化代理和语言模型，由 [Terminal-Bench](https://www.tbench.ai) 的创建者推出。Harbor 在隔离容器中运行每次试验，因此您可以并行跨多个环境运行评估和发布。
+
+langsmith Harbor 环境在 LangSmith 沙盒上运行这些试验。使用 `-e langsmith` 选择它，在 LangSmith 基础设施上执行 Harbor 作业，与 AgentCore、Daytona、E2B 和 Modal 等提供商并列。
+
+## 前置要求
+
+- [LangSmith 账户](https://smith.langchain.com) 和 API 密钥。
+- Python 和 `pip`。
+
+## 安装
+
+安装带有 `langsmith` extra 的 Harbor：
+
+```bash
+pip install "harbor[langsmith]"
+```
+
+## 身份验证
+
+Harbor 使用您的 LangSmith 凭证进行身份验证。设置一个 API 密钥：
+
+```bash
+export LANGSMITH_API_KEY="<LANGSMITH_API_KEY>"
+```
+
+`LANGCHAIN_API_KEY` 同样有效。或者，选择一个 [LangSmith SDK 配置文件](/langsmith/profile-configuration) 而不是导出密钥：
+
+```bash
+export LANGSMITH_PROFILE=prod
+```
+
+## 运行评估
+
+运行 Harbor 任务并使用 `-e langsmith` 选择 LangSmith 环境：
+
+```bash
+harbor run -d "<org/name>" \
+  -m "<model>" \
+  -a "<agent>" \
+  -e langsmith \
+  -n "<n-parallel-trials>"
+```
+
+Harbor 为每个 trial 创建一个 LangSmith sandbox，在其中运行 agent 和 verifier，然后在 trial 完成后销毁 sandbox。
+
+## 配置 sandbox 环境
+
+LangSmith 环境从文件系统快照启动每个 sandbox。请在 Harbor 任务中提供以下之一：
+
+- **预构建镜像**: 在 `task.toml` 中设置 `[environment].docker_image`。Harbor 会复用或从该镜像创建快照。
+- **现有快照**: 传递 `environment.kwargs.snapshot_name` 以从您已创建的[快照](/langsmith/sandbox-snapshots)启动。
+- **Dockerfile**: 包含一个 `environment/Dockerfile`。Harbor 会使用[从 Dockerfile 构建快照流程](/langsmith/sandbox-snapshots#build-a-snapshot-from-a-dockerfile)从中构建快照，并使用任务的 `environment/` 目录作为构建上下文。
+
+使用环境 kwargs 调整 sandbox 生命周期，通过命令行以 `--ek` 传递：
+
+```bash
+harbor run -d "<org/name>" \
+  -m "<model>" \
+  -a "<agent>" \
+  -e langsmith \
+  -n "<n-parallel-trials>" \
+  --ek idle_ttl_seconds=0 \
+  --ek delete_after_stop_seconds=7200
+```
+
+- `idle_ttl_seconds`：在空闲这么多秒后停止沙箱。设置为 `0` 可禁用空闲超时。
+- `delete_after_stop_seconds`：在停止后这么多秒删除沙箱。
+
+## 在 LangSmith 上运行 Deep Agents
+
+[Deep Agents](/oss/deepagents/overview) 通过 Harbor 内置的 `langgraph` 代理和 `-e langsmith` 环境在 LangSmith 沙箱上运行。完整设置包括：暂存 Deep Agents 包、LangGraph 项目（带有 `deepagent` 图的 `langgraph.json`）以及确切的 `harbor run` 命令，都在 Deep Agents 评估指南中有维护：
+
+→ [在 Harbor / Terminal Bench 2.0 上运行 Deep Agents](https://github.com/langchain-ai/deepagents/blob/main/libs/evals/CONTRIBUTING.md#harbor--terminal-bench-20)
+
+[LangSmith 特定选项](#configure-the-sandbox-environment)（身份验证、`-e langsmith` 和 `--ek` 沙箱生命周期 kwargs）也适用于这些运行。
+
+## 多容器任务
+
+LangSmith 环境支持多容器任务。在任务定义中包含 `environment/docker-compose.yaml` 文件以在每次试验中运行多个容器。详细信息请参阅 [Harbor 沙箱文档](https://harborframework.com/docs/run-jobs/cloud-sandboxes)。

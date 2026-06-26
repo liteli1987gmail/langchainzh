@@ -1,0 +1,464 @@
+---
+title: 检索
+---
+
+大型语言模型（LLM）功能强大，但有两个关键限制：
+
+* **有限的上下文**——它们无法一次性摄入整个语料库。
+* **静态知识**——它们的训练数据在某个时间点被冻结。
+
+检索通过在查询时获取相关的外部知识来解决这些问题。这是**检索增强生成（RAG）**的基础：通过特定上下文信息增强 LLM 的回答。
+
+## 构建知识库
+
+**知识库**是用于检索的文档或结构化数据的存储库。
+
+如果您需要自定义知识库，可以使用 LangChain 的文档加载器和向量存储从您自己的数据构建一个。
+
+<Note>
+    如果您已有知识库（例如 SQL 数据库、CRM 或内部文档系统），则**不需要**重建它。您可以：
+    - 将其作为**工具**连接到 Agentic RAG 中的代理。
+    - 查询它并将检索到的内容作为上下文提供给 LLM [（两步 RAG）](#2-step-rag)。
+</Note>
+
+请参阅以下教程来构建可搜索的知识库和最小化 RAG 工作流：
+
+<Card
+    title="教程：语义搜索"
+    icon="database"
+    href="/oss/langchain/knowledge-base"
+    arrow cta="了解更多"
+>
+    了解如何使用 LangChain 的文档加载器、嵌入和向量存储从您自己的数据创建可搜索的知识库。
+    在本教程中，您将基于 PDF 构建搜索引擎，实现与查询相关的段落检索。您还将在此搜索引擎之上实现一个最小化 RAG 工作流，了解如何将外部知识集成到 LLM 推理中。
+</Card>
+
+### 从检索到 RAG
+
+检索使 LLM 能够在运行时访问相关上下文。但大多数实际应用程序更进了一步：它们**将检索与生成相结合**，以产生有依据的、上下文感知的回答。
+
+这就是**检索增强生成（RAG）**的核心思想。检索管道成为更广泛系统的基础，将搜索与生成相结合。
+
+### 检索管道
+
+典型检索工作流如下所示：
+
+```mermaid
+flowchart LR
+  S(["Sources<br>(Google Drive, Slack, Notion, etc.)"]) --> L[Document Loaders]
+  L --> A([Documents])
+  A --> B[Split into chunks]
+  B --> C[Turn into embeddings]
+  C --> D[(Vector Store)]
+  Q([User Query]) --> E[Query embedding]
+  E --> D
+  D --> F[Retriever]
+  F --> G[LLM uses retrieved info]
+  G --> H([Answer])
+
+  classDef trigger fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+  classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:2px,color:#030710
+  classDef output fill:#EBD0F0,stroke:#885270,stroke-width:2px,color:#441E33
+  classDef neutral fill:#F2FAFF,stroke:#40668D,stroke-width:2px,color:#2F4B68
+
+  class S,Q trigger
+  class L,B,C,E,F,G process
+  class D output
+  class A,H neutral
+```
+
+每个组件都是模块化的：您可以替换加载器、分词器、嵌入模型或向量存储，而无需重写应用程序的逻辑。
+
+### 构建块
+
+<Columns cols={2}>
+    <Card
+        title="文档加载器"
+        icon="file-import"
+        href="/oss/integrations/document_loaders"
+        arrow cta="了解更多"
+    >
+        从外部来源（Google Drive、Slack、Notion 等）获取数据，返回标准化的 @[`Document`] 对象。
+    </Card>
+
+    :::python
+    <Card
+        title="文本分词器"
+        icon="scissors"
+        href="/oss/integrations/splitters"
+        arrow
+        cta="了解更多"
+    >
+        将大型文档拆分成更小的块，以便单独检索并适应模型的上下文窗口。
+    </Card>
+    :::
+    <Card
+        title="嵌入模型"
+        icon="sitemap"
+        href="/oss/integrations/embeddings"
+        arrow
+        cta="了解更多"
+    >
+        嵌入模型将文本转换为数字向量，以便语义相近的文本在该向量空间中彼此接近。
+    </Card>
+
+    <Card
+        title="向量存储"
+        icon="database"
+        href="/oss/integrations/vectorstores/"
+        arrow
+        cta="了解更多"
+    >
+        专门用于存储和搜索嵌入向量的专业数据库。
+    </Card>
+
+    <Card
+        title="检索器"
+        icon="binoculars"
+        href="/oss/integrations/retrievers/"
+        arrow
+        cta="了解更多"
+    >
+        检索器是一个接口，根据非结构化查询返回相关文档。
+    </Card>
+</Columns>
+
+## RAG 架构
+
+RAG 可以根据系统的具体需求采用多种实现方式。我们将在下文中概述每种类型。
+
+| 架构            | 描述                                                                  | 控制度   | 灵活性   | 延迟        | 示例用例                                           |
+|-------------------------|----------------------------------------------------------------------------|-----------|-------------|----------------|----------------------------------------------------|
+| **2 步 RAG**           | 检索始终在生成之前发生。简单且可预测                                       | ✅ 高      | ❌ 低        | ⚡ 快           | 常见问题解答、文档机器人                            |
+| **Agentic RAG**        | 由 LLM 驱动的智能体决定在推理过程中*何时*以及*如何*检索                   | ❌ 低      | ✅ 高        | ⏳ 可变         | 可访问多种工具的研究助手                            |
+| **混合架构**           | 结合两种方法的特点，并加入验证步骤                                         | ⚖️ 中等   | ⚖️ 中等    | ⏳ 可变         | 带质量验证的领域特定问答                            |
+
+<Info>
+**延迟**：在**2 步 RAG**中，延迟通常更**可预测**，因为 LLM 调用的最大次数是已知且有上限的。这种可预测性假设 LLM 推理时间是主要因素。然而，现实世界的延迟也可能受到检索步骤性能的影响——如 API 响应时间、网络延迟或数据库查询——这些因素可能因使用的工具和基础设施而异。
+</Info>
+
+### 2 步 RAG
+
+在**2 步 RAG**中，检索步骤始终在生成步骤之前执行。这种架构简单直接且可预测，适合于将相关文档检索作为生成答案的明确前提条件的多种应用场景。
+
+```mermaid
+graph LR
+    A[User Question] --> B["Retrieve Relevant Documents"]
+    B --> C["Generate Answer"]
+    C --> D[Return Answer to User]
+
+    %% Styling
+    classDef startend fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:1.5px,color:#030710
+
+    class A,D startend
+    class B,C process
+```
+
+<Card
+    title="教程：检索增强生成 (RAG)"
+    icon="robot"
+    href="/oss/langchain/rag#rag-chain"
+    arrow cta="了解更多"
+>
+    了解如何构建一个能够回答基于您数据的问题的问答聊天机器人（使用检索增强生成）。
+    本教程介绍两种方法：
+    * 一个 **RAG 代理**，使用灵活的工具运行搜索——非常适合通用场景。
+    * 一个 **两步 RAG** 链，每个查询只需一次 LLM 调用——对于更简单的任务来说快速高效。
+</Card>
+
+### 代理型 RAG
+
+**代理型检索增强生成 (RAG)** 将检索增强生成的优势与基于代理的推理相结合。代理（由 LLM 提供支持）不是在回答之前检索文档，而是逐步推理并决定在交互过程中**何时**以及**如何**检索信息。
+
+<Tip>
+代理只需具备访问一个或多个能够获取外部知识的**工具**（如文档加载器、Web API 或数据库查询）的能力，即可启用 RAG 行为。
+</Tip>
+
+```mermaid
+graph LR
+    A[User Input / Question] --> B["Agent (LLM)"]
+    B --> C{Need external info?}
+    C -- Yes --> D["Search using tool(s)"]
+    D --> H{Enough to answer?}
+    H -- No --> B
+    H -- Yes --> I[Generate final answer]
+    C -- No --> I
+    I --> J[Return to user]
+
+    %% Dark-mode friendly styling
+    classDef startend fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef decision fill:#FDF3FF,stroke:#7E65AE,stroke-width:2px,color:#504B5F
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:1.5px,color:#030710
+
+    class A,J startend
+    class B,D,I process
+    class C,H decision
+```
+
+:::python
+```python
+import requests
+from langchain.tools import tool
+from langchain.chat_models import init_chat_model
+from langchain.agents import create_agent
+
+
+@tool
+def fetch_url(url: str) -> str:
+    """Fetch text content from a URL"""
+    response = requests.get(url, timeout=10.0)
+    response.raise_for_status()
+    return response.text
+
+system_prompt = """\
+Use fetch_url when you need to fetch information from a web-page; quote relevant snippets.
+"""
+
+agent = create_agent(
+    model="claude-sonnet-4-6",
+    tools=[fetch_url], # A tool for retrieval [!code highlight]
+    system_prompt=system_prompt,
+)
+```
+:::
+
+:::js
+```typescript
+import { tool, createAgent } from "langchain";
+
+const fetchUrl = tool(
+    (url: string) => {
+        return `Fetched content from ${url}`;
+    },
+    { name: "fetch_url", description: "Fetch text content from a URL" }
+);
+
+const agent = createAgent({
+    model: "claude-sonnet-4-0",
+    tools: [fetchUrl],
+    systemPrompt,
+});
+```
+:::
+
+<Expandable title="扩展示例：LangGraph llms.txt 的 Agentic RAG">
+
+本示例实现了一个 **Agentic RAG 系统**，用于帮助用户查询 LangGraph 文档。智能体首先加载 [llms.txt](https://llmstxt.org/)，该文件列出了可用的文档 URL，然后可以动态使用 `fetch_documentation` 工具根据用户的问题检索和处理相关内容。
+
+:::python
+```python
+import requests
+from langchain.agents import create_agent
+from langchain.messages import HumanMessage
+from langchain.tools import tool
+from markdownify import markdownify
+
+
+ALLOWED_DOMAINS = ["https://langchain-ai.github.io/"]
+LLMS_TXT = 'https://langchain-ai.github.io/langgraph/llms.txt'
+
+
+@tool
+def fetch_documentation(url: str) -> str:  # [!code highlight]
+    """Fetch and convert documentation from a URL"""
+    if not any(url.startswith(domain) for domain in ALLOWED_DOMAINS):
+        return (
+            "Error: URL not allowed. "
+            f"Must start with one of: {', '.join(ALLOWED_DOMAINS)}"
+        )
+    response = requests.get(url, timeout=10.0)
+    response.raise_for_status()
+    return markdownify(response.text)
+
+
+# We will fetch the content of llms.txt, so this can
+# be done ahead of time without requiring an LLM request.
+llms_txt_content = requests.get(LLMS_TXT).text
+
+# System prompt for the agent
+system_prompt = f"""
+You are an expert Python developer and technical assistant.
+Your primary role is to help users with questions about LangGraph and related tools.
+
+Instructions:
+
+1. If a user asks a question you're unsure about—or one that likely involves API usage,
+   behavior, or configuration—you MUST use the `fetch_documentation` tool to consult the relevant docs.
+2. When citing documentation, summarize clearly and include relevant context from the content.
+3. Do not use any URLs outside of the allowed domain.
+4. If a documentation fetch fails, tell the user and proceed with your best expert understanding.
+
+You can access official documentation from the following approved sources:
+
+{llms_txt_content}
+
+You MUST consult the documentation to get up to date documentation
+before answering a user's question about LangGraph.
+
+Your answers should be clear, concise, and technically accurate.
+"""
+
+tools = [fetch_documentation]
+
+model = init_chat_model("claude-sonnet-4-0", max_tokens=32_000)
+
+agent = create_agent(
+    model=model,
+    tools=tools,  # [!code highlight]
+    system_prompt=system_prompt,  # [!code highlight]
+    name="Agentic RAG",
+)
+
+response = agent.invoke({
+    'messages': [
+        HumanMessage(content=(
+            "Write a short example of a langgraph agent using the "
+            "prebuilt create react agent. the agent should be able "
+            "to look up stock pricing information."
+        ))
+    ]
+})
+
+print(response['messages'][-1].content)
+```
+:::
+:::js
+```typescript
+import { tool, createAgent, HumanMessage } from "langchain";
+import * as z from "zod";
+
+const ALLOWED_DOMAINS = ["https://langchain-ai.github.io/"];
+const LLMS_TXT = "https://langchain-ai.github.io/langgraph/llms.txt";
+
+const fetchDocumentation = tool(
+  async (input) => {  // [!code highlight]
+    if (!ALLOWED_DOMAINS.some((domain) => input.url.startsWith(domain))) {
+      return `Error: URL not allowed. Must start with one of: ${ALLOWED_DOMAINS.join(", ")}`;
+    }
+    const response = await fetch(input.url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.text();
+  },
+  {
+    name: "fetch_documentation",
+    description: "Fetch and convert documentation from a URL",
+    schema: z.object({
+      url: z.string().describe("The URL of the documentation to fetch"),
+    }),
+  }
+);
+
+const llmsTxtResponse = await fetch(LLMS_TXT);
+const llmsTxtContent = await llmsTxtResponse.text();
+
+const systemPrompt = `
+You are an expert TypeScript developer and technical assistant.
+Your primary role is to help users with questions about LangGraph and related tools.
+
+Instructions:
+
+1. If a user asks a question you're unsure about—or one that likely involves API usage,
+   behavior, or configuration—you MUST use the \`fetch_documentation\` tool to consult the relevant docs.
+2. When citing documentation, summarize clearly and include relevant context from the content.
+3. Do not use any URLs outside of the allowed domain.
+4. If a documentation fetch fails, tell the user and proceed with your best expert understanding.
+
+You can access official documentation from the following approved sources:
+
+${llmsTxtContent}
+
+You MUST consult the documentation to get up to date documentation
+before answering a user's question about LangGraph.
+
+Your answers should be clear, concise, and technically accurate.
+`;
+
+const tools = [fetchDocumentation];
+
+const agent = createAgent({
+  model: "claude-sonnet-4-0"
+  tools,  // [!code highlight]
+  systemPrompt,  // [!code highlight]
+  name: "Agentic RAG",
+});
+
+const response = await agent.invoke({
+  messages: [
+    new HumanMessage(
+      "Write a short example of a langgraph agent using the " +
+      "prebuilt create react agent. the agent should be able " +
+      "to look up stock pricing information."
+    ),
+  ],
+});
+
+console.log(response.messages.at(-1)?.content);
+```
+:::
+</Expandable>
+
+<Card
+    title="Tutorial: Retrieval-Augmented Generation (RAG)"
+    icon="robot"
+    href="/oss/langchain/rag"
+    arrow cta="Learn more"
+>
+    See how to build a Q&A chatbot that can answer questions grounded in your data using Retrieval-Augmented Generation.
+    This tutorial walks through two approaches:
+    * A **RAG agent** that runs searches with a flexible tool—great for general-purpose use.
+    * A **2-step RAG** chain that requires just one LLM call per query—fast and efficient for simpler tasks.
+</Card>
+
+### 混合式 RAG
+
+混合式 RAG 结合了 2 步式和代理式 RAG 的特点。它引入了中间步骤，如查询预处理、检索验证和生成后检查。这些系统在保持一定执行控制的同时，提供了比固定管道更大的灵活性。
+
+典型组件包括：
+
+* **查询增强**：修改输入问题以提高检索质量。这可能包括重写不清晰的查询、生成多个变体，或使用额外上下文扩展查询。
+* **检索验证**：评估检索到的文档是否相关且充分。如果不充分，系统可能会优化查询并重新检索。
+* **答案验证**：检查生成的答案是否准确、完整，并与源内容一致。必要时，系统可以重新生成或修改答案。
+
+该架构通常支持这些步骤之间的多次迭代：
+
+```mermaid
+graph LR
+    A[User Question] --> B[Query Enhancement]
+    B --> C[Retrieve Documents]
+    C --> D{Sufficient Info?}
+    D -- No --> E[Refine Query]
+    E --> C
+    D -- Yes --> F[Generate Answer]
+    F --> G{Answer Quality OK?}
+    G -- No --> H{Try Different Approach?}
+    H -- Yes --> E
+    H -- No --> I[Return Best Answer]
+    G -- Yes --> I
+    I --> J[Return to User]
+
+    classDef startend fill:#F6FFDB,stroke:#6E8900,stroke-width:2px,color:#2E3900
+    classDef decision fill:#FDF3FF,stroke:#7E65AE,stroke-width:2px,color:#504B5F
+    classDef process fill:#E5F4FF,stroke:#006DDD,stroke-width:1.5px,color:#030710
+
+    class A,J startend
+    class B,C,E,F,I process
+    class D,G,H decision
+```
+
+这种架构适用于：
+
+* 查询模糊或未明确说明的应用程序
+* 需要验证或质量控制步骤的系统
+* 涉及多个来源或迭代优化的个工作流程
+
+<Card
+    title="教程：带自我修正的代理式 RAG"
+    icon="robot"
+    href="/oss/langgraph/agentic-rag"
+    arrow cta="了解更多"
+>
+    结合代理推理与检索和自我修正的 **混合 RAG** 示例。
+</Card>
