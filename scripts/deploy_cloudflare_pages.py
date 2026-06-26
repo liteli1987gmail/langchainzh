@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -50,6 +51,37 @@ def clean_proxy_env(env: dict[str, str]) -> dict[str, str]:
     return cleaned
 
 
+def configure_npm_cache(env: dict[str, str]) -> None:
+    cache = env.get("NPM_CONFIG_CACHE") or env.get("npm_config_cache")
+    cache_path = Path(cache).expanduser() if cache else None
+    if cache_path is None or not npm_cache_is_writable(cache_path):
+        cache_path = Path(tempfile.gettempdir()) / "langchainzh-npm-cache"
+        if not npm_cache_is_writable(cache_path):
+            raise SystemExit(f"Unable to create writable npm cache at {cache_path}")
+
+    env["NPM_CONFIG_CACHE"] = str(cache_path)
+    env["npm_config_cache"] = str(cache_path)
+
+
+def configure_wrangler_env(env: dict[str, str]) -> None:
+    wrangler_tmp = Path(tempfile.gettempdir()) / "langchainzh-wrangler"
+    wrangler_tmp.mkdir(parents=True, exist_ok=True)
+    env.setdefault("WRANGLER_WRITE_LOGS", "false")
+    env.setdefault("WRANGLER_LOG_PATH", str(wrangler_tmp / "logs"))
+    env.setdefault("WRANGLER_CACHE_DIR", str(wrangler_tmp / "cache"))
+
+
+def npm_cache_is_writable(cache_path: Path) -> bool:
+    try:
+        probe_dir = cache_path / "_cacache" / "tmp"
+        probe_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(prefix=".langchainzh-", dir=probe_dir):
+            pass
+    except OSError:
+        return False
+    return True
+
+
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
     print("+ " + " ".join(cmd))
     subprocess.run(cmd, check=True, env=env)
@@ -82,6 +114,8 @@ def main() -> int:
         check_site(args.site_dir)
 
     env = clean_proxy_env(os.environ)
+    configure_npm_cache(env)
+    configure_wrangler_env(env)
     if args.account_id:
         env["CLOUDFLARE_ACCOUNT_ID"] = args.account_id
 
