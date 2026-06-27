@@ -7,7 +7,7 @@
 - 上游源码：`https://github.com/langchain-ai/docs`
 - 官方构建：`uv run pipeline build`，输出 `build/`
 - 中文翻译：MiniMax OpenAI-compatible API
-- 免费部署目标：生成静态目录 `site/`，供 Vercel 或 Cloudflare Pages 发布
+- 部署目标：优先用 Mintlify CLI (`mint export`) 真实渲染到 `site/`，供 Vercel 或 Cloudflare Pages 发布
 - 更新监测：GitHub Actions 每天北京时间 02:17 检查上游并自动同步
 
 

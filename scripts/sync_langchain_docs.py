@@ -218,6 +218,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-if-unchanged", action="store_true")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument(
+        "--renderer",
+        choices=("static", "mintlify"),
+        default=os.environ.get("DOCS_RENDERER", "static"),
+        help="Use the compatibility static exporter or the official Mintlify export path.",
+    )
+    parser.add_argument(
         "--translation-workers",
         type=int,
         default=int(os.environ.get("TRANSLATION_WORKERS", "1")),
@@ -310,16 +316,28 @@ def main() -> int:
     copy_translated_src(upstream_dir, translated_src)
     if not args.skip_build:
         build_official_docs(upstream_dir)
-        run(
-            [
-                sys.executable,
-                "scripts/export_static_site.py",
-                "--build-dir",
-                str(upstream_dir / "build"),
-                "--out-dir",
-                str(args.site_dir),
-            ]
-        )
+        if args.renderer == "mintlify":
+            run(
+                [
+                    sys.executable,
+                    "scripts/export_mintlify_site.py",
+                    "--build-dir",
+                    str(upstream_dir / "build"),
+                    "--out-dir",
+                    str(args.site_dir),
+                ]
+            )
+        else:
+            run(
+                [
+                    sys.executable,
+                    "scripts/export_static_site.py",
+                    "--build-dir",
+                    str(upstream_dir / "build"),
+                    "--out-dir",
+                    str(args.site_dir),
+                ]
+            )
         run(
             [
                 sys.executable,

@@ -17,7 +17,7 @@
 2. 用 MiniMax OpenAI-compatible API 将 `src/` 增量翻译到中文。
 3. 将翻译后的 `src/` 放回官方仓库快照。
 4. 运行官方 pipeline 生成 `build/`。
-5. 将 `build/` 转成可直接部署的静态站点 `site/`。
+5. 优先使用 Mintlify CLI 将 `build/` 真实渲染/导出为 `site/`；仅在 CLI 不可用时使用兼容静态导出器。
 6. 压缩超过免费静态托管单文件限制的 GIF 资源。
 7. GitHub Actions 提交 `site/`，Cloudflare Pages 通过 Git 集成自动部署。
 
@@ -66,6 +66,26 @@ export MINIMAX_API_KEY=...
 python -m pip install -r requirements-docs.txt
 python scripts/sync_langchain_docs.py --force
 ```
+
+使用真实 Mintlify 渲染导出：
+
+```bash
+export MINIMAX_API_KEY=...
+DOCS_RENDERER=mintlify python scripts/sync_langchain_docs.py --force
+```
+
+也可以在已有 `.langchain-work-latest/upstream/build` 时单独导出：
+
+```bash
+python scripts/export_mintlify_site.py \
+  --build-dir .langchain-work-latest/upstream/build \
+  --out-dir site
+```
+
+`export_mintlify_site.py` 会在包含 `docs.json` 的目录运行 `mint export --output ...`，
+解压官方预渲染结果到 `site/`。默认 Mintlify 命令是 `npx --yes mint@latest`；
+如果 CI 已全局安装 CLI，可设置 `MINT_COMMAND=mint`。Mintlify 官方要求 Node.js
+`20.17.0+`，并提供 `mint dev` 本地预览和 `mint export` 离线导出命令。
 
 更稳的完整同步参数：
 
@@ -173,9 +193,22 @@ python3 scripts/deploy_cloudflare_pages.py --project-name langchainzh
 如果本机未登录 Cloudflare，请先运行 `wrangler login`，或设置
 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`。
 
+## Mintlify 渲染策略
+
+真实生产路径应使用 `DOCS_RENDERER=mintlify`。原因是官方 `pipeline build` 的输出仍是
+Mintlify/MDX 文档树，而不是最终网页；`Card`、`Tabs`、`CodeGroup`、`Callout` 等控件需要
+Mintlify 前端渲染层理解。仓库里的 `scripts/export_static_site.py` 只是兼容导出器，用于
+Mintlify CLI 暂时不可用时生成可读页面，不能保证 1:1 复刻官方交互。
+
+`scripts/verify_site.py` 已加入残留标签扫描，会拒绝明显未渲染的 `fragment`、
+`Card/CardGroup`、`Callout/Tip/Note/Warning` 等可见残留。
+
+本机测试时，`npx --yes mint@latest version` 在 Puppeteer/Mintlify 客户端下载阶段耗时较长。
+CI 中建议缓存 npm/Mintlify 相关目录，或预装 `mint` 后设置 `MINT_COMMAND=mint`。
+
 ## 注意
 
-- `site/` 是静态导出版，目标是免费部署可用；它不会完全复刻 Mintlify 的所有交互组件。
+- `site/` 应优先由 Mintlify 官方 CLI 导出；兼容导出器只是 fallback。
 - 翻译缓存保存源文件 hash、模型、时间和可复用的译文文件，不保存 MiniMax key。
   这样上游只改少量文件时，未变文件会直接从 `.translation-cache/translations/` 写回，不会重复消耗 MiniMax 额度。
 - 当前仓库的旧 Nextra 站点文件暂时保留，等 `site/` 首次生成并确认部署后再删除更稳。
