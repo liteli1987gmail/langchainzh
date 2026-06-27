@@ -17,9 +17,9 @@
 2. 用 MiniMax OpenAI-compatible API 将 `src/` 增量翻译到中文。
 3. 将翻译后的 `src/` 放回官方仓库快照。
 4. 运行官方 pipeline 生成 `build/`。
-5. 优先使用兼容静态导出器将 `build/` 渲染/导出为 `site/`；真实 Mintlify CLI 路径保留为可选实验路径。
+5. 优先使用 Mintlify CLI 将 `build/` 真实渲染/导出为 `site/`；仅在 CLI 不可用时使用兼容静态导出器。
 6. 压缩超过免费静态托管单文件限制的 GIF 资源。
-7. GitHub Actions 验证并提交 `site/`、翻译缓存和上游 SHA 状态；当前阶段不自动部署真实域名。
+7. GitHub Actions 提交 `site/`，Cloudflare Pages 通过 Git 集成自动部署。
 
 ## 需要配置的密钥
 
@@ -135,12 +135,9 @@ python scripts/translate_minimax.py \
 - `force=true`：忽略缓存，强制重翻。
 - `mock=true`：不调用 MiniMax，只复制原文，用来测试拉取、构建和导出链路；mock 结果不会提交回 `main`。
 
-`.github/workflows/deploy-static-site.yml` 当前已改为 `Validate Static Site`，只负责验证当前
-`site/`，不再部署真实域名。当 `site/` 推送到 `main` 时会自动运行；也可以在 GitHub Actions
-页面手动运行，用来确认已提交产物仍然满足发布前质量门。
-
-当前自动化目标是先打通“上游更新 -> 翻译 -> 官方 pipeline build -> 静态渲染 -> 验证 -> 提交”
-这条链路。真实域名发布留到后续单独开启。
+`.github/workflows/deploy-static-site.yml` 只负责验证并部署当前 `site/`。
+当 `site/` 推送到 `main` 时会自动运行；也可以在 GitHub Actions 页面手动运行，用来在补齐
+Cloudflare 配置后立即发布现有静态站。
 
 ## 当前生产域名
 
@@ -190,8 +187,9 @@ npm run verify:domain
 Cloudflare Pages 免费计划有单文件大小限制。本仓库会在同步导出后运行
 `scripts/optimize_site_assets.py`，自动压缩超限 GIF，并保持原路径不变。
 
-GitHub Actions 当前不再包含自动 Cloudflare Pages 直传步骤。等翻译和网页渲染自动化稳定后，
-再单独恢复部署 workflow 或使用 Cloudflare Pages 的 Git 集成。
+GitHub Actions 中也包含一个可选的 Cloudflare Pages 直传步骤。只有当
+`CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID` 都存在时才会执行；否则会跳过，
+不影响翻译、构建和提交。
 
 如果使用 Wrangler 直传，可在 `site/` 生成后执行：
 

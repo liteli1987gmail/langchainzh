@@ -1097,23 +1097,23 @@
 <h2>已知限制</h2>
 <p>某些集成需要元数据覆盖才能被识别：</p>
 <ul>
-<li><strong>单独的 <code>wrap_anthropic</code>：</strong>包装器没有设置 <code>ls_message_format</code>，因此目前检测无法匹配。在调用时设置 <code>metadata={&quot;ls_message_format&quot;: &quot;anthropic&quot;}</code>（或通过 <code>RunnableConfig</code>）以便追踪该运行。</li>
-<li><strong>Claude Agent SDK (JS)：</strong>自动检测目前仅允许列表中的 <code>&quot;claude-agent-sdk&quot;</code> 和 <code>&quot;claude-code&quot;</code>，而不是 JS 发出的 <code>&quot;claude-agent-sdk-js&quot;</code>。需要在 JavaScript 追踪中明确设置 <code>ls_message_format: &quot;anthropic&quot;</code>。</li>
-<li><strong><code>langchain.create_agent</code>：</strong>不在显式检测允许列表中。它目前通过匹配 OpenAI/Anthropic 检测中的 <code>ls_provider</code>/<code>ls_message_format</code> 后备机制，或通过 <code>graph_id</code>/<code>langgraph_node</code> 在代理在 LangGraph 内部运行时进行追踪。如果路由不可靠，请明确设置 <code>metadata.ls_message_format: &quot;langchain&quot;</code>。</li>
+<li>- **单独的 <code>wrap_anthropic</code>：**包装器没有设置 <code>ls_message_format</code>，因此目前检测无法匹配。在调用时设置 <code>metadata={&quot;ls_message_format&quot;: &quot;anthropic&quot;}</code>（或通过 <code>RunnableConfig</code>）以便追踪该运行。</li>
+<li>- **Claude Agent SDK (JS)：**自动检测目前仅允许列表中的 <code>&quot;claude-agent-sdk&quot;</code> 和 <code>&quot;claude-code&quot;</code>，而不是 JS 发出的 <code>&quot;claude-agent-sdk-js&quot;</code>。需要在 JavaScript 追踪中明确设置 <code>ls_message_format: &quot;anthropic&quot;</code>。</li>
+<li>- **<code>langchain.create_agent</code>：**不在显式检测允许列表中。它目前通过匹配 OpenAI/Anthropic 检测中的 <code>ls_provider</code>/<code>ls_message_format</code> 后备机制，或通过 <code>graph_id</code>/<code>langgraph_node</code> 在代理在 LangGraph 内部运行时进行追踪。如果路由不可靠，请明确设置 <code>metadata.ls_message_format: &quot;langchain&quot;</code>。</li>
 </ul>
 <h2>从 Messages 视图中排除运行</h2>
 <p>在运行的元数据上设置 <code>LS_MESSAGE_VIEW_EXCLUDE</code> 会告诉 Messages 视图跳过该运行。重要的是键的存在；<code>True</code> 是常规值。过滤器在任何提取策略看到追踪之前运行，因此被排除的 LLM 或工具运行永远不会影响检测、消息提取或工具调用配对。</p>
 <p><code>LS_MESSAGE_VIEW_EXCLUDE</code> 是从 <code>langsmith</code>（Python 和 JS）导出的顶级常量，其值是字符串 <code>&quot;ls_message_view_exclude&quot;</code>。优先使用该常量以避免拼写错误；字面字符串仍然有效。</p>
 <p>将其用于非对话回合的 LLM 子跨度，例如分类调用、嵌入查找、安全过滤器或路由/防护决策，您仍然希望这些在 LangSmith 的其他地方可见，但不希望它们弄乱对话记录。</p>
 <h3>Python</h3>
-<p><strong>1. 在 <code>@traceable</code> 装饰器上：</strong>排除整个函数的运行。</p>
+<p>**1. 在 <code>@traceable</code> 装饰器上：**排除整个函数的运行。</p>
 <pre><code data-language="python">from langsmith import LS_MESSAGE_VIEW_EXCLUDE, traceable
 
 @traceable(run_type=&quot;llm&quot;, metadata={LS_MESSAGE_VIEW_EXCLUDE: True})
 def classify_intent(query: str) -&gt; str:
     # This LLM call is internal routing, not part of the chat
     return llm.predict(f&quot;Classify the intent of: {query}&quot;)</code></pre>
-<p><strong>2. 通过 <code>trace</code> 上下文管理器</strong>：排除一个临时跨度。</p>
+<p>**2. 通过 <code>trace</code> 上下文管理器**：排除一个临时跨度。</p>
 <pre><code data-language="python">from langsmith import LS_MESSAGE_VIEW_EXCLUDE, trace
 
 with trace(
@@ -1123,7 +1123,7 @@ with trace(
 ) as run:
     result = safety_model.score(text)
     run.end(outputs={&quot;score&quot;: result})</code></pre>
-<p><strong>3. 从正在运行的函数内部</strong>：在任何修补运行之前的时刻，在当前运行树中设置键。</p>
+<p>**3. 从正在运行的函数内部**：在任何修补运行之前的时刻，在当前运行树中设置键。</p>
 <pre><code data-language="python">from langsmith import LS_MESSAGE_VIEW_EXCLUDE, get_current_run_tree, traceable
 
 @traceable(run_type=&quot;llm&quot;)
@@ -1134,7 +1134,7 @@ def maybe_internal(query: str) -&gt; str:
         if rt is not None:
             rt.add_metadata({LS_MESSAGE_VIEW_EXCLUDE: True})
     return result</code></pre>
-<p><strong>4. 每次调用时使用 <code>wrap_openai</code> / <code>wrap_anthropic</code></strong>：将 <code>langsmith_extra</code> 传递到被包装的客户端调用。</p>
+<p>**4. 每次调用时使用 <code>wrap_openai</code> / <code>wrap_anthropic</code>**：将 <code>langsmith_extra</code> 传递到被包装的客户端调用。</p>
 <pre><code data-language="python">from langsmith import LS_MESSAGE_VIEW_EXCLUDE
 from langsmith.wrappers import wrap_openai
 
@@ -1145,7 +1145,7 @@ resp = client.chat.completions.create(
     messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Classify: ...&quot;}],
     langsmith_extra={&quot;metadata&quot;: {LS_MESSAGE_VIEW_EXCLUDE: True}},
 )</code></pre>
-<p><strong>5. LangChain <code>RunnableConfig</code></strong>：排除单个链或聊天模型调用。</p>
+<p>**5. LangChain <code>RunnableConfig</code>**：排除单个链或聊天模型调用。</p>
 <pre><code data-language="python">from langchain_openai import ChatOpenAI
 from langsmith import LS_MESSAGE_VIEW_EXCLUDE
 
@@ -1155,7 +1155,7 @@ result = llm.invoke(
     config={&quot;metadata&quot;: {LS_MESSAGE_VIEW_EXCLUDE: True}},
 )</code></pre>
 <h3>TypeScript</h3>
-<p><strong>1. 在 <code>traceable</code> 包装器上</strong>：排除整个函数的执行。</p>
+<p>**1. 在 <code>traceable</code> 包装器上**：排除整个函数的执行。</p>
 <pre><code data-language="typescript">const classifyIntent = traceable(
   async (query: string) =&gt; {
     return await llm.predict(`Classify the intent of: ${query}`);
@@ -1166,7 +1166,7 @@ result = llm.invoke(
     metadata: { [LS_MESSAGE_VIEW_EXCLUDE]: true },
   },
 );</code></pre>
-<p><strong>2. 从正在运行的函数内部</strong>：修改当前的运行树。</p>
+<p>**2. 从正在运行的函数内部**：修改当前的运行树。</p>
 <pre><code data-language="typescript">const maybeInternal = traceable(
   async (query: string) =&gt; {
     const result = await llm.predict(query);
@@ -1179,7 +1179,7 @@ result = llm.invoke(
   },
   { run_type: &quot;llm&quot; },
 );</code></pre>
-<p><strong>3. 每次调用使用 <code>wrapOpenAI</code></strong>：在调用时传递 <code>langsmithExtra</code>。</p>
+<p>**3. 每次调用使用 <code>wrapOpenAI</code>**：在调用时传递 <code>langsmithExtra</code>。</p>
 <pre><code data-language="typescript">const client = wrapOpenAI(new OpenAI());
 
 const resp = await client.chat.completions.create(
@@ -1189,12 +1189,12 @@ const resp = await client.chat.completions.create(
   },
   { langsmithExtra: { metadata: { [LS_MESSAGE_VIEW_EXCLUDE]: true } } },
 );</code></pre>
-<p><strong>4. Vercel AI SDK 中间件</strong>：通过 <code>wrapAISDK</code> 上的 <code>lsConfig.metadata</code> 传递密钥。中间件将其合并到每个发出的 LLM 运行中。</p>
+<p>**4. Vercel AI SDK 中间件**：通过 <code>wrapAISDK</code> 上的 <code>lsConfig.metadata</code> 传递密钥。中间件将其合并到每个发出的 LLM 运行中。</p>
 <pre><code data-language="typescript">const { generateText } = wrapAISDK(ai, {
   metadata: { [LS_MESSAGE_VIEW_EXCLUDE]: true },
 });</code></pre>
 <p>要仅排除部分调用而非全部，请正常使用 <code>wrapAISDK</code> 包装，但改为在调用 AI SDK 的父级 <code>traceable</code> 内部修改 <code>getCurrentRunTree()</code>，或者使用子级 <code>RunTree</code> 并传入 <code>createChild({ extra: { metadata: { [LS_MESSAGE_VIEW_EXCLUDE]: true } } })</code>。</p>
-<p><strong>5. Manual <code>RunTree.createChild</code></strong>：当你手动构建 runs 时使用。</p>
+<p>**5. Manual <code>RunTree.createChild</code>**：当你手动构建 runs 时使用。</p>
 <pre><code data-language="typescript">const parent = new RunTree({ name: &quot;agent&quot;, run_type: &quot;chain&quot; });
 const child = parent.createChild({
   name: &quot;safety_check&quot;,
@@ -1203,9 +1203,9 @@ const child = parent.createChild({
 });</code></pre>
 <h3>注意事项</h3>
 <ul>
-<li>过滤器检查的是<strong>键是否存在</strong>，而不是真值。<code>{LS_MESSAGE_VIEW_EXCLUDE: false}</code> 仍然会排除该运行。完全省略该键以包含该运行。</li>
-<li>在 <code>@traceable</code>（Python）或 <code>traceable</code>（JS）父级内执行的子运行通过共享的追踪上下文继承排除规则：Python 的 <code>_METADATA</code> <code>ContextVar</code> 和 JS 的 <code>AsyncLocalStorage</code>。子运行自身的装饰器时元数据会叠加在继承值之上。</li>
-<li>被排除的运行仍会出现在常规追踪视图、运行浏览器和指标中。只有 Messages 视图会将其过滤掉。</li>
+<li>- 过滤器检查的是**键是否存在**，而不是真值。<code>{LS_MESSAGE_VIEW_EXCLUDE: false}</code> 仍然会排除该运行。完全省略该键以包含该运行。</li>
+<li>- 在 <code>@traceable</code>（Python）或 <code>traceable</code>（JS）父级内执行的子运行通过共享的追踪上下文继承排除规则：Python 的 <code>_METADATA</code> <code>ContextVar</code> 和 JS 的 <code>AsyncLocalStorage</code>。子运行自身的装饰器时元数据会叠加在继承值之上。</li>
+<li>- 被排除的运行仍会出现在常规追踪视图、运行浏览器和指标中。只有 Messages 视图会将其过滤掉。</li>
 </ul>
 <h2>手动插桩</h2>
 <p>如果您在没有 <a href="#supported-integrations">支持的集成</a> 中提供的包装器的情况下进行追踪（例如，通过 <code>RunTree</code>、REST API 或围绕提供商 SDK 的自定义包装器发出运行），请在每个 LLM 运行的元数据上设置 <code>ls_message_format</code>，以将追踪路由到正确的提取器：</p>

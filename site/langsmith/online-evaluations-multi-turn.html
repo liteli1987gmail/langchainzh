@@ -1075,85 +1075,56 @@
 <a class="nav-link level-5" href="/langsmith/scalability-and-resilience.html">可扩展性与弹性</a></aside>
     <main class="content">
       <article class="doc"><p>多轮在线评估器允许您评估人类与代理之间的整个对话，而不仅仅是单个交互。它们测量整个对话线程中端到端的交互质量。</p>
-<p>您可以使用多轮评估来衡量：</p>
-<ol>
-<li>语义意图：用户试图做什么。</li>
-<li>语义结果：实际发生了什么，任务是否成功。</li>
-<li>轨迹：对话如何展开，包括工具调用的轨迹。</li>
-</ol>
+<p>您可以使用多轮评估来衡量： 1. 语义意图：用户试图做什么。 2. 语义结果：实际发生了什么，任务是否成功。 3. 轨迹：对话如何展开，包括工具调用的轨迹。</p>
 <aside class="callout"><strong>提示</strong>
  运行多轮在线评估将自动将线程中的每个追踪升级到[扩展数据保留](/langsmith/usage-and-billing.html#data-retention-auto-upgrades)。此升级将影响追踪定价，但可确保满足您评估标准的追踪（通常是分析最有价值的追踪）被保留以供调查。
 </aside>
 <h2>工作原理</h2>
 <p>多轮在线评估器遵循以下评估生命周期：</p>
 <ol>
-<li><strong>追踪摄取</strong>：对话中的每个轮次作为单独的运行进行追踪，并使用共享的线程 ID 与一个线程关联。</li>
-<li><strong>空闲时间检测</strong>：在摄取线程中的最后一个追踪后，LangSmith 会等待配置的空​​闲时间过去。此空闲期表示对话已完成并准备好进行评估。</li>
-<li><strong>消息组装</strong>：LangSmith 从线程中的每个追踪收集 <code>messages</code> 并将它们组装成单个对话历史记录。如果每个追踪只包含最新的消息，LangSmith 会跨轮次拼接消息。如果每个追踪包含完整历史记录，LangSmith 会直接使用该历史记录。由于线程中连续的追踪通常会重新发送之前的历史记录，因此 LangSmith 会对重叠的消息进行去重，以便每个消息只出现一次。结果是 OpenAI 聊天格式的消息列表 (<code>{&quot;role&quot;: ..., &quot;content&quot;: ...}</code>)，这就是您的提示中 <code>all_messages</code> 变量解析的内容。</li>
-<li><strong>LLM 即评判评估</strong>：组装后的对话将传递给您配置的 LLM 即评判提示。评估器根据您的标准对整个线程进行评分：语义意图、结果或轨迹。</li>
-<li><strong>反馈记录</strong>：评估器使用您配置的反馈键将反馈写入 LangSmith，与该线程关联。</li>
+<li>1. **追踪摄取**：对话中的每个轮次作为单独的运行进行追踪，并使用共享的线程 ID 与一个线程关联。</li>
+<li>2. **空闲时间检测**：在摄取线程中的最后一个追踪后，LangSmith 会等待配置的空​​闲时间过去。此空闲期表示对话已完成并准备好进行评估。</li>
+<li>3. **消息组装**：LangSmith 从线程中的每个追踪收集 <code>messages</code> 并将它们组装成单个对话历史记录。如果每个追踪只包含最新的消息，LangSmith 会跨轮次拼接消息。如果每个追踪包含完整历史记录，LangSmith 会直接使用该历史记录。由于线程中连续的追踪通常会重新发送之前的历史记录，因此 LangSmith 会对重叠的消息进行去重，以便每个消息只出现一次。结果是 OpenAI 聊天格式的消息列表 (<code>{&quot;role&quot;: ..., &quot;content&quot;: ...}</code>)，这就是您的提示中 <code>all_messages</code> 变量解析的内容。</li>
+<li>4. **LLM 即评判评估**：组装后的对话将传递给您配置的 LLM 即评判提示。评估器根据您的标准对整个线程进行评分：语义意图、结果或轨迹。</li>
+<li>5. **反馈记录**：评估器使用您配置的反馈键将反馈写入 LangSmith，与该线程关联。</li>
 </ol>
 <p>此生命周期意味着多轮评估器每个完成的线程运行一次，而不是每个追踪运行一次。如果您需要每个追踪的评估，请使用<a href="/langsmith/online-evaluations-llm-as-judge.html">运行级在线评估器</a>。</p>
 <h2>前置条件</h2>
 <ul>
-<li>您的追踪项目必须使用<a href="/langsmith/threads.html">线程</a>。</li>
-<li>线程中每个追踪的顶级输入和输出必须包含一个 <code>messages</code> 键，该键包含消息列表。我们支持 <a href="/langsmith/log-llm-trace.html#messages-format">LangChain</a>、<a href="https://platform.openai.com/docs/api-reference/chat/create">OpenAI Chat Completions</a> 和 <a href="https://platform.claude.com/docs/en/api/messages">Anthropic Messages</a> 格式的消息。</li>
-<li>如果每个追踪的顶级输入和输出只包含对话中的最新消息，LangSmith 将自动将跨轮次的消息组合成一个线程。</li>
-<li>如果每个追踪的顶级输入和输出包含完整的对话历史记录，LangSmith 将直接使用该历史记录。</li>
+<li>- 您的追踪项目必须使用<a href="/langsmith/threads.html">线程</a>。</li>
+<li>- 线程中每个追踪的顶级输入和输出必须包含一个 <code>messages</code> 键，该键包含消息列表。我们支持 <a href="/langsmith/log-llm-trace.html#messages-format">LangChain</a>、<a href="https://platform.openai.com/docs/api-reference/chat/create">OpenAI Chat Completions</a> 和 <a href="https://platform.claude.com/docs/en/api/messages">Anthropic Messages</a> 格式的消息。</li>
+<li>- 如果每个追踪的顶级输入和输出只包含对话中的最新消息，LangSmith 将自动将跨轮次的消息组合成一个线程。</li>
+<li>- 如果每个追踪的顶级输入和输出包含完整的对话历史记录，LangSmith 将直接使用该历史记录。</li>
 </ul>
 <aside class="callout"><strong>提示</strong>
 <p>如果您的追踪不符合上述格式，线程级评估器将无法工作。您需要更新您追踪到 LangSmith 的方式，以确保每个追踪的顶级输入和输出都包含 <code>messages</code> 列表。</p>
 <p>有关更多信息，请参阅<a href="/langsmith/online-evaluations-multi-turn.html#troubleshooting">故障排除</a>部分。</p>
 </aside>
 <h2>配置</h2>
-<ol>
-<li>导航到 <strong>追踪</strong> 页面并选择一个追踪项目。</li>
-<li>点击 <strong>评估器</strong> 选项卡，然后点击 <strong>+ 评估器</strong>。在 <strong>从头创建</strong> 下选择 <strong>LLM 即评判评估器</strong>。在 <strong>来源</strong> 下，选择 <strong>线程</strong>。</li>
-<li><strong>为您的评估器命名</strong>。</li>
-<li>应用 <strong>过滤器</strong> 或 <strong>采样率</strong>。 &lt;br /&gt;</li>
-</ol>
-<p>使用过滤器或采样来控制评估器成本。例如，只评估少于 <em>N</em> 轮的线程或对 10% 的所有线程进行采样。</p>
-<ol>
-<li><strong>配置空闲时间</strong>。 &lt;br /&gt;</li>
-</ol>
-<p>首次配置线程级评估器时，您将定义空闲时间——线程中最后一个追踪之后到被认为完成并准备好进行评估之前的时间。此值应反映您应用中用户交互的预期长度。它适用于项目中的所有评估器。</p>
+<p>1. 导航到 **追踪** 页面并选择一个追踪项目。 2. 点击 **评估器** 选项卡，然后点击 **+ 评估器**。在 **从头创建** 下选择 **LLM 即评判评估器**。在 **来源** 下，选择 **线程**。 3. **为您的评估器命名**。 4. 应用 **过滤器** 或 **采样率**。 &lt;br /&gt; 使用过滤器或采样来控制评估器成本。例如，只评估少于 *N* 轮的线程或对 10% 的所有线程进行采样。 5. **配置空闲时间**。 &lt;br /&gt; 首次配置线程级评估器时，您将定义空闲时间——线程中最后一个追踪之后到被认为完成并准备好进行评估之前的时间。此值应反映您应用中用户交互的预期长度。它适用于项目中的所有评估器。</p>
 <aside class="callout"><strong>建议</strong>
 <p>首次测试评估器时，请使用较短的空闲时间，以便您能快速看到结果。验证后，增加空闲时间以匹配用户交互的预期长度。</p>
 </aside>
-<ol>
-<li><strong>配置您的模型。</strong>&lt;br /&gt;</li>
-</ol>
-<p>选择您希望用于评估器的提供商和模型。线程往往会变得很长，因此您应该使用具有更高上下文窗口的模型，以避免遇到限制。例如，OpenAI 的 GPT-4o mini 或 Gemini 2.5 Flash 都是不错的选择，因为它们的上下文窗口都超过 100 万个 token。</p>
-<ol>
-<li><strong>配置您的 LLM 即评判提示。</strong>&lt;br /&gt;</li>
-</ol>
-<p>定义您想要评估的内容。此提示将用于评估线程。您还可以配置通过 <code>all_messages</code> 变量传递给评估器的组装对话的哪些部分，以控制它接收的内容：</p>
-<ul>
-<li>所有消息：以 OpenAI 聊天格式的 JSON 消息对象列表形式发送完整对话 (<code>{&quot;role&quot;: ..., &quot;content&quot;: ...}</code>)，每个消息渲染为缩进的 JSON 并用空行分隔。</li>
-<li>人类和 AI 对：只发送用户和助手消息，格式为 <code>&lt;user&gt;...&lt;/user&gt;</code> 和 <code>&lt;assistant&gt;...&lt;/assistant&gt;</code>，不包括系统消息、工具调用和其他角色。</li>
-<li>第一个人类和最后一个 AI：只发送第一个用户消息和最后一个助手回复。</li>
-</ul>
-<ol>
-<li><strong>设置您的反馈配置</strong>。&lt;br /&gt;</li>
-</ol>
-<p>为反馈键配置一个名称，您想要收集的反馈格式，以及可选地启用反馈推理。</p>
+<p>6. **配置您的模型。**&lt;br /&gt; 选择您希望用于评估器的提供商和模型。线程往往会变得很长，因此您应该使用具有更高上下文窗口的模型，以避免遇到限制。例如，OpenAI 的 GPT-4o mini 或 Gemini 2.5 Flash 都是不错的选择，因为它们的上下文窗口都超过 100 万个 token。</p>
+<p>7. **配置您的 LLM 即评判提示。**&lt;br /&gt; 定义您想要评估的内容。此提示将用于评估线程。您还可以配置通过 <code>all_messages</code> 变量传递给评估器的组装对话的哪些部分，以控制它接收的内容： - 所有消息：以 OpenAI 聊天格式的 JSON 消息对象列表形式发送完整对话 (<code>{&quot;role&quot;: ..., &quot;content&quot;: ...}</code>)，每个消息渲染为缩进的 JSON 并用空行分隔。 - 人类和 AI 对：只发送用户和助手消息，格式为 <code>&lt;user&gt;...&lt;/user&gt;</code> 和 <code>&lt;assistant&gt;...&lt;/assistant&gt;</code>，不包括系统消息、工具调用和其他角色。 - 第一个人类和最后一个 AI：只发送第一个用户消息和最后一个助手回复。</p>
+<p>9. **设置您的反馈配置**。&lt;br /&gt; 为反馈键配置一个名称，您想要收集的反馈格式，以及可选地启用反馈推理。</p>
 <aside class="callout"><strong>警告</strong>
 <p>我们不建议对线程级评估器和运行级评估器使用相同的反馈键，因为这可能会导致难以区分两者。</p>
 </aside>
 <ol>
-<li><strong>保存您的评估器。</strong></li>
+<li>8. **保存您的评估器。**</li>
 </ol>
-<p>保存后，您的评估器将出现在 <strong>评估器</strong> 选项卡中。一旦保存后任何新线程的空闲时间过去，您就可以测试它。</p>
+<p>保存后，您的评估器将出现在 **评估器** 选项卡中。一旦保存后任何新线程的空闲时间过去，您就可以测试它。</p>
 <h2>限制</h2>
 <p>这些是多轮在线评估器的当前限制（可能会发生变化）。如果您遇到任何这些限制，请与我们联系。</p>
 <ul>
-<li><strong>运行时间必须少于一周</strong>：当线程变为空闲时，只有过去 7 天内的运行才有资格进行评估。</li>
-<li><strong>一次最多评估 500 个线程</strong>：如果您在五分钟内有超过 500 个线程被标记为空闲，我们将自动采样超过 500 个。</li>
-<li><strong>每个工作区最多 10 个多轮在线评估器</strong></li>
+<li>- **运行时间必须少于一周**：当线程变为空闲时，只有过去 7 天内的运行才有资格进行评估。</li>
+<li>- **一次最多评估 500 个线程**：如果您在五分钟内有超过 500 个线程被标记为空闲，我们将自动采样超过 500 个。</li>
+<li>- **每个工作区最多 10 个多轮在线评估器**</li>
 </ul>
 <h2>故障排除</h2>
-<p><strong>检查评估器的状态</strong> &lt;br /&gt; 您可以通过导航到追踪项目内的 <strong>评估器</strong> 选项卡并点击您创建的评估器的 <strong>日志</strong> 按钮来检查评估器上次运行的时间，以查看其运行历史。</p>
-<p><strong>检查发送到评估器的数据</strong> &lt;br /&gt; 通过导航到追踪项目内的 <strong>评估器</strong> 选项卡，点击您创建的评估器，然后点击 <strong>评估器追踪</strong> 选项卡来检查发送到评估器的数据。</p>
+<p>**检查评估器的状态** &lt;br /&gt; 您可以通过导航到追踪项目内的 **评估器** 选项卡并点击您创建的评估器的 **日志** 按钮来检查评估器上次运行的时间，以查看其运行历史。</p>
+<p>**检查发送到评估器的数据** &lt;br /&gt; 通过导航到追踪项目内的 **评估器** 选项卡，点击您创建的评估器，然后点击 **评估器追踪** 选项卡来检查发送到评估器的数据。</p>
 <p>在此选项卡中，您可以看到传递给 LLM 即评判评估器的输入。如果您的消息没有正确传递，您将在输入中看到空白值。如果您的消息不是<a href="/langsmith/online-evaluations-multi-turn.html#prerequisites">预期格式</a>之一，可能会发生这种情况。</p>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>

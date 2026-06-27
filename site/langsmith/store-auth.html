@@ -1077,20 +1077,20 @@
       <article class="doc"><p>每个 <a href="/langsmith/deployment.html">LangSmith Deployment</a> 都包含一个 Postgres 支持的 <a href="/oss/python/langgraph/stores.html">store</a>，用于长期记忆和跨线程数据。默认情况下，store 命名空间在所有调用者之间共享。要为每个用户提供独立的隔离 store，请配置<a href="/langsmith/custom-auth.html">自定义认证</a>并添加一个 store <a href="/langsmith/auth.html#authorization">授权处理程序</a>，用于重写命名空间以包含已认证用户的身份。</p>
 <p>本指南介绍如何在 LangSmith Deployment 中配置该隔离。相同的模式也适用于启用了自定义认证的<a href="/langsmith/self-hosted.html">自托管</a>部署。</p>
 <h2>工作原理</h2>
-<p>Store 项由 <strong>namespace</strong> 元组（例如 <code>(&quot;memories&quot;, &quot;preferences&quot;)</code>）和 <strong>key</strong> 组织。与线程和助手不同，store 命名空间由您的应用程序定义，因此授权的工作方式不同：</p>
+<p>Store 项由 **namespace** 元组（例如 <code>(&quot;memories&quot;, &quot;preferences&quot;)</code>）和 **key** 组织。与线程和助手不同，store 命名空间由您的应用程序定义，因此授权的工作方式不同：</p>
 <ol>
-<li>您的 <code>@auth.authenticate</code> 处理程序验证调用者并为每个用户返回唯一的 <code>identity</code>。</li>
-<li>您的 <code>@auth.on.store</code> 处理程序<strong>验证</strong>命名空间以该身份开头，或者<strong>重写</strong>命名空间以添加该身份前缀。</li>
-<li>服务器使用验证或重写后的命名空间执行实际读取或写入操作。</li>
+<li>1. 您的 <code>@auth.authenticate</code> 处理程序验证调用者并为每个用户返回唯一的 <code>identity</code>。</li>
+<li>2. 您的 <code>@auth.on.store</code> 处理程序**验证**命名空间以该身份开头，或者**重写**命名空间以添加该身份前缀。</li>
+<li>3. 服务器使用验证或重写后的命名空间执行实际读取或写入操作。</li>
 </ol>
 <p>用户写入逻辑命名空间 <code>(&quot;memories&quot;,)</code> 时，自动前缀重写实际上会将数据存储在 <code>(&quot;user-123&quot;, &quot;memories&quot;)</code>。其他用户无法读取或覆盖该数据，因为他们的请求被限定在 <code>(&quot;user-456&quot;, ...)</code> 范围内。</p>
 <aside class="callout"><strong>提示</strong>
-<p>Store 授权处理程序接收一个<strong>可变的</strong> <code>value</code> 字典。对 <code>value[&quot;namespace&quot;]</code> 的更改会在操作中生效。您不需要像线程那样返回元数据过滤器。</p>
+<p>Store 授权处理程序接收一个**可变的** <code>value</code> 字典。对 <code>value[&quot;namespace&quot;]</code> 的更改会在操作中生效。您不需要像线程那样返回元数据过滤器。</p>
 </aside>
 <h2>前置条件</h2>
 <ul>
-<li>已配置<a href="/langsmith/set-up-custom-auth.html">自定义认证</a>的 LangSmith Deployment。</li>
-<li>一个 <code>@auth.authenticate</code> 处理程序，为每个最终用户返回稳定且唯一的 <code>identity</code>。</li>
+<li>- 已配置<a href="/langsmith/set-up-custom-auth.html">自定义认证</a>的 LangSmith Deployment。</li>
+<li>- 一个 <code>@auth.authenticate</code> 处理程序，为每个最终用户返回稳定且唯一的 <code>identity</code>。</li>
 </ul>
 <h2>在 LangSmith Deployment 中配置认证</h2>
 <p>在 <a href="/langsmith/application-structure.html#configuration-file-concepts"><code>langgraph.json</code></a> 中将您的部署指向认证模块：</p>
@@ -1109,8 +1109,8 @@
 <table>
 <thead><tr><th>模式</th><th>用户作用域设置位置</th><th>最佳场景</th></tr></thead>
 <tbody>
-<tr><td><strong>显式命名空间 + 拒绝</strong></td><td>应用程序代码将 <code>user_id</code> 放在每个命名空间的第一位</td><td>您已经将用户身份传递到图代码中，或者您希望命名空间反映完整存储路径</td></tr>
-<tr><td><strong>自动前缀重写</strong></td><td>认证处理器在逻辑命名空间前添加 <code>ctx.user.identity</code></td><td>您希望更简单的代理代码和在 API 层透明的隔离</td></tr>
+<tr><td>**显式命名空间 + 拒绝**</td><td>应用程序代码将 <code>user_id</code> 放在每个命名空间的第一位</td><td>您已经将用户身份传递到图代码中，或者您希望命名空间反映完整存储路径</td></tr>
+<tr><td>**自动前缀重写**</td><td>认证处理器在逻辑命名空间前添加 <code>ctx.user.identity</code></td><td>您希望更简单的代理代码和在 API 层透明的隔离</td></tr>
 </tbody>
 </table>
 <p>两种模式都使用单一的 <code>@auth.on.store</code> 处理器来覆盖所有存储操作（<code>put</code>、<code>get</code>、<code>search</code>、<code>delete</code> 和 <code>list_namespaces</code>）。只有在需要为每个操作设置不同规则时，才需要特定操作的处理器，如 <code>@auth.on.store.put</code>。</p>
@@ -1157,7 +1157,7 @@ async def scope_store(
         namespace = (ctx.user.identity, *namespace)
     value[&quot;namespace&quot;] = namespace</code></pre>
 <p>当客户端调用 <code>list_namespaces</code> 不带前缀时，<code>value[&quot;namespace&quot;]</code> 为空。上面的处理器将空命名空间视为 <code>(ctx.user.identity,)</code>，因此用户只能看到自己的命名空间。</p>
-<p>此模式使代理代码更简单，因为认证层透明地处理用户隔离。代价是你不能在应用代码中也为命名空间添加前缀，否则你会双重作用域数据并破坏读取。选择一个作用域层：认证重写 <strong>或</strong> 应用级命名空间，不要两者都用。</p>
+<p>此模式使代理代码更简单，因为认证层透明地处理用户隔离。代价是你不能在应用代码中也为命名空间添加前缀，否则你会双重作用域数据并破坏读取。选择一个作用域层：认证重写 **或** 应用级命名空间，不要两者都用。</p>
 <h2>在代理代码中使用命名空间</h2>
 <p>如果使用自动前缀重写，你的图代码使用逻辑命名空间，不带用户前缀。认证层在请求时自动添加用户作用域。将以下内容放入你的图节点或工具中（例如 <code>graph.py</code>）：</p>
 <pre><code data-language="python">from langgraph.store.base import BaseStore
@@ -1176,7 +1176,7 @@ async def load_preference(state: State, *, store: BaseStore):
     )
     return item.value if item else {}</code></pre>
 <p>当 User A 调用 store API 时，服务器会将数据持久化到 <code>(&quot;user-a&quot;, &quot;memories&quot;, &quot;preferences&quot;)</code>。User B 的请求永远不会到达该命名空间。</p>
-<p>如果你使用 <strong>explicit namespace + deny</strong>，请改为在代码的每个命名空间中包含用户身份：</p>
+<p>如果你使用 **explicit namespace + deny**，请改为在代码的每个命名空间中包含用户身份：</p>
 <pre><code data-language="python">from langchain_core.runnables import RunnableConfig
 from langgraph.store.base import BaseStore
 
@@ -1194,7 +1194,7 @@ async def save_preference(state: State, *, store: BaseStore, config: RunnableCon
 StoreBackend(
     namespace=lambda rt: (&quot;memories&quot;,),  # auth adds user identity
 )</code></pre>
-<p>或者，如果您通过图内用户进行作用域限定（例如，使用 <code>rt.server_info.user.identity</code>），请确保您的 auth handler 不会重复添加命名空间前缀。选择一种作用域层：auth 重写<strong>或</strong>应用级命名空间，不要两者同时使用。</p>
+<p>或者，如果您通过图内用户进行作用域限定（例如，使用 <code>rt.server_info.user.identity</code>），请确保您的 auth handler 不会重复添加命名空间前缀。选择一种作用域层：auth 重写**或**应用级命名空间，不要两者同时使用。</p>
 <p>有关命名空间设计的更多信息，请参阅 <a href="/oss/python/deepagents/backends.html#namespace-factories">Deep Agents 后端</a> 和 <a href="/oss/python/deepagents/memory.html#user-scoped-memory">用户级内存</a>。</p>
 <h2>测试 store 隔离</h2>
 <p>在 <code>langgraph dev</code> 运行且 auth handler 中配置了两个测试用户的情况下，验证 store 数据不会在用户之间泄露：</p>
@@ -1253,11 +1253,11 @@ if __name__ == &quot;__main__&quot;:
 <p>对于多用户代理，请同时配置两者。参见<a href="/langsmith/resource-auth.html">使对话保持私密</a>了解线程和运行范围。</p>
 <h2>另请参阅</h2>
 <ul>
-<li><a href="/langsmith/auth.html">身份验证和访问控制</a></li>
-<li><a href="/langsmith/set-up-custom-auth.html">设置自定义身份验证</a></li>
-<li><a href="/langsmith/resource-auth.html">使对话保持私密</a></li>
-<li><a href="/langsmith/semantic-search.html">部署中的语义搜索</a></li>
-<li><a href="/oss/python/langgraph/stores.html">LangGraph 存储</a></li>
+<li>- <a href="/langsmith/auth.html">身份验证和访问控制</a></li>
+<li>- <a href="/langsmith/set-up-custom-auth.html">设置自定义身份验证</a></li>
+<li>- <a href="/langsmith/resource-auth.html">使对话保持私密</a></li>
+<li>- <a href="/langsmith/semantic-search.html">部署中的语义搜索</a></li>
+<li>- <a href="/oss/python/langgraph/stores.html">LangGraph 存储</a></li>
 </ul>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>

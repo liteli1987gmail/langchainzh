@@ -1146,9 +1146,9 @@ const agent = await createDeepAgent({
 <p>技能源路径列表。</p>
 <p>路径必须使用正斜杠指定，且相对于后端的根目录。</p>
 <ul>
-<li>如果省略，则不加载任何技能。</li>
-<li>使用 <code>StateBackend</code>（默认）时，请使用 <code>invoke(files={...})</code> 提供技能文件。使用 <code>deepagents.backends.utils</code> 中的 <code>create_file_data()</code> 格式化文件内容；不支持原始字符串。</li>
-<li>使用 <code>FilesystemBackend</code> 时，技能从磁盘加载，相对于后端的 <code>root_dir</code>。</li>
+<li>- 如果省略，则不加载任何技能。</li>
+<li>- 使用 <code>StateBackend</code>（默认）时，请使用 <code>invoke(files={...})</code> 提供技能文件。使用 <code>deepagents.backends.utils</code> 中的 <code>create_file_data()</code> 格式化文件内容；不支持原始字符串。</li>
+<li>- 使用 <code>FilesystemBackend</code> 时，技能从磁盘加载，相对于后端的 <code>root_dir</code>。</li>
 </ul>
 <p>后续源会覆盖同名技能（后者优先）。</p>
 <aside class="callout"><strong>提示</strong>
@@ -1165,26 +1165,26 @@ const agent = await createDeepAgent({
 <h2>技能如何工作</h2>
 <p>随着智能体承担更复杂的任务，它们需要的上下文也会随之增长。将所有指令加载到系统提示中会浪费令牌在当前任务无关的信息上，而在不同会话中手动提供相同的指导无法规模化。</p>
 <aside class="callout"><strong>信息</strong>
-<p>技能使用<strong>渐进式披露</strong>：智能体分层加载技能信息，而不是一次性全部加载。在启动时，它只能看到每个技能的名称和描述。当某个技能被调用时，它会读取完整的 <code>SKILL.md</code> 指令。辅助文件随后加载，但仅在指令需要时才会被读取。</p>
+<p>技能使用**渐进式披露**：智能体分层加载技能信息，而不是一次性全部加载。在启动时，它只能看到每个技能的名称和描述。当某个技能被调用时，它会读取完整的 <code>SKILL.md</code> 指令。辅助文件随后加载，但仅在指令需要时才会被读取。</p>
 </aside>
 <p>技能分三个层级加载。每个层级仅在任务需要时添加更多细节：</p>
 <table>
 <thead><tr><th>层级</th><th>加载内容</th><th>时机</th></tr></thead>
 <tbody>
-<tr><td><strong>1. 元数据</strong></td><td><code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a> 中的 <a href="#frontmatter-fields"><code>name</code></a> 和 <a href="#frontmatter-fields"><code>description</code></a></td><td>智能体启动时，针对每个已配置的技能</td></tr>
-<tr><td><strong>2. 指令</strong></td><td>完整的 <code>SKILL.md</code> 主体内容</td><td>当技能被调用时</td></tr>
-<tr><td><strong>3. 资源</strong></td><td><code>scripts/</code>、<code>references/</code> 和 <code>assets/</code> 下的<a href="#add-supporting-resources">辅助文件</a></td><td>调用后按需加载，当指令引用它们时</td></tr>
+<tr><td>**1. 元数据**</td><td><code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a> 中的 <a href="#frontmatter-fields"><code>name</code></a> 和 <a href="#frontmatter-fields"><code>description</code></a></td><td>智能体启动时，针对每个已配置的技能</td></tr>
+<tr><td>**2. 指令**</td><td>完整的 <code>SKILL.md</code> 主体内容</td><td>当技能被调用时</td></tr>
+<tr><td>**3. 资源**</td><td><code>scripts/</code>、<code>references/</code> 和 <code>assets/</code> 下的<a href="#add-supporting-resources">辅助文件</a></td><td>调用后按需加载，当指令引用它们时</td></tr>
 </tbody>
 </table>
 <p>下图展示了在特定时刻智能体上下文中出现的内容。在启动时，每个技能的第一层元数据都在系统提示中。当某个技能被调用时，第二层指令加入上下文。第三层文件保留在后端，直到智能体在调用后读取它们。</p>
-<p><img src="/oss/images/deepagents/skills-composition.svg" alt="How skill components map into agent context at startup and activation" loading="lazy"></p>
+<p>!<a href="/oss/images/deepagents/skills-composition.svg.html">How skill components map into agent context at startup and activation</a></p>
 <p>当智能体处理任务时，它会分层加载技能信息：</p>
-<p><img src="/oss/images/deepagents/skills-progressive-disclosure.svg" alt="How skills load in layers from metadata to instructions to resources" loading="lazy"></p>
+<p>!<a href="/oss/images/deepagents/skills-progressive-disclosure.svg.html">How skills load in layers from metadata to instructions to resources</a></p>
 <p>在 Deep Agents 中，<a href="https://reference.langchain.com/javascript/deepagents/middleware/createSkillsMiddleware"><code>SkillsMiddleware</code></a>（传递 <code>skills</code> 时<a href="/oss/javascript/deepagents/customization.html#default-stack-main-agent">默认中间件栈</a>的一部分）处理前两个层级，第三个层级由 LLM 处理：</p>
 <ol>
-<li><strong>发现</strong>（第一层）：在智能体启动时，中间件扫描已配置的技能路径，解析每个 <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a>，并将 <a href="#frontmatter-fields"><code>name</code></a> 和 <a href="#frontmatter-fields"><code>description</code></a> 字段注入系统提示。</li>
-<li><strong>读取</strong>（第二层）：当智能体调用某个技能时，它通过 <code>read_file</code> 读取完整的 <code>SKILL.md</code> 内容。</li>
-<li><strong>执行</strong>（第三层）：调用后，智能体遵循技能的指令，并仅在指令需要时读取辅助文件（脚本、参考资料、资产）。</li>
+<li>1. **发现**（第一层）：在智能体启动时，中间件扫描已配置的技能路径，解析每个 <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a>，并将 <a href="#frontmatter-fields"><code>name</code></a> 和 <a href="#frontmatter-fields"><code>description</code></a> 字段注入系统提示。</li>
+<li>2. **读取**（第二层）：当智能体调用某个技能时，它通过 <code>read_file</code> 读取完整的 <code>SKILL.md</code> 内容。</li>
+<li>3. **执行**（第三层）：调用后，智能体遵循技能的指令，并仅在指令需要时读取辅助文件（脚本、参考资料、资产）。</li>
 </ol>
 <h2>何时使用技能</h2>
 <p>如果你发现自己向智能体反复提供类似的指令，尤其是包含多个步骤的详细指令时，请考虑将这些指令编码化供智能体使用。这样，当将来你想要完成类似的任务时，智能体已经知道该怎么做了。</p>
@@ -1193,15 +1193,15 @@ const agent = await createDeepAgent({
 </aside>
 <p>技能特别有助于编码化以下内容：</p>
 <ul>
-<li><strong>多步骤工作流</strong>：跨越多个步骤的工作流，类似于食谱。</li>
-<li><strong>领域特定知识</strong>：指导智能体如何在该工作流中使用工具。例如，包含从哪里获取信息的信息，包括该技能可能可以访问的其他参考资料或脚本。</li>
-<li><strong>包含可执行代码的指令</strong>：将过程与智能体可以运行的脚本或模块打包在一起，这样它遵循经过测试的逻辑，而不是每次都从指令重新生成。参见<a href="#execute-code-with-skills">使用技能执行代码</a>。</li>
-<li><strong>指南</strong>：向智能体提供关于护栏的辅助指令以遵守。例如，遵循特定的格式或样式指南，或指定将测试作为工作流的一部分始终运行。</li>
+<li>- **多步骤工作流**：跨越多个步骤的工作流，类似于食谱。</li>
+<li>- **领域特定知识**：指导智能体如何在该工作流中使用工具。例如，包含从哪里获取信息的信息，包括该技能可能可以访问的其他参考资料或脚本。</li>
+<li>- **包含可执行代码的指令**：将过程与智能体可以运行的脚本或模块打包在一起，这样它遵循经过测试的逻辑，而不是每次都从指令重新生成。参见<a href="#execute-code-with-skills">使用技能执行代码</a>。</li>
+<li>- **指南**：向智能体提供关于护栏的辅助指令以遵守。例如，遵循特定的格式或样式指南，或指定将测试作为工作流的一部分始终运行。</li>
 </ul>
 <h2>编写有效的技能</h2>
 <p><a href="https://agentskills.io/specification">Agent Skills 规范</a> 包含了关于构建技能以实现可靠发现和激活的指导。以下建议在此基础上为 Deep Agents 提供实用的模式。</p>
-<p><strong>保持 <a href="#frontmatter-fields">frontmatter</a> 简洁</strong>，且 <code>SKILL.md</code> 主体内容在 5,000 个令牌以下。每个技能的前置数据都在<a href="#how-skills-work">发现</a>阶段添加到系统提示中，而完整主体内容仅在激活时才被读取。保持两个层级都很小意味着你可以在不挤占上下文窗口的情况下加载许多技能。</p>
-<p><strong>写出具体的描述。</strong> 在<a href="#how-skills-work">发现</a>阶段，<a href="#frontmatter-fields"><code>description</code></a> 字段是智能体对每个技能看到的唯一信息。一个好的描述告诉智能体该技能做什么以及何时激活它，包含智能体可以匹配的具体关键词：</p>
+<p>**保持 <a href="#frontmatter-fields">frontmatter</a> 简洁**，且 <code>SKILL.md</code> 主体内容在 5,000 个令牌以下。每个技能的前置数据都在<a href="#how-skills-work">发现</a>阶段添加到系统提示中，而完整主体内容仅在激活时才被读取。保持两个层级都很小意味着你可以在不挤占上下文窗口的情况下加载许多技能。</p>
+<p>**写出具体的描述。** 在<a href="#how-skills-work">发现</a>阶段，<a href="#frontmatter-fields"><code>description</code></a> 字段是智能体对每个技能看到的唯一信息。一个好的描述告诉智能体该技能做什么以及何时激活它，包含智能体可以匹配的具体关键词：</p>
 <pre><code data-language="yaml"># Good: specific about what and when
 description: &gt;-
   Extract text and tables from PDF files, fill PDF forms, and merge
@@ -1211,19 +1211,19 @@ description: &gt;-
 # Poor: too vague for reliable matching
 description: Helps with PDFs.</code></pre>
 <p>当你在相关领域拥有多个技能时，要清晰地区分它们的描述。重叠的描述会导致智能体激活错误的技能或在选项之间犹豫不决。如果两个技能服务于相似的目的，请将它们合并为一个。</p>
-<p><strong>保持指令简洁。</strong> Agent Skills 规范建议将 <code>SKILL.md</code> 保持在 500 行以内。当指令变长时，将详细的参考资料移至<a href="#add-supporting-resources">支持资源文件</a>，然后从主 <code>SKILL.md</code> 中引用它们：</p>
+<p>**保持指令简洁。** Agent Skills 规范建议将 <code>SKILL.md</code> 保持在 500 行以内。当指令变长时，将详细的参考资料移至<a href="#add-supporting-resources">支持资源文件</a>，然后从主 <code>SKILL.md</code> 中引用它们：</p>
 <p>智能体仅在指令调用时加载参考文件，使每一层渐进式披露都保持适当的大小。保持文件引用相对于 <code>SKILL.md</code> 一级深，避免使用深层嵌套的引用链，因为那会迫使智能体多次读取才能获取所需信息。</p>
-<p><strong>为智能体构建指令。</strong> 将 <code>SKILL.md</code> 的正文写成智能体可以遵循的清晰指令：</p>
+<p>**为智能体构建指令。** 将 <code>SKILL.md</code> 的正文写成智能体可以遵循的清晰指令：</p>
 <ul>
-<li><strong>分步骤程序</strong>，用于多步骤工作流</li>
-<li><strong>决策标准</strong>，用于选择不同的方法</li>
-<li><strong>预期输入和输出示例</strong>，让智能体知道成功的标准是什么</li>
-<li><strong>边界情况</strong>，智能体应该处理或标记给用户的情况</li>
+<li>- **分步骤程序**，用于多步骤工作流</li>
+<li>- **决策标准**，用于选择不同的方法</li>
+<li>- **预期输入和输出示例**，让智能体知道成功的标准是什么</li>
+<li>- **边界情况**，智能体应该处理或标记给用户的情况</li>
 </ul>
-<p><strong>管理技能数量。</strong> 少而精的技能比多个重叠的技能效果更好。随着描述相似的技能数量增加，智能体选择正确技能的能力会下降。如果你发现有许多相关技能，请考虑：</p>
+<p>**管理技能数量。** 少而精的技能比多个重叠的技能效果更好。随着描述相似的技能数量增加，智能体选择正确技能的能力会下降。如果你发现有许多相关技能，请考虑：</p>
 <ul>
-<li>将相关能力合并为一个技能，每个子任务单独成节</li>
-<li>使用参考文件来保持主 <code>SKILL.md</code> 简洁，同时覆盖多个子任务</li>
+<li>- 将相关能力合并为一个技能，每个子任务单独成节</li>
+<li>- 使用参考文件来保持主 <code>SKILL.md</code> 简洁，同时覆盖多个子任务</li>
 </ul>
 <aside class="callout"><strong>建议</strong>
 <p>使用 <a href="https://github.com/agentskills/agentskills/tree/main/skills-ref"><code>skills-ref</code> 验证工具</a> 检查你的 <code>SKILL.md</code> <a href="#frontmatter-fields">前置元数据</a> 是否遵循 Agent Skills 规范的命名和格式约定。</p>
@@ -1233,25 +1233,25 @@ description: Helps with PDFs.</code></pre>
 <h3><code>scripts/</code></h3>
 <p><code>scripts/</code> 目录包含智能体可以运行的可执行代码，例如 API 客户端、数据转换或验证检查。脚本应该：</p>
 <ul>
-<li>自包含或明确记录依赖项</li>
-<li>包含有用的错误消息</li>
-<li>优雅地处理边界情况</li>
+<li>- 自包含或明确记录依赖项</li>
+<li>- 包含有用的错误消息</li>
+<li>- 优雅地处理边界情况</li>
 </ul>
 <p>支持的编程语言取决于你的智能体设置。常见选项包括 Python、Bash 和 JavaScript 或 TypeScript。要执行脚本而不仅仅是读取它们，请参见<a href="#execute-code-with-skills">使用技能执行代码</a>。当智能体需要 shell 时，请使用<a href="#sandbox-scripts">沙盒脚本</a>。</p>
 <h3><code>references/</code></h3>
 <p><code>references/</code> 目录包含智能体按需读取的补充文档。对于 <code>SKILL.md</code> 来说太详细但仍是任务特定的材料使用它，例如：</p>
 <ul>
-<li><code>REFERENCE.md</code> 用于详细技术参考</li>
-<li><code>FORMS.md</code> 用于表单模板或结构化数据格式</li>
-<li>领域特定指南（<code>finance.md</code>、<code>legal.md</code> 等）</li>
+<li>- <code>REFERENCE.md</code> 用于详细技术参考</li>
+<li>- <code>FORMS.md</code> 用于表单模板或结构化数据格式</li>
+<li>- 领域特定指南（<code>finance.md</code>、<code>legal.md</code> 等）</li>
 </ul>
 <p>保持单个参考文件专注于特定主题。智能体仅在需要时加载它们，所以较小的文件占用的上下文更少。</p>
 <h3><code>assets/</code></h3>
 <p><code>assets/</code> 目录包含智能体使用但不需要作为指令读取的静态资源，例如：</p>
 <ul>
-<li>文档或配置模板</li>
-<li>图片（图表、示例）</li>
-<li>数据文件（查找表、模式）</li>
+<li>- 文档或配置模板</li>
+<li>- 图片（图表、示例）</li>
+<li>- 数据文件（查找表、模式）</li>
 </ul>
 <p>在 <code>SKILL.md</code> 中描述智能体何时应该打开或复制每个资源。</p>
 <h3>从 <code>SKILL.md</code> 引用文件</h3>
@@ -1265,9 +1265,9 @@ scripts/extract.py</code></pre>
 <h2>后端和远程技能加载</h2>
 <p>Deep Agents 支持不同的后端，具体取决于您如何存储和管理技能文件：</p>
 <ul>
-<li><code>StateBackend</code>：将文件存储在当前线程的 LangGraph 代理状态中。</li>
-<li><code>StoreBackend</code>：将文件存储在 LangGraph 存储中，实现持久化的跨线程存储。</li>
-<li><code>FilesystemBackend</code>：从磁盘读取和写入技能文件，文件位于可配置的 <code>root_dir</code> 下。</li>
+<li>- <code>StateBackend</code>：将文件存储在当前线程的 LangGraph 代理状态中。</li>
+<li>- <code>StoreBackend</code>：将文件存储在 LangGraph 存储中，实现持久化的跨线程存储。</li>
+<li>- <code>FilesystemBackend</code>：从磁盘读取和写入技能文件，文件位于可配置的 <code>root_dir</code> 下。</li>
 </ul>
 <h2>运行时加载技能</h2>
 <p>当您拥有大量技能集合，但只有部分技能与特定运行相关时，可以根据运行时上下文（如用户角色、租户或请求类型）选择要加载的技能。主要有两种方法：</p>
@@ -1331,8 +1331,8 @@ const agent = await createDeepAgent({
 <h2>子代理的技能</h2>
 <p>使用 <a href="/oss/javascript/deepagents/subagents.html">subagents</a> 时，您可以配置每种类型可以访问的技能：</p>
 <ul>
-<li><strong>通用子代理</strong>：向 <code>create_deep_agent</code> 传递 <code>skills</code> 时，会自动继承主代理的技能。无需额外配置。</li>
-<li><strong>自定义子代理</strong>：不会继承主代理的技能。在每个子代理定义中添加 <code>skills</code> 参数，指定该子代理的技能源路径。</li>
+<li>- **通用子代理**：向 <code>create_deep_agent</code> 传递 <code>skills</code> 时，会自动继承主代理的技能。无需额外配置。</li>
+<li>- **自定义子代理**：不会继承主代理的技能。在每个子代理定义中添加 <code>skills</code> 参数，指定该子代理的技能源路径。</li>
 </ul>
 <p>技能状态是完全隔离的：主代理的技能对子代理不可见，子代理的技能对主代理也不可见。</p>
 <p>python</p>
@@ -1371,8 +1371,8 @@ const agent = await createDeepAgent({
 <h3>在用户之间共享技能</h3>
 <p>要让每个用户都能访问相同的精选库，请将 <code>/skills/</code> 路由到共享的 <a href="https://reference.langchain.com/javascript/deepagents/backends/StoreBackend">StoreBackend</a>，并通过应用程序代码或管理工作流来填充数据。使用组织范围的命名空间，使该组织中的所有代理都能解析到同一个存储：</p>
 <ul>
-<li>按组织 ID 命名空间以实现工作区范围的技能（请参阅<a href="#enforce-read-only-skills">强制只读技能</a>）。</li>
-<li>当每个用户需要独立的库时，按用户 ID 命名空间（<a href="#namespaced-skills">命名空间技能</a>）。</li>
+<li>- 按组织 ID 命名空间以实现工作区范围的技能（请参阅<a href="#enforce-read-only-skills">强制只读技能</a>）。</li>
+<li>- 当每个用户需要独立的库时，按用户 ID 命名空间（<a href="#namespaced-skills">命名空间技能</a>）。</li>
 </ul>
 <p>使用类似 <code>/company-policies/SKILL.md</code> 的键和包含 <code>content</code> 与 <code>encoding</code> 字段的值来填充存储。在从存储读取记录之前，<code>/skills/</code> 路由前缀会被剥离。</p>
 <p>有关处理技能访问、共享和工作区级别可见性的托管解决方案，请参阅<a href="/langsmith/fleet/skills.html">批量技能</a>。</p>
@@ -1380,8 +1380,8 @@ const agent = await createDeepAgent({
 <h3>根据用户上下文限制技能</h3>
 <p>并非每个用户都应该看到每个技能。根据角色、租户或其他请求上下文控制哪些技能在运行时加载。有两种主要方法：</p>
 <ul>
-<li><strong><a href="#dynamic-skill-lists">动态技能列表</a></strong> — 在创建代理之前构建 <code>skills</code> 数组。为不同的角色或请求类型传递不同的路径列表。适用于技能位于共享后端且按路径过滤的情况。</li>
-<li><strong><a href="#namespaced-skills">命名空间技能</a></strong> — 将 <code>/skills/</code> 路由到带有以用户或租户 ID 为键的命名空间工厂的 <code>StoreBackend</code>。用每个身份应该访问的技能填充各自的命名空间。</li>
+<li>- **<a href="#dynamic-skill-lists">动态技能列表</a>** — 在创建代理之前构建 <code>skills</code> 数组。为不同的角色或请求类型传递不同的路径列表。适用于技能位于共享后端且按路径过滤的情况。</li>
+<li>- **<a href="#namespaced-skills">命名空间技能</a>** — 将 <code>/skills/</code> 路由到带有以用户或租户 ID 为键的命名空间工厂的 <code>StoreBackend</code>。用每个身份应该访问的技能填充各自的命名空间。</li>
 </ul>
 <p>这些模式可以与下面的读写控制结合使用。例如，您可以给管理员比工程师更大的技能集，同时保持两个库只读。</p>
 <h3>强制只读技能</h3>
@@ -1421,9 +1421,9 @@ agent = create_deep_agent(
 <h3>允许智能体编辑个人技能</h3>
 <p>默认情况下，如果后端允许且没有权限规则阻止该路径，智能体可以写入技能文件。要让智能体创建或优化技能而不影响共享库：</p>
 <ol>
-<li>将 <code>/skills/personal/</code> 等可写路径路由到用户范围的 <code>StoreBackend</code>。</li>
-<li>在 <code>skills</code> 中传递该路径（以及任何共享路径）。</li>
-<li>不要为可写路径添加 <code>deny</code> 规则。如果混合使用共享路径和个人路径，请将更具体的规则放在更广泛的拒绝规则之前（<a href="/oss/javascript/deepagents/permissions.html#rule-ordering">规则顺序</a>）。</li>
+<li>1. 将 <code>/skills/personal/</code> 等可写路径路由到用户范围的 <code>StoreBackend</code>。</li>
+<li>2. 在 <code>skills</code> 中传递该路径（以及任何共享路径）。</li>
+<li>3. 不要为可写路径添加 <code>deny</code> 规则。如果混合使用共享路径和个人路径，请将更具体的规则放在更广泛的拒绝规则之前（<a href="/oss/javascript/deepagents/permissions.html#rule-ordering">规则顺序</a>）。</li>
 </ol>
 <pre><code data-language="typescript">  createDeepAgent,
   CompositeBackend,
@@ -1480,17 +1480,17 @@ Search arXiv for papers matching the user&#x27;s query.
 <p>代理可以从任何后端_读取_脚本，但要_执行_它们，代理需要访问 shell，只有<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>提供这种访问。</p>
 <p><a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>在隔离的容器中运行。存储在沙箱外部的技能文件在其中不可用，这意味着代理无法执行技能脚本或访问技能资源，除非先将其传输进去。使用<a href="/oss/javascript/langchain/middleware/custom.html">自定义中间件</a>来处理此传输：</p>
 <ul>
-<li><strong><code>before_agent</code></strong>：从后端读取技能文件并上传到沙箱中，以便代理从一开始就可以执行脚本。</li>
-<li><strong><code>after_agent</code></strong>：从沙箱下载任何更新或新创建的技能文件并将其写回后端，以便更改在多次运行之间保持一致。</li>
+<li>- **<code>before_agent</code>**：从后端读取技能文件并上传到沙箱中，以便代理从一开始就可以执行脚本。</li>
+<li>- **<code>after_agent</code>**：从沙箱下载任何更新或新创建的技能文件并将其写回后端，以便更改在多次运行之间保持一致。</li>
 </ul>
 <p>有关在执行前同时初始化技能和记忆并在执行后同步两者的完整示例，请参阅<a href="/oss/javascript/deepagents/going-to-production.html#example-syncing-skills-and-memories-with-custom-middleware">使用自定义中间件同步技能和记忆</a>。</p>
 <h2>故障排除</h2>
 <p>使用 <a href="https://smith.langchain.com?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-deepagents-skills">LangSmith</a> 追踪来调试技能发现、<code>SKILL.md</code> 上的 <code>read_file</code> 调用以及支持资源访问。按照<a href="/langsmith/observability-quickstart.html">追踪快速入门</a>进行设置。我们还建议您设置 <a href="/langsmith/engine.html">LangSmith Engine</a>，它可以监控您的追踪、检测问题并提出修复建议。</p>
 <h3>技能未激活</h3>
-<p><strong>问题</strong>：代理处理任务时未读取技能的 <code>SKILL.md</code>。</p>
-<p><strong>解决方案</strong>：</p>
+<p>**问题**：代理处理任务时未读取技能的 <code>SKILL.md</code>。</p>
+<p>**解决方案**：</p>
 <ol>
-<li><strong>使描述更加具体。</strong> 代理仅根据<a href="#how-skills-work">发现</a>时的<a href="#frontmatter-fields"><code>描述</code></a>字段选择技能。包括技能的作用、使用时机以及代理可以匹配的关键词：</li>
+<li>1. **使描述更加具体。** 代理仅根据<a href="#how-skills-work">发现</a>时的<a href="#frontmatter-fields"><code>描述</code></a>字段选择技能。包括技能的作用、使用时机以及代理可以匹配的关键词：</li>
 </ol>
 <pre><code data-language="yaml">   # Good
    description: &gt;-
@@ -1501,55 +1501,55 @@ Search arXiv for papers matching the user&#x27;s query.
    description: Helps with research.
    </code></pre>
 <ol>
-<li><strong>减少技能之间的重叠。</strong> 如果多个技能的描述相似，智能体可能会跳过正确的技能或选错技能。请区分描述或<a href="#write-effective-skills">整合相关技能</a>。</li>
+<li>2. **减少技能之间的重叠。** 如果多个技能的描述相似，智能体可能会跳过正确的技能或选错技能。请区分描述或<a href="#write-effective-skills">整合相关技能</a>。</li>
 </ol>
 <ol>
-<li><strong>确认技能在 <code>skills</code> 数组中。</strong> 技能仅从您在创建智能体时传递的路径或子智能体特定的 <code>skills</code> 参数加载。</li>
+<li>3. **确认技能在 <code>skills</code> 数组中。** 技能仅从您在创建智能体时传递的路径或子智能体特定的 <code>skills</code> 参数加载。</li>
 </ol>
 <h3>启动时缺失技能</h3>
-<p><strong>问题</strong>：智能体未在其系统提示中列出技能，或对 <code>SKILL.md</code> 的 <code>read_file</code> 失败。</p>
-<p><strong>解决方案</strong>：</p>
+<p>**问题**：智能体未在其系统提示中列出技能，或对 <code>SKILL.md</code> 的 <code>read_file</code> 失败。</p>
+<p>**解决方案**：</p>
 <ol>
-<li><strong>检查技能路径。</strong> 路径必须使用正斜杠，并相对于后端根目录。使用 <code>FilesystemBackend</code> 时，路径相对于 <code>root_dir</code>。使用 <code>StateBackend</code> 时，在 <code>invoke(files={...})</code> 中使用 <code>create_file_data()</code> 传入技能文件。</li>
+<li>1. **检查技能路径。** 路径必须使用正斜杠，并相对于后端根目录。使用 <code>FilesystemBackend</code> 时，路径相对于 <code>root_dir</code>。使用 <code>StateBackend</code> 时，在 <code>invoke(files={...})</code> 中使用 <code>create_file_data()</code> 传入技能文件。</li>
 </ol>
 <ol>
-<li><strong>验证 <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a>。</strong> <a href="#frontmatter-fields"><code>name</code></a> 必须与父目录名称匹配，并遵循 <a href="https://agentskills.io/specification">Agent Skills 规范</a>。使用 <a href="https://github.com/agentskills/agentskills/tree/main/skills-ref"><code>skills-ref</code> 验证工具</a> 检查格式。</li>
+<li>2. **验证 <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a>。** <a href="#frontmatter-fields"><code>name</code></a> 必须与父目录名称匹配，并遵循 <a href="https://agentskills.io/specification">Agent Skills 规范</a>。使用 <a href="https://github.com/agentskills/agentskills/tree/main/skills-ref"><code>skills-ref</code> 验证工具</a> 检查格式。</li>
 </ol>
 <ol>
-<li><strong>检查文件大小。</strong> Deep Agents 在发现阶段会跳过超过 10 MB 的 <code>SKILL.md</code> 文件。</li>
+<li>3. **检查文件大小。** Deep Agents 在发现阶段会跳过超过 10 MB 的 <code>SKILL.md</code> 文件。</li>
 </ol>
 <ol>
-<li><strong>检查分层来源。</strong> 当同一技能名称出现在多个来源时，<a href="#usage">后一个来源优先</a>。来自较晚路径的较旧或空技能可能会覆盖您期望的技能。</li>
+<li>4. **检查分层来源。** 当同一技能名称出现在多个来源时，<a href="#usage">后一个来源优先</a>。来自较晚路径的较旧或空技能可能会覆盖您期望的技能。</li>
 </ol>
 <h3>找不到支持文件</h3>
-<p><strong>问题</strong>：智能体读取了 <code>SKILL.md</code> 但无法访问脚本、引用或资源。</p>
-<p><strong>解决方案</strong>：</p>
+<p>**问题**：智能体读取了 <code>SKILL.md</code> 但无法访问脚本、引用或资源。</p>
+<p>**解决方案**：</p>
 <ol>
-<li><strong>从 <code>SKILL.md</code> 引用文件。</strong> 智能体不会自动发现支持文件。说明每个文件包含的内容及使用时机。使用从技能根目录开始的<a href="#reference-files-from-skill-md">相对路径</a>。</li>
+<li>1. **从 <code>SKILL.md</code> 引用文件。** 智能体不会自动发现支持文件。说明每个文件包含的内容及使用时机。使用从技能根目录开始的<a href="#reference-files-from-skill-md">相对路径</a>。</li>
 </ol>
 <ol>
-<li><strong>保持路径在技能目录内。</strong> 文件路径相对于后端解析。确认支持文件存在于您说明中引用的路径。</li>
+<li>2. **保持路径在技能目录内。** 文件路径相对于后端解析。确认支持文件存在于您说明中引用的路径。</li>
 </ol>
 <ol>
-<li><strong>将技能同步到沙箱。</strong> 如果您使用<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>，容器外的技能文件在复制进去之前不可用。请参见 <a href="#sandbox-scripts">沙箱脚本</a> 和<a href="/oss/javascript/deepagents/going-to-production.html#example-syncing-skills-and-memories-with-custom-middleware">使用自定义中间件同步技能和记忆</a>。</li>
+<li>3. **将技能同步到沙箱。** 如果您使用<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>，容器外的技能文件在复制进去之前不可用。请参见 <a href="#sandbox-scripts">沙箱脚本</a> 和<a href="/oss/javascript/deepagents/going-to-production.html#example-syncing-skills-and-memories-with-custom-middleware">使用自定义中间件同步技能和记忆</a>。</li>
 </ol>
 <h3>脚本运行失败</h3>
-<p><strong>问题</strong>：智能体读取了脚本但无法运行。</p>
-<p><strong>解决方案</strong>：智能体可以从任何后端读取脚本，但运行它们需要<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>。请参见<a href="#execute-code-with-skills">使用技能执行代码</a>。</p>
+<p>**问题**：智能体读取了脚本但无法运行。</p>
+<p>**解决方案**：智能体可以从任何后端读取脚本，但运行它们需要<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>。请参见<a href="#execute-code-with-skills">使用技能执行代码</a>。</p>
 <h3>子智能体无法访问技能</h3>
-<p><strong>问题</strong>：自定义子智能体看不到主智能体使用的技能。</p>
-<p><strong>解决方案</strong>：自定义子智能体不会继承主智能体的技能。请在每个<a href="#skills-for-subagents">子智能体定义</a>中添加 <code>skills</code> 参数，指定该子智能体的技能源路径。通用子智能体会自动继承 <code>create_deep_agent</code> 中的技能。</p>
+<p>**问题**：自定义子智能体看不到主智能体使用的技能。</p>
+<p>**解决方案**：自定义子智能体不会继承主智能体的技能。请在每个<a href="#skills-for-subagents">子智能体定义</a>中添加 <code>skills</code> 参数，指定该子智能体的技能源路径。通用子智能体会自动继承 <code>create_deep_agent</code> 中的技能。</p>
 <h2>参考</h2>
 <h3>技能、记忆和工具</h3>
 <p>技能、<a href="/oss/javascript/deepagents/memory.html">记忆</a>（<code>AGENTS.md</code> 文件）和工具都为智能体提供上下文或能力。下表总结何时使用每种：</p>
 <table>
 <thead><tr><th></th><th>技能</th><th>记忆</th><th>工具</th></tr></thead>
 <tbody>
-<tr><td><strong>用途</strong></td><td>通过渐进式披露发现按需使用的能力</td><td>在启动时加载的持久上下文</td><td>智能体可调用的编程操作</td></tr>
-<tr><td><strong>加载方式</strong></td><td>仅在智能体确定相关性时读取</td><td>在智能体启动时加载</td><td>每轮对话都可用</td></tr>
-<tr><td><strong>格式</strong></td><td>命名目录中的 <code>SKILL.md</code></td><td><code>AGENTS.md</code> 文件</td><td>绑定到智能体的函数</td></tr>
-<tr><td><strong>分层方式</strong></td><td>用户级，然后项目级（后者覆盖）</td><td>用户级，然后项目级（合并）</td><td>在创建智能体时定义</td></tr>
-<tr><td><strong>使用场景</strong></td><td>说明是特定于任务的且可能较大</td><td>上下文始终相关（项目约定、偏好）</td><td>智能体需要编程操作，或无法访问文件系统</td></tr>
+<tr><td>**用途**</td><td>通过渐进式披露发现按需使用的能力</td><td>在启动时加载的持久上下文</td><td>智能体可调用的编程操作</td></tr>
+<tr><td>**加载方式**</td><td>仅在智能体确定相关性时读取</td><td>在智能体启动时加载</td><td>每轮对话都可用</td></tr>
+<tr><td>**格式**</td><td>命名目录中的 <code>SKILL.md</code></td><td><code>AGENTS.md</code> 文件</td><td>绑定到智能体的函数</td></tr>
+<tr><td>**分层方式**</td><td>用户级，然后项目级（后者覆盖）</td><td>用户级，然后项目级（合并）</td><td>在创建智能体时定义</td></tr>
+<tr><td>**使用场景**</td><td>说明是特定于任务的且可能较大</td><td>上下文始终相关（项目约定、偏好）</td><td>智能体需要编程操作，或无法访问文件系统</td></tr>
 </tbody>
 </table>
 <p>这些是指导原则，而非硬性界限。在实践中，技能和记忆处于一个光谱上。智能体可以在工作时更新自己的技能，捕获新流程并随时间完善说明。这样，技能可以作为一种渐进式披露记忆的形式：智能体在工作中构建并按需检索的上下文，而不是在每个提示时加载。</p>

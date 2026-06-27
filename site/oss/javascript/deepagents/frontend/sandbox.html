@@ -1075,18 +1075,15 @@
 <a class="nav-link level-5" href="/langsmith/scalability-and-resilience.html">可扩展性与弹性</a></aside>
     <main class="content">
       <article class="doc"><p>编码代理需要的不仅仅是聊天窗口。它们需要文件浏览器、代码查看器和差异对比面板，提供 IDE 体验。此模式将深度代理连接到<a href="/oss/javascript/deepagents/sandboxes.html">沙盒</a>，使其能够在隔离环境中读取、写入和执行代码，然后通过自定义 API 服务器暴露沙盒文件系统，使前端能够在代理工作时实时显示文件。</p>
-<p>本页面涵盖<strong>三面板 UI</strong>（文件树、代码查看器和聊天）以及向其暴露沙盒文件系统的<strong>自定义 API 路由</strong>。有关沙盒提供商、生命周期作用域、文件植入、密钥、部署和生产环境 <code>useStream</code> 配置，请参阅<a href="/oss/javascript/deepagents/going-to-production.html">投入生产</a>。</p>
+<p>本页面涵盖**三面板 UI**（文件树、代码查看器和聊天）以及向其暴露沙盒文件系统的**自定义 API 路由**。有关沙盒提供商、生命周期作用域、文件植入、密钥、部署和生产环境 <code>useStream</code> 配置，请参阅<a href="/oss/javascript/deepagents/going-to-production.html">投入生产</a>。</p>
 <h2>架构</h2>
 <p>此设置包含三个部分：</p>
+<p>1. **带有沙箱后端的深度代理：** 代理自动从沙箱获取文件系统工具 (<code>read_file</code>、<code>write_file</code>、<code>edit_file</code>、<code>execute</code>)</p>
 <ol>
-<li><strong>带有沙箱后端的深度代理：</strong> 代理自动从沙箱获取文件系统工具</li>
-</ol>
-<p>(<code>read_file</code>、<code>write_file</code>、<code>edit_file</code>、<code>execute</code>)</p>
-<ol>
-<li><strong>自定义 API 服务器：</strong> 通过 <code>langgraph.json</code> 的 <code>http.app</code> 字段暴露的 Hono 应用，提供前端可调用的文件浏览端点</li>
+<li>2. **自定义 API 服务器：** 通过 <code>langgraph.json</code> 的 <code>http.app</code> 字段暴露的 Hono 应用，提供前端可调用的文件浏览端点</li>
 </ol>
 <ol>
-<li><strong>三面板前端：</strong> 文件树、代码/差异查看器和聊天面板，可在代理进行更改时实时同步文件</li>
+<li>3. **三面板前端：** 文件树、代码/差异查看器和聊天面板，可在代理进行更改时实时同步文件</li>
 </ol>
 <pre><code data-language="mermaid">%%{
   init: {
@@ -1117,7 +1114,7 @@ graph LR
   class API orangeHighlight;</code></pre>
 <h2>沙箱生命周期</h2>
 <p>在连接前端之前，选择沙箱的存活时长以及谁可以访问它。 请参阅<a href="/oss/javascript/deepagents/going-to-production.html#lifecycle">沙箱生命周期</a>了解线程作用域沙箱与助手作用域沙箱的对比、异步<a href="/langsmith/graph-rebuild.html">图工厂</a>设置、TTL 行为以及 SDK 调用示例。</p>
-<p>本指南默认使用<strong>线程作用域沙箱</strong>。前端和自定义 API 服务器都通过 LangGraph <a href="/langsmith/use-threads.html">线程</a> ID 解析沙箱。这样可以保持对话隔离，并在您<a href="#thread-creation">持久化线程 ID</a>时让页面重新加载后重新连接到同一环境。</p>
+<p>本指南默认使用**线程作用域沙箱**。前端和自定义 API 服务器都通过 LangGraph <a href="/langsmith/use-threads.html">线程</a> ID 解析沙箱。这样可以保持对话隔离，并在您<a href="#thread-creation">持久化线程 ID</a>时让页面重新加载后重新连接到同一环境。</p>
 <pre><code data-language="mermaid">sequenceDiagram
     participant FE as Frontend
     participant LG as LangGraph API
@@ -1145,7 +1142,7 @@ graph LR
 <p>对于<a href="/oss/javascript/deepagents/going-to-production.html#multi-tenancy">多租户</a>应用，请在后端工厂中按用户或助手的作用域来划分沙箱。对于没有 LangGraph 线程的演示，请在 API URL 中传递客户端生成的会话 ID。会话 ID 不会跨浏览器会话持久保存。</p>
 <h2>连接代理和 API 服务器</h2>
 <p>按照<a href="/oss/javascript/deepagents/going-to-production.html#execution-environment">执行环境</a>中所述，使用<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>配置深度代理。代理会自动获取文件系统工具和 <code>execute</code> 工具；无需额外配置工具。</p>
-<p>构建此 UI 需要在生产环境设置基础上增加一个要求：一个<strong>自定义 API 服务器</strong>，它在代理图之外运行，因此代理后端和文件浏览路由必须为每个线程解析<strong>同一个沙箱</strong>。将沙箱 ID 存储在线程元数据中，并在两者之间共享一个查找函数。</p>
+<p>构建此 UI 需要在生产环境设置基础上增加一个要求：一个**自定义 API 服务器**，它在代理图之外运行，因此代理后端和文件浏览路由必须为每个线程解析**同一个沙箱**。将沙箱 ID 存储在线程元数据中，并在两者之间共享一个查找函数。</p>
 <h3>从线程元数据解析沙箱</h3>
 <p>在共享模块中定义 <code>getOrCreateSandboxForThread</code>。代理图工厂和自定义 API 路由都导入它：</p>
 <pre><code data-language="ts">// src/api/utils.ts
@@ -1370,7 +1367,7 @@ async function fetchFile(threadId: string, path: string): Promise&lt;string | nu
   return data.content ?? null;
 }</code></pre>
 <h3>实时文件同步</h3>
-<p>IDE 体验的关键在于<strong>在代理工作时</strong>更新文件，而不是在其完成后。监听流中的消息，查找文件修改工具发出的 <code>ToolMessage</code> 实例。当 <code>write_file</code> 或 <code>edit_file</code> 工具调用完成时，刷新该特定文件。当 <code>execute</code> 完成时，刷新所有内容（因为 shell 命令可能修改任何文件）：</p>
+<p>IDE 体验的关键在于**在代理工作时**更新文件，而不是在其完成后。监听流中的消息，查找文件修改工具发出的 <code>ToolMessage</code> 实例。当 <code>write_file</code> 或 <code>edit_file</code> 工具调用完成时，刷新该特定文件。当 <code>execute</code> 完成时，刷新所有内容（因为 shell 命令可能修改任何文件）：</p>
 <pre><code data-language="tsx React">const FILE_MUTATING_TOOLS = new Set([&quot;write_file&quot;, &quot;edit_file&quot;, &quot;execute&quot;]);
 
   const stream = useStream&lt;typeof myAgent&gt;({
@@ -1605,27 +1602,27 @@ watch(
 <h2>使用场景</h2>
 <p>沙盒是以下场景的正确选择：</p>
 <ul>
-<li><strong>编码代理</strong>，需要创建、修改和运行代码，并需要超越聊天的可视化界面</li>
-<li><strong>代码审查工作流</strong>，代理建议更改，用户在采纳前审查差异</li>
-<li><strong>教程或学习应用</strong>，AI 助手帮助用户逐步构建项目，在上下文中显示更改</li>
-<li><strong>原型设计工具</strong>，用户用自然语言描述功能，观看代理实时实现</li>
+<li>- **编码代理**，需要创建、修改和运行代码，并需要超越聊天的可视化界面</li>
+<li>- **代码审查工作流**，代理建议更改，用户在采纳前审查差异</li>
+<li>- **教程或学习应用**，AI 助手帮助用户逐步构建项目，在上下文中显示更改</li>
+<li>- **原型设计工具**，用户用自然语言描述功能，观看代理实时实现</li>
 </ul>
 <h2>最佳实践</h2>
 <p>前端方面：</p>
 <ul>
-<li><strong>将 <code>threadId</code> 持久化到 <code>sessionStorage</code></strong>，这样页面重新加载后会重新连接到相同的线程和沙盒，而不会创建新的。</li>
-<li><strong>每次相关工具调用时同步文件</strong>，而不仅仅是运行完成时。监听 <code>write_file</code>、<code>edit_file</code> 和 <code>execute</code> 工具消息并立即刷新。</li>
-<li><strong>对于已更改的文件默认使用差异视图</strong>。当用户点击代理修改过的文件时，首先显示差异——这才是他们关心的。</li>
-<li><strong>对于只读操作显示简洁的工具结果</strong>。不要在聊天中转储 <code>read_file</code> 的完整输出，而是显示一行摘要如 <code>Read router.js L1-42</code>。将完整输出显示保留给变更工具。</li>
-<li><strong>从文件树中过滤 <code>node_modules</code></strong>。没人想浏览数千个依赖文件。获取树时将其过滤掉。</li>
+<li>- **将 <code>threadId</code> 持久化到 <code>sessionStorage</code>**，这样页面重新加载后会重新连接到相同的线程和沙盒，而不会创建新的。</li>
+<li>- **每次相关工具调用时同步文件**，而不仅仅是运行完成时。监听 <code>write_file</code>、<code>edit_file</code> 和 <code>execute</code> 工具消息并立即刷新。</li>
+<li>- **对于已更改的文件默认使用差异视图**。当用户点击代理修改过的文件时，首先显示差异——这才是他们关心的。</li>
+<li>- **对于只读操作显示简洁的工具结果**。不要在聊天中转储 <code>read_file</code> 的完整输出，而是显示一行摘要如 <code>Read router.js L1-42</code>。将完整输出显示保留给变更工具。</li>
+<li>- **从文件树中过滤 <code>node_modules</code>**。没人想浏览数千个依赖文件。获取树时将其过滤掉。</li>
 </ul>
 <p>后端和沙盒方面：</p>
 <ul>
-<li><strong>在生产应用中使用线程作用域沙盒</strong>。请参阅<a href="/oss/javascript/deepagents/going-to-production.html#lifecycle">沙盒生命周期</a>。</li>
-<li><strong>通过线程元数据在代理后端和 API 服务器之间共享沙盒解析</strong>，使两者使用相同的无内存缓存的环境。</li>
-<li><strong>用真实项目初始化沙盒</strong>。请参阅<a href="/oss/javascript/deepagents/going-to-production.html#file-transfers">文件传输</a>。</li>
-<li><strong>将密钥排除在沙盒之外</strong>。使用<a href="/oss/javascript/deepagents/going-to-production.html#managing-secrets">沙盒认证代理</a>，而不是环境变量或文件上传来存储 API 密钥。</li>
-<li><strong>上线前添加护栏</strong>。为自主编码代理配置<a href="/oss/javascript/deepagents/going-to-production.html#rate-limiting">速率限制</a>、<a href="/oss/javascript/deepagents/going-to-production.html#handling-errors">错误处理</a>和<a href="/oss/javascript/deepagents/going-to-production.html#data-privacy">数据隐私</a>中间件。</li>
+<li>- **在生产应用中使用线程作用域沙盒**。请参阅<a href="/oss/javascript/deepagents/going-to-production.html#lifecycle">沙盒生命周期</a>。</li>
+<li>- **通过线程元数据在代理后端和 API 服务器之间共享沙盒解析**，使两者使用相同的无内存缓存的环境。</li>
+<li>- **用真实项目初始化沙盒**。请参阅<a href="/oss/javascript/deepagents/going-to-production.html#file-transfers">文件传输</a>。</li>
+<li>- **将密钥排除在沙盒之外**。使用<a href="/oss/javascript/deepagents/going-to-production.html#managing-secrets">沙盒认证代理</a>，而不是环境变量或文件上传来存储 API 密钥。</li>
+<li>- **上线前添加护栏**。为自主编码代理配置<a href="/oss/javascript/deepagents/going-to-production.html#rate-limiting">速率限制</a>、<a href="/oss/javascript/deepagents/going-to-production.html#handling-errors">错误处理</a>和<a href="/oss/javascript/deepagents/going-to-production.html#data-privacy">数据隐私</a>中间件。</li>
 </ul>
 <h2>相关</h2>
 <section class="card-grid cols-2">

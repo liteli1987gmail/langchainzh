@@ -1077,14 +1077,14 @@
       <article class="doc"><p>并非每个智能体操作都应该无人值守运行。当智能体即将发送电子邮件、删除记录、执行金融交易或执行任何不可逆操作时，您需要人工先审查并批准该操作。人在环中（Human-in-the-Loop，HITL）模式允许您的智能体暂停执行，向用户展示待处理的操作，并在获得明确批准后才恢复执行。</p>
 <p>由于 HITL 基于 LangGraph 中断和检查点构建，暂停是持久化的。用户可以刷新页面，审查员可以从其他组件回复，智能体仍会从停止执行的确切位置恢复，而不是重放整个运行过程。</p>
 <h2>中断的工作原理</h2>
-<p>LangGraph 代理支持<strong>中断</strong>，即代理将控制权返还给客户端的显式暂停点。当代理遇到中断时：</p>
+<p>LangGraph 代理支持**中断**，即代理将控制权返还给客户端的显式暂停点。当代理遇到中断时：</p>
 <ol>
-<li>代理停止执行并发出中断负载</li>
-<li><a href="https://reference.langchain.com/javascript/langchain-react/index/useStream"><code>useStream</code></a> 钩子通过 <code>stream.interrupt</code> 暴露中断</li>
-<li>你的 UI 渲染带有批准/拒绝/编辑选项的审核卡片</li>
-<li>用户做出决定</li>
-<li>你的代码使用恢复命令调用 <code>stream.submit()</code></li>
-<li>代理从中断处继续执行</li>
+<li>1. 代理停止执行并发出中断负载</li>
+<li>2. <a href="https://reference.langchain.com/javascript/langchain-react/index/useStream"><code>useStream</code></a> 钩子通过 <code>stream.interrupt</code> 暴露中断</li>
+<li>3. 你的 UI 渲染带有批准/拒绝/编辑选项的审核卡片</li>
+<li>4. 用户做出决定</li>
+<li>5. 你的代码使用恢复命令调用 <code>stream.submit()</code></li>
+<li>6. 代理从中断处继续执行</li>
 </ol>
 <p>前端 SDK 将中断与线程状态的其他部分一起保留，因此你的 UI 可以在任何有意义的地方渲染它：内联在对话记录中、审核队列中、管理员仪表板中，或者在阻止下一个用户操作直到做出决定的模态框中。</p>
 <h2>设置 <code>useStream</code></h2>
@@ -1341,7 +1341,7 @@ async function editOne(index: number, editedArgs: Record&lt;string, unknown&gt;)
   );
 }</code></pre>
 <h2>自定义中断表单</h2>
-<p><a href="#the-resume-flow">恢复流程</a> 使用 <code>humanInTheLoopMiddleware</code>，它用通用的批准/拒绝/编辑/回复卡片包装工具。有时一组按钮不够用：预订航班、批准退款和审核社交帖子各自需要<em>不同</em>的表单，包含各自的字段、验证和内容。为此，请从<strong>工具内部</strong>调用 <code>interrupt()</code>，让负载描述 UI 应渲染的精确表单。每个工具可以呈现完全不同的界面。</p>
+<p><a href="#the-resume-flow">恢复流程</a> 使用 <code>humanInTheLoopMiddleware</code>，它用通用的批准/拒绝/编辑/回复卡片包装工具。有时一组按钮不够用：预订航班、批准退款和审核社交帖子各自需要*不同*的表单，包含各自的字段、验证和内容。为此，请从**工具内部**调用 <code>interrupt()</code>，让负载描述 UI 应渲染的精确表单。每个工具可以呈现完全不同的界面。</p>
 <h3>在中断负载中描述表单</h3>
 <p><code>interrupt()</code> 接受任何 JSON 可序列化的值，这允许你提供一个前端知道如何渲染的&quot;卡片&quot;，例如表单类型、标题、人员正在审核的上下文以及要收集的字段。<code>interrupt()</code> 在其输入和返回类型上是泛型的（<code>interrupt&lt;I, R&gt;(value: I): R</code>），这样你就可以为发送的卡片（<code>InterruptCard</code>）和用户解析的值（<code>ReviewDecision</code>）都进行类型标注。导出这些类型以便前端可以导入并保持同步：</p>
 <pre><code data-language="ts">  name: string;
@@ -1435,7 +1435,7 @@ const bookFlight = tool(
 // `card.formType`, collects `card.fields`, and calls `onResolve` with the
 // user&#x27;s decision and edited values.</code></pre>
 <h3>使用 <code>respond(decision, { update })</code> 保持卡片在屏幕上</h3>
-<p>当你解决一个普通中断时，卡片会在中断清除的瞬间消失，只会返回工具结果。这意味着一个丰富的审核卡片会在运行中途消失。要让它保持在屏幕上，需要在<em>同一个</em>超步骤中解决中断<strong>并且</strong>提交一条将卡片带到状态的消息，使用 <a href="https://reference.langchain.com/javascript/langchain-react/index/useStream"><code>useStream</code></a> 的 <code>respond</code>：</p>
+<p>当你解决一个普通中断时，卡片会在中断清除的瞬间消失，只会返回工具结果。这意味着一个丰富的审核卡片会在运行中途消失。要让它保持在屏幕上，需要在*同一个*超步骤中解决中断**并且**提交一条将卡片带到状态的消息，使用 <a href="https://reference.langchain.com/javascript/langchain-react/index/useStream"><code>useStream</code></a> 的 <code>respond</code>：</p>
 <pre><code data-language="tsx">function handleResolve(decision: ReviewDecision) {
   // Snapshot the card with the decision baked in so it renders read-only.
   const resolvedCard = { ...card, resolved: true, decision };
@@ -1448,7 +1448,7 @@ const bookFlight = tool(
   // LangGraph&#x27;s `Command(resume, update)`: one checkpoint, no extra state write.
   stream.respond(decision, { update: { messages: [cardMessage] } });
 }</code></pre>
-<p><code>respond(response, { update })</code> <strong>乐观地</strong>应用 <code>update</code>：卡片会立即绘制，一旦恢复后的运行回显相同的消息，就会按 ID 进行协调。后端永远不会重新发送卡片，因此在（可能较慢的）工具运行期间，卡片保持渲染状态而不会闪烁。通过从消息中重新读取来渲染已解析的卡片：</p>
+<p><code>respond(response, { update })</code> **乐观地**应用 <code>update</code>：卡片会立即绘制，一旦恢复后的运行回显相同的消息，就会按 ID 进行协调。后端永远不会重新发送卡片，因此在（可能较慢的）工具运行期间，卡片保持渲染状态而不会闪烁。通过从消息中重新读取来渲染已解析的卡片：</p>
 <pre><code data-language="tsx">{stream.messages.map((msg) =&gt; {
   const card = (msg.response_metadata as { cards?: InterruptCard })?.cards;
   if (card) return ;
@@ -1460,12 +1460,12 @@ const bookFlight = tool(
 <h2>最佳实践</h2>
 <p>在实现 HITL 工作流时请牢记以下准则：</p>
 <ul>
-<li><strong>显示清晰的上下文</strong>。始终显示代理想要做什么<em>以及</em>为什么。包含操作描述和完整参数。</li>
-<li><strong>使批准成为最简单的路径</strong>。如果操作看起来正确，批准应该只需一次点击。将多步骤流程保留给拒绝/编辑操作。</li>
-<li><strong>验证编辑后的参数</strong>。当用户编辑操作参数时，在发送前验证 JSON 结构。对于格式错误的输入显示内联错误。</li>
-<li><strong>持久化中断状态</strong>。如果用户刷新页面，中断应该仍然可见。<a href="https://reference.langchain.com/javascript/langchain-react/index/useStream"><code>useStream</code></a> 通过线程的检查点来处理这一点。</li>
-<li><strong>记录所有决策</strong>。对于审计追踪，记录每个批准/拒绝/编辑决策，包括时间戳和做出该决策的用户。</li>
-<li><strong>合理设置超时时间</strong>。长时间运行的代理不应该无限期地阻塞人工审核。考虑显示代理等待了多长时间。</li>
+<li>- **显示清晰的上下文**。始终显示代理想要做什么*以及*为什么。包含操作描述和完整参数。</li>
+<li>- **使批准成为最简单的路径**。如果操作看起来正确，批准应该只需一次点击。将多步骤流程保留给拒绝/编辑操作。</li>
+<li>- **验证编辑后的参数**。当用户编辑操作参数时，在发送前验证 JSON 结构。对于格式错误的输入显示内联错误。</li>
+<li>- **持久化中断状态**。如果用户刷新页面，中断应该仍然可见。<a href="https://reference.langchain.com/javascript/langchain-react/index/useStream"><code>useStream</code></a> 通过线程的检查点来处理这一点。</li>
+<li>- **记录所有决策**。对于审计追踪，记录每个批准/拒绝/编辑决策，包括时间戳和做出该决策的用户。</li>
+<li>- **合理设置超时时间**。长时间运行的代理不应该无限期地阻塞人工审核。考虑显示代理等待了多长时间。</li>
 </ul>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>

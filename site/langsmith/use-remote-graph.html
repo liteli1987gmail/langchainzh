@@ -1077,32 +1077,32 @@
       <article class="doc"><p><a href="https://reference.langchain.com/python/langgraph/pregel/remote/RemoteGraph"><code>RemoteGraph</code></a> 是一个客户端接口，允许您像与本地图一样与您的<a href="/langsmith/deployment.html">部署</a>进行交互。它提供与 <a href="/oss/python/langgraph/graph-api.html#compiling-your-graph"><code>CompiledGraph</code></a> 的 API 对齐，这意味着您可以在开发和生产环境中使用相同的方法（<code>invoke()</code>、<code>stream()</code>、<code>get_state()</code> 等）。本页介绍如何初始化 <code>RemoteGraph</code> 并与其进行交互。</p>
 <p><code>RemoteGraph</code> 适用于以下场景：</p>
 <ul>
-<li>开发与部署分离：使用 <code>CompiledGraph</code> 在本地构建和测试图，将其部署到 LangSmith，然后<a href="#initialize-the-graph">使用 <code>RemoteGraph</code></a> 在生产环境中调用它，同时使用相同的 API 接口。</li>
-<li>线程级持久化：使用线程 ID 在多次调用之间<a href="#persist-state-at-the-thread-level">持久化和获取</a>对话状态。</li>
-<li>子图嵌入：通过将 <code>RemoteGraph</code> 作为<a href="#use-as-a-subgraph">子图</a>嵌入到另一个图中，组合模块化图以实现多代理工作流。</li>
-<li>可复用工作流：将部署的图作为节点或 <a href="https://reference.langchain.com/python/langsmith/deployment/remote_graph/#langgraph.pregel.remote.RemoteGraph.as_tool">工具</a> 使用，以便复用和公开复杂逻辑。</li>
+<li>- 开发与部署分离：使用 <code>CompiledGraph</code> 在本地构建和测试图，将其部署到 LangSmith，然后<a href="#initialize-the-graph">使用 <code>RemoteGraph</code></a> 在生产环境中调用它，同时使用相同的 API 接口。</li>
+<li>- 线程级持久化：使用线程 ID 在多次调用之间<a href="#persist-state-at-the-thread-level">持久化和获取</a>对话状态。</li>
+<li>- 子图嵌入：通过将 <code>RemoteGraph</code> 作为<a href="#use-as-a-subgraph">子图</a>嵌入到另一个图中，组合模块化图以实现多代理工作流。</li>
+<li>- 可复用工作流：将部署的图作为节点或 <a href="https://reference.langchain.com/python/langsmith/deployment/remote_graph/#langgraph.pregel.remote.RemoteGraph.as_tool">工具</a> 使用，以便复用和公开复杂逻辑。</li>
 </ul>
 <aside class="callout"><strong>警告</strong>
-<p><strong>重要：避免调用同一部署</strong></p>
+<p>**重要：避免调用同一部署**</p>
 <p><code>RemoteGraph</code> 旨在调用其他部署上的图。请勿使用 <code>RemoteGraph</code> 调用自身或同一部署上的另一个图，因为这可能导致死锁和资源耗尽。相反，请使用本地图组合或<a href="/oss/python/langgraph/use-subgraphs.html">子图</a>来处理同一部署内的图。</p>
 </aside>
 <h2>前置条件</h2>
 <p>在开始使用 <code>RemoteGraph</code> 之前，请确保您已具备以下条件：</p>
 <ul>
-<li><a href="/langsmith/observability.html">LangSmith</a> 的访问权限，您可以在其中开发和管理您的图。</li>
-<li>一个正在运行的 <a href="/langsmith/agent-server.html">Agent Server</a>，它托管您的部署图以供远程交互。</li>
+<li>- <a href="/langsmith/observability.html">LangSmith</a> 的访问权限，您可以在其中开发和管理您的图。</li>
+<li>- 一个正在运行的 <a href="/langsmith/agent-server.html">Agent Server</a>，它托管您的部署图以供远程交互。</li>
 </ul>
 <h2>初始化图</h2>
 <p>初始化 <code>RemoteGraph</code> 时，必须始终指定：</p>
 <ul>
-<li><code>name</code>：您要交互的图的名称<strong>或</strong>助手 ID。如果您指定图名称，将使用默认助手。如果您指定助手 ID，将使用该特定助手。图名称与您在部署的 <code>langgraph.json</code> 配置文件中使用的名称相同。</li>
-<li><code>api_key</code>：有效的 <a href="/langsmith/create-account-api-key.html">LangSmith API 密钥</a>。您可以将其设置为环境变量（<code>LANGSMITH_API_KEY</code>）或直接在 <code>api_key</code> 参数中传递。如果 <code>LangGraphClient</code> / <code>SyncLangGraphClient</code> 在初始化时已传入 <code>api_key</code> 参数，您也可以在 <code>client</code> / <code>sync_client</code> 参数中提供 API 密钥。</li>
+<li>- <code>name</code>：您要交互的图的名称**或**助手 ID。如果您指定图名称，将使用默认助手。如果您指定助手 ID，将使用该特定助手。图名称与您在部署的 <code>langgraph.json</code> 配置文件中使用的名称相同。</li>
+<li>- <code>api_key</code>：有效的 <a href="/langsmith/create-account-api-key.html">LangSmith API 密钥</a>。您可以将其设置为环境变量（<code>LANGSMITH_API_KEY</code>）或直接在 <code>api_key</code> 参数中传递。如果 <code>LangGraphClient</code> / <code>SyncLangGraphClient</code> 在初始化时已传入 <code>api_key</code> 参数，您也可以在 <code>client</code> / <code>sync_client</code> 参数中提供 API 密钥。</li>
 </ul>
 <p>此外，您必须提供以下参数之一：</p>
 <ul>
-<li><a href="#use-a-url"><code>url</code></a>：您要交互的部署的 URL。如果您传入 <code>url</code> 参数，将使用提供的 URL、请求头（如果提供）和默认配置值（例如超时时间）来创建同步和异步客户端。</li>
-<li><a href="#use-a-client"><code>client</code></a>：用于与部署进行异步交互的 <code>LangGraphClient</code> 实例（例如使用 <code>.astream()</code>、<code>.ainvoke()</code>、<code>.aget_state()</code>、<code>.aupdate_state()</code>）。</li>
-<li><code>sync_client</code>：用于与部署进行同步交互的 <code>SyncLangGraphClient</code> 实例（例如使用 <code>.stream()</code>、<code>.invoke()</code>、<code>.get_state()</code>、<code>.update_state()</code>）。</li>
+<li>- <a href="#use-a-url"><code>url</code></a>：您要交互的部署的 URL。如果您传入 <code>url</code> 参数，将使用提供的 URL、请求头（如果提供）和默认配置值（例如超时时间）来创建同步和异步客户端。</li>
+<li>- <a href="#use-a-client"><code>client</code></a>：用于与部署进行异步交互的 <code>LangGraphClient</code> 实例（例如使用 <code>.astream()</code>、<code>.ainvoke()</code>、<code>.aget_state()</code>、<code>.aupdate_state()</code>）。</li>
+<li>- <code>sync_client</code>：用于与部署进行同步交互的 <code>SyncLangGraphClient</code> 实例（例如使用 <code>.stream()</code>、<code>.invoke()</code>、<code>.get_state()</code>、<code>.update_state()</code>）。</li>
 </ul>
 <aside class="callout"><strong>提示</strong>
 <p>如果您同时传入 <code>client</code> 或 <code>sync_client</code> 以及 <code>url</code> 参数，则它们将优先于 <code>url</code> 参数。如果未提供任何 <code>client</code> / <code>sync_client</code> / <code>url</code> 参数，<code>RemoteGraph</code> 将在运行时抛出 <code>ValueError</code>。</p>

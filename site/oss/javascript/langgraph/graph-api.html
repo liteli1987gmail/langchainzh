@@ -1077,13 +1077,13 @@
       <article class="doc"><h2>图</h2>
 <p>LangGraph 的核心是将智能体工作流建模为图。您可以使用三个关键组件来定义智能体的行为：</p>
 <ol>
-<li><a href="#state"><code>State</code></a>：一个共享数据结构，表示应用程序的当前快照。它可以是任何数据类型，但通常使用共享状态模式来定义。</li>
+<li>1. <a href="#state"><code>State</code></a>：一个共享数据结构，表示应用程序的当前快照。它可以是任何数据类型，但通常使用共享状态模式来定义。</li>
 </ol>
 <ol>
-<li><a href="#nodes"><code>Nodes</code></a>：对智能体逻辑进行编码的函数。它们接收当前状态作为输入，执行一些计算或副作用，并返回更新后的状态。</li>
+<li>2. <a href="#nodes"><code>Nodes</code></a>：对智能体逻辑进行编码的函数。它们接收当前状态作为输入，执行一些计算或副作用，并返回更新后的状态。</li>
 </ol>
 <ol>
-<li><a href="#edges"><code>Edges</code></a>：根据当前状态确定下一步执行哪个 <code>Node</code> 的函数。它们可以是条件分支或固定转换。</li>
+<li>3. <a href="#edges"><code>Edges</code></a>：根据当前状态确定下一步执行哪个 <code>Node</code> 的函数。它们可以是条件分支或固定转换。</li>
 </ol>
 <p>通过组合 <code>Nodes</code> 和 <code>Edges</code>，您可以创建随时间演化状态的复杂循环工作流。不过，真正的强大之处在于 LangGraph 如何管理该状态。</p>
 <p>需要强调的是：<code>Nodes</code> 和 <code>Edges</code> 不过是函数——它们可以包含 LLM 或只是普通的代码。</p>
@@ -1142,8 +1142,8 @@ const graph = new StateGraph(AgentState)
 <h4>多个模式</h4>
 <p>通常，所有图节点都使用单一模式进行通信。这意味着它们将读取和写入相同的状态通道。但是，在某些情况下，我们需要更多控制：</p>
 <ul>
-<li>内部节点可以传递图中输入/输出不需要的信息。</li>
-<li>我们可能还想为图使用不同的输入/输出模式。例如，输出可能只包含一个相关的输出键。</li>
+<li>- 内部节点可以传递图中输入/输出不需要的信息。</li>
+<li>- 我们可能还想为图使用不同的输入/输出模式。例如，输出可能只包含一个相关的输出键。</li>
 </ul>
 <p>节点可以在图内部写入私有状态通道以进行内部节点通信。我们可以简单地定义一个私有模式 <code>PrivateState</code>。</p>
 <p>也可以为图定义显式的输入和输出模式。在这些情况下，我们定义一个包含图操作所有相关键的&quot;内部&quot;模式。但是，我们还定义 <code>input</code> 和 <code>output</code> 模式作为&quot;内部&quot;模式的子集，以约束图的输入和输出。有关更多详细信息，请参阅<a href="/oss/javascript/langgraph/use-graph-api.html#define-input-and-output-schemas">定义输入和输出模式</a>。</p>
@@ -1151,12 +1151,9 @@ const graph = new StateGraph(AgentState)
 <p>这里有两个微妙但重要的点需要注意：</p>
 <p>js</p>
 <ol>
-<li>We pass <code>state</code> as the input schema to <code>node1</code>. But, we write out to <code>foo</code>, a channel in <code>OverallState</code>. How can we write out to a state channel that is not included in the input schema? This is because a node _can write to any state channel in the graph state._ The graph state is the union of the state channels defined at initialization, which includes <code>OverallState</code> and the filters <code>InputState</code> and <code>OutputState</code>.</li>
+<li>1. We pass <code>state</code> as the input schema to <code>node1</code>. But, we write out to <code>foo</code>, a channel in <code>OverallState</code>. How can we write out to a state channel that is not included in the input schema? This is because a node _can write to any state channel in the graph state._ The graph state is the union of the state channels defined at initialization, which includes <code>OverallState</code> and the filters <code>InputState</code> and <code>OutputState</code>.</li>
 </ol>
-<ol>
-<li>We initialize the graph with <code>StateGraph({ state: OverallState, input: InputState, output: OutputState })</code>. How can we write to <code>PrivateState</code> in <code>node2</code>? How does the graph gain access to this schema if it was not passed in the <code>StateGraph</code> initialization? We can do this because _nodes can also declare additional state channels_ as long as the state schema definition exists. In this case, the <code>PrivateState</code> schema is defined, so we can add <code>bar</code> as a new state channel in the graph and write to it.</li>
-</ol>
-<p>:::</p>
+<p>2. We initialize the graph with <code>StateGraph({ state: OverallState, input: InputState, output: OutputState })</code>. How can we write to <code>PrivateState</code> in <code>node2</code>? How does the graph gain access to this schema if it was not passed in the <code>StateGraph</code> initialization? We can do this because _nodes can also declare additional state channels_ as long as the state schema definition exists. In this case, the <code>PrivateState</code> schema is defined, so we can add <code>bar</code> as a new state channel in the graph and write to it. :::</p>
 <pre><code data-language="python">stream = graph.stream_events(
     {&quot;user_input&quot;: &quot;My&quot;},
     version=&quot;v3&quot;,
@@ -1170,9 +1167,9 @@ for snapshot in stream.values:
 </aside>
 <p>:::</p>
 <aside class="callout"><strong>警告</strong>
-<p><strong>私有通道在流式传输时不会被删除。</strong></p>
-<p>Input、output 和 private schema 约束每个节点 _reads_（输入 schema）的内容以及 <code>invoke</code> _returns_（输出 schema）的内容。它们 <strong>不会</strong> 从 <code>stream</code> 中隐藏通道。</p>
-<p>当你使用 <code>streamMode: &quot;values&quot;</code> 进行流式传输时，图默认会发出 <strong>所有</strong> 状态通道——包括私有通道——因为 values 流式传输默认为完整的状态通道集合而不是输出 schema。这就是为什么像 <code>bar</code> 这样的私有通道在 <code>invoke</code> 中被隐藏，但在流式传输时可见：</p>
+<p>**私有通道在流式传输时不会被删除。**</p>
+<p>Input、output 和 private schema 约束每个节点 _reads_（输入 schema）的内容以及 <code>invoke</code> _returns_（输出 schema）的内容。它们 **不会** 从 <code>stream</code> 中隐藏通道。</p>
+<p>当你使用 <code>streamMode: &quot;values&quot;</code> 进行流式传输时，图默认会发出 **所有** 状态通道——包括私有通道——因为 values 流式传输默认为完整的状态通道集合而不是输出 schema。这就是为什么像 <code>bar</code> 这样的私有通道在 <code>invoke</code> 中被隐藏，但在流式传输时可见：</p>
 <p>要将流式传输的值限制为特定通道集合（例如仅输出 schema），请传递 <code>outputKeys</code>：</p>
 </aside>
 <pre><code data-language="typescript">const stream = await graph.streamEvents(
@@ -1205,14 +1202,8 @@ for await (const snapshot of stream.values) {
 });</code></pre>
 <p>在这个示例中，我们使用 <code>ReducedValue</code> 为第二个键（<code>bar</code>）指定一个 reducer 函数。请注意，第一个键保持不变。假设图的输入是 <code>{ foo: 1, bar: [&quot;hi&quot;] }</code>。然后假设第一个 <code>Node</code> 返回 <code>{ foo: 2 }</code>。这被视为对状态的更新。请注意，<code>Node</code> 不需要返回整个 <code>State</code> schema——只需要一个更新。应用此更新后，<code>State</code> 将变为 <code>{ foo: 2, bar: [&quot;hi&quot;] }</code>。如果第二个节点返回 <code>{ bar: [&quot;bye&quot;] }</code>，那么 <code>State</code> 将变为 <code>{ foo: 2, bar: [&quot;hi&quot;, &quot;bye&quot;] }</code>。请注意，这里的 <code>bar</code> 键是通过将两个数组合并在一起来更新的。 :::</p>
 <h3>未追踪的值</h3>
-<p><code>UntrackedValue</code> 用于在图执行期间存在但<strong>永远不应该被检查点化</strong>的状态字段。当图从检查点恢复时，未追踪的值将被重置为其初始状态（或不可用）。</p>
-<p>这对于以下情况很有用：</p>
-<ul>
-<li><strong>无法序列化</strong>的数据库连接</li>
-<li><strong>恢复时应重建</strong>的临时缓存</li>
-<li><strong>您不想持久化</strong>的大型对象</li>
-<li><strong>每次都应传递新的</strong>仅运行时配置</li>
-</ul>
+<p><code>UntrackedValue</code> 用于在图执行期间存在但**永远不应该被检查点化**的状态字段。当图从检查点恢复时，未追踪的值将被重置为其初始状态（或不可用）。</p>
+<p>这对于以下情况很有用： - **无法序列化**的数据库连接 - **恢复时应重建**的临时缓存 - **您不想持久化**的大型对象 - **每次都应传递新的**仅运行时配置</p>
 <pre><code data-language="typescript">const State = new StateSchema({
   messages: MessagesValue,
 
@@ -1228,14 +1219,7 @@ for await (const snapshot of stream.values) {
   // Untracked without a schema (for maximum flexibility)
   runtimeConfig: new UntrackedValue(),
 });</code></pre>
-<p><strong>行为：</strong></p>
-<ul>
-<li>在执行期间：值像普通状态一样被存储和可访问</li>
-<li>在检查点时：未跟踪的值会<strong>从</strong>检查点数据中<strong>排除</strong></li>
-<li>恢复时：未跟踪的值会重新开始（空值或默认值）</li>
-<li>使用 <code>guard: true</code>（默认）：如果在同一步骤中多个节点写入，则抛出错误</li>
-<li>使用 <code>guard: false</code>：允许多次写入，最后一次写入的值生效</li>
-</ul>
+<p>**行为：** - 在执行期间：值像普通状态一样被存储和可访问 - 在检查点时：未跟踪的值会**从**检查点数据中**排除** - 恢复时：未跟踪的值会重新开始（空值或默认值） - 使用 <code>guard: true</code>（默认）：如果在同一步骤中多个节点写入，则抛出错误 - 使用 <code>guard: false</code>：允许多次写入，最后一次写入的值生效</p>
 <aside class="callout"><strong>警告</strong>
 <p>不要将 <code>UntrackedValue</code> 用于需要在中断或时间旅行中持久化的数据。使用常规状态字段或 <code>ReducedValue</code> 来存储持久化数据。</p>
 </aside>
@@ -1394,8 +1378,8 @@ builder.add_node(&quot;node_with_execution_info&quot;, node_with_execution_info)
 <p>:::</p>
 <p>在 LangGraph 中，节点通常是函数（同步或异步），接受以下参数：</p>
 <ol>
-<li><code>state</code>—图的 <a href="#state">state</a></li>
-<li><code>config</code>—一个 <a href="https://reference.langchain.com/javascript/langchain-core/runnables/RunnableConfig"><code>RunnableConfig</code></a> 对象，包含配置信息（如 <code>thread_id</code>）和追踪信息（如 <code>tags</code>）</li>
+<li>1. <code>state</code>—图的 <a href="#state">state</a></li>
+<li>2. <code>config</code>—一个 <a href="https://reference.langchain.com/javascript/langchain-core/runnables/RunnableConfig"><code>RunnableConfig</code></a> 对象，包含配置信息（如 <code>thread_id</code>）和追踪信息（如 <code>tags</code>）</li>
 </ol>
 <p>可以使用 <code>addNode</code> 方法向图中添加节点。为了获得更好的类型安全性，请使用 <code>GraphNode</code> 类型工具或 <code>State.Node</code> 为节点函数添加类型：</p>
 <pre><code data-language="typescript">const State = new StateSchema({
@@ -1427,12 +1411,12 @@ const builder = new StateGraph(State)
 <pre><code data-language="typescript">builder.addNode(myNode);
 // You can then create edges to/from this node by referencing it as `&quot;myNode&quot;`</code></pre>
 <h3>重新执行和幂等性</h3>
-<p>当您使用 <a href="/oss/javascript/langgraph/persistence.html">检查点保存器</a> 进行编译时，LangGraph 在<a href="#graphs">超级步</a>边界处保存检查点，而不是在节点内部的函数中途保存。如果执行停止后稍后恢复（例如在<a href="/oss/javascript/langgraph/interrupts.html">中断</a>或重试之后），受影响的<strong>节点</strong>会从头开始重新运行其函数。暂停前的代码和副作用会再次执行。</p>
-<p><strong>幂等性。</strong> 设计<strong>节点</strong>逻辑，使重新执行不会破坏状态。如果节点插入数据库行，运行两次不应创建重复行，除非这是有意的。使用幂等性键、upserts 或先读后写检查。关于 <code>interrupt()</code> 周围的副作用，请参阅<a href="/oss/javascript/langgraph/interrupts.html#side-effects-called-before-interrupt-must-be-idempotent">在 interrupt 之前调用的副作用必须是幂等的</a>。</p>
-<p><strong>图变更。</strong> 关于代码变更的<a href="/oss/javascript/langgraph/functional-api.html#determinism">确定性</a>规则不适用于图结构。您可以添加或删除<strong>节点</strong>和边，而不会破坏现有线程的恢复。恢复的运行使用保存的状态，并执行您现在编译的任何图。</p>
-<p><strong>节点内部的任务和中断。</strong> 如果<strong>节点</strong>调用<a href="/oss/javascript/langgraph/functional-api.html#task"><strong>任务</strong></a> 或 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/interrupt"><code>interrupt</code></a>，恢复时适用更严格的确定性规则。LangGraph 从检查点保存器恢复已完成的<strong>任务</strong>结果，但在恢复点之前更改代码中<strong>任务</strong>或 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/interrupt"><code>interrupt</code></a> 的顺序可能导致缓存值不匹配。<a href="/oss/javascript/langgraph/functional-api.html">函数式 API</a> <strong>入口点</strong>编译为单个<strong>节点</strong>，该节点以此方式运行整个入口点方法。请参阅<a href="/oss/javascript/langgraph/functional-api.html#determinism">确定性</a>、<a href="/oss/javascript/langgraph/functional-api.html#idempotency">幂等性</a>和<a href="#using-tasks-in-nodes">在节点中使用任务</a>。</p>
+<p>当您使用 <a href="/oss/javascript/langgraph/persistence.html">检查点保存器</a> 进行编译时，LangGraph 在<a href="#graphs">超级步</a>边界处保存检查点，而不是在节点内部的函数中途保存。如果执行停止后稍后恢复（例如在<a href="/oss/javascript/langgraph/interrupts.html">中断</a>或重试之后），受影响的**节点**会从头开始重新运行其函数。暂停前的代码和副作用会再次执行。</p>
+<p>**幂等性。** 设计**节点**逻辑，使重新执行不会破坏状态。如果节点插入数据库行，运行两次不应创建重复行，除非这是有意的。使用幂等性键、upserts 或先读后写检查。关于 <code>interrupt()</code> 周围的副作用，请参阅<a href="/oss/javascript/langgraph/interrupts.html#side-effects-called-before-interrupt-must-be-idempotent">在 interrupt 之前调用的副作用必须是幂等的</a>。</p>
+<p>**图变更。** 关于代码变更的<a href="/oss/javascript/langgraph/functional-api.html#determinism">确定性</a>规则不适用于图结构。您可以添加或删除**节点**和边，而不会破坏现有线程的恢复。恢复的运行使用保存的状态，并执行您现在编译的任何图。</p>
+<p>**节点内部的任务和中断。** 如果**节点**调用<a href="/oss/javascript/langgraph/functional-api.html#task">**任务**</a> 或 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/interrupt"><code>interrupt</code></a>，恢复时适用更严格的确定性规则。LangGraph 从检查点保存器恢复已完成的**任务**结果，但在恢复点之前更改代码中**任务**或 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/interrupt"><code>interrupt</code></a> 的顺序可能导致缓存值不匹配。<a href="/oss/javascript/langgraph/functional-api.html">函数式 API</a> **入口点**编译为单个**节点**，该节点以此方式运行整个入口点方法。请参阅<a href="/oss/javascript/langgraph/functional-api.html#determinism">确定性</a>、<a href="/oss/javascript/langgraph/functional-api.html#idempotency">幂等性</a>和<a href="#using-tasks-in-nodes">在节点中使用任务</a>。</p>
 <h3>在节点中使用任务</h3>
-<p>如果<a href="#nodes">节点</a>包含多个操作，您可能会发现将每个操作实现为<a href="/oss/javascript/langgraph/functional-api.html#task"><strong>任务</strong></a>比将逻辑拆分到多个节点中更容易实现。当图使用检查点保存器时，任务结果会被检查点保存，因此恢复线程可以跳过节点内已完成的<strong>任务</strong>工作。</p>
+<p>如果<a href="#nodes">节点</a>包含多个操作，您可能会发现将每个操作实现为<a href="/oss/javascript/langgraph/functional-api.html#task">**任务**</a>比将逻辑拆分到多个节点中更容易实现。当图使用检查点保存器时，任务结果会被检查点保存，因此恢复线程可以跳过节点内已完成的**任务**工作。</p>
 <section class="mdx-block">
 <h3>原始</h3>
 </section>
@@ -1481,17 +1465,13 @@ print(graph.invoke({&quot;x&quot;: 5}, stream_mode=&#x27;updates&#x27;))    # [!
 <p><code>set_finish_point(node)</code> 定义图的最后一个节点。 它等同于 <code>builder.add_edge(node, END)</code>。</p>
 <p>两种方法都有效，但 <code>add_edge(START, ...)</code> 和 <code>add_edge(..., END)</code> 是推荐的现代语法。</p>
 </aside>
-<ol>
-<li>首次运行需要两秒（由于模拟的昂贵计算）。</li>
-<li>第二次运行使用缓存并快速返回。</li>
-</ol>
-<p>:::</p>
+<p>1. 首次运行需要两秒（由于模拟的昂贵计算）。 2. 第二次运行使用缓存并快速返回。 :::</p>
 <p>LangGraph 支持基于节点输入的任务/节点缓存。要使用缓存：</p>
 <ul>
-<li>在编译图时指定缓存（或指定入口点）</li>
-<li>为节点指定缓存策略。每种缓存策略支持：</li>
-<li><code>keyFunc</code>，用于根据节点输入生成缓存键。</li>
-<li><code>ttl</code>，缓存的生存时间（秒）。如果未指定，缓存永不过期。</li>
+<li>- 在编译图时指定缓存（或指定入口点）</li>
+<li>- 为节点指定缓存策略。每种缓存策略支持：</li>
+<li>- <code>keyFunc</code>，用于根据节点输入生成缓存键。</li>
+<li>- <code>ttl</code>，缓存的生存时间（秒）。如果未指定，缓存永不过期。</li>
 </ul>
 <pre><code data-language="typescript">const State = new StateSchema({
   x: z.number(),
@@ -1517,19 +1497,19 @@ await graph.invoke({ x: 5 }, { streamMode: &quot;updates&quot; });   // [!code h
 <h2>边</h2>
 <p>边定义了逻辑如何路由以及图如何决定停止。这是你的智能体如何工作以及不同节点如何相互通信的关键部分。边有以下几种关键类型：</p>
 <ul>
-<li>普通边：从一个节点直接连接到下一个节点。</li>
-<li>条件边：调用函数来决定下一步前往哪个或哪些节点。</li>
-<li>入口点：用户输入到达时首先调用的节点。</li>
-<li>条件入口点：调用函数来决定用户输入到达时首先调用哪个或哪些节点。</li>
+<li>- 普通边：从一个节点直接连接到下一个节点。</li>
+<li>- 条件边：调用函数来决定下一步前往哪个或哪些节点。</li>
+<li>- 入口点：用户输入到达时首先调用的节点。</li>
+<li>- 条件入口点：调用函数来决定用户输入到达时首先调用哪个或哪些节点。</li>
 </ul>
-<p>一个节点可以有多个出边。如果一个节点有多个出边，<strong>所有</strong>目标节点将在下一个超级步骤中并行执行。</p>
+<p>一个节点可以有多个出边。如果一个节点有多个出边，**所有**目标节点将在下一个超级步骤中并行执行。</p>
 <aside class="callout"><strong>警告</strong>
 <p>对于每个节点，选择一种路由机制：使用普通边进行静态路由，或使用条件边 / <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/Command"><code>Command</code></a> 进行动态路由。不要将普通边和动态路由混用于同一节点，因为两条路径都可能执行，使图的行为更难推理。</p>
 </aside>
 <h3>普通边</h3>
 <pre><code data-language="python">graph.add_edge(&quot;node_a&quot;, &quot;node_b&quot;)</code></pre>
 <p>:::</p>
-<p>如果<strong>始终</strong>想从节点 A 到达节点 B，可以直接使用 <a href="https://reference.langchain.com/javascript/classes/_langchain_langgraph.index.StateGraph.html#addEdge"><code>addEdge</code></a> 方法。</p>
+<p>如果**始终**想从节点 A 到达节点 B，可以直接使用 <a href="https://reference.langchain.com/javascript/classes/_langchain_langgraph.index.StateGraph.html#addEdge"><code>addEdge</code></a> 方法。</p>
 <pre><code data-language="typescript">graph.addEdge(&quot;nodeA&quot;, &quot;nodeB&quot;);</code></pre>
 <h3>条件边</h3>
 <pre><code data-language="python">graph.add_conditional_edges(&quot;node_a&quot;, routing_function)</code></pre>
@@ -1538,7 +1518,7 @@ await graph.invoke({ x: 5 }, { streamMode: &quot;updates&quot; });   // [!code h
 <p>您可以选择提供一个字典，将 <code>routing_function</code> 的输出映射到下一个节点的名称。</p>
 <pre><code data-language="python">graph.add_conditional_edges(&quot;node_a&quot;, routing_function, {True: &quot;node_b&quot;, False: &quot;node_c&quot;})</code></pre>
 <p>:::</p>
-<p>如果您想<strong>可选地</strong>路由到一个或多个边缘（或者可选地终止），您可以使用 <a href="https://reference.langchain.com/javascript/classes/_langchain_langgraph.index.StateGraph.html#addConditionalEdges"><code>addConditionalEdges</code></a> 方法。此方法接受一个节点名称和一个&quot;路由函数&quot;，在该节点执行后调用：</p>
+<p>如果您想**可选地**路由到一个或多个边缘（或者可选地终止），您可以使用 <a href="https://reference.langchain.com/javascript/classes/_langchain_langgraph.index.StateGraph.html#addConditionalEdges"><code>addConditionalEdges</code></a> 方法。此方法接受一个节点名称和一个&quot;路由函数&quot;，在该节点执行后调用：</p>
 <pre><code data-language="typescript">graph.addConditionalEdges(&quot;nodeA&quot;, routingFunction);</code></pre>
 <p>与节点类似，<code>routingFunction</code> 接受图的当前 <code>state</code> 并返回一个值。</p>
 <p>默认情况下，<code>routingFunction</code> 的返回值被用作下一个发送状态的节点名称（或节点列表）。所有这些节点将作为下一个超级步骤的一部分并行运行。</p>
@@ -1590,16 +1570,16 @@ graph.add_conditional_edges(&quot;node_a&quot;, continue_to_jokes)</code></pre>
 <h2><code>Command</code></h2>
 <p><a href="https://reference.langchain.com/javascript/langchain-langgraph/index/Command"><code>Command</code></a> 是一个用于控制图执行的通用原语。它接受四个参数：</p>
 <ul>
-<li><code>update</code>：应用状态更新（类似于从节点返回更新）。</li>
-<li><code>goto</code>：导航到特定节点（类似于<a href="#conditional-edges">条件边</a>）。</li>
-<li><code>graph</code>：从<a href="/oss/javascript/langgraph/use-subgraphs.html">子图</a>导航时指定父图。</li>
-<li><code>resume</code>：在<a href="/oss/javascript/langgraph/interrupts.html">中断</a>后提供值以恢复执行。</li>
+<li>- <code>update</code>：应用状态更新（类似于从节点返回更新）。</li>
+<li>- <code>goto</code>：导航到特定节点（类似于<a href="#conditional-edges">条件边</a>）。</li>
+<li>- <code>graph</code>：从<a href="/oss/javascript/langgraph/use-subgraphs.html">子图</a>导航时指定父图。</li>
+<li>- <code>resume</code>：在<a href="/oss/javascript/langgraph/interrupts.html">中断</a>后提供值以恢复执行。</li>
 </ul>
 <p><code>Command</code> 用于三种场景：</p>
 <ul>
-<li><strong><a href="#return-from-nodes">从节点返回</a></strong>：使用 <code>update</code>、<code>goto</code> 和 <code>graph</code> 将状态更新与控制流结合。</li>
-<li><strong><a href="#input-to-invoke-or-stream">作为 <code>invoke</code> 或 <code>stream</code> 的输入</a></strong>：使用 <code>resume</code> 在中断后继续执行。</li>
-<li><strong><a href="#return-from-tools">从工具返回</a></strong>：与从节点返回类似，从工具内部将状态更新与控制流结合。</li>
+<li>- **<a href="#return-from-nodes">从节点返回</a>**：使用 <code>update</code>、<code>goto</code> 和 <code>graph</code> 将状态更新与控制流结合。</li>
+<li>- **<a href="#input-to-invoke-or-stream">作为 <code>invoke</code> 或 <code>stream</code> 的输入</a>**：使用 <code>resume</code> 在中断后继续执行。</li>
+<li>- **<a href="#return-from-tools">从工具返回</a>**：与从节点返回类似，从工具内部将状态更新与控制流结合。</li>
 </ul>
 <h3>从节点返回</h3>
 <h4><code>update</code> 和 <code>goto</code></h4>
@@ -1619,7 +1599,7 @@ graph.add_conditional_edges(&quot;node_a&quot;, continue_to_jokes)</code></pre>
     });
   }
 });</code></pre>
-<p>当你需要<strong>同时</strong>更新状态<strong>和</strong>路由到不同节点时，请使用 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/Command"><code>Command</code></a>。如果你只需要路由而不需要更新状态，请改用<a href="#conditional-edges">条件边</a>。</p>
+<p>当你需要**同时**更新状态**和**路由到不同节点时，请使用 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/Command"><code>Command</code></a>。如果你只需要路由而不需要更新状态，请改用<a href="#conditional-edges">条件边</a>。</p>
 <p>在节点函数中使用 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/Command"><code>Command</code></a> 时，添加节点时必须添加 <code>ends</code> 参数来指定它可以路由到哪些节点：</p>
 <pre><code data-language="typescript">builder.addNode(&quot;myNode&quot;, myNode, {
   ends: [&quot;myOtherNode&quot;, END],
@@ -1641,13 +1621,13 @@ graph.add_conditional_edges(&quot;node_a&quot;, continue_to_jokes)</code></pre>
 });</code></pre>
 <aside class="callout"><strong>提示</strong>
 <p>将 <code>graph</code> 设置为 <code>Command.PARENT</code> 将导航到最近的父图。</p>
-<p>当你从子图节点向父图节点发送更新，且该 key 在父图和子图的<a href="#schema">状态模式</a>中共享时，你<strong>必须</strong>为你正在更新的 key 在父图状态中定义一个 <a href="#reducers">reducer</a>。</p>
+<p>当你从子图节点向父图节点发送更新，且该 key 在父图和子图的<a href="#schema">状态模式</a>中共享时，你**必须**为你正在更新的 key 在父图状态中定义一个 <a href="#reducers">reducer</a>。</p>
 </aside>
 <p>:::</p>
 <p>这在实现<a href="/oss/javascript/langchain/multi-agent/handoffs.html">多代理交接</a>时特别有用。请参阅<a href="/oss/javascript/langgraph/use-graph-api.html#navigate-to-a-node-in-a-parent-graph">导航到父图中的节点</a>了解更多详情。</p>
 <h3>传递给 <code>invoke</code> 或 <code>stream</code> 的输入</h3>
 <aside class="callout"><strong>警告</strong>
-<p><code>new Command({ resume: ... })</code> 是唯一打算用作 <code>invoke()</code>/<code>stream()</code> 输入的 <code>Command</code> 模式（可选择与 <code>update</code> 结合使用以在恢复时同时应用状态更改）。不要单独使用 <code>new Command({ update: ... })</code> 作为多轮对话的输入——因为传入任何 <code>Command</code> 作为输入都会从最新的检查点恢复（即最后运行的步骤，而不是 <code><strong>start</strong></code>），如果图已经完成，它将看起来卡住。要在现有线程上继续对话，请传入一个普通的输入对象：</p>
+<p><code>new Command({ resume: ... })</code> 是唯一打算用作 <code>invoke()</code>/<code>stream()</code> 输入的 <code>Command</code> 模式（可选择与 <code>update</code> 结合使用以在恢复时同时应用状态更改）。不要单独使用 <code>new Command({ update: ... })</code> 作为多轮对话的输入——因为传入任何 <code>Command</code> 作为输入都会从最新的检查点恢复（即最后运行的步骤，而不是 <code>__start__</code>），如果图已经完成，它将看起来卡住。要在现有线程上继续对话，请传入一个普通的输入对象：</p>
 </aside>
 <pre><code data-language="typescript">// WRONG - graph resumes from the latest checkpoint
 // (last step that ran), appears stuck
@@ -1679,11 +1659,11 @@ const resumed = await graph.invoke(new Command({ resume: &quot;yes&quot; }), con
 <h2>图迁移</h2>
 <p>LangGraph 可以轻松处理图定义（节点、边和状态）的迁移，即使使用检查点程序来跟踪状态也是如此。</p>
 <ul>
-<li>对于到达图末端的线程（即未中断的线程），您可以更改整个图拓扑结构（即所有节点和边，移除、添加、重命名等）</li>
-<li>对于当前中断的线程，我们支持除重命名/移除节点之外的所有拓扑更改（因为该线程现在可能即将进入一个不再存在的节点）——如果这成为阻碍，请联系我们，我们可以优先提供解决方案。</li>
-<li>对于修改状态，我们对添加和删除键具有完整的向后和向前兼容性</li>
-<li>重命名的状态键会丢失现有线程中保存的状态</li>
-<li>以不兼容方式更改类型的状态键可能会导致具有更改前状态的线程出现问题——如果这成为阻碍，请联系我们，我们可以优先提供解决方案。</li>
+<li>- 对于到达图末端的线程（即未中断的线程），您可以更改整个图拓扑结构（即所有节点和边，移除、添加、重命名等）</li>
+<li>- 对于当前中断的线程，我们支持除重命名/移除节点之外的所有拓扑更改（因为该线程现在可能即将进入一个不再存在的节点）——如果这成为阻碍，请联系我们，我们可以优先提供解决方案。</li>
+<li>- 对于修改状态，我们对添加和删除键具有完整的向后和向前兼容性</li>
+<li>- 重命名的状态键会丢失现有线程中保存的状态</li>
+<li>- 以不兼容方式更改类型的状态键可能会导致具有更改前状态的线程出现问题——如果这成为阻碍，请联系我们，我们可以优先提供解决方案。</li>
 </ul>
 <h2>运行时上下文</h2>
 <p>创建图时，可以指定 <code>contextSchema</code> 用于传递给节点的运行时上下文。这对于向节点传递不属于图状态的信息很有用。例如，您可能想要传递依赖项（如模型名称或数据库连接）。</p>
@@ -1843,11 +1823,11 @@ try {
 <tr><td>被动方式（捕获 <code>GraphRecursionError</code>）</td><td>在超过限制之后</td><td>在图外的 try/catch 中</td><td>图执行终止</td></tr>
 </tbody>
 </table>
-<p><strong>被动方式的优点：</strong></p>
+<p>**被动方式的优点：**</p>
 <ul>
-<li>实现更简单</li>
-<li>无需修改图逻辑</li>
-<li>集中式错误处理</li>
+<li>- 实现更简单</li>
+<li>- 无需修改图逻辑</li>
+<li>- 集中式错误处理</li>
 </ul>
 <h4>其他可用的元数据</h4>
 <pre><code data-language="python">def inspect_metadata(state: dict, config: RunnableConfig) -&gt; dict:
@@ -1879,9 +1859,9 @@ try {
 <p>要追踪、调试和评估您的代理，请使用 <a href="/langsmith/observability.html">LangSmith</a>。</p>
 <h2>了解更多</h2>
 <ul>
-<li><a href="/oss/javascript/langgraph/use-graph-api.html">如何使用图形 API</a></li>
-<li><a href="/oss/javascript/langgraph/functional-api.html">函数式 API 概念概述</a></li>
-<li><a href="/oss/javascript/langgraph/choosing-apis.html">在图形 API 和函数式 API 之间选择</a></li>
+<li>- <a href="/oss/javascript/langgraph/use-graph-api.html">如何使用图形 API</a></li>
+<li>- <a href="/oss/javascript/langgraph/functional-api.html">函数式 API 概念概述</a></li>
+<li>- <a href="/oss/javascript/langgraph/choosing-apis.html">在图形 API 和函数式 API 之间选择</a></li>
 </ul>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>

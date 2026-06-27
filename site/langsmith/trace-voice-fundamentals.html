@@ -1087,24 +1087,24 @@
 <p>构建级联语音智能体最常见的两个框架是 <a href="/langsmith/trace-with-livekit.html">LiveKit</a> 和 <a href="/langsmith/trace-with-pipecat.html">Pipecat</a>。</p>
 <h3>语音转语音 (S2S)</h3>
 <p>语音转语音模型（如 <a href="/langsmith/trace-openai-realtime.html">OpenAI Realtime API</a> 或 <a href="/langsmith/trace-gemini-live.html">Gemini Live</a>）原生处理音频并通过单一持久连接（通常为 WebSocket）以音频形式回复。没有 STT/LLM/TTS 分解需要追踪。</p>
-<p>相反，模型服务器和客户端通过线路交换<strong>事件</strong>流：音频块、转录片段、工具调用请求、轮次边界、中断和错误。追踪的自然单元是<strong>事件负载</strong>，而不是请求/响应对。你记录的每个事件都成为一个 span，其内容是穿越线路的有效负载。</p>
+<p>相反，模型服务器和客户端通过线路交换**事件**流：音频块、转录片段、工具调用请求、轮次边界、中断和错误。追踪的自然单元是**事件负载**，而不是请求/响应对。你记录的每个事件都成为一个 span，其内容是穿越线路的有效负载。</p>
 <p>本页面其余部分描述适用于两种架构的约定。提供商指南涵盖了 <a href="/langsmith/trace-openai-realtime.html">OpenAI Realtime</a> 和 <a href="/langsmith/trace-gemini-live.html">Gemini Live</a> 的事件流细节。</p>
 <h2>核心约定</h2>
 <p>这些是我们推荐的充分利用 LangSmith 中语音追踪的最佳实践。你应该以最适合你的基础设施和实现的方式追踪你的语音应用，但遵循我们在此建议的结构将有助于使你的追踪保持一致且易于调试和评估。</p>
 <p>我们建议三个高层约定：</p>
 <ol>
-<li><a href="#trace-each-conversation-as-a-single-trace"><strong>将每个对话作为单个追踪</strong></a>，而不是将其拆分为多个追踪。</li>
-<li><a href="#record-a-single-combined-audio-file"><strong>录制一个组合音频文件</strong></a> 并将其附加到根运行。</li>
-<li><a href="#mark-the-trace-as-audio"><strong>使用 <code>ls_modality</code> 将追踪标记为音频</strong></a>，以便将其渲染和过滤为语音追踪。</li>
+<li>1. <a href="#trace-each-conversation-as-a-single-trace">**将每个对话作为单个追踪**</a>，而不是将其拆分为多个追踪。</li>
+<li>2. <a href="#record-a-single-combined-audio-file">**录制一个组合音频文件**</a> 并将其附加到根运行。</li>
+<li>3. <a href="#mark-the-trace-as-audio">**使用 <code>ls_modality</code> 将追踪标记为音频**</a>，以便将其渲染和过滤为语音追踪。</li>
 </ol>
 <h3>将每个对话作为单个追踪</h3>
 <p>对话是单一交互，因此我们建议将其保持在单个追踪中，单独的模型调用或事件嵌套在一个代表整个对话的根运行下。</p>
-<p>不要将对话拆分为多个追踪。如果为每次交换启动新的追踪，你会丢失存在于交换<strong>之间</strong>的信息：</p>
+<p>不要将对话拆分为多个追踪。如果为每次交换启动新的追踪，你会丢失存在于交换**之间**的信息：</p>
 <ul>
-<li><strong>中断</strong>：用户抢话且智能体停止（打断）。</li>
-<li><strong>时间和延迟</strong>：说话者之间的间隔，以及智能体响应所需的时间。</li>
-<li><strong>上下文</strong>：回顾对话的早期部分。</li>
-<li><strong>对话级结果</strong>：用户的最终目标是否已解决。</li>
+<li>- **中断**：用户抢话且智能体停止（打断）。</li>
+<li>- **时间和延迟**：说话者之间的间隔，以及智能体响应所需的时间。</li>
+<li>- **上下文**：回顾对话的早期部分。</li>
+<li>- **对话级结果**：用户的最终目标是否已解决。</li>
 </ul>
 <p>根运行下方的内容取决于你的<a href="#two-architectures-two-trace-shapes">架构</a>。对于<a href="#cascade">级联</a>，子项是模型调用和中间件：</p>
 <pre><code data-language="text">conversation                      ← root run (whole conversation; combined audio; ls_modality=&quot;audio&quot;)
@@ -1113,7 +1113,7 @@
 ├─ llm                            ← a model call (may include middleware and tool runs)
 ├─ tts                            ← a synthesis call
 └─ ...                            ← the pattern repeats as the conversation continues</code></pre>
-<p>对于<a href="#speech-to-speech-s2s">语音转语音</a>智能体，子元素是穿过套接字的 <strong>events</strong>：</p>
+<p>对于<a href="#speech-to-speech-s2s">语音转语音</a>智能体，子元素是穿过套接字的 **events**：</p>
 <pre><code data-language="text">conversation                      ← root run (whole conversation; combined audio; ls_modality=&quot;audio&quot;)
 │
 ├─ input_transcription            ← a fragment of the user&#x27;s speech transcript
@@ -1127,7 +1127,7 @@
 </aside>
 <p>要了解分组相关运行的背景信息，请参阅<a href="/langsmith/nest-traces.html">嵌套追踪</a>。要将多个独立会话归为一个用户，请使用<a href="/langsmith/threads.html">线程</a>。</p>
 <h3>录制单个合并音频文件</h3>
-<p>将<strong>一个</strong>音频文件附加到根运行，该文件包含<strong>用户和代理双方的</strong>音频，录制的是<strong>实际播放给客户端的内容</strong>，而不是模型生成的音频。</p>
+<p>将**一个**音频文件附加到根运行，该文件包含**用户和代理双方的**音频，录制的是**实际播放给客户端的内容**，而不是模型生成的音频。</p>
 <p>在客户端录制。常见做法是使用立体声 WAV 文件，将用户的麦克风放在一个声道，代理的语音（从扬声器捕获）放在另一个声道。这很重要，因为生成的音频和用户听到的音频不是一回事：网络延迟、数据包丢失或重排，以及插话都会改变用户的实际体验。一次截断代理说话的插话应该在录音中呈现截断状态，因为这确实是发生的情况。录制实际播放的内容，而不是可能从未被听到的生成内容，这样才能使追踪忠实于真实交互。</p>
 <p>使用<a href="/langsmith/upload-files-with-traces.html">附件 API</a>附加文件：</p>
 <pre><code data-language="python Python">from langsmith import traceable

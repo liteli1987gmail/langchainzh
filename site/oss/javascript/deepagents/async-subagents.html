@@ -1094,12 +1094,12 @@
 <table>
 <thead><tr><th>维度</th><th>同步子代理</th><th>异步子代理</th></tr></thead>
 <tbody>
-<tr><td><strong>执行模型</strong></td><td>主管阻塞直到子代理完成</td><td>立即返回任务 ID；主管继续执行</td></tr>
-<tr><td><strong>并发性</strong></td><td>并行但阻塞</td><td>并行且非阻塞</td></tr>
-<tr><td><strong>任务中更新</strong></td><td>不支持</td><td>通过 <code>update_async_task</code> 发送后续指令</td></tr>
-<tr><td><strong>取消</strong></td><td>不支持</td><td>通过 <code>cancel_async_task</code> 取消运行中的任务</td></tr>
-<tr><td><strong>有状态性</strong></td><td>无状态 —— 调用之间无持久状态</td><td>有状态 —— 在其自己的线程上维护跨交互的状态</td></tr>
-<tr><td><strong>适用场景</strong></td><td>代理需要等待结果后再继续的任务</td><td>需要在聊天中交互管理的长时间运行复杂任务</td></tr>
+<tr><td>**执行模型**</td><td>主管阻塞直到子代理完成</td><td>立即返回任务 ID；主管继续执行</td></tr>
+<tr><td>**并发性**</td><td>并行但阻塞</td><td>并行且非阻塞</td></tr>
+<tr><td>**任务中更新**</td><td>不支持</td><td>通过 <code>update_async_task</code> 发送后续指令</td></tr>
+<tr><td>**取消**</td><td>不支持</td><td>通过 <code>cancel_async_task</code> 取消运行中的任务</td></tr>
+<tr><td>**有状态性**</td><td>无状态 —— 调用之间无持久状态</td><td>有状态 —— 在其自己的线程上维护跨交互的状态</td></tr>
+<tr><td>**适用场景**</td><td>代理需要等待结果后再继续的任务</td><td>需要在聊天中交互管理的长时间运行复杂任务</td></tr>
 </tbody>
 </table>
 <h2>Configure async subagents</h2>
@@ -1176,11 +1176,11 @@ const agent = createDeepAgent({
     Platform--&gt;&gt;Supervisor: status: success, result: &quot;findings...&quot;
     Supervisor--&gt;&gt;User: &quot;Here are the results&quot;</code></pre>
 <ul>
-<li><strong>Launch</strong> 在服务器上创建一个新线程，使用任务描述作为输入启动一个运行，并将线程 ID 作为任务 ID 返回。主管将此 ID 报告给用户，且不轮询完成状态。</li>
-<li><strong>Check</strong> 获取当前运行状态。如果运行成功，它会检索线程状态以提取子代理的最终输出。如果仍在运行，则向用户报告。</li>
-<li><strong>Update</strong> 使用 interrupt multitask 策略在同一线程上创建一个新运行。之前的运行被中断，子代理随完整对话历史和新指令一起重新启动。任务 ID 保持不变。</li>
-<li><strong>Cancel</strong> 调用服务器上的 <code>runs.cancel()</code> 并将任务标记为 <code>&quot;cancelled&quot;</code>。</li>
-<li><strong>List</strong> 迭代所有跟踪的任务。对于非终止任务，它并行从服务器获取实时状态。终止状态（<code>success</code>、<code>error</code>、<code>cancelled</code>）从缓存返回。</li>
+<li>- **Launch** 在服务器上创建一个新线程，使用任务描述作为输入启动一个运行，并将线程 ID 作为任务 ID 返回。主管将此 ID 报告给用户，且不轮询完成状态。</li>
+<li>- **Check** 获取当前运行状态。如果运行成功，它会检索线程状态以提取子代理的最终输出。如果仍在运行，则向用户报告。</li>
+<li>- **Update** 使用 interrupt multitask 策略在同一线程上创建一个新运行。之前的运行被中断，子代理随完整对话历史和新指令一起重新启动。任务 ID 保持不变。</li>
+<li>- **Cancel** 调用服务器上的 <code>runs.cancel()</code> 并将任务标记为 <code>&quot;cancelled&quot;</code>。</li>
+<li>- **List** 迭代所有跟踪的任务。对于非终止任务，它并行从服务器获取实时状态。终止状态（<code>success</code>、<code>error</code>、<code>cancelled</code>）从缓存返回。</li>
 </ul>
 <h2>理解状态管理</h2>
 <p>任务元数据存储在主管图上专用状态通道（<code>asyncTasks</code>）中，与消息历史分开。这很关键，因为深度代理在上下文窗口填满时会压缩消息历史/如果任务 ID 仅在工具消息中，它们会在压缩过程中丢失。专用通道确保主管即使在多轮压缩后也能通过 <code>list_async_tasks</code> 回忆其任务。</p>
@@ -1261,8 +1261,8 @@ const agent = createDeepAgent({
 <p>使用基于 LangGraph 的部署时，每个异步子代理运行都是标准 LangGraph 运行，在 LangSmith 中完全可见。监督者的追踪显示 <code>launch</code>、<code>check</code>、<code>update</code>、<code>cancel</code> 和 <code>list</code> 的工具调用。每个子代理运行都显示为单独的追踪，通过线程 ID 链接。使用线程 ID（任务 ID）将监督者编排追踪与子代理执行追踪关联起来。</p>
 <h2>故障排除</h2>
 <h3>监督者在启动后立即轮询</h3>
-<p><strong>问题</strong>：监督者在启动后立即在循环中调用 <code>check</code>，将异步执行变为阻塞执行。</p>
-<p><strong>解决方案</strong>：中间件注入系统提示规则来防止这种情况。如果轮询仍然存在，请在监督者的系统提示中加强此行为：</p>
+<p>**问题**：监督者在启动后立即在循环中调用 <code>check</code>，将异步执行变为阻塞执行。</p>
+<p>**解决方案**：中间件注入系统提示规则来防止这种情况。如果轮询仍然存在，请在监督者的系统提示中加强此行为：</p>
 <pre><code data-language="typescript">const agent = createDeepAgent({
   model: &quot;google_genai:gemini-3.5-flash&quot;,
   systemPrompt: `...your instructions...
@@ -1272,14 +1272,14 @@ const agent = createDeepAgent({
   subagents: [...asyncSubagents],
 });</code></pre>
 <h3>监督器报告过期状态</h3>
-<p><strong>问题</strong>: 监督器引用了对话历史中早期的任务状态，而不是发起新的 <code>check</code> 调用。</p>
-<p><strong>解决方案</strong>: 中间件提示指示模型&quot;对话历史中的任务状态始终是过期的&quot;。如果问题仍然存在，请添加明确的指令，要求在报告状态前始终调用 <code>check</code> 或 <code>list</code>。</p>
+<p>**问题**: 监督器引用了对话历史中早期的任务状态，而不是发起新的 <code>check</code> 调用。</p>
+<p>**解决方案**: 中间件提示指示模型&quot;对话历史中的任务状态始终是过期的&quot;。如果问题仍然存在，请添加明确的指令，要求在报告状态前始终调用 <code>check</code> 或 <code>list</code>。</p>
 <h3>任务 ID 查找失败</h3>
-<p><strong>问题</strong>: 监督器截断或重新格式化了任务 ID，导致 <code>check</code> 或 <code>cancel</code> 失败。</p>
-<p><strong>解决方案</strong>: 中间件提示指示模型始终使用完整的任务 ID。如果截断问题持续存在，这通常是模型特定的问题——请尝试不同的模型，或将&quot;始终显示完整的 task_id，不要截断或缩写&quot;添加到系统提示中。</p>
+<p>**问题**: 监督器截断或重新格式化了任务 ID，导致 <code>check</code> 或 <code>cancel</code> 失败。</p>
+<p>**解决方案**: 中间件提示指示模型始终使用完整的任务 ID。如果截断问题持续存在，这通常是模型特定的问题——请尝试不同的模型，或将&quot;始终显示完整的 task_id，不要截断或缩写&quot;添加到系统提示中。</p>
 <h3>子代理启动队列而不是运行</h3>
-<p><strong>问题</strong>: 启动子代理时挂起或需要很长时间才能启动。</p>
-<p><strong>解决方案</strong>: 工作线程池可能已耗尽。使用 <code>--n-jobs-per-worker</code> 增加池大小。请参阅<a href="#size-the-worker-pool-for-local-development">调整工作线程池大小</a>。</p>
+<p>**问题**: 启动子代理时挂起或需要很长时间才能启动。</p>
+<p>**解决方案**: 工作线程池可能已耗尽。使用 <code>--n-jobs-per-worker</code> 增加池大小。请参阅<a href="#size-the-worker-pool-for-local-development">调整工作线程池大小</a>。</p>
 <h2>参考实现</h2>
 <p><a href="https://github.com/langchain-ai/async-deep-agents">async-deep-agents</a> 代码库包含 Python 和 TypeScript 的工作示例，可部署到 LangSmith Deployments。它演示了带有研究者和编码器子代理的监督器作为后台任务运行。</p>
 <aside class="callout"><strong>提示</strong>
