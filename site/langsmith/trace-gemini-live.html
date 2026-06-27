@@ -1077,13 +1077,13 @@
       <article class="doc"><p><a href="https://ai.google.dev/gemini-api/docs/live-api">Gemini Live API</a> 支持通过持久的 WebSocket 连接与 Gemini 模型进行低延迟双向语音交互。本指南展示了如何将使用 <a href="https://google.github.io/adk-docs/streaming/">Google Agent Development Kit (ADK)</a> 构建的 Gemini Live 语音代理追踪到 LangSmith。</p>
 <p>Gemini Live 是一个语音到语音模型：它原生处理音频，并通过持久的 WebSocket 连接与您的应用程序交换连续的事件流，而不是进行离散的请求/响应调用。以下部分展示了这些事件以及如何将它们转换为 LangSmith 追踪。有关充分利用语音代理追踪的高级原则，请参阅<a href="/langsmith/trace-voice-fundamentals.html">语音追踪基础知识</a>。</p>
 <h2>ADK Live 事件模型</h2>
-<p>对话运行时，ADK 会向您的应用程序流式传输一系列事件。每个事件报告对话中发生的事情：音频块、转录片段、工具调用、轮次边界或中断。每个事件具有相同的结构，大部分字段是可选的，因此您根据**哪些字段被填充**来确定事件代表什么：</p>
+<p>对话运行时，ADK 会向您的应用程序流式传输一系列事件。每个事件报告对话中发生的事情：音频块、转录片段、工具调用、轮次边界或中断。每个事件具有相同的结构，大部分字段是可选的，因此您根据<strong>哪些字段被填充</strong>来确定事件代表什么：</p>
 <table>
 <thead><tr><th>填充字段</th><th>含义</th></tr></thead>
 <tbody>
 <tr><td><code>content.parts[*].inline_data</code></td><td>代理音频块（PCM16 字节）。代理的声音以大量此类数据块的形式到达。</td></tr>
-<tr><td><code>input_transcription</code></td><td>*用户*语音转录的片段。最终事件会重复完整话语并带有 <code>finished=True</code>。</td></tr>
-<tr><td><code>output_transcription</code></td><td>*代理*语音转录的片段。</td></tr>
+<tr><td><code>input_transcription</code></td><td><em>用户</em>语音转录的片段。最终事件会重复完整话语并带有 <code>finished=True</code>。</td></tr>
+<tr><td><code>output_transcription</code></td><td><em>代理</em>语音转录的片段。</td></tr>
 <tr><td><code>content.parts[*].function_call</code></td><td>模型请求调用工具（名称和参数）。</td></tr>
 <tr><td><code>content.parts[*].function_response</code></td><td>ADK 执行了工具并将结果返回给模型。</td></tr>
 <tr><td><code>turn_complete</code></td><td>服务器完成了其一半的交互。</td></tr>
@@ -1122,7 +1122,7 @@ run_config = RunConfig(
     output_audio_transcription=genai_types.AudioTranscriptionConfig(),
 )</code></pre>
 <aside class="callout"><strong>提示</strong>
-<p>**转录是可选的。**除非您在 <code>RunConfig</code> 中启用输入和输出转录，否则您将不会获得任何转录内容。<code>finished=True</code> 转录事件包含完整的语音内容，因此无需在客户端累积片段。</p>
+<p><strong>转录是可选的。</strong>除非您在 <code>RunConfig</code> 中启用输入和输出转录，否则您将不会获得任何转录内容。<code>finished=True</code> 转录事件包含完整的语音内容，因此无需在客户端累积片段。</p>
 </aside>
 <h3>步骤 2：打开会话根运行</h3>
 <p>为整个会话打开一个运行，并使用 <code>ls_modality=&quot;audio&quot;</code> 将其标记为语音追踪，遵循<a href="/langsmith/trace-voice-fundamentals.html#trace-each-conversation-as-a-single-trace">单追踪约定</a>。在整个会话期间保持此运行处于打开状态，并在会话结束时将其最终化。</p>
@@ -1205,13 +1205,13 @@ finally:
 <p>演示仓库封装了每个框架的完整录音流程，包括麦克风重采样、扬声器点击捕获和立体声 WAV 重建。对于 Gemini Live，请参阅 <a href="https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/adk/agent.py">ADK agent</a> 和共享的 <a href="https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/sdk_tracing.py">recording helpers</a>。</p>
 <h2>故障排除</h2>
 <ul>
-<li>- **没有转录配置意味着空的跟踪。** 这是最常见的失败模式。<code>RunConfig</code> 上必须同时设置 <code>input_audio_transcription</code> 和 <code>output_audio_transcription</code>。</li>
-<li>- **不要累积转录片段。** 使用 <code>finished=True</code> 事件的完整文本；片段仅用于实时 UI 显示。</li>
-<li>- **不要跨越纯音频事件。** 几分钟的对话会产生数千个此类事件。</li>
-<li>- **字段同时出现。** 按优先级分类，而不是假设每个事件只有一个字段。</li>
-<li>- **工具在 ADK 内部运行。** 不要自己合成工具运行。这样做会重复计算 <code>function_call</code> 和 <code>function_response</code> 已经记录的内容。</li>
-<li>- **如果您的采集不是 16 kHz，请重新采样麦克风**（ADK 输入是 16 kHz，输出是 24 kHz）。</li>
-<li>- **消除 ADK 的启动噪音**用于控制台 UI：<code>logging.getLogger(&quot;google_adk&quot;).setLevel(logging.ERROR)</code> 会抑制 <code>run_live</code> 的实验性功能警告和 MCP 未安装的行。</li>
+<li><strong>没有转录配置意味着空的跟踪。</strong> 这是最常见的失败模式。<code>RunConfig</code> 上必须同时设置 <code>input_audio_transcription</code> 和 <code>output_audio_transcription</code>。</li>
+<li><strong>不要累积转录片段。</strong> 使用 <code>finished=True</code> 事件的完整文本；片段仅用于实时 UI 显示。</li>
+<li><strong>不要跨越纯音频事件。</strong> 几分钟的对话会产生数千个此类事件。</li>
+<li><strong>字段同时出现。</strong> 按优先级分类，而不是假设每个事件只有一个字段。</li>
+<li><strong>工具在 ADK 内部运行。</strong> 不要自己合成工具运行。这样做会重复计算 <code>function_call</code> 和 <code>function_response</code> 已经记录的内容。</li>
+<li><strong>如果您的采集不是 16 kHz，请重新采样麦克风</strong>（ADK 输入是 16 kHz，输出是 24 kHz）。</li>
+<li><strong>消除 ADK 的启动噪音</strong>用于控制台 UI：<code>logging.getLogger(&quot;google_adk&quot;).setLevel(logging.ERROR)</code> 会抑制 <code>run_live</code> 的实验性功能警告和 MCP 未安装的行。</li>
 </ul>
 <h2>下一步</h2>
 <section class="card-grid cols-2">

@@ -1078,17 +1078,17 @@
 <h2>服务器基础设施</h2>
 <p>除了 <a href="/langsmith/agent-server.html">Agent Server</a> 本身，每个服务器的以下基础设施组件也包含在&quot;数据平面&quot;的广义定义中：</p>
 <ul>
-<li>- **PostgreSQL**：用户、运行和内存数据的持久化层。</li>
-<li>- **Redis**：worker 之间的通信和临时元数据。</li>
-<li>- **密钥存储**：环境密钥的安全管理。</li>
-<li>- **自动扩缩器**：根据负载扩展服务器容器。</li>
+<li><strong>PostgreSQL</strong>：用户、运行和内存数据的持久化层。</li>
+<li><strong>Redis</strong>：worker 之间的通信和临时元数据。</li>
+<li><strong>密钥存储</strong>：环境密钥的安全管理。</li>
+<li><strong>自动扩缩器</strong>：根据负载扩展服务器容器。</li>
 </ul>
 <h2>&quot;监听器&quot;应用程序</h2>
 <p>数据平面&quot;监听器&quot;应用程序定期调用<a href="/langsmith/control-plane.html#control-plane-api">控制平面 API</a>来：</p>
 <ul>
-<li>* 确定是否应创建新部署。</li>
-<li>* 确定是否应更新现有部署（即新版本）。</li>
-<li>* 确定是否应删除现有部署。</li>
+<li>确定是否应创建新部署。</li>
+<li>确定是否应更新现有部署（即新版本）。</li>
+<li>确定是否应删除现有部署。</li>
 </ul>
 <p>换句话说，数据平面&quot;监听器&quot;读取控制平面的最新状态（期望状态）并采取行动来协调现有部署（当前状态）以匹配最新状态。</p>
 <h2>PostgreSQL</h2>
@@ -1098,9 +1098,9 @@
 <h3>通信</h3>
 <p>Agent Server 中的所有运行都由属于每个部署的后台 worker 池执行。为了在这些运行中启用某些功能（如取消和输出流式传输），我们需要一个双向通信通道，用于服务器与处理特定运行的 worker 之间进行通信。我们使用 Redis 来组织这种通信。</p>
 <ol>
-<li>1. Redis 列表用作在新运行创建时立即唤醒 worker 的机制。该列表中仅存储一个哨兵值，不存储任何实际运行信息。Worker 随后从 PostgreSQL 中检索运行信息。</li>
-<li>2. Redis 字符串和 Redis PubSub 通道的组合用于服务器向适当的 worker 传达运行取消请求。</li>
-<li>3. Redis PubSub 通道由 worker 用于在处理运行时分发代理的流式输出。服务器中任何打开的 <code>/stream</code> 请求都会订阅该通道，并在事件到达时将其转发到响应中。Redis 中不会在任何时候存储任何事件。</li>
+<li>Redis 列表用作在新运行创建时立即唤醒 worker 的机制。该列表中仅存储一个哨兵值，不存储任何实际运行信息。Worker 随后从 PostgreSQL 中检索运行信息。</li>
+<li>Redis 字符串和 Redis PubSub 通道的组合用于服务器向适当的 worker 传达运行取消请求。</li>
+<li>Redis PubSub 通道由 worker 用于在处理运行时分发代理的流式输出。服务器中任何打开的 <code>/stream</code> 请求都会订阅该通道，并在事件到达时将其转发到响应中。Redis 中不会在任何时候存储任何事件。</li>
 </ol>
 <h3>临时元数据</h3>
 <p>Agent Server 中的运行可能会因特定失败而重试（目前仅针对运行期间遇到的临时 PostgreSQL 错误）。为了限制重试次数（目前限制为每个运行 3 次尝试），我们在拾取运行时将尝试次数记录在 Redis 字符串中。这不包含除其 ID 之外的任何特定运行信息，并且会在短时间后过期。</p>
@@ -1109,9 +1109,9 @@
 <h3>自动扩缩</h3>
 <p><a href="/langsmith/cloud-platform-features.html#deployment-types"><code>Production</code> 类型</a>的部署会自动扩展到最多 10 个容器。扩缩基于 3 个指标：</p>
 <ol>
-<li>1. CPU 利用率</li>
-<li>2. 内存利用率</li>
-<li>3. 待处理（进行中）<a href="/langsmith/runs.html">运行</a>数量</li>
+<li>CPU 利用率</li>
+<li>内存利用率</li>
+<li>待处理（进行中）<a href="/langsmith/runs.html">运行</a>数量</li>
 </ol>
 <p>对于 CPU 利用率，自动扩缩器以 75% 利用率为目标。这意味着自动扩缩器将向上或向下扩展容器数量，以确保 CPU 利用率接近或等于 75%。对于内存利用率，自动扩缩器也以 75% 利用率为目标。</p>
 <p>对于待处理运行数量，自动扩缩器以 10 个待处理运行为目标。例如，如果当前容器数量为 1，但待处理运行数量为 20，则自动扩缩器将把部署扩展到 2 个容器（20 个待处理运行 / 2 个容器 = 每个容器 10 个待处理运行）。</p>

@@ -1075,12 +1075,12 @@
 <a class="nav-link level-5" href="/langsmith/scalability-and-resilience.html">可扩展性与弹性</a></aside>
     <main class="content">
       <article class="doc"><p>生产环境中的软件需要不断变化。新需求、bug 修复和重构最终都会应用到你的图代码中。因为 LangGraph 针对已为现有线程<a href="/oss/python/langgraph/persistence.html">持久化</a>的状态运行最新部署的图，你发布的每个更改实际上都是相对于现有检查点的向后兼容 API 变更。</p>
-<p>与将运行绑定到其启动时代码版本的 workflow 引擎不同，LangGraph 立即将最新图应用到*每个*线程，无论是新线程还是从检查点恢复的线程。这很方便：bug 修复会传播到进行中的对话和代理，无需额外操作。但这也意味着你必须考虑每个更改如何与在先前版本代码下启动的运行交互。</p>
+<p>与将运行绑定到其启动时代码版本的 workflow 引擎不同，LangGraph 立即将最新图应用到<em>每个</em>线程，无论是新线程还是从检查点恢复的线程。这很方便：bug 修复会传播到进行中的对话和代理，无需额外操作。但这也意味着你必须考虑每个更改如何与在先前版本代码下启动的运行交互。</p>
 <p>有三种兼容性问题是需要注意的，按你将遇到的大致顺序排列：</p>
 <ol>
-<li>1. <a href="#technical-compatibility">技术兼容性</a>：最常见；新代码必须仍能针对现有 State 加载和执行。</li>
-<li>2. <a href="#business-compatibility">业务兼容性</a>：较少见；现有运行应该继续遵循旧业务逻辑，即使代码已更改。</li>
-<li>3. <a href="#non-determinism">非确定性</a>：仅适用于 <a href="/oss/python/langgraph/functional-api.html">Functional API</a>。</li>
+<li><a href="#technical-compatibility">技术兼容性</a>：最常见；新代码必须仍能针对现有 State 加载和执行。</li>
+<li><a href="#business-compatibility">业务兼容性</a>：较少见；现有运行应该继续遵循旧业务逻辑，即使代码已更改。</li>
+<li><a href="#non-determinism">非确定性</a>：仅适用于 <a href="/oss/python/langgraph/functional-api.html">Functional API</a>。</li>
 </ol>
 <aside class="callout"><strong>建议</strong>
 <p>有关运行时默认可支持哪些图拓扑和状态更改的简短总结，请参阅 <a href="/oss/python/langgraph/graph-api.html#graph-migrations">图迁移</a>。本页其余部分涵盖了你可以在更改超出支持范围时应用的模式。</p>
@@ -1089,14 +1089,14 @@
 <p>技术兼容性等同于微服务中的 API 破坏性变更。这里的&quot;API&quot;是你图代码与已为现有线程<a href="&amp;lt;/oss/langgraph/checkpointers.html#checkpointer-libraries">持久化</a>的数据之间的契约。当线程恢复时，LangGraph 反序列化保存的状态，按名称将数据分派给节点，并期望节点返回符合状态 schema 的值。</p>
 <p>常见的技术性破坏：</p>
 <ul>
-<li>- **重命名或删除节点**，而线程在或即将进入该节点时暂停，例如在 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 处或通过仍路由到旧名称的检查点条件边。恢复时，LangGraph 无法按其保存的名称找到节点，运行失败。恢复运行的起点是执行停止的节点开头，因此缺失的节点没有恢复的地方。</li>
-<li>- **重命名或删除 State 键**，而旧检查点仍包含该键或下游节点仍读取该键。</li>
-<li>- **收紧 State 字段**，例如将 <code>Optional</code> 字段改为必需、缩窄类型或添加没有默认值的新必需字段。现有检查点将不满足新 schema。</li>
+<li><strong>重命名或删除节点</strong>，而线程在或即将进入该节点时暂停，例如在 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 处或通过仍路由到旧名称的检查点条件边。恢复时，LangGraph 无法按其保存的名称找到节点，运行失败。恢复运行的起点是执行停止的节点开头，因此缺失的节点没有恢复的地方。</li>
+<li><strong>重命名或删除 State 键</strong>，而旧检查点仍包含该键或下游节点仍读取该键。</li>
+<li><strong>收紧 State 字段</strong>，例如将 <code>Optional</code> 字段改为必需、缩窄类型或添加没有默认值的新必需字段。现有检查点将不满足新 schema。</li>
 </ul>
-<p>边拓扑本身在检查点中*不*被持久化。在仍存在的节点之间添加、删除或重路由边对于进行中的线程是安全的。根据<a href="/oss/python/langgraph/graph-api.html#graph-migrations">图迁移</a>摘要，唯一可能中断被中断线程的拓扑更改是重命名或删除节点。</p>
+<p>边拓扑本身在检查点中<em>不</em>被持久化。在仍存在的节点之间添加、删除或重路由边对于进行中的线程是安全的。根据<a href="/oss/python/langgraph/graph-api.html#graph-migrations">图迁移</a>摘要，唯一可能中断被中断线程的拓扑更改是重命名或删除节点。</p>
 <h3>推荐的模式</h3>
 <ul>
-<li>- 将新状态字段添加为 <code>NotRequired</code>（或 <code>Optional[...] = None</code>），以便旧检查点仍能通过验证：</li>
+<li>将新状态字段添加为 <code>NotRequired</code>（或 <code>Optional[...] = None</code>），以便旧检查点仍能通过验证：</li>
 </ul>
 <pre><code data-language="python">  from typing import NotRequired
   from typing_extensions import TypedDict
@@ -1106,29 +1106,29 @@
       summary: NotRequired[str]  # [!code ++]
   </code></pre>
 <ul>
-<li>- 将删除视为弃用。即使没有节点读取该字段，也请在状态上保留该字段定义至少一个排水周期，以便现有检查点继续加载。</li>
-<li>- 通过*先添加后删除*进行重命名。在旧字段或节点旁边添加新字段或节点，在弃用窗口期内双向写入或路由到两者，一旦确认没有运行中的线程依赖它后删除旧的。</li>
-<li>- 让节点函数对未知键保持容错。<code>TypedDict</code> 在运行时忽略额外的键，因此旧代码版本留下的状态不会引发错误，除非节点显式读取缺失的键。</li>
-<li>- 使用<a href="/oss/python/langgraph/use-time-travel.html">时间旅行</a>和 <a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.get_state"><code>graph.get_state</code></a> 在预发布部署中对新代码进行现有线程的抽查，然后再推出。</li>
+<li>将删除视为弃用。即使没有节点读取该字段，也请在状态上保留该字段定义至少一个排水周期，以便现有检查点继续加载。</li>
+<li>通过<em>先添加后删除</em>进行重命名。在旧字段或节点旁边添加新字段或节点，在弃用窗口期内双向写入或路由到两者，一旦确认没有运行中的线程依赖它后删除旧的。</li>
+<li>让节点函数对未知键保持容错。<code>TypedDict</code> 在运行时忽略额外的键，因此旧代码版本留下的状态不会引发错误，除非节点显式读取缺失的键。</li>
+<li>使用<a href="/oss/python/langgraph/use-time-travel.html">时间旅行</a>和 <a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.get_state"><code>graph.get_state</code></a> 在预发布部署中对新代码进行现有线程的抽查，然后再推出。</li>
 </ul>
 <h3>检测运行中的线程</h3>
 <p>在删除节点、重命名 State 键或进行旧线程无法容受的更改之前，你需要知道是否有任何线程当前停在你即将丢弃的代码版本上。LangGraph 本身不维护线程状态的搜索索引，因此答案取决于你的图运行在哪里。</p>
-<p>**如果你部署到 <a href="/langsmith/deployment.html">LangSmith</a>。** 使用 Agent Server 的线程搜索按状态过滤。<code>status</code> 字段接受 <code>idle</code>、<code>busy</code>、<code>interrupted</code> 和 <code>error</code>，因此你可以批量查询 <code>interrupted</code> 或 <code>busy</code> 线程，可选择使用元数据过滤器缩小范围。请参阅<a href="/langsmith/use-threads.html#filter-by-thread-status">按线程状态过滤</a>和<a href="/langsmith/use-threads.html#list-threads">列出线程</a>。</p>
-<p>**LangGraph 运行的所有地方。** 使用 <a href="/oss/python/langgraph/observability.html">LangSmith 追踪</a> 监控生产中哪些节点正在被进入和退出。这是节点或状态字段在任何活动代码路径中不再可到达的最可靠信号。</p>
-<p>**当你已有 <code>thread_id</code> 时。** 直接检查该单个线程：</p>
+<p><strong>如果你部署到 <a href="/langsmith/deployment.html">LangSmith</a>。</strong> 使用 Agent Server 的线程搜索按状态过滤。<code>status</code> 字段接受 <code>idle</code>、<code>busy</code>、<code>interrupted</code> 和 <code>error</code>，因此你可以批量查询 <code>interrupted</code> 或 <code>busy</code> 线程，可选择使用元数据过滤器缩小范围。请参阅<a href="/langsmith/use-threads.html#filter-by-thread-status">按线程状态过滤</a>和<a href="/langsmith/use-threads.html#list-threads">列出线程</a>。</p>
+<p><strong>LangGraph 运行的所有地方。</strong> 使用 <a href="/oss/python/langgraph/observability.html">LangSmith 追踪</a> 监控生产中哪些节点正在被进入和退出。这是节点或状态字段在任何活动代码路径中不再可到达的最可靠信号。</p>
+<p><strong>当你已有 <code>thread_id</code> 时。</strong> 直接检查该单个线程：</p>
 <ul>
-<li>- <a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.get_state"><code>graph.get_state(config)</code></a> 返回最新的检查点，包括线程暂停的节点和任何待处理的打断。</li>
-<li>- <a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.get_state_history"><code>graph.get_state_history(config)</code></a> 返回该线程的完整时间顺序检查点列表。</li>
+<li><a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.get_state"><code>graph.get_state(config)</code></a> 返回最新的检查点，包括线程暂停的节点和任何待处理的打断。</li>
+<li><a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.get_state_history"><code>graph.get_state_history(config)</code></a> 返回该线程的完整时间顺序检查点列表。</li>
 </ul>
 <p>如有疑问，请保留弃用的节点或字段，直到 Agent Server 线程列表和追踪都显示它不再有任何活动。</p>
 <h2>业务兼容性</h2>
-<p>有时更改在技术上是有效的（每个现有检查点仍能加载，每个节点仍能解析），但新图的*含义*与旧图不同。新行为对新线程是正确的，但你不想将其追溯应用到在旧逻辑下启动的线程。</p>
+<p>有时更改在技术上是有效的（每个现有检查点仍能加载，每个节点仍能解析），但新图的<em>含义</em>与旧图不同。新行为对新线程是正确的，但你不想将其追溯应用到在旧逻辑下启动的线程。</p>
 <p>例如，假设你的图运行 <code>intake → triage → respond</code>，你决定在 <code>triage</code> 和 <code>respond</code> 之间插入新的 <code>policy_check</code> 步骤：</p>
 <ul>
-<li>- 已通过 <code>triage</code> 的线程应继续直接到 <code>respond</code>（旧流程）。</li>
-<li>- 新线程应运行完整的新流程。</li>
+<li>已通过 <code>triage</code> 的线程应继续直接到 <code>respond</code>（旧流程）。</li>
+<li>新线程应运行完整的新流程。</li>
 </ul>
-<p>推荐的模式是在线程开始时在状态上记录相关的*行为版本*，然后使用<a href="/oss/python/langgraph/graph-api.html#conditional-edges">条件边</a>对其进行分支：</p>
+<p>推荐的模式是在线程开始时在状态上记录相关的<em>行为版本</em>，然后使用<a href="/oss/python/langgraph/graph-api.html#conditional-edges">条件边</a>对其进行分支：</p>
 <pre><code data-language="python">from typing import NotRequired
 from typing_extensions import TypedDict
 
@@ -1171,20 +1171,20 @@ builder.add_edge(&quot;respond&quot;, END)
 
 graph = builder.compile()</code></pre>
 <p>在 <code>triage</code> 后恢复的旧线程会从其保存的状态中读取 <code>flow_version</code>（或回退到 v1 默认值），并跳过 <code>policy_check</code>。新线程从 <code>intake</code> 开始，被标记为 <code>flow_version=2</code>，并运行新的路径。一旦所有 v1 线程完成后，你可以移除版本标志和条件边。</p>
-<p>只有*在线程启动时*设置版本此模式才能生效，在任何需要版本化的分支之前设置。在之后设置意味着现有线程在需要时不会有该设置。</p>
+<p>只有<em>在线程启动时</em>设置版本此模式才能生效，在任何需要版本化的分支之前设置。在之后设置意味着现有线程在需要时不会有该设置。</p>
 <h2>非确定性</h2>
-<p>本类别仅适用于 <a href="/oss/python/langgraph/functional-api.html">Functional API</a> 以及 <a href="/oss/python/langgraph/graph-api.html">Graph API</a> **节点**内部的 <a href="/oss/python/langgraph/functional-api.html#task">**tasks**</a> 或 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 调用。普通的 Graph API **节点**在恢复时会 <a href="/oss/python/langgraph/graph-api.html#re-execution-and-idempotency">从头重新运行节点函数</a>；请将副作用设计为幂等的，但除非你在该**节点**中使用了 **tasks** 或 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a>，否则不需要保留任务调用顺序。</p>
-<p>Functional API **entrypoint** 会被编译成单个**节点**，当运行恢复时从头重放 entrypoint 主体，并使用缓存的 <a href="https://reference.langchain.com/python/langgraph/func/task"><code>@task</code></a> 结果跳过已完成的操作。两类变更会破坏此模型：</p>
+<p>本类别仅适用于 <a href="/oss/python/langgraph/functional-api.html">Functional API</a> 以及 <a href="/oss/python/langgraph/graph-api.html">Graph API</a> <strong>节点</strong>内部的 <a href="/oss/python/langgraph/functional-api.html#task"><strong>tasks</strong></a> 或 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 调用。普通的 Graph API <strong>节点</strong>在恢复时会 <a href="/oss/python/langgraph/graph-api.html#re-execution-and-idempotency">从头重新运行节点函数</a>；请将副作用设计为幂等的，但除非你在该<strong>节点</strong>中使用了 <strong>tasks</strong> 或 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a>，否则不需要保留任务调用顺序。</p>
+<p>Functional API <strong>entrypoint</strong> 会被编译成单个<strong>节点</strong>，当运行恢复时从头重放 entrypoint 主体，并使用缓存的 <a href="https://reference.langchain.com/python/langgraph/func/task"><code>@task</code></a> 结果跳过已完成的操作。两类变更会破坏此模型：</p>
 <ul>
-<li>- **在恢复点之前添加、移除或重新排序 <code>@task</code> 调用或 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 调用**。LangGraph 会根据重放中的位置将缓存的结果和恢复值与调用进行匹配，因此位置移动可能导致错误的缓存值被重放到不同的调用上。</li>
-<li>- **在 <code>@task</code> 之外引入非确定性操作**，例如 <code>time.time()</code>、<code>random.random()</code>，或在 entrypoint 主体中内联的网络调用。在重放时这些会产生与首次运行不同的值，可能改变控制流。</li>
+<li><strong>在恢复点之前添加、移除或重新排序 <code>@task</code> 调用或 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 调用</strong>。LangGraph 会根据重放中的位置将缓存的结果和恢复值与调用进行匹配，因此位置移动可能导致错误的缓存值被重放到不同的调用上。</li>
+<li><strong>在 <code>@task</code> 之外引入非确定性操作</strong>，例如 <code>time.time()</code>、<code>random.random()</code>，或在 entrypoint 主体中内联的网络调用。在重放时这些会产生与首次运行不同的值，可能改变控制流。</li>
 </ul>
 <p>有关更深入的处理和示例，请参阅 Functional API 指南中的 <a href="/oss/python/langgraph/functional-api.html#determinism">确定性</a> 和 <a href="/oss/python/langgraph/functional-api.html#common-pitfalls">常见陷阱</a>。</p>
 <p>如果需要对有进行中运行的 <code>@entrypoint</code> 进行重大代码更改，最安全的选项是：</p>
 <ul>
-<li>- 让进行中的运行在部署更改之前耗尽。</li>
-<li>- 将任何新逻辑包装在新的 <code>@task</code> 中，以便其结果被独立检查点化。</li>
-<li>- 在 <code>langgraph.json</code> 中使用新的图名称注册新的 entrypoint 来处理新行为，并将新线程路由到该 entrypoint。</li>
+<li>让进行中的运行在部署更改之前耗尽。</li>
+<li>将任何新逻辑包装在新的 <code>@task</code> 中，以便其结果被独立检查点化。</li>
+<li>在 <code>langgraph.json</code> 中使用新的图名称注册新的 entrypoint 来处理新行为，并将新线程路由到该 entrypoint。</li>
 </ul>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>

@@ -1077,16 +1077,16 @@
       <article class="doc"><p>本指南介绍如何将 <a href="https://github.com/google/adk-python">Google Agent Development Kit (ADK)</a> 代理部署到 <a href="/langsmith/agent-server.html">LangSmith Agent Server</a> 上，使用 <a href="https://pypi.org/project/deployments-wrap-sdk/"><code>deployments-wrap-sdk</code></a> 包。</p>
 <p><code>deployments-wrap-sdk</code> 提供了一个轻量级包装器，可将配置好的 ADK <code>Runner</code> 转换为与 LangGraph 兼容的图，从而无需编写 <a href="/oss/python/langgraph/functional-api.html">Functional API</a> 胶水代码即可部署 ADK 代理。该包装器：</p>
 <ul>
-<li>- 将 ADK 会话桥接到 Agent Server 的<a href="/langsmith/agent-server.html#persistence">检查点持久化</a>，使会话状态在重启后保留并可在不同运行间恢复。</li>
-<li>- 通过 LangGraph 的流式管道转发 ADK token 事件，使部分 token 能在 <a href="/langsmith/streaming.html"><code>stream_mode=&quot;messages&quot;</code></a> 和 <a href="/langsmith/studio.html">LangSmith Studio</a> 中显示。</li>
-<li>- 当设置 <code>LANGSMITH_TRACING</code> 时，自动为 ADK 启用 <a href="/langsmith/trace-with-google-adk.html">LangSmith 追踪</a>。</li>
+<li>将 ADK 会话桥接到 Agent Server 的<a href="/langsmith/agent-server.html#persistence">检查点持久化</a>，使会话状态在重启后保留并可在不同运行间恢复。</li>
+<li>通过 LangGraph 的流式管道转发 ADK token 事件，使部分 token 能在 <a href="/langsmith/streaming.html"><code>stream_mode=&quot;messages&quot;</code></a> 和 <a href="/langsmith/studio.html">LangSmith Studio</a> 中显示。</li>
+<li>当设置 <code>LANGSMITH_TRACING</code> 时，自动为 ADK 启用 <a href="/langsmith/trace-with-google-adk.html">LangSmith 追踪</a>。</li>
 </ul>
 <h2>前置条件</h2>
 <ul>
-<li>- Python 3.11+</li>
-<li>- 用于本地开发和部署的 <a href="/langsmith/cli.html">LangGraph CLI</a></li>
-<li>- LangSmith API 密钥，请参阅<a href="https://docs.langchain.com/langsmith/create-account-api-key">创建账户和 API 密钥</a></li>
-<li>- 如果使用 Gemini 模型，需要 Google AI API 密钥，请参阅 <a href="https://aistudio.google.com/api-keys">Google AI Studio</a></li>
+<li>Python 3.11+</li>
+<li>用于本地开发和部署的 <a href="/langsmith/cli.html">LangGraph CLI</a></li>
+<li>LangSmith API 密钥，请参阅<a href="https://docs.langchain.com/langsmith/create-account-api-key">创建账户和 API 密钥</a></li>
+<li>如果使用 Gemini 模型，需要 Google AI API 密钥，请参阅 <a href="https://aistudio.google.com/api-keys">Google AI Studio</a></li>
 </ul>
 <h2>安装</h2>
 <p>使用 <code>google-adk</code> 额外依赖安装该包。额外依赖会引入 <code>google-adk</code> 和包装器所需的其他依赖：</p>
@@ -1130,32 +1130,32 @@ agent = wrap(
 )</code></pre>
 <p>有两点至关重要：</p>
 <ol>
-<li>1. **将 <code>LangsmithSessionService()</code> 作为运行器的 <code>session_service</code> 传递**。如果忘记，<code>wrap()</code> 会抛出 <code>TypeError</code>。Agent Server 需要这个钩子来通过其检查点加载和保存 ADK 会话状态。</li>
-<li>2. **将包装后的 <code>agent</code> 导出为模块级变量**。Agent Server 在提供图服务时会导入此符号。</li>
+<li><strong>将 <code>LangsmithSessionService()</code> 作为运行器的 <code>session_service</code> 传递</strong>。如果忘记，<code>wrap()</code> 会抛出 <code>TypeError</code>。Agent Server 需要这个钩子来通过其检查点加载和保存 ADK 会话状态。</li>
+<li><strong>将包装后的 <code>agent</code> 导出为模块级变量</strong>。Agent Server 在提供图服务时会导入此符号。</li>
 </ol>
 <p>对于实际 agent，请删除 <code>before_model_callback</code> 并直接配置模型。例如，通过设置 <code>model=&quot;gemini-2.5-flash&quot;</code> 并配置 <code>GOOGLE_API_KEY</code> 来使用 Gemini，或通过 ADK 的 LiteLLM 适配器（<code>google.adk.models.lite_llm.LiteLlm</code>，可通过 <code>google-adk[extensions]</code> 获取）使用 Claude/OpenAI。</p>
 <h2>功能和限制</h2>
 <p><code>wrap()</code> 将 ADK 运行时的一个明确定义的子集桥接到 Agent Server。在移植现有 ADK agent 之前请查看以下边界，因为某些 ADK 功能会原样传递，而其他功能则有意不支持。</p>
 <h3>支持的功能</h3>
 <ul>
-<li>- **Agent 原语**：<code>Agent</code>、<code>SequentialAgent</code> 和 <code>ParallelAgent</code>，包括通过 <code>sub_agents</code> 参数进行的嵌套子代理委托。</li>
-<li>- **工具**：Python 函数工具和 <code>LongRunningFunctionTool</code>。</li>
-<li>- **模型**：直接支持 Gemini 模型，以及 ADK 的 LiteLLM 适配器（<code>google.adk.models.lite_llm.LiteLlm</code>，可通过 <code>google-adk[extensions]</code> 获取）支持的任何模型。在部署时设置提供商的 API 密钥。</li>
-<li>- **Token 流式传输**：ADK 部分事件通过 LangGraph 的异步回调管理器转发，因此 token 块会到达使用 <code>stream_mode=&quot;messages&quot;</code> 和 Studio 聊天视图的客户端。</li>
-<li>- **结构化输出**：使用 <code>output_schema</code> 和 <code>output_key</code> 配置的 agent 会在图的响应中的 <code>messages</code> 之外暴露类型化值。</li>
-<li>- **会话持久化**：<code>LangsmithSessionService</code> 在部署的检查点存储中保存 ADK 会话状态。状态在重启后保留，并在同一线程的每个后续轮次中加载。</li>
-<li>- **追踪**：当 <code>LANGSMITH_TRACING=true</code> 时，包装器会自动调用 <code>configure_google_adk()</code>（请参阅<a href="#enable-tracing">启用追踪</a>）。</li>
-<li>- **认证**：如果启用了 Agent Server <a href="/langsmith/auth.html">认证</a>，经过认证的用户 ID 将成为 ADK 的 <code>user_id</code>。否则用户 ID 为 <code>&quot;anonymous&quot;</code>。</li>
+<li><strong>Agent 原语</strong>：<code>Agent</code>、<code>SequentialAgent</code> 和 <code>ParallelAgent</code>，包括通过 <code>sub_agents</code> 参数进行的嵌套子代理委托。</li>
+<li><strong>工具</strong>：Python 函数工具和 <code>LongRunningFunctionTool</code>。</li>
+<li><strong>模型</strong>：直接支持 Gemini 模型，以及 ADK 的 LiteLLM 适配器（<code>google.adk.models.lite_llm.LiteLlm</code>，可通过 <code>google-adk[extensions]</code> 获取）支持的任何模型。在部署时设置提供商的 API 密钥。</li>
+<li><strong>Token 流式传输</strong>：ADK 部分事件通过 LangGraph 的异步回调管理器转发，因此 token 块会到达使用 <code>stream_mode=&quot;messages&quot;</code> 和 Studio 聊天视图的客户端。</li>
+<li><strong>结构化输出</strong>：使用 <code>output_schema</code> 和 <code>output_key</code> 配置的 agent 会在图的响应中的 <code>messages</code> 之外暴露类型化值。</li>
+<li><strong>会话持久化</strong>：<code>LangsmithSessionService</code> 在部署的检查点存储中保存 ADK 会话状态。状态在重启后保留，并在同一线程的每个后续轮次中加载。</li>
+<li><strong>追踪</strong>：当 <code>LANGSMITH_TRACING=true</code> 时，包装器会自动调用 <code>configure_google_adk()</code>（请参阅<a href="#enable-tracing">启用追踪</a>）。</li>
+<li><strong>认证</strong>：如果启用了 Agent Server <a href="/langsmith/auth.html">认证</a>，经过认证的用户 ID 将成为 ADK 的 <code>user_id</code>。否则用户 ID 为 <code>&quot;anonymous&quot;</code>。</li>
 </ul>
 <h3>不支持的功能</h3>
 <ul>
-<li>- **多模态输入**：包装器仅将 <code>messages[-1].content</code> 作为单个文本部分转发。入站图像、文件、音频或内联二进制块不会传递给 ADK 运行器。</li>
-<li>- **每轮多个新消息**：只有 <code>messages</code> 中的最后一项被视为新的用户消息。对话历史记录从 ADK 会话状态重建，而非从 LangGraph 消息列表重建。</li>
-<li>- **双向/实时流式传输**：包装器硬编码 <code>RunConfig(streaming_mode=StreamingMode.SSE)</code>。不会调用 ADK 的 <code>Runner.run_live()</code> 和用于音频或语音代理的双向流式传输模式，因此无法通过 <code>wrap()</code> 部署实时音频和语音代理。</li>
-<li>- **非文本输出部分**：仅从 ADK 事件中收集 <code>part.text</code> 值。代理生成的内联图像、音频或文件不会显示在图的 <code>messages</code> 输出中。</li>
-<li>- **中间事件作为消息**：响应作为一条包含连接文本的 <code>AIMessage</code> 发出。工具调用、工具结果和中间子代理轮次不会作为图的 <code>messages</code> 字段中的单独项暴露。请在 <a href="/langsmith/observability.html">LangSmith traces</a> 中检查它们。</li>
-<li>- **替代 ADK 会话服务**：<code>runner.session_service</code> 必须是 <code>LangsmithSessionService</code>。ADK 的 <code>InMemorySessionService</code>、<code>DatabaseSessionService</code> 和 <code>VertexAiSessionService</code> 会因 <code>TypeError</code> 被拒绝，因为会话状态保存在 LangGraph 检查点中。</li>
-<li>- **原生 LangGraph 中断**：包装器不暴露 LangGraph 的 <code>interrupt</code> 或 <code>Command(resume=...)</code> 机制。基于 <code>LongRunningFunctionTool</code> 构建的人机交互流程遵循 ADK 自身的模式：工具返回诸如 <code>pending_approval</code> 的状态，代理回复，后续轮次解析待处理的调用。</li>
+<li><strong>多模态输入</strong>：包装器仅将 <code>messages[-1].content</code> 作为单个文本部分转发。入站图像、文件、音频或内联二进制块不会传递给 ADK 运行器。</li>
+<li><strong>每轮多个新消息</strong>：只有 <code>messages</code> 中的最后一项被视为新的用户消息。对话历史记录从 ADK 会话状态重建，而非从 LangGraph 消息列表重建。</li>
+<li><strong>双向/实时流式传输</strong>：包装器硬编码 <code>RunConfig(streaming_mode=StreamingMode.SSE)</code>。不会调用 ADK 的 <code>Runner.run_live()</code> 和用于音频或语音代理的双向流式传输模式，因此无法通过 <code>wrap()</code> 部署实时音频和语音代理。</li>
+<li><strong>非文本输出部分</strong>：仅从 ADK 事件中收集 <code>part.text</code> 值。代理生成的内联图像、音频或文件不会显示在图的 <code>messages</code> 输出中。</li>
+<li><strong>中间事件作为消息</strong>：响应作为一条包含连接文本的 <code>AIMessage</code> 发出。工具调用、工具结果和中间子代理轮次不会作为图的 <code>messages</code> 字段中的单独项暴露。请在 <a href="/langsmith/observability.html">LangSmith traces</a> 中检查它们。</li>
+<li><strong>替代 ADK 会话服务</strong>：<code>runner.session_service</code> 必须是 <code>LangsmithSessionService</code>。ADK 的 <code>InMemorySessionService</code>、<code>DatabaseSessionService</code> 和 <code>VertexAiSessionService</code> 会因 <code>TypeError</code> 被拒绝，因为会话状态保存在 LangGraph 检查点中。</li>
+<li><strong>原生 LangGraph 中断</strong>：包装器不暴露 LangGraph 的 <code>interrupt</code> 或 <code>Command(resume=...)</code> 机制。基于 <code>LongRunningFunctionTool</code> 构建的人机交互流程遵循 ADK 自身的模式：工具返回诸如 <code>pending_approval</code> 的状态，代理回复，后续轮次解析待处理的调用。</li>
 </ul>
 <h2>项目布局</h2>
 <p>一个可部署的项目需要三个文件：</p>
@@ -1214,11 +1214,11 @@ GOOGLE_API_KEY=your-google-api-key</code></pre>
 <table>
 <thead><tr><th>参数</th><th>类型</th><th>描述</th></tr></thead>
 <tbody>
-<tr><td><code>runner</code></td><td><code>google.adk.runners.Runner</code></td><td>一个已配置的 ADK Runner。其 <code>session_service</code> **必须**是 <code>LangsmithSessionService</code>。</td></tr>
+<tr><td><code>runner</code></td><td><code>google.adk.runners.Runner</code></td><td>一个已配置的 ADK Runner。其 <code>session_service</code> <strong>必须</strong>是 <code>LangsmithSessionService</code>。</td></tr>
 </tbody>
 </table>
-<p>**返回：** 一个名为 <code>runner.app_name</code> 的 <code>Pregel</code> 图。</p>
-<p>**抛出：** 如果 <code>runner.session_service</code> 不是 <code>LangsmithSessionService</code>，则抛出 <code>TypeError</code>。</p>
+<p><strong>返回：</strong> 一个名为 <code>runner.app_name</code> 的 <code>Pregel</code> 图。</p>
+<p><strong>抛出：</strong> 如果 <code>runner.session_service</code> 不是 <code>LangsmithSessionService</code>，则抛出 <code>TypeError</code>。</p>
 <p>如果 <code>runner.agent</code> 定义了 <code>output_key</code>，则该键的值也会在图的输出中暴露，以及 <code>messages</code>。这就是使 ADK 结构化输出智能体（<code>output_schema=...</code>、<code>output_key=...</code>）与 Studio 和 <code>/runs/wait</code> 响应配合工作的原因。</p>
 <h3><code>LangsmithSessionService</code></h3>
 <p>一个由 Agent Server 的检查点存储支持的 <code>google.adk.sessions.BaseSessionService</code> 实现。包装器自动管理会话生命周期。它在线程第一轮时创建会话，在后续轮次从检查点加载，并在运行完成时将更新的会话写回。</p>
@@ -1246,10 +1246,10 @@ GOOGLE_API_KEY=your-google-api-key</code></pre>
 <h2>工作原理</h2>
 <p>当运行到达时：</p>
 <ol>
-<li>1. 包装后的图从运行配置中读取 <code>thread_id</code> 并将其作为 ADK 的 <code>session_id</code>。如果启用了<a href="/langsmith/auth.html">身份验证</a>，已认证用户的 id 将成为 ADK 的 <code>user_id</code>；否则用户 id 为 <code>&quot;anonymous&quot;</code>。</li>
-<li>2. 包装器从 LangGraph 检查点加载之前的会话（如果有）到 <code>LangsmithSessionService</code>，然后让运行器处理最新消息。</li>
-<li>3. 运行器发出 ADK 事件。包装器通过 LangGraph 的异步回调管理器转发部分 token 事件，使其通过 <code>stream_mode=&quot;messages&quot;</code> 进行流式输出，并收集最终文本以生成响应消息。</li>
-<li>4. 当运行完成时，包装器将 ADK 会话序列化并通过 <code>entrypoint.final(save=...)</code> 保存到检查点。同一个线程上的下一次运行将从该状态恢复。</li>
+<li>包装后的图从运行配置中读取 <code>thread_id</code> 并将其作为 ADK 的 <code>session_id</code>。如果启用了<a href="/langsmith/auth.html">身份验证</a>，已认证用户的 id 将成为 ADK 的 <code>user_id</code>；否则用户 id 为 <code>&quot;anonymous&quot;</code>。</li>
+<li>包装器从 LangGraph 检查点加载之前的会话（如果有）到 <code>LangsmithSessionService</code>，然后让运行器处理最新消息。</li>
+<li>运行器发出 ADK 事件。包装器通过 LangGraph 的异步回调管理器转发部分 token 事件，使其通过 <code>stream_mode=&quot;messages&quot;</code> 进行流式输出，并收集最终文本以生成响应消息。</li>
+<li>当运行完成时，包装器将 ADK 会话序列化并通过 <code>entrypoint.final(save=...)</code> 保存到检查点。同一个线程上的下一次运行将从该状态恢复。</li>
 </ol>
 <p>这意味着 ADK 自己的会话/状态语义被端到端地保留，而部署可以获得标准的 Agent Server 功能：持久化运行、流式输出、多线程持久化和追踪。</p>
 <aside class="callout"><strong>提示</strong>

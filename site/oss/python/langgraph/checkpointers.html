@@ -1074,21 +1074,30 @@
 <a class="nav-link level-5" href="/langsmith/data-purging-compliance.html">合规性数据清除</a>
 <a class="nav-link level-5" href="/langsmith/scalability-and-resilience.html">可扩展性与弹性</a></aside>
     <main class="content">
-      <article class="doc"><p>检查点器在每个超步骤保存图状态的快照，组织成 **线程**。使用检查点器编译图以启用人机交互工作流、时间旅行调试、容错执行和会话记忆。</p>
-<p>!<a href="/oss/images/checkpoints.jpg.html">检查点</a></p>
+      <article class="doc"><p>检查点器在每个超步骤保存图状态的快照，组织成 <strong>线程</strong>。使用检查点器编译图以启用人机交互工作流、时间旅行调试、容错执行和会话记忆。</p>
+<p><img src="/oss/images/checkpoints.jpg" alt="检查点" loading="lazy"></p>
 <aside class="callout"><strong>信息</strong>
-<p>**Agent Server 自动处理检查点** 使用 <a href="/langsmith/agent-server.html">Agent Server</a> 时，您无需手动实现或配置检查点器。服务器在后台处理所有持久化基础设施。</p>
+<p><strong>Agent Server 自动处理检查点</strong> 使用 <a href="/langsmith/agent-server.html">Agent Server</a> 时，您无需手动实现或配置检查点器。服务器在后台处理所有持久化基础设施。</p>
 </aside>
 <aside class="callout"><strong>建议</strong>
 <p>使用 <a href="https://smith.langchain.com?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-langgraph-checkpointers">LangSmith</a> 追踪检查点状态并调试代理如何在会话间恢复。按照 <a href="/langsmith/trace-with-langgraph.html">追踪快速入门</a> 开始设置。</p>
 </aside>
 <h2>为什么使用检查点器</h2>
 <p>检查点器是以下功能所必需的：</p>
-<p>- **人机交互**：检查点器通过允许人类检查、中断和批准图步骤来促进 <a href="/oss/python/langgraph/interrupts.html">人机交互工作流</a>。这些工作流需要检查点器，因为相关人员必须能够查看图在任何时间点的状态，并且图必须能够在人员对状态进行任何更新后恢复执行。请参阅 <a href="/oss/python/langgraph/interrupts.html">中断</a> 的示例。 - **记忆**：检查点器允许交互之间的 <a href="/oss/python/concepts/memory.html">&quot;记忆&quot;</a>。在重复的人类交互（如对话）中，任何后续消息都可以发送到该线程，它将保留对之前交互的记忆。请参阅 <a href="/oss/python/langgraph/add-memory.html">添加记忆</a> 了解如何使用检查点器添加和管理会话记忆。 - **时间旅行**：检查点器允许 <a href="/oss/python/langgraph/use-time-travel.html">&quot;时间旅行&quot;</a>，让用户回放先前的图执行来审查和/或调试特定的图步骤。此外，检查点器使得可以在任意检查点处分叉图状态以探索替代轨迹。 - **容错**：检查点提供容错和错误恢复：如果一个或多个节点在给定的超步骤失败，您可以从最后一个成功的步骤重新启动图。 &lt;a id=&quot;pending-writes&quot;&gt;&lt;/a&gt; - **待写入**：当图节点在给定的 <a href="#super-steps">超步骤</a> 执行中途失败时，LangGraph 会存储在该超步骤成功完成的其他节点的待检查点写入。当您从该超步骤恢复图执行时，无需重新运行成功的节点。</p>
+<ul>
+<li><strong>人机交互</strong>：检查点器通过允许人类检查、中断和批准图步骤来促进 <a href="/oss/python/langgraph/interrupts.html">人机交互工作流</a>。这些工作流需要检查点器，因为相关人员必须能够查看图在任何时间点的状态，并且图必须能够在人员对状态进行任何更新后恢复执行。请参阅 <a href="/oss/python/langgraph/interrupts.html">中断</a> 的示例。</li>
+<li><strong>记忆</strong>：检查点器允许交互之间的 <a href="/oss/python/concepts/memory.html">&quot;记忆&quot;</a>。在重复的人类交互（如对话）中，任何后续消息都可以发送到该线程，它将保留对之前交互的记忆。请参阅 <a href="/oss/python/langgraph/add-memory.html">添加记忆</a> 了解如何使用检查点器添加和管理会话记忆。</li>
+<li><strong>时间旅行</strong>：检查点器允许 <a href="/oss/python/langgraph/use-time-travel.html">&quot;时间旅行&quot;</a>，让用户回放先前的图执行来审查和/或调试特定的图步骤。此外，检查点器使得可以在任意检查点处分叉图状态以探索替代轨迹。</li>
+<li><strong>容错</strong>：检查点提供容错和错误恢复：如果一个或多个节点在给定的超步骤失败，您可以从最后一个成功的步骤重新启动图。</li>
+</ul>
+<a id="pending-writes"></a>
+<ul>
+<li><strong>待写入</strong>：当图节点在给定的 <a href="#super-steps">超步骤</a> 执行中途失败时，LangGraph 会存储在该超步骤成功完成的其他节点的待检查点写入。当您从该超步骤恢复图执行时，无需重新运行成功的节点。</li>
+</ul>
 <h2>核心概念</h2>
 <h3>线程</h3>
 <p>线程是分配给检查点器保存的每个检查点的唯一 ID 或线程标识符。它包含一系列 <a href="/langsmith/runs.html">运行</a> 的累积状态。当执行运行时，助手底层图的 <a href="/oss/python/langgraph/graph-api.html#state">状态</a> 将被持久化到该线程。</p>
-<p>使用检查点器调用图时，您 **必须** 将 <code>thread_id</code> 指定为配置 <code>configurable</code> 部分的一部分：</p>
+<p>使用检查点器调用图时，您 <strong>必须</strong> 将 <code>thread_id</code> 指定为配置 <code>configurable</code> 部分的一部分：</p>
 <pre><code data-language="python">{&quot;configurable&quot;: {&quot;thread_id&quot;: &quot;1&quot;}}</code></pre>
 <p>python</p>
 <pre><code data-language="python">from langgraph.graph import StateGraph, START, END
@@ -1124,17 +1133,17 @@ graph.invoke({&quot;foo&quot;: &quot;&quot;, &quot;bar&quot;:[]}, config)</code>
 <p>:::</p>
 <p>运行图后，将有恰好 4 个检查点：</p>
 <ul>
-<li>* 空检查点，<code><a href="https://reference.langchain.com/python/langgraph/constants/START"></code>START<code></a></code> 作为下一个要执行的节点</li>
-<li>* 检查点包含用户输入 <code>{&#x27;foo&#x27;: &#x27;&#x27;, &#x27;bar&#x27;: []}</code>，<code>node_a</code> 作为下一个要执行的节点</li>
-<li>* 检查点包含 <code>node_a</code> 的输出 <code>{&#x27;foo&#x27;: &#x27;a&#x27;, &#x27;bar&#x27;: [&#x27;a&#x27;]}</code>，<code>node_b</code> 作为下一个要执行的节点</li>
-<li>* 检查点包含 <code>node_b</code> 的输出 <code>{&#x27;foo&#x27;: &#x27;b&#x27;, &#x27;bar&#x27;: [&#x27;a&#x27;, &#x27;b&#x27;]}</code>，没有下一个节点要执行</li>
+<li>空检查点，<code><a href="https://reference.langchain.com/python/langgraph/constants/START"></code>START<code></a></code> 作为下一个要执行的节点</li>
+<li>检查点包含用户输入 <code>{&#x27;foo&#x27;: &#x27;&#x27;, &#x27;bar&#x27;: []}</code>，<code>node_a</code> 作为下一个要执行的节点</li>
+<li>检查点包含 <code>node_a</code> 的输出 <code>{&#x27;foo&#x27;: &#x27;a&#x27;, &#x27;bar&#x27;: [&#x27;a&#x27;]}</code>，<code>node_b</code> 作为下一个要执行的节点</li>
+<li>检查点包含 <code>node_b</code> 的输出 <code>{&#x27;foo&#x27;: &#x27;b&#x27;, &#x27;bar&#x27;: [&#x27;a&#x27;, &#x27;b&#x27;]}</code>，没有下一个节点要执行</li>
 </ul>
 <p>请注意，<code>bar</code> 通道的值包含两个节点的输出，因为此示例为 <code>bar</code> 通道设置了一个 reducer。</p>
 <h4>检查点命名空间</h4>
 <p>每个检查点都有一个 <code>checkpoint_ns</code>（检查点命名空间）字段，用于标识它属于哪个图或子图：</p>
 <ul>
-<li>- **<code>&quot;&quot;</code>**（空字符串）：检查点属于父（根）图。</li>
-<li>- **<code>&quot;node_name:uuid&quot;</code>**：检查点属于作为给定节点调用的子图。对于嵌套子图，命名空间用 <code>|</code> 分隔符连接（例如 <code>&quot;outer_node:uuid|inner_node:uuid&quot;</code>）。</li>
+<li><strong><code>&quot;&quot;</code></strong>（空字符串）：检查点属于父（根）图。</li>
+<li><strong><code>&quot;node_name:uuid&quot;</code></strong>：检查点属于作为给定节点调用的子图。对于嵌套子图，命名空间用 <code>|</code> 分隔符连接（例如 <code>&quot;outer_node:uuid|inner_node:uuid&quot;</code>）。</li>
 </ul>
 <p>你可以通过 config 从节点内部访问检查点命名空间：</p>
 <pre><code data-language="python">from langchain_core.runnables import RunnableConfig
@@ -1145,7 +1154,7 @@ def my_node(state: State, config: RunnableConfig):
 <p>有关使用子图状态和检查点的更多详细信息，请参阅 <a href="/oss/python/langgraph/use-subgraphs.html">Subgraphs</a>。</p>
 <h2>获取和更新状态</h2>
 <h3>获取状态</h3>
-<p>在与保存的图状态进行交互时，您 **必须** 指定一个<a href="#threads">线程标识符</a>。您可以通过调用 <code>graph.get_state(config)</code> 来查看图的_最新_状态。这将返回一个 <code>StateSnapshot</code> 对象，该对象对应于配置中提供的线程 ID 关联的最新检查点，或者对应于该线程的检查点 ID 关联的检查点（如果提供了检查点 ID）。</p>
+<p>在与保存的图状态进行交互时，您 <strong>必须</strong> 指定一个<a href="#threads">线程标识符</a>。您可以通过调用 <code>graph.get_state(config)</code> 来查看图的_最新_状态。这将返回一个 <code>StateSnapshot</code> 对象，该对象对应于配置中提供的线程 ID 关联的最新检查点，或者对应于该线程的检查点 ID 关联的检查点（如果提供了检查点 ID）。</p>
 <pre><code data-language="python"># get the latest state snapshot
 config = {&quot;configurable&quot;: {&quot;thread_id&quot;: &quot;1&quot;}}
 graph.get_state(config)
@@ -1359,7 +1368,7 @@ for await (const state of graph.getStateHistory(config)) {
   }
 ]</code></pre>
 <p>:::</p>
-<p>!<a href="/oss/images/get_state.jpg.html">状态</a></p>
+<p><img src="/oss/images/get_state.jpg" alt="状态" loading="lazy"></p>
 <h4>查找特定检查点</h4>
 <p>您可以过滤状态历史记录以查找符合特定条件的检查点：</p>
 <pre><code data-language="python">history = list(graph.get_state_history(config))
@@ -1380,7 +1389,7 @@ interrupted = next(
 )</code></pre>
 <p>python 您可以使用 <a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.update_state"><code>update_state</code></a> 编辑图状态。这会创建一个包含更新值的新检查点——它不会修改原始检查点。更新被视为节点更新：当定义了<a href="/oss/python/langgraph/graph-api.html#reducers">归约器</a>函数时，值会通过归约器函数传递，因此具有归约器的通道会_累积_值而不是覆盖它们。</p>
 <p>您可以可选地指定 <code>as_node</code> 来控制更新被视为来自哪个节点，这会影响下一个执行的节点。详见<a href="/oss/python/langgraph/use-time-travel.html#from-a-specific-node">时间旅行：<code>as_node</code></a>。 :::</p>
-<p>!<a href="/oss/images/checkpoints_full_story.jpg.html">Update</a></p>
+<p><img src="/oss/images/checkpoints_full_story.jpg" alt="Update" loading="lazy"></p>
 <h2>Durability modes</h2>
 <p>LangGraph 支持三种持久性模式，让您在性能和数据一致性之间取得平衡。调用任何图执行方法时都可以指定持久性模式：</p>
 <pre><code data-language="python">graph.stream(
@@ -1399,18 +1408,18 @@ interrupted = next(
 <p>有关可用的提供商，请参见 <a href="/oss/python/integrations/checkpointers.html">检查点集成</a>。</p>
 </aside>
 <ul>
-<li>* <code>langgraph-checkpoint</code>：检查点保存器的基础接口（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.base.BaseCheckpointSaver"><code>BaseCheckpointSaver</code></a>）和序列化/反序列化接口（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.serde.base.SerializerProtocol"><code>SerializerProtocol</code></a>）。包含内存中的检查点实现（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.memory.InMemorySaver"><code>InMemorySaver</code></a>）用于实验。LangGraph 自带 <code>langgraph-checkpoint</code>。</li>
-<li>* <code>langgraph-checkpoint-sqlite</code>：使用 SQLite 数据库的 LangGraph 检查点实现（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.sqlite.SqliteSaver"><code>SqliteSaver</code></a> / <a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.sqlite.aio.AsyncSqliteSaver"><code>AsyncSqliteSaver</code></a>）。适合实验和本地工作流。需要单独安装。</li>
-<li>* <code>langgraph-checkpoint-postgres</code>：使用 Postgres 数据库的高级检查点（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.postgres.PostgresSaver"><code>PostgresSaver</code></a> / <a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.postgres.aio.AsyncPostgresSaver"><code>AsyncPostgresSaver</code></a>），用于 LangSmith。适合生产环境使用。需要单独安装。</li>
-<li>* <code>langchain-azure-cosmosdb</code>：使用 Azure Cosmos DB 进行 NoSQL 的 LangGraph 检查点实现（<a href="https://reference.langchain.com/python/langchain-azure-cosmosdb/"><code>CosmosDBSaverSync</code></a> / <a href="https://reference.langchain.com/python/langchain-azure-cosmosdb/"><code>CosmosDBSaver</code></a>）。适合与 Azure 一起用于生产。支持同步和异步操作，并提供 Microsoft Entra ID 身份验证。需要单独安装。</li>
+<li><code>langgraph-checkpoint</code>：检查点保存器的基础接口（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.base.BaseCheckpointSaver"><code>BaseCheckpointSaver</code></a>）和序列化/反序列化接口（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.serde.base.SerializerProtocol"><code>SerializerProtocol</code></a>）。包含内存中的检查点实现（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.memory.InMemorySaver"><code>InMemorySaver</code></a>）用于实验。LangGraph 自带 <code>langgraph-checkpoint</code>。</li>
+<li><code>langgraph-checkpoint-sqlite</code>：使用 SQLite 数据库的 LangGraph 检查点实现（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.sqlite.SqliteSaver"><code>SqliteSaver</code></a> / <a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.sqlite.aio.AsyncSqliteSaver"><code>AsyncSqliteSaver</code></a>）。适合实验和本地工作流。需要单独安装。</li>
+<li><code>langgraph-checkpoint-postgres</code>：使用 Postgres 数据库的高级检查点（<a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.postgres.PostgresSaver"><code>PostgresSaver</code></a> / <a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.postgres.aio.AsyncPostgresSaver"><code>AsyncPostgresSaver</code></a>），用于 LangSmith。适合生产环境使用。需要单独安装。</li>
+<li><code>langchain-azure-cosmosdb</code>：使用 Azure Cosmos DB 进行 NoSQL 的 LangGraph 检查点实现（<a href="https://reference.langchain.com/python/langchain-azure-cosmosdb/"><code>CosmosDBSaverSync</code></a> / <a href="https://reference.langchain.com/python/langchain-azure-cosmosdb/"><code>CosmosDBSaver</code></a>）。适合与 Azure 一起用于生产。支持同步和异步操作，并提供 Microsoft Entra ID 身份验证。需要单独安装。</li>
 </ul>
 <h3>检查点接口</h3>
 <p>每个检查点都符合 <a href="https://reference.langchain.com/python/langgraph/checkpoints/#langgraph.checkpoint.base.BaseCheckpointSaver"><code>BaseCheckpointSaver</code></a> 接口并实现以下方法：</p>
 <ul>
-<li>* <code>.put</code> - 使用其配置和元数据存储检查点。</li>
-<li>* <code>.put_writes</code> - 存储链接到检查点的中间写入（即<a href="#pending-writes">待处理写入</a>）。</li>
-<li>* <code>.get_tuple</code> - 使用给定配置（<code>thread_id</code> 和 <code>checkpoint_id</code>）获取检查点元组。这用于在 <code>graph.get_state()</code> 中填充 <code>StateSnapshot</code>。</li>
-<li>* <code>.list</code> - 列出与给定配置和过滤条件匹配的检查点。这用于在 <code>graph.get_state_history()</code> 中填充状态历史记录。</li>
+<li><code>.put</code> - 使用其配置和元数据存储检查点。</li>
+<li><code>.put_writes</code> - 存储链接到检查点的中间写入（即<a href="#pending-writes">待处理写入</a>）。</li>
+<li><code>.get_tuple</code> - 使用给定配置（<code>thread_id</code> 和 <code>checkpoint_id</code>）获取检查点元组。这用于在 <code>graph.get_state()</code> 中填充 <code>StateSnapshot</code>。</li>
+<li><code>.list</code> - 列出与给定配置和过滤条件匹配的检查点。这用于在 <code>graph.get_state_history()</code> 中填充状态历史记录。</li>
 </ul>
 <p>如果检查点与异步图执行一起使用（即通过 <code>.ainvoke</code>、<code>.astream</code>、<code>.abatch</code> 执行图），则将使用上述方法的异步版本（<code>.aput</code>、<code>.aput_writes</code>、<code>.aget_tuple</code>、<code>.alist</code>）。</p>
 <aside class="callout"><strong>提示</strong>
@@ -1451,8 +1460,8 @@ checkpointer.setup()</code></pre>
 <h3>概述</h3>
 <p>LangGraph 的持久化层构建在两个存储抽象之上：</p>
 <ul>
-<li>- **检查点表** — 每个超步骤一行；存储序列化的图状态（<code>channel_values</code>、<code>channel_versions</code>、<code>versions_seen</code>）并链接到其父检查点。</li>
-<li>- **写入表** — 每个超步骤内每个节点输出一行；存储链接到检查点的 <code>(task_id, channel, value)</code> 元组。</li>
+<li><strong>检查点表</strong> — 每个超步骤一行；存储序列化的图状态（<code>channel_values</code>、<code>channel_versions</code>、<code>versions_seen</code>）并链接到其父检查点。</li>
+<li><strong>写入表</strong> — 每个超步骤内每个节点输出一行；存储链接到检查点的 <code>(task_id, channel, value)</code> 元组。</li>
 </ul>
 <p>您的检查点器管理两个表。<code>put</code> 写入检查点行；<code>put_writes</code> 写入节点输出行；<code>get_tuple</code> 将两者读回 <code>CheckpointTuple</code>。</p>
 <h3>基础契约</h3>
@@ -1507,9 +1516,9 @@ class MyCheckpointer(BaseCheckpointSaver):
 <p>存储一个检查点行。返回包含存储的 <code>checkpoint_id</code> 的更新配置。</p>
 <p>关键要求：</p>
 <ul>
-<li>- 使用 <code>self.serde.dumps_typed(checkpoint)</code> 序列化检查点 — 这会处理所有 LangGraph 原生类型，包括 delta 通道使用的 <code>_DeltaSnapshot</code> blob。</li>
-<li>- 完整存储 <code>metadata</code> — 不要剥离未知键。LangGraph 在次版本中添加新的元数据字段（例如 <code>counters_since_delta_snapshot</code> 用于 delta 通道）；静默丢弃它们会破坏功能。</li>
-<li>- 将 <code>config[&quot;configurable&quot;].get(&quot;checkpoint_id&quot;)</code> 存储为父检查点 ID，以便 <code>get_tuple</code> 可以填充 <code>parent_config</code>。</li>
+<li>使用 <code>self.serde.dumps_typed(checkpoint)</code> 序列化检查点 — 这会处理所有 LangGraph 原生类型，包括 delta 通道使用的 <code>_DeltaSnapshot</code> blob。</li>
+<li>完整存储 <code>metadata</code> — 不要剥离未知键。LangGraph 在次版本中添加新的元数据字段（例如 <code>counters_since_delta_snapshot</code> 用于 delta 通道）；静默丢弃它们会破坏功能。</li>
+<li>将 <code>config[&quot;configurable&quot;].get(&quot;checkpoint_id&quot;)</code> 存储为父检查点 ID，以便 <code>get_tuple</code> 可以填充 <code>parent_config</code>。</li>
 </ul>
 <pre><code data-language="python">async def aput(self, config, checkpoint, metadata, new_versions):
     thread_id = config[&quot;configurable&quot;][&quot;thread_id&quot;]
@@ -1547,14 +1556,14 @@ class MyCheckpointer(BaseCheckpointSaver):
                       task_id, task_path, final_idx, channel, type_, blob))
 
     await self.db.executemany(&quot;INSERT INTO writes (...) VALUES (...)&quot;, rows)</code></pre>
-<p>从 <code>langgraph.checkpoint.base</code> 导入 <code>WRITES_IDX_MAP</code>。它将特殊通道（<code>__error__</code>、<code>__interrupt__</code> 等）映射到保留的负索引，以避免与常规写索引冲突。</p>
+<p>从 <code>langgraph.checkpoint.base</code> 导入 <code>WRITES_IDX_MAP</code>。它将特殊通道（<code><strong>error</strong></code>、<code><strong>interrupt</strong></code> 等）映射到保留的负索引，以避免与常规写索引冲突。</p>
 <h4>get_tuple / aget_tuple</h4>
 <p>检索检查点。配置可能包含：</p>
 <ul>
-<li>- **无 <code>checkpoint_id</code>** — 返回该线程 + 命名空间的最新检查点。</li>
-<li>- **有特定 <code>checkpoint_id</code>** — 返回该精确检查点。</li>
+<li><strong>无 <code>checkpoint_id</code></strong> — 返回该线程 + 命名空间的最新检查点。</li>
+<li><strong>有特定 <code>checkpoint_id</code></strong> — 返回该精确检查点。</li>
 </ul>
-<p>**两条路径都必须正确工作。** specific-id 路径用于时间旅行，并且——关键的是——用于每次图调用时的增量通道状态重构（参见<a href="#delta-channel-support">增量通道支持</a>）。损坏的 specific-id 查询会静默破坏增量通道状态。</p>
+<p><strong>两条路径都必须正确工作。</strong> specific-id 路径用于时间旅行，并且——关键的是——用于每次图调用时的增量通道状态重构（参见<a href="#delta-channel-support">增量通道支持</a>）。损坏的 specific-id 查询会静默破坏增量通道状态。</p>
 <pre><code data-language="python">async def aget_tuple(self, config):
     thread_id = config[&quot;configurable&quot;][&quot;thread_id&quot;]
     checkpoint_ns = config[&quot;configurable&quot;].get(&quot;checkpoint_ns&quot;, &quot;&quot;)
@@ -1615,7 +1624,7 @@ class MyCheckpointer(BaseCheckpointSaver):
         pending_writes=pending_writes,
     )</code></pre>
 <aside class="callout"><strong>警告</strong>
-<p>**行键/索引设计对于特定 ID 查询很重要。** 如果您的存储使用时间排序的键（例如倒序时间戳）且不嵌入 <code>checkpoint_id</code>，则无法通过 ID 进行直接行读取。您必须在行键中编码 <code>checkpoint_id</code>，或构建二级索引。每次查询时使用值过滤进行扫描虽然可行，但无法扩展。</p>
+<p><strong>行键/索引设计对于特定 ID 查询很重要。</strong> 如果您的存储使用时间排序的键（例如倒序时间戳）且不嵌入 <code>checkpoint_id</code>，则无法通过 ID 进行直接行读取。您必须在行键中编码 <code>checkpoint_id</code>，或构建二级索引。每次查询时使用值过滤进行扫描虽然可行，但无法扩展。</p>
 </aside>
 <h4>list / alist</h4>
 <p>返回线程的检查点，最新的在前。遵循 <code>before</code> 参数（仅返回比该配置的 <code>checkpoint_id</code> 更旧的检查点）和 <code>limit</code> 参数。</p>
@@ -1623,7 +1632,7 @@ class MyCheckpointer(BaseCheckpointSaver):
 <p>删除线程的所有检查点和写入记录。检查点行和写入行都必须删除。</p>
 <h3>行键/索引设计</h3>
 <p>存储和索引检查点的方式直接影响正确性和性能。</p>
-<p>**推荐架构（SQL）：**</p>
+<p><strong>推荐架构（SQL）：</strong></p>
 <pre><code data-language="sql">CREATE TABLE checkpoints (
     thread_id          TEXT NOT NULL,
     checkpoint_ns      TEXT NOT NULL DEFAULT &#x27;&#x27;,
@@ -1648,10 +1657,14 @@ CREATE TABLE writes (
     PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, task_path, idx)
 );</code></pre>
 <p>因为 <code>checkpoint_id</code> 是 ULID，所以它按字典序排序——值越大表示越新。&quot;获取最新&quot;就是 <code>ORDER BY checkpoint_id DESC LIMIT 1</code>；&quot;按 ID 获取&quot;就是对主键的等值查找。</p>
-<p>**对于非 SQL 存储：** 同样适用此原则。无论使用何种键方案，<code>(thread_id, checkpoint_ns, checkpoint_id)</code> 的直接查找必须是 O(1) 或接近 O(1)。避免使用那种只能通过扫描所有行来按 ID 查找 checkpoint 的设计。</p>
+<p><strong>对于非 SQL 存储：</strong> 同样适用此原则。无论使用何种键方案，<code>(thread_id, checkpoint_ns, checkpoint_id)</code> 的直接查找必须是 O(1) 或接近 O(1)。避免使用那种只能通过扫描所有行来按 ID 查找 checkpoint 的设计。</p>
 <h3>序列化</h3>
 <p>始终使用 <code>self.serde</code>（从 <code>BaseCheckpointSaver</code> 继承，默认为 <code>JsonPlusSerializer</code>）来处理 checkpoint、写入和元数据。不要直接对元数据使用 <code>pickle</code>——虽然可以工作，但 <code>JsonPlusSerializer</code> 能生成人类可读的输出，并且更好地处理版本控制。</p>
-<p><code>JsonPlusSerializer</code> 自动处理所有 LangGraph 原生类型： - <code>_DeltaSnapshot</code> — delta 通道使用的哨兵 blob（msgpack ext code 7） - Pydantic v2 模型、dataclass、numpy 数组、datetime、enum 等</p>
+<p><code>JsonPlusSerializer</code> 自动处理所有 LangGraph 原生类型：</p>
+<ul>
+<li><code>_DeltaSnapshot</code> — delta 通道使用的哨兵 blob（msgpack ext code 7）</li>
+<li>Pydantic v2 模型、dataclass、numpy 数组、datetime、enum 等</li>
+</ul>
 <p>如果编写自定义序列化器，请确保它能够往返处理来自 <code>langgraph.checkpoint.serde.types</code> 的 <code>_DeltaSnapshot</code>。</p>
 <h3>扩展功能</h3>
 <p>这些方法是可选的，但可以解锁额外的 Agent Server 功能。如果你的存储后端能够高效支持，请实现它们。</p>
@@ -1667,14 +1680,14 @@ CREATE TABLE writes (
 <p>Agent Server 在启动时自动检测你的 checkpointer 实现了哪些功能，并激活相应的特性。</p>
 <h3>Delta 通道支持</h3>
 <aside class="callout"><strong>信息</strong>
-<p>**DeltaChannel 处于测试阶段。** API 和磁盘表示形式可能在设计稳定之前发生变化。</p>
+<p><strong>DeltaChannel 处于测试阶段。</strong> API 和磁盘表示形式可能在设计稳定之前发生变化。</p>
 </aside>
 <p><code>DeltaChannel</code> 是一种 reducer 通道，它在 checkpoint blob 中只存储哨兵（<code>MISSING</code>）而不是完整的通道值。状态通过在 reducer 上重放祖先写入来重建。这使得 checkpoint blob 为每步 O(1)，而不是像 <code>messages</code> 这样随时间累积的通道的 O(N)。</p>
 <h4>运行时需求</h4>
 <p>当加载一个 checkpoint 时，如果其 delta 通道不在 <code>channel_values</code> 中，LangGraph 会调用 <code>saver.get_delta_channel_history(config=config, channels=[...])</code>。这会为每个通道返回：</p>
 <ul>
-<li>- **<code>writes</code>** — 祖先链中对该通道的所有写入，最早的在前，直到最近的快照。</li>
-<li>- **<code>seed</code>**（可选）— 最近有快照的祖先上存储的 <code>_DeltaSnapshot</code> blob；如果遍历到根仍未找到快照，则不存在。</li>
+<li><strong><code>writes</code></strong> — 祖先链中对该通道的所有写入，最早的在前，直到最近的快照。</li>
+<li><strong><code>seed</code></strong>（可选）— 最近有快照的祖先上存储的 <code>_DeltaSnapshot</code> blob；如果遍历到根仍未找到快照，则不存在。</li>
 </ul>
 <p>然后运行时调用 <code>channel.from_checkpoint(seed)</code> 和 <code>channel.replay_writes(writes)</code> 来重建实时值。</p>
 <h4>默认实现</h4>
@@ -1704,7 +1717,7 @@ def get_delta_channel_history(self, *, config, channels):
         ch: {&quot;writes&quot;: list(reversed(collected[ch])), **({&quot;seed&quot;: seed[ch]} if ch in seed else {})}
         for ch in channels
     }</code></pre>
-<p>**关键依赖项：** <code>get_tuple(cursor)</code> 始终使用特定的 <code>checkpoint_id</code>（父级的 id）进行调用。如果该查询返回 <code>None</code>，则遍历立即停止，每个 delta 通道都会静默重建为空——没有错误。这就是为什么 <code>get_tuple</code> 中的特定 id 路径必须正确。</p>
+<p><strong>关键依赖项：</strong> <code>get_tuple(cursor)</code> 始终使用特定的 <code>checkpoint_id</code>（父级的 id）进行调用。如果该查询返回 <code>None</code>，则遍历立即停止，每个 delta 通道都会静默重建为空——没有错误。这就是为什么 <code>get_tuple</code> 中的特定 id 路径必须正确。</p>
 <h4>性能覆盖</h4>
 <p>默认的遍历为每个祖先 checkpoint 发出一次 <code>get_tuple</code> 调用。对于查询支持良好的后端，重写 <code>get_delta_channel_history</code>（及其异步版本）以在两个查询中检索祖先链和写入：</p>
 <pre><code data-language="python">async def aget_delta_channel_history(self, *, config, channels):
@@ -1781,9 +1794,9 @@ def get_delta_channel_history(self, *, config, channels):
 <p><code>DeltaChannel</code> 状态不是自包含在单个检查点中的——它依赖于回溯到最近 <code>_DeltaSnapshot</code> 的祖先写入链。如果您实现了 <code>prune</code> 或 <code>delete_for_runs</code>，则不能删除存活检查点的 delta channel 所依赖的写入行。</p>
 <p>安全选项：</p>
 <ol>
-<li>1. **裁剪前先遍历** — 对于每个您打算保留的检查点，遍历其祖先链并将直到最近 <code>_DeltaSnapshot</code> 的所有写入行标记为不可删除。</li>
-<li>2. **裁剪前强制创建快照** — 在您要保留的检查点上重写 <code>channel_values[ch] = _DeltaSnapshot(reconstructed_value)</code>，然后自由删除祖先。</li>
-<li>3. **跳过 delta-channel 线程的裁剪** — 如果您尚不需要裁剪，这是最安全的短期选项。</li>
+<li><strong>裁剪前先遍历</strong> — 对于每个您打算保留的检查点，遍历其祖先链并将直到最近 <code>_DeltaSnapshot</code> 的所有写入行标记为不可删除。</li>
+<li><strong>裁剪前强制创建快照</strong> — 在您要保留的检查点上重写 <code>channel_values[ch] = _DeltaSnapshot(reconstructed_value)</code>，然后自由删除祖先。</li>
+<li><strong>跳过 delta-channel 线程的裁剪</strong> — 如果您尚不需要裁剪，这是最安全的短期选项。</li>
 </ol>
 <h4>使用 delta channel 复制线程</h4>
 <p>在实现 <code>copy_thread</code> 时，复制完整的祖先链——而不仅仅是头部检查点。目标线程必须为每个 delta channel 拥有回溯到至少一个 <code>_DeltaSnapshot</code> 的写入行，否则这些 channel 在复制后将重建为空。</p>

@@ -15,6 +15,14 @@ on:
         description: Do not call MiniMax; copy source text unchanged for a smoke run
         required: false
         default: "false"
+      renderer:
+        description: Renderer to use after the official LangChain pipeline build
+        required: false
+        default: "static"
+        type: choice
+        options:
+          - static
+          - mintlify
   schedule:
     # 02:17 Asia/Shanghai every day.
     - cron: "17 18 * * *"
@@ -82,6 +90,7 @@ jobs:
           TRANSLATION_WORKERS: "1"
           TRANSLATION_MAX_CHARS: "6000"
           TRANSLATION_TIMEOUT: "90"
+          DOCS_RENDERER: ${{ github.event.inputs.renderer || 'static' }}
         run: |
           args=("--limit" "${{ github.event.inputs.limit || '0' }}")
           if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
@@ -97,7 +106,9 @@ jobs:
 
       - name: Verify generated static site
         if: steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
-        run: python scripts/verify_site.py --site-dir site --min-pages 20
+        run: |
+          python -m compileall -q scripts
+          python scripts/verify_site.py --site-dir site --min-pages 20
 
       - name: Commit generated docs
         if: (steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') && github.event.inputs.mock != 'true'
@@ -119,19 +130,3 @@ jobs:
             git commit -m "chore: sync LangChain Chinese docs"
             git push
           fi
-
-      - name: Deploy to Cloudflare Pages
-        if: (steps.upstream.outputs.changed == 'true' || github.event_name == 'workflow_dispatch') && github.event.inputs.mock != 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_PROJECT_NAME: ${{ vars.CLOUDFLARE_PROJECT_NAME || 'langchainzh' }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "Cloudflare Pages direct deploy skipped; set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to enable it."
-            exit 0
-          fi
-          python scripts/deploy_cloudflare_pages.py \
-            --skip-verify \
-            --project-name "$CLOUDFLARE_PROJECT_NAME" \
-            --branch main

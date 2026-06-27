@@ -1076,7 +1076,7 @@
     <main class="content">
       <article class="doc"><p>本页面介绍如何为自托管 LangSmith 可观测性和评估系统规划、配置和运行灾难恢复 (DR)。它涵盖必须保护哪些数据、数据存储在哪里、如何备份数据，以及如何在区域或可用区故障后恢复平台。</p>
 <aside class="callout"><strong>提示</strong>
-<p>**共同责任。** 对于自托管部署，您负责所有组件的备份、复制、恢复测试和恢复程序，包括 LangSmith Pod 和所有后端数据存储。LangChain 仅负责 LangSmith 软件本身。有关等效的 SaaS 责任，请参阅<a href="/langsmith/shared-responsibility-model.html">共同责任模型</a>。</p>
+<p><strong>共同责任。</strong> 对于自托管部署，您负责所有组件的备份、复制、恢复测试和恢复程序，包括 LangSmith Pod 和所有后端数据存储。LangChain 仅负责 LangSmith 软件本身。有关等效的 SaaS 责任，请参阅<a href="/langsmith/shared-responsibility-model.html">共同责任模型</a>。</p>
 </aside>
 <aside class="callout"><strong>建议</strong>
 <p>有关本页面假设的建筑原语（无状态服务、队列心跳、精确一次语义）的详细信息，请参阅<a href="/langsmith/scalability-and-resilience.html">可扩展性和弹性</a>。</p>
@@ -1087,9 +1087,9 @@
 <thead><tr><th>层级</th><th>组件</th><th>状态</th><th>恢复操作</th></tr></thead>
 <tbody>
 <tr><td>LangSmith 服务</td><td><code>langsmith-frontend</code>、<code>langsmith-backend</code>、<code>langsmith-platform-backend</code>、<code>langsmith-queue</code>、<code>langsmith-ingest-queue</code>、<code>langsmith-playground</code>、<code>langsmith-ace-backend</code></td><td>无状态</td><td>重新安装 Helm chart</td></tr>
-<tr><td>PostgreSQL</td><td>运营数据：组织、工作区、用户、API 密钥、数据集、提示词、项目、部署元数据</td><td>**持久**</td><td>从备份或副本恢复</td></tr>
-<tr><td>ClickHouse</td><td>追踪和反馈（高容量分析数据）</td><td>**持久**</td><td>从备份或副本恢复</td></tr>
-<tr><td>Blob 存储（S3/GCS/Azure Blob）</td><td>运行输入、输出、错误、清单、额外数据、事件、附件（启用时）</td><td>**持久**</td><td>从版本化存储桶或副本恢复</td></tr>
+<tr><td>PostgreSQL</td><td>运营数据：组织、工作区、用户、API 密钥、数据集、提示词、项目、部署元数据</td><td><strong>持久</strong></td><td>从备份或副本恢复</td></tr>
+<tr><td>ClickHouse</td><td>追踪和反馈（高容量分析数据）</td><td><strong>持久</strong></td><td>从备份或副本恢复</td></tr>
+<tr><td>Blob 存储（S3/GCS/Azure Blob）</td><td>运行输入、输出、错误、清单、额外数据、事件、附件（启用时）</td><td><strong>持久</strong></td><td>从版本化存储桶或副本恢复</td></tr>
 <tr><td>Redis（或 Valkey）</td><td>临时队列状态、pub/sub、缓存、运行心跳</td><td>临时</td><td>重新配置；无需恢复</td></tr>
 <tr><td>Kubernetes 对象</td><td>Helm values、<code>Secret</code>、TLS 材料、IRSA / 工作负载身份绑定</td><td>配置</td><td>从源代码控制重新应用或备份集群状态</td></tr>
 </tbody>
@@ -1100,8 +1100,8 @@
 <h2>规划您的 RPO 和 RTO</h2>
 <p>在设计 DR 架构之前，请定义两个目标：</p>
 <ul>
-<li>- **恢复点目标 (RPO)：** 您的组织可以容忍的最大数据丢失量，以时间衡量。使用托管 Postgres PITR，RPO 通常小于 5 分钟。仅使用夜间快照，RPO 可能长达 24 小时。</li>
-<li>- **恢复时间目标 (RTO)：** 故障后恢复服务的最大时间。热跨区域副本可以在几分钟内实现 RTO；从快照冷恢复可能需要数小时，特别是对于大型 ClickHouse 数据集。</li>
+<li><strong>恢复点目标 (RPO)：</strong> 您的组织可以容忍的最大数据丢失量，以时间衡量。使用托管 Postgres PITR，RPO 通常小于 5 分钟。仅使用夜间快照，RPO 可能长达 24 小时。</li>
+<li><strong>恢复时间目标 (RTO)：</strong> 故障后恢复服务的最大时间。热跨区域副本可以在几分钟内实现 RTO；从快照冷恢复可能需要数小时，特别是对于大型 ClickHouse 数据集。</li>
 </ul>
 <p>以下部署模式假设三种目标配置文件之一：</p>
 <table>
@@ -1113,39 +1113,39 @@
 </tbody>
 </table>
 <h2>Postgres</h2>
-<p>LangSmith 使用 PostgreSQL 作为运营和事务数据的主要存储。**与 Postgres 的所有通信都使用可重试错误的重试机制**，因此故障转移期间的短暂中断通常不会显示为用户可见的错误。长时间中断将使 LangSmith API 不可用。</p>
+<p>LangSmith 使用 PostgreSQL 作为运营和事务数据的主要存储。<strong>与 Postgres 的所有通信都使用可重试错误的重试机制</strong>，因此故障转移期间的短暂中断通常不会显示为用户可见的错误。长时间中断将使 LangSmith API 不可用。</p>
 <h3>使用托管服务</h3>
 <p>我们强烈建议在生产环境中使用托管服务运行 Postgres。托管服务提供内置的自动备份、PITR 和高可用性故障转移。有关设置，请参阅<a href="/langsmith/self-host-external-postgres.html">连接外部 Postgres</a>。</p>
 <section class="mdx-block">
 <h3>AWS</h3>
 <p>在多可用区模式下运行 <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_GettingStarted.CreatingConnecting.PostgreSQL.html">Amazon RDS for PostgreSQL</a> 或 <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.html">Aurora PostgreSQL</a>。</p>
-<p>- **备份：** 启用<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.html">自动备份</a>，保留窗口与您的合规姿态匹配（通常为 7 到 35 天）。 - **PITR：** 自动备份在保留窗口内包含 PITR。 - **高可用性：** 多可用区部署在第二个可用区维护同步备用，具有自动故障转移。 - **跨区域 DR：** 对于 Aurora，配置 <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html">Aurora 全局数据库</a>。对于 RDS，使用<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.XRgn.html">跨区域只读副本</a>或将自动快照复制到辅助区域。 - **加密：** 使用客户管理的 <a href="https://aws.amazon.com/kms/">KMS</a> 密钥启用存储加密。 &lt;/section&gt;</p>
+<p>- <strong>备份：</strong> 启用<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.html">自动备份</a>，保留窗口与您的合规姿态匹配（通常为 7 到 35 天）。 - <strong>PITR：</strong> 自动备份在保留窗口内包含 PITR。 - <strong>高可用性：</strong> 多可用区部署在第二个可用区维护同步备用，具有自动故障转移。 - <strong>跨区域 DR：</strong> 对于 Aurora，配置 <a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html">Aurora 全局数据库</a>。对于 RDS，使用<a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.XRgn.html">跨区域只读副本</a>或将自动快照复制到辅助区域。 - <strong>加密：</strong> 使用客户管理的 <a href="https://aws.amazon.com/kms/">KMS</a> 密钥启用存储加密。 &lt;/section&gt;</p>
 <section class="mdx-block">
 <h3>GCP</h3>
 <p>使用<a href="https://cloud.google.com/sql/docs/postgres/high-availability">高可用性</a>运行 <a href="https://cloud.google.com/sql/docs/postgres">Cloud SQL for PostgreSQL</a>。</p>
-<p>- **备份：** 启用带 PITR 的<a href="https://cloud.google.com/sql/docs/postgres/backup-recovery/backups">自动备份</a>。 - **高可用性：** 区域实例同步复制到第二个区域中的备用。 - **跨区域 DR：** 配置<a href="https://cloud.google.com/sql/docs/postgres/replication/cross-region-replicas">跨区域只读副本</a>并在区域故障时提升。 - **加密：** 使用 <a href="https://docs.cloud.google.com/sql/docs/postgres/cmek">Cloud KMS 客户管理加密密钥</a>。 &lt;/section&gt;</p>
+<p>- <strong>备份：</strong> 启用带 PITR 的<a href="https://cloud.google.com/sql/docs/postgres/backup-recovery/backups">自动备份</a>。 - <strong>高可用性：</strong> 区域实例同步复制到第二个区域中的备用。 - <strong>跨区域 DR：</strong> 配置<a href="https://cloud.google.com/sql/docs/postgres/replication/cross-region-replicas">跨区域只读副本</a>并在区域故障时提升。 - <strong>加密：</strong> 使用 <a href="https://docs.cloud.google.com/sql/docs/postgres/cmek">Cloud KMS 客户管理加密密钥</a>。 &lt;/section&gt;</p>
 <section class="mdx-block">
 <h3>Azure</h3>
 <p>使用区域冗余高可用性运行 <a href="https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/overview">Azure Database for PostgreSQL Flexible Server</a>。</p>
-<p>- **备份：** 启用带异地冗余备份存储的<a href="https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-backup-restore">自动备份</a>。 - **高可用性：** 区域冗余高可用性在不同可用区维护同步备用。 - **跨区域 DR：** 在辅助区域使用<a href="https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-read-replicas">只读副本</a>，以便在区域故障时提升。 &lt;/section&gt;</p>
+<p>- <strong>备份：</strong> 启用带异地冗余备份存储的<a href="https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-backup-restore">自动备份</a>。 - <strong>高可用性：</strong> 区域冗余高可用性在不同可用区维护同步备用。 - <strong>跨区域 DR：</strong> 在辅助区域使用<a href="https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-read-replicas">只读副本</a>，以便在区域故障时提升。 &lt;/section&gt;</p>
 <h3>集群内 Postgres</h3>
-<p>如果您必须从捆绑的 chart 在集群内运行 Postgres，您负责备份底层 PersistentVolume。定期使用 CSI 驱动程序的快照类对 PVC 进行快照，并将快照复制到对象存储或不同区域。**不建议将此路径用于生产。**</p>
+<p>如果您必须从捆绑的 chart 在集群内运行 Postgres，您负责备份底层 PersistentVolume。定期使用 CSI 驱动程序的快照类对 PVC 进行快照，并将快照复制到对象存储或不同区域。<strong>不建议将此路径用于生产。</strong></p>
 <h2>ClickHouse</h2>
 <p>ClickHouse 保存高容量追踪和反馈数据，通常是 LangSmith 部署中最大的数据存储。备份和复制需要规划成本和恢复时间影响。</p>
 <h3>托管 ClickHouse</h3>
 <p>实现弹性 ClickHouse 的最快路径是托管选项。请参阅<a href="/langsmith/self-host-external-clickhouse.html">连接外部 ClickHouse</a>。</p>
 <ul>
-<li>- **<a href="/langsmith/langsmith-managed-clickhouse.html">LangSmith 托管 ClickHouse</a>：** LangChain 操作 ClickHouse 集群，包括备份和复制。VPC 对等连接将其连接到您的 LangSmith 安装。</li>
-<li>- **<a href="https://clickhouse.cloud/">ClickHouse Cloud</a>：** 提供内置备份、复制和高可用性。可在 AWS、GCP 和 Azure 市场上使用。</li>
+<li><strong><a href="/langsmith/langsmith-managed-clickhouse.html">LangSmith 托管 ClickHouse</a>：</strong> LangChain 操作 ClickHouse 集群，包括备份和复制。VPC 对等连接将其连接到您的 LangSmith 安装。</li>
+<li><strong><a href="https://clickhouse.cloud/">ClickHouse Cloud</a>：</strong> 提供内置备份、复制和高可用性。可在 AWS、GCP 和 Azure 市场上使用。</li>
 </ul>
 <h3>自管理复制集群</h3>
 <p>如果出于合规性或气隙原因自行管理 ClickHouse，请使用复制集群。单个节点 ClickHouse 实例无法满足有意义的 RPO。</p>
 <ul>
-<li>- 使用 <a href="https://clickhouse.com/docs/architecture/replication">Keeper 或 ZooKeeper</a> 通过复制配置多节点 ClickHouse 集群。</li>
-<li>- 在 LangSmith chart 中设置 <code>cluster</code> 值，以便迁移从一开始就创建 <code>Replicated</code> 表引擎。**集群设置必须针对全新架构配置**，您不能稍后将独立实例转换为集群。</li>
-<li>- 将副本分布到可用区。</li>
-<li>- 安排<a href="https://clickhouse.com/docs/operations/backup"><code>BACKUP TABLE</code> 或 <code>BACKUP DATABASE</code></a>到对象存储，频率与您的 RPO 匹配。社区 <a href="https://github.com/Altinity/clickhouse-backup"><code>clickhouse-backup</code></a> 工具也是定时增量备份的流行选项，内置支持 S3、GCS 和 Azure Blob。</li>
-<li>- 对于跨区域 DR，将备份存储桶复制到辅助区域。跨区域 ClickHouse 复制在自管理部署中通常不受支持，ClickHouse Cloud 也不提供此功能，因此请计划备份/恢复故障转移模型，而不是热副本。</li>
+<li>使用 <a href="https://clickhouse.com/docs/architecture/replication">Keeper 或 ZooKeeper</a> 通过复制配置多节点 ClickHouse 集群。</li>
+<li>在 LangSmith chart 中设置 <code>cluster</code> 值，以便迁移从一开始就创建 <code>Replicated</code> 表引擎。<strong>集群设置必须针对全新架构配置</strong>，您不能稍后将独立实例转换为集群。</li>
+<li>将副本分布到可用区。</li>
+<li>安排<a href="https://clickhouse.com/docs/operations/backup"><code>BACKUP TABLE</code> 或 <code>BACKUP DATABASE</code></a>到对象存储，频率与您的 RPO 匹配。社区 <a href="https://github.com/Altinity/clickhouse-backup"><code>clickhouse-backup</code></a> 工具也是定时增量备份的流行选项，内置支持 S3、GCS 和 Azure Blob。</li>
+<li>对于跨区域 DR，将备份存储桶复制到辅助区域。跨区域 ClickHouse 复制在自管理部署中通常不受支持，ClickHouse Cloud 也不提供此功能，因此请计划备份/恢复故障转移模型，而不是热副本。</li>
 </ul>
 <p>有关复制的示例配置，请参阅 Helm 仓库中的<a href="https://github.com/langchain-ai/helm/blob/main/charts/langsmith/examples/replicated-clickhouse/README.md">复制 ClickHouse 示例</a>。</p>
 <aside class="callout"><strong>警告</strong>
@@ -1161,62 +1161,62 @@
 <p>- 在存储桶上启用<a href="https://cloud.google.com/storage/docs/object-versioning">对象版本控制</a>。 - 使用<a href="https://cloud.google.com/storage/docs/locations">双区域或多区域存储桶</a>实现地理冗余。 - 对于跨区域 DR，使用 <a href="https://cloud.google.com/storage-transfer-service">Storage Transfer Service</a>或<a href="https://cloud.google.com/storage/docs/lifecycle">对象生命周期管理</a>与复制策略。 - 使用<a href="https://cloud.google.com/storage/docs/encryption/customer-managed-keys">客户管理加密密钥 (CMEK)</a>加密。 &lt;/section&gt;</p>
 <section class="mdx-block">
 <h3>Azure</h3>
-<p>- 选择与您的 DR 目标匹配的<a href="https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy">冗余层</a>。使用 **RA-GRS** 或 **RA-GZRS** 以便在主区域中断期间跨区域读取访问。 - 启用<a href="https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview">软删除和 blob 版本控制</a>。 - 使用 <a href="https://learn.microsoft.com/en-us/azure/storage/common/customer-managed-keys-overview">Key Vault 中的客户管理密钥</a>加密。 &lt;/section&gt;</p>
+<p>- 选择与您的 DR 目标匹配的<a href="https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy">冗余层</a>。使用 <strong>RA-GRS</strong> 或 <strong>RA-GZRS</strong> 以便在主区域中断期间跨区域读取访问。 - 启用<a href="https://learn.microsoft.com/en-us/azure/storage/blobs/soft-delete-blob-overview">软删除和 blob 版本控制</a>。 - 使用 <a href="https://learn.microsoft.com/en-us/azure/storage/common/customer-managed-keys-overview">Key Vault 中的客户管理密钥</a>加密。 &lt;/section&gt;</p>
 <aside class="callout"><strong>警告</strong>
-<p>**在 DR 存储桶中保留 TTL 生命周期规则。** 如果您将数据复制到 DR 存储桶，还要复制 <code>ttl_s/</code>、<code>ttl_l/</code> 和任何自定义 <code>ttl_XXd/</code> 前缀的生命周期规则。DR 存储桶中缺少规则会导致故障转移后数据无限期保留。请参阅 <a href="/langsmith/self-host-blob-storage.html#ttl-configuration">TTL 配置</a>。</p>
+<p><strong>在 DR 存储桶中保留 TTL 生命周期规则。</strong> 如果您将数据复制到 DR 存储桶，还要复制 <code>ttl_s/</code>、<code>ttl_l/</code> 和任何自定义 <code>ttl_XXd/</code> 前缀的生命周期规则。DR 存储桶中缺少规则会导致故障转移后数据无限期保留。请参阅 <a href="/langsmith/self-host-blob-storage.html#ttl-configuration">TTL 配置</a>。</p>
 </aside>
 <h2>Redis</h2>
-<p>Redis 存储临时元数据、队列状态和跨实例 pub/sub。**Redis 中不存储持久数据，因此您不需要备份它。** 与 Redis 的通信会重试可重试错误。恢复设计是使 Redis 在活动区域内高度可用，并在 DR 区域从头重新配置。</p>
+<p>Redis 存储临时元数据、队列状态和跨实例 pub/sub。<strong>Redis 中不存储持久数据，因此您不需要备份它。</strong> 与 Redis 的通信会重试可重试错误。恢复设计是使 Redis 在活动区域内高度可用，并在 DR 区域从头重新配置。</p>
 <ul>
-<li>- 使用云托管服务：<a href="https://aws.amazon.com/elasticache/redis/">Amazon ElastiCache</a>、<a href="https://cloud.google.com/memorystore">Google Cloud Memorystore</a> 或 <a href="https://azure.microsoft.com/en-us/products/cache">Azure Cache for Redis</a>。</li>
-<li>- 启用多可用区故障转移。</li>
-<li>- 对于跨区域 DR，在故障转移期间在 DR 区域配置新的 Redis 实例；**不要**在新区群中重用活动区域的 Redis URI。</li>
+<li>使用云托管服务：<a href="https://aws.amazon.com/elasticache/redis/">Amazon ElastiCache</a>、<a href="https://cloud.google.com/memorystore">Google Cloud Memorystore</a> 或 <a href="https://azure.microsoft.com/en-us/products/cache">Azure Cache for Redis</a>。</li>
+<li>启用多可用区故障转移。</li>
+<li>对于跨区域 DR，在故障转移期间在 DR 区域配置新的 Redis 实例；<strong>不要</strong>在新区群中重用活动区域的 Redis URI。</li>
 </ul>
 <aside class="callout"><strong>警告</strong>
-<p>每个 LangSmith 安装必须使用自己专用的 Redis 实例。**不要在两个安装之间共享 Redis 实例**，包括可能在任何时候都处于活动状态的主安装和 DR 副本。共享 Redis 会导致部署任务被路由到错误的集群。请参阅<a href="/langsmith/self-host-external-redis.html">连接外部 Redis</a>。</p>
+<p>每个 LangSmith 安装必须使用自己专用的 Redis 实例。<strong>不要在两个安装之间共享 Redis 实例</strong>，包括可能在任何时候都处于活动状态的主安装和 DR 副本。共享 Redis 会导致部署任务被路由到错误的集群。请参阅<a href="/langsmith/self-host-external-redis.html">连接外部 Redis</a>。</p>
 </aside>
 <h2>Kubernetes 配置和密钥</h2>
 <p>Helm chart values、Kubernetes <code>Secret</code> 和身份绑定与您的数据备份同样重要。完整恢复需要两者。</p>
 <ul>
-<li>- **Helm values：** 将 <code>values.yaml</code> 存储在源代码控制中。单独跟踪每个环境的覆盖。</li>
-<li>- **镜像版本：** 固定 LangSmith chart 版本和镜像标签，以便恢复安装相同版本的软件。请参阅<a href="/langsmith/self-host-upgrades.html">自托管升级</a>和<a href="/langsmith/self-host-dependency-versions.html">依赖版本</a>。</li>
-<li>- **密钥：** LangSmith 从 Kubernetes <code>Secret</code> 读取数据库、blob 和许可凭证。将这些镜像到 DR 集群的密钥管理器（<a href="https://aws.amazon.com/secrets-manager/">AWS Secrets Manager</a>、<a href="https://cloud.google.com/secret-manager">GCP Secret Manager</a> 或 <a href="https://azure.microsoft.com/en-us/products/key-vault/">Azure Key Vault</a>）。请参阅<a href="/langsmith/self-host-using-an-existing-secret.html">使用现有密钥</a>。</li>
-<li>- **TLS 材料：** 如果您在 LangSmith 入口终止 TLS，请备份证书和密钥，或在 DR 区域从您的私有 CA 重新颁发。请参阅<a href="/langsmith/self-host-custom-tls-certificates.html">自定义 TLS 证书</a>。</li>
-<li>- **IRSA / 工作负载身份绑定：** 在 DR 区域重新创建 IAM 角色和服务账户绑定；服务账户 ARN 和注解是区域范围的。</li>
-<li>- **许可证密钥：** 将 LangSmith 许可证密钥与其他恢复密钥一起保存。</li>
+<li><strong>Helm values：</strong> 将 <code>values.yaml</code> 存储在源代码控制中。单独跟踪每个环境的覆盖。</li>
+<li><strong>镜像版本：</strong> 固定 LangSmith chart 版本和镜像标签，以便恢复安装相同版本的软件。请参阅<a href="/langsmith/self-host-upgrades.html">自托管升级</a>和<a href="/langsmith/self-host-dependency-versions.html">依赖版本</a>。</li>
+<li><strong>密钥：</strong> LangSmith 从 Kubernetes <code>Secret</code> 读取数据库、blob 和许可凭证。将这些镜像到 DR 集群的密钥管理器（<a href="https://aws.amazon.com/secrets-manager/">AWS Secrets Manager</a>、<a href="https://cloud.google.com/secret-manager">GCP Secret Manager</a> 或 <a href="https://azure.microsoft.com/en-us/products/key-vault/">Azure Key Vault</a>）。请参阅<a href="/langsmith/self-host-using-an-existing-secret.html">使用现有密钥</a>。</li>
+<li><strong>TLS 材料：</strong> 如果您在 LangSmith 入口终止 TLS，请备份证书和密钥，或在 DR 区域从您的私有 CA 重新颁发。请参阅<a href="/langsmith/self-host-custom-tls-certificates.html">自定义 TLS 证书</a>。</li>
+<li><strong>IRSA / 工作负载身份绑定：</strong> 在 DR 区域重新创建 IAM 角色和服务账户绑定；服务账户 ARN 和注解是区域范围的。</li>
+<li><strong>许可证密钥：</strong> 将 LangSmith 许可证密钥与其他恢复密钥一起保存。</li>
 </ul>
 <h2>参考部署模式</h2>
 <h3>具有多可用区高可用的单区域（推荐基线）</h3>
 <p>这是最低生产姿态，可防止可用区故障。它不能防止区域中断。</p>
 <ul>
-<li>- Kubernetes 节点池跨越至少两个可用区。</li>
-<li>- Postgres 以多可用区高可用模式运行（RDS Multi-AZ、Cloud SQL HA 或 Flexible Server 区域冗余）。</li>
-<li>- ClickHouse 作为托管服务，或跨可用区分布的 3 节点复制集群。</li>
-<li>- 启用多可用区故障转移的 Redis。</li>
-<li>- 启用版本控制的 blob 存储，至少具有区域冗余的冗余层。</li>
-<li>- 每个数据存储的每日快照，保留至少 7 天。</li>
+<li>Kubernetes 节点池跨越至少两个可用区。</li>
+<li>Postgres 以多可用区高可用模式运行（RDS Multi-AZ、Cloud SQL HA 或 Flexible Server 区域冗余）。</li>
+<li>ClickHouse 作为托管服务，或跨可用区分布的 3 节点复制集群。</li>
+<li>启用多可用区故障转移的 Redis。</li>
+<li>启用版本控制的 blob 存储，至少具有区域冗余的冗余层。</li>
+<li>每个数据存储的每日快照，保留至少 7 天。</li>
 </ul>
 <h3>跨区域主动/被动 DR</h3>
 <p>这可以防止区域中断。它成本更高，但对于一级部署是正确的模式。</p>
 <ul>
-<li>- DR 区域中的第二个 Kubernetes 集群，安装了 LangSmith Helm chart，但缩减到低副本数（热）或零（冷）。</li>
-<li>- Postgres 跨区域副本（RDS 或 Aurora 跨区域副本、Cloud SQL 跨区域副本、Azure Flexible Server 跨区域副本）。在故障转移时提升。</li>
-<li>- ClickHouse Cloud 或 LangSmith 托管 ClickHouse 以及区域故障转移计划，**或** ClickHouse 备份复制到 DR 区域并在故障转移时恢复到新的自管理集群。跨区域 ClickHouse 复制通常不受支持（ClickHouse Cloud 也不提供此功能），因此请计划备份/恢复而不是热 DR 副本。</li>
-<li>- Blob 存储复制到 DR 存储桶，具有版本控制并匹配生命周期规则。</li>
-<li>- 在故障转移期间在 DR 区域配置新 Redis。</li>
-<li>- DNS 由 <a href="https://aws.amazon.com/route53/">Route 53</a>、<a href="https://cloud.google.com/dns">Cloud DNS</a> 或 <a href="https://azure.microsoft.com/en-us/products/dns/">Azure DNS</a> 管理，具有健康检查和故障转移策略，指向每个区域的 LangSmith 前端入口。</li>
+<li>DR 区域中的第二个 Kubernetes 集群，安装了 LangSmith Helm chart，但缩减到低副本数（热）或零（冷）。</li>
+<li>Postgres 跨区域副本（RDS 或 Aurora 跨区域副本、Cloud SQL 跨区域副本、Azure Flexible Server 跨区域副本）。在故障转移时提升。</li>
+<li>ClickHouse Cloud 或 LangSmith 托管 ClickHouse 以及区域故障转移计划，<strong>或</strong> ClickHouse 备份复制到 DR 区域并在故障转移时恢复到新的自管理集群。跨区域 ClickHouse 复制通常不受支持（ClickHouse Cloud 也不提供此功能），因此请计划备份/恢复而不是热 DR 副本。</li>
+<li>Blob 存储复制到 DR 存储桶，具有版本控制并匹配生命周期规则。</li>
+<li>在故障转移期间在 DR 区域配置新 Redis。</li>
+<li>DNS 由 <a href="https://aws.amazon.com/route53/">Route 53</a>、<a href="https://cloud.google.com/dns">Cloud DNS</a> 或 <a href="https://azure.microsoft.com/en-us/products/dns/">Azure DNS</a> 管理，具有健康检查和故障转移策略，指向每个区域的 LangSmith 前端入口。</li>
 </ul>
 <aside class="callout"><strong>提示</strong>
-<p>LangSmith 是一个单写平台。跨区域部署应该是**主动/被动**，而不是主动/主动。同时写入两个区域与同一逻辑安装会导致数据不一致。</p>
+<p>LangSmith 是一个单写平台。跨区域部署应该是<strong>主动/被动</strong>，而不是主动/主动。同时写入两个区域与同一逻辑安装会导致数据不一致。</p>
 </aside>
 <h2>恢复程序</h2>
 <h3>可用区故障后恢复</h3>
 <p>在单区域多可用区部署中，可用区故障由云提供商自动处理：</p>
 <ol>
-<li>1. 托管 Postgres 故障转移到另一个可用区中的备用。LangSmith Pod 通过集群端点重试后重新连接。</li>
-<li>2. 托管 Redis 类似地故障转移。LangSmith 自动重试重新连接。</li>
-<li>3. Kubernetes 将 LangSmith Pod 重新调度到剩余可用区中的健康节点。验证节点池和水平 Pod 自动扩缩器限制允许此余地。</li>
-<li>4. 通过从 SDK 提交测试追踪来验证摄入，并确认它出现在 UI 中。</li>
+<li>托管 Postgres 故障转移到另一个可用区中的备用。LangSmith Pod 通过集群端点重试后重新连接。</li>
+<li>托管 Redis 类似地故障转移。LangSmith 自动重试重新连接。</li>
+<li>Kubernetes 将 LangSmith Pod 重新调度到剩余可用区中的健康节点。验证节点池和水平 Pod 自动扩缩器限制允许此余地。</li>
+<li>通过从 SDK 提交测试追踪来验证摄入，并确认它出现在 UI 中。</li>
 </ol>
 <h3>区域故障后恢复</h3>
 <p>这是跨区域故障转移手册。根据您的特定基础设施进行调整。</p>
@@ -1231,7 +1231,7 @@
 <p>更新 LangSmith Helm <code>config.blobStorage.bucketName</code> 和 <code>apiURL</code> 指向 DR 存储桶。确认存储桶具有相同的 TTL 生命周期规则。请参阅 <a href="/langsmith/self-host-blob-storage.html#configuration">Blob 存储配置</a>。 &lt;/section&gt;</p>
 <section class="mdx-block">
 <h3>配置 Redis</h3>
-<p>在 DR 区域创建新的托管 Redis 实例。更新 LangSmith Helm <code>redis.external</code> 值以指向它。**不要从主 Redis 导入转储**；配置空的。 &lt;/section&gt;</p>
+<p>在 DR 区域创建新的托管 Redis 实例。更新 LangSmith Helm <code>redis.external</code> 值以指向它。<strong>不要从主 Redis 导入转储</strong>；配置空的。 &lt;/section&gt;</p>
 <section class="mdx-block">
 <h3>扩展 DR 集群</h3>
 <p>如果运行热/冷，请将 LangSmith 部署扩展到其生产副本数。从源代码控制应用任何待处理的 Helm value 更新。 &lt;/section&gt;</p>
@@ -1267,24 +1267,24 @@
 <h2>测试您的 DR 计划</h2>
 <p>备份的好坏取决于上次成功恢复。请安排以下练习：</p>
 <ul>
-<li>- **每季度：** 将 Postgres 和 ClickHouse 快照恢复到非生产环境，运行<a href="/langsmith/diagnostics-self-hosted.html">诊断工具</a>和冒烟追踪测试。测量实际恢复时间并确认其在 RTO 内。</li>
-<li>- **每半年：** 对暂存安装执行完整的跨区域故障转移演练。提升副本、重新指向 blob 存储、扩展 DR 集群、运行冒烟测试，然后回滚。</li>
-<li>- **每次 chart 升级时：** 验证升级路径不会使您的 DR 计划失效（例如，仅应用于主数据库的架构迁移需要复制到 DR 副本）。请参阅<a href="/langsmith/self-host-upgrades.html">自托管升级</a>。</li>
+<li><strong>每季度：</strong> 将 Postgres 和 ClickHouse 快照恢复到非生产环境，运行<a href="/langsmith/diagnostics-self-hosted.html">诊断工具</a>和冒烟追踪测试。测量实际恢复时间并确认其在 RTO 内。</li>
+<li><strong>每半年：</strong> 对暂存安装执行完整的跨区域故障转移演练。提升副本、重新指向 blob 存储、扩展 DR 集群、运行冒烟测试，然后回滚。</li>
+<li><strong>每次 chart 升级时：</strong> 验证升级路径不会使您的 DR 计划失效（例如，仅应用于主数据库的架构迁移需要复制到 DR 副本）。请参阅<a href="/langsmith/self-host-upgrades.html">自托管升级</a>。</li>
 </ul>
 <h2>相关页面</h2>
 <ul>
-<li>- <a href="/langsmith/scalability-and-resilience.html">可扩展性和弹性</a></li>
-<li>- <a href="/langsmith/shared-responsibility-model.html">共同责任模型</a></li>
-<li>- <a href="/langsmith/self-host-external-postgres.html">连接外部 Postgres</a></li>
-<li>- <a href="/langsmith/self-host-external-clickhouse.html">连接外部 ClickHouse</a></li>
-<li>- <a href="/langsmith/self-host-external-redis.html">连接外部 Redis</a></li>
-<li>- <a href="/langsmith/self-host-blob-storage.html">启用 blob 存储</a></li>
-<li>- <a href="/langsmith/self-host-upgrades.html">自托管升级</a></li>
-<li>- <a href="/langsmith/self-host-using-an-existing-secret.html">使用现有密钥</a></li>
-<li>- <a href="/langsmith/diagnostics-self-hosted.html">自托管诊断</a></li>
-<li>- <a href="/langsmith/aws-self-hosted.html">AWS 自托管参考架构</a></li>
-<li>- <a href="/langsmith/gcp-self-hosted.html">GCP 自托管参考架构</a></li>
-<li>- <a href="/langsmith/azure-self-hosted.html">Azure 自托管参考架构</a></li>
+<li><a href="/langsmith/scalability-and-resilience.html">可扩展性和弹性</a></li>
+<li><a href="/langsmith/shared-responsibility-model.html">共同责任模型</a></li>
+<li><a href="/langsmith/self-host-external-postgres.html">连接外部 Postgres</a></li>
+<li><a href="/langsmith/self-host-external-clickhouse.html">连接外部 ClickHouse</a></li>
+<li><a href="/langsmith/self-host-external-redis.html">连接外部 Redis</a></li>
+<li><a href="/langsmith/self-host-blob-storage.html">启用 blob 存储</a></li>
+<li><a href="/langsmith/self-host-upgrades.html">自托管升级</a></li>
+<li><a href="/langsmith/self-host-using-an-existing-secret.html">使用现有密钥</a></li>
+<li><a href="/langsmith/diagnostics-self-hosted.html">自托管诊断</a></li>
+<li><a href="/langsmith/aws-self-hosted.html">AWS 自托管参考架构</a></li>
+<li><a href="/langsmith/gcp-self-hosted.html">GCP 自托管参考架构</a></li>
+<li><a href="/langsmith/azure-self-hosted.html">Azure 自托管参考架构</a></li>
 </ul>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>

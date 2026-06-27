@@ -1076,9 +1076,9 @@
     <main class="content">
       <article class="doc"><p>在本教程中，我们将构建一个客户支持机器人，帮助用户在数字音乐商店中导航。然后，我们将介绍对聊天机器人运行的三种最有效的评估类型：</p>
 <ul>
-<li>* **<a href="#final-response-evaluator">最终响应</a>**：评估代理的最终响应。</li>
-<li>* **<a href="#trajectory-evaluator">轨迹</a>**：评估代理是否采用了预期的路径（例如，工具调用）来得出最终答案。</li>
-<li>* **<a href="#single-step-evaluators">单步</a>**：隔离评估任何代理步骤（例如，评估是否为给定步骤选择了合适的第一步工具）。</li>
+<li><strong><a href="#final-response-evaluator">最终响应</a></strong>：评估代理的最终响应。</li>
+<li><strong><a href="#trajectory-evaluator">轨迹</a></strong>：评估代理是否采用了预期的路径（例如，工具调用）来得出最终答案。</li>
+<li><strong><a href="#single-step-evaluators">单步</a></strong>：隔离评估任何代理步骤（例如，评估是否为给定步骤选择了合适的第一步工具）。</li>
 </ul>
 <p>我们将使用 <a href="https://github.com/langchain-ai/langgraph">LangGraph</a> 构建代理，但这里展示的技术和 LangSmith 功能与框架无关。</p>
 <h2>设置</h2>
@@ -1112,25 +1112,25 @@ else:
 <pre><code data-language="python"># ... database connection and query code</code></pre>
 <pre><code data-language="">[(1, &#x27;AC/DC&#x27;), (2, &#x27;Accept&#x27;), (3, &#x27;Aerosmith&#x27;), (4, &#x27;Alanis Morissette&#x27;), (5, &#x27;Alice In Chains&#x27;), (6, &#x27;Antônio Carlos Jobim&#x27;), (7, &#x27;Apocalyptica&#x27;), (8, &#x27;Audioslave&#x27;), (9, &#x27;BackBeat&#x27;), (10, &#x27;Billy Cobham&#x27;)]</code></pre>
 <p>以下是数据库架构（图片来源于 <a href="https://github.com/lerocha/chinook-database">https://github.com/lerocha/chinook-database</a>）：</p>
-<p>!<a href="/langsmith/images/chinook-diagram.png.html">Chinook DB</a></p>
+<p><img src="/langsmith/images/chinook-diagram.png" alt="Chinook DB" loading="lazy"></p>
 <h3>定义客户支持代理</h3>
 <p>我们将创建一个带有有限数据库访问权限的 <a href="https://langchain-ai.github.io/langgraph/">LangGraph</a> 代理。出于演示目的，我们的代理将支持两种基本类型的请求：</p>
 <ul>
-<li>* Lookup（查询）：客户可以基于其他标识信息查找歌曲标题、艺术家姓名和专辑。例如：&quot;你们有哪些 Jimi Hendrix 的歌曲？&quot;</li>
-<li>* Refund（退款）：客户可以申请对过去购买进行退款。例如：&quot;我叫 Claude Shannon，我想对上周的一笔购买申请退款，你能帮我吗？&quot;</li>
+<li>Lookup（查询）：客户可以基于其他标识信息查找歌曲标题、艺术家姓名和专辑。例如：&quot;你们有哪些 Jimi Hendrix 的歌曲？&quot;</li>
+<li>Refund（退款）：客户可以申请对过去购买进行退款。例如：&quot;我叫 Claude Shannon，我想对上周的一笔购买申请退款，你能帮我吗？&quot;</li>
 </ul>
 <p>为简化本演示，我们将通过删除相应的数据库记录来实现退款。我们将跳过用户身份验证和其他生产安全措施的实现。</p>
 <p>代理的逻辑将被构建为两个独立的子图（一个用于查询，一个用于退款），以及一个将请求路由到相应子图的父图。</p>
 <h4>退款代理</h4>
 <p>让我们构建退款处理代理。此代理需要：</p>
 <ol>
-<li>1. 在数据库中查找客户的购买记录</li>
-<li>2. 删除相应的 Invoice 和 InvoiceLine 记录以处理退款</li>
+<li>在数据库中查找客户的购买记录</li>
+<li>删除相应的 Invoice 和 InvoiceLine 记录以处理退款</li>
 </ol>
 <p>我们将创建两个 SQL 辅助函数：</p>
 <ol>
-<li>1. 用于通过删除记录来执行退款的函数</li>
-<li>2. 用于查询客户购买历史的函数</li>
+<li>用于通过删除记录来执行退款的函数</li>
+<li>用于查询客户购买历史的函数</li>
 </ol>
 <p>为简化测试，我们将为这些函数添加&quot;模拟&quot;模式。启用模拟模式后，这些函数将模拟数据库操作而不会实际修改任何数据。</p>
 <pre><code data-language="python">def _refund(invoice_id: int | None, invoice_line_ids: list[int] | None, mock: bool = False) -&gt; float:
@@ -1139,21 +1139,21 @@ else:
 def _lookup( ...</code></pre>
 <p>现在让我们定义我们的图。我们将使用一个简单的架构，包含三条主要路径：</p>
 <ol>
-<li>1. 从对话中提取客户和购买信息</li>
+<li>从对话中提取客户和购买信息</li>
 </ol>
 <ol>
-<li>2. 将请求路由到三条路径之一：</li>
+<li>将请求路由到三条路径之一：</li>
 </ol>
 <ul>
-<li>* 退款路径：如果我们有足够的购买详情（Invoice ID 或 Invoice Line IDs）来处理退款</li>
-<li>* 查询路径：如果我们有足够的客户信息（姓名和电话）来搜索他们的购买历史</li>
-<li>* 响应路径：如果我们需要更多信息，向用户回复请求所需的具体信息</li>
+<li>退款路径：如果我们有足够的购买详情（Invoice ID 或 Invoice Line IDs）来处理退款</li>
+<li>查询路径：如果我们有足够的客户信息（姓名和电话）来搜索他们的购买历史</li>
+<li>响应路径：如果我们需要更多信息，向用户回复请求所需的具体信息</li>
 </ul>
 <p>图的 state 将追踪：</p>
 <ul>
-<li>* 对话历史（用户和代理之间的消息）</li>
-<li>* 从对话中提取的所有客户和购买信息</li>
-<li>* 要发送给用户的下一条消息（跟进文本）</li>
+<li>对话历史（用户和代理之间的消息）</li>
+<li>从对话中提取的所有客户和购买信息</li>
+<li>要发送给用户的下一条消息（跟进文本）</li>
 </ul>
 <pre><code data-language="python">from typing import Literal
 
@@ -1304,7 +1304,7 @@ graph_builder.add_edge(&quot;refund&quot;, END)
 refund_graph = graph_builder.compile()</code></pre>
 <p>我们可以可视化退款图表：</p>
 <pre><code data-language=""># Assumes you&#x27;re in an interactive Python environmentfrom IPython.display import Image, display ...</code></pre>
-<p>!<a href="/langsmith/images/refund-graph.png.html">退款图表</a></p>
+<p><img src="/langsmith/images/refund-graph.png" alt="退款图表" loading="lazy"></p>
 <h4>查找代理</h4>
 <p>对于查找（即问答）代理，我们将使用一个简单的 ReACT 架构，并为代理提供工具来根据各种过滤器查找曲目名称、艺术家名称和专辑名称。例如，您可以按特定艺术家查找专辑、发行了特定名称歌曲的艺术家等。</p>
 <pre><code data-language="python">from langchain.embeddings import init_embeddings
@@ -1339,7 +1339,7 @@ qa_llm = init_chat_model(&quot;claude-sonnet-4-6&quot;)
 # state we defined for the refund agent can also be passed to our lookup agent.
 qa_graph = create_agent(qa_llm, tools=[lookup_track, lookup_artist, lookup_album])</code></pre>
 <pre><code data-language="">display(Image(qa_graph.get_graph(xray=True).draw_mermaid_png()))</code></pre>
-<p>!<a href="/langsmith/images/qa-graph.png.html">问答图</a></p>
+<p><img src="/langsmith/images/qa-graph.png" alt="问答图" loading="lazy"></p>
 <h4>父代理</h4>
 <p>现在让我们定义一个父代理，它将两个任务特定的代理组合在一起。父代理的唯一职责是通过分类用户当前的意图来路由到子代理之一，并将输出编译成后续消息。</p>
 <pre><code data-language="python"># Schema for routing user intent.
@@ -1401,7 +1401,7 @@ graph_builder.add_edge(&quot;compile_followup&quot;, END)
 graph = graph_builder.compile()</code></pre>
 <p>我们可以可视化编译后的父图，包括其所有子图：</p>
 <pre><code data-language="python">display(Image(graph.get_graph().draw_mermaid_png()))</code></pre>
-<p>!<a href="/langsmith/images/agent-tutorial-graph.png.html">图</a></p>
+<p><img src="/langsmith/images/agent-tutorial-graph.png" alt="图" loading="lazy"></p>
 <h4>试试看</h4>
 <p>让我们来体验一下自定义支持代理吧！</p>
 <pre><code data-language="python">state = await graph.ainvoke(
@@ -1420,9 +1420,9 @@ print(state[&quot;followup&quot;])</code></pre>
 <h2>评估</h2>
 <p>现在我们有了可测试的代理版本，让我们运行一些评估。代理评估可以关注至少 3 个方面：</p>
 <ul>
-<li>- <a href="#final-response-evaluator">最终响应</a>：输入是一个提示词和一个可选的工具列表。输出是最终的代理响应。</li>
-<li>- <a href="#trajectory-evaluator">轨迹</a>：与之前相同，输入是一个提示词和一个可选的工具列表。输出是工具调用列表</li>
-<li>- <a href="#single-step-evaluators">单步</a>：与之前相同，输入是一个提示词和一个可选的工具列表。输出是工具调用。</li>
+<li><a href="#final-response-evaluator">最终响应</a>：输入是一个提示词和一个可选的工具列表。输出是最终的代理响应。</li>
+<li><a href="#trajectory-evaluator">轨迹</a>：与之前相同，输入是一个提示词和一个可选的工具列表。输出是工具调用列表</li>
+<li><a href="#single-step-evaluators">单步</a>：与之前相同，输入是一个提示词和一个可选的工具列表。输出是工具调用。</li>
 </ul>
 <p>让我们运行每种类型的评估：</p>
 <h3>最终响应评估器</h3>
@@ -1551,8 +1551,8 @@ experiment_results.to_pandas()</code></pre>
 <p>随着代理变得越来越复杂，它们有更多潜在的失败点。与其使用简单的通过/失败评估，不如使用能够在代理采取一些正确步骤时给予部分分数的评估，即使它没有达到正确的最终答案。</p>
 <p>这就是轨迹评估的用武之地。轨迹评估：</p>
 <ol>
-<li>1. 将代理采取的实际步骤序列与预期序列进行比较</li>
-<li>2. 根据正确完成的预期步骤数量计算分数</li>
+<li>将代理采取的实际步骤序列与预期序列进行比较</li>
+<li>根据正确完成的预期步骤数量计算分数</li>
 </ol>
 <p>对于这个示例，我们的端到端数据集包含我们期望代理采取的有序步骤列表。让我们创建一个评估器，检查代理的实际轨迹与这些预期步骤，并计算完成了多少百分比：</p>
 <pre><code data-language="python">def trajectory_subsequence(outputs: dict, reference_outputs: dict) -&gt; float:

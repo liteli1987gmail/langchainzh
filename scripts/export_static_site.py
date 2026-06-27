@@ -267,7 +267,7 @@ def rewrite_links(markdown_text: str, known_urls: dict[str, str]) -> str:
             target = target.rsplit(".", 1)[0] + ".html"
         return f"[{label}]({target}{anchor})"
 
-    return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", replace, markdown_text)
+    return re.sub(r"(?<!!)\[([^\]]+)\]\(([^)]+)\)", replace, markdown_text)
 
 
 def rewrite_href(value: str) -> str:
@@ -396,11 +396,66 @@ def render_inline_markdown(text: str) -> str:
     value = html.escape(re.sub(r"\s+", " ", text).strip())
     value = re.sub(r"`([^`]+)`", r"<code>\1</code>", value)
     value = re.sub(
-        r"\[([^\]]+)\]\(([^)]+)\)",
+        r"!\[([^\]]*)\]\(([^)]+)\)",
+        lambda m: (
+            f'<img src="{html.escape(m.group(2), quote=True)}" '
+            f'alt="{html.escape(m.group(1), quote=True)}" loading="lazy">'
+        ),
+        value,
+    )
+    value = re.sub(
+        r"(?<!!)\[([^\]]+)\]\(([^)]+)\)",
         lambda m: f'<a href="{html.escape(rewrite_href(m.group(2)), quote=True)}">{m.group(1)}</a>',
         value,
     )
+    value = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", value)
+    value = re.sub(r"__(.+?)__", r"<strong>\1</strong>", value)
+    value = re.sub(r"(?<!\*)\*([^*\s][^*]*?)\*(?!\*)", r"<em>\1</em>", value)
     return value
+
+
+def is_unordered_list_line(line: str) -> bool:
+    return bool(re.match(r"^\s*[-*]\s+", line))
+
+
+def is_ordered_list_line(line: str) -> bool:
+    return bool(re.match(r"^\s*\d+\.\s+", line))
+
+
+def is_list_line(line: str) -> bool:
+    return is_unordered_list_line(line) or is_ordered_list_line(line)
+
+
+def normalize_markdown_blocks(text: str) -> str:
+    """Add block breaks around Markdown lists when upstream omits blank lines."""
+    lines = text.splitlines()
+    normalized: list[str] = []
+    previous_was_list = False
+    for line in lines:
+        current_is_list = is_list_line(line)
+        previous = normalized[-1] if normalized else ""
+        if (
+            current_is_list
+            and previous.strip()
+            and not previous_was_list
+            and previous != ""
+        ):
+            normalized.append("")
+        if (
+            not current_is_list
+            and previous_was_list
+            and line.strip()
+            and not line.lstrip().startswith(("|", "</"))
+        ):
+            normalized.append("")
+        normalized.append(line)
+        previous_was_list = current_is_list
+    return "\n".join(normalized)
+
+
+def strip_list_marker(line: str) -> str:
+    value = re.sub(r"^\s*(?:[-*]|\d+\.)\s+", "", line).strip()
+    return re.sub(r"^\s*[-*]\s+", "", value).strip()
 
 
 def split_table_row(line: str) -> list[str]:
@@ -410,7 +465,7 @@ def split_table_row(line: str) -> list[str]:
 
 def is_table_separator(line: str) -> bool:
     cells = split_table_row(line)
-    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells)
+    return bool(cells) and all(re.fullmatch(r":?-+:?", cell.strip()) for cell in cells)
 
 
 def render_table(lines: list[str]) -> str | None:
@@ -456,6 +511,7 @@ def render_markdown_fallback(markdown_text: str) -> str:
     text = re.sub(r"```([^\n]*)\n(.*?)```", stash_code, markdown_text, flags=re.DOTALL)
     text = re.sub(r"^\s*---\s*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"<h([1-6])\b[^>]*>(.*?)</h\1>", r"\n\n<h\1>\2</h\1>\n\n", text, flags=re.DOTALL)
+    text = normalize_markdown_blocks(text)
 
     blocks = re.split(r"\n{2,}", text)
     rendered: list[str] = []
@@ -491,18 +547,18 @@ def render_markdown_fallback(markdown_text: str) -> str:
             close_list()
             rendered.append(table_html)
             continue
-        if all(re.match(r"^\s*[-*]\s+", line) for line in lines):
+        if all(is_unordered_list_line(line) for line in lines):
             if not in_list:
                 rendered.append("<ul>")
                 in_list = True
             for line in lines:
-                rendered.append(f"<li>{render_inline_markdown(re.sub(r'^\\s*[-*]\\s+', '', line))}</li>")
+                rendered.append(f"<li>{render_inline_markdown(strip_list_marker(line))}</li>")
             continue
-        if all(re.match(r"^\s*\d+\.\s+", line) for line in lines):
+        if all(is_ordered_list_line(line) for line in lines):
             close_list()
             rendered.append("<ol>")
             for line in lines:
-                rendered.append(f"<li>{render_inline_markdown(re.sub(r'^\\s*\\d+\\.\\s+', '', line))}</li>")
+                rendered.append(f"<li>{render_inline_markdown(strip_list_marker(line))}</li>")
             rendered.append("</ol>")
             continue
         close_list()

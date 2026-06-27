@@ -1074,21 +1074,30 @@
 <a class="nav-link level-5" href="/langsmith/data-purging-compliance.html">合规性数据清除</a>
 <a class="nav-link level-5" href="/langsmith/scalability-and-resilience.html">可扩展性与弹性</a></aside>
     <main class="content">
-      <article class="doc"><p>检查点器在每个超步骤保存图状态的快照，组织成 **线程**。使用检查点器编译图以启用人机交互工作流、时间旅行调试、容错执行和会话记忆。</p>
-<p>!<a href="/oss/images/checkpoints.jpg.html">检查点</a></p>
+      <article class="doc"><p>检查点器在每个超步骤保存图状态的快照，组织成 <strong>线程</strong>。使用检查点器编译图以启用人机交互工作流、时间旅行调试、容错执行和会话记忆。</p>
+<p><img src="/oss/images/checkpoints.jpg" alt="检查点" loading="lazy"></p>
 <aside class="callout"><strong>信息</strong>
-<p>**Agent Server 自动处理检查点** 使用 <a href="/langsmith/agent-server.html">Agent Server</a> 时，您无需手动实现或配置检查点器。服务器在后台处理所有持久化基础设施。</p>
+<p><strong>Agent Server 自动处理检查点</strong> 使用 <a href="/langsmith/agent-server.html">Agent Server</a> 时，您无需手动实现或配置检查点器。服务器在后台处理所有持久化基础设施。</p>
 </aside>
 <aside class="callout"><strong>建议</strong>
 <p>使用 <a href="https://smith.langchain.com?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-langgraph-checkpointers">LangSmith</a> 追踪检查点状态并调试代理如何在会话间恢复。按照 <a href="/langsmith/trace-with-langgraph.html">追踪快速入门</a> 开始设置。</p>
 </aside>
 <h2>为什么使用检查点器</h2>
 <p>检查点器是以下功能所必需的：</p>
-<p>- **人机交互**：检查点器通过允许人类检查、中断和批准图步骤来促进 <a href="/oss/javascript/langgraph/interrupts.html">人机交互工作流</a>。这些工作流需要检查点器，因为相关人员必须能够查看图在任何时间点的状态，并且图必须能够在人员对状态进行任何更新后恢复执行。请参阅 <a href="/oss/javascript/langgraph/interrupts.html">中断</a> 的示例。 - **记忆**：检查点器允许交互之间的 <a href="/oss/javascript/concepts/memory.html">&quot;记忆&quot;</a>。在重复的人类交互（如对话）中，任何后续消息都可以发送到该线程，它将保留对之前交互的记忆。请参阅 <a href="/oss/javascript/langgraph/add-memory.html">添加记忆</a> 了解如何使用检查点器添加和管理会话记忆。 - **时间旅行**：检查点器允许 <a href="/oss/javascript/langgraph/use-time-travel.html">&quot;时间旅行&quot;</a>，让用户回放先前的图执行来审查和/或调试特定的图步骤。此外，检查点器使得可以在任意检查点处分叉图状态以探索替代轨迹。 - **容错**：检查点提供容错和错误恢复：如果一个或多个节点在给定的超步骤失败，您可以从最后一个成功的步骤重新启动图。 &lt;a id=&quot;pending-writes&quot;&gt;&lt;/a&gt; - **待写入**：当图节点在给定的 <a href="#super-steps">超步骤</a> 执行中途失败时，LangGraph 会存储在该超步骤成功完成的其他节点的待检查点写入。当您从该超步骤恢复图执行时，无需重新运行成功的节点。</p>
+<ul>
+<li><strong>人机交互</strong>：检查点器通过允许人类检查、中断和批准图步骤来促进 <a href="/oss/javascript/langgraph/interrupts.html">人机交互工作流</a>。这些工作流需要检查点器，因为相关人员必须能够查看图在任何时间点的状态，并且图必须能够在人员对状态进行任何更新后恢复执行。请参阅 <a href="/oss/javascript/langgraph/interrupts.html">中断</a> 的示例。</li>
+<li><strong>记忆</strong>：检查点器允许交互之间的 <a href="/oss/javascript/concepts/memory.html">&quot;记忆&quot;</a>。在重复的人类交互（如对话）中，任何后续消息都可以发送到该线程，它将保留对之前交互的记忆。请参阅 <a href="/oss/javascript/langgraph/add-memory.html">添加记忆</a> 了解如何使用检查点器添加和管理会话记忆。</li>
+<li><strong>时间旅行</strong>：检查点器允许 <a href="/oss/javascript/langgraph/use-time-travel.html">&quot;时间旅行&quot;</a>，让用户回放先前的图执行来审查和/或调试特定的图步骤。此外，检查点器使得可以在任意检查点处分叉图状态以探索替代轨迹。</li>
+<li><strong>容错</strong>：检查点提供容错和错误恢复：如果一个或多个节点在给定的超步骤失败，您可以从最后一个成功的步骤重新启动图。</li>
+</ul>
+<a id="pending-writes"></a>
+<ul>
+<li><strong>待写入</strong>：当图节点在给定的 <a href="#super-steps">超步骤</a> 执行中途失败时，LangGraph 会存储在该超步骤成功完成的其他节点的待检查点写入。当您从该超步骤恢复图执行时，无需重新运行成功的节点。</li>
+</ul>
 <h2>核心概念</h2>
 <h3>线程</h3>
 <p>线程是分配给检查点器保存的每个检查点的唯一 ID 或线程标识符。它包含一系列 <a href="/langsmith/runs.html">运行</a> 的累积状态。当执行运行时，助手底层图的 <a href="/oss/javascript/langgraph/graph-api.html#state">状态</a> 将被持久化到该线程。</p>
-<p>使用检查点器调用图时，您 **必须** 将 <code>thread_id</code> 指定为配置 <code>configurable</code> 部分的一部分：</p>
+<p>使用检查点器调用图时，您 <strong>必须</strong> 将 <code>thread_id</code> 指定为配置 <code>configurable</code> 部分的一部分：</p>
 <pre><code data-language="typescript">{
   configurable: {
     thread_id: &quot;1&quot;;
@@ -1099,8 +1108,8 @@
 <h3>检查点</h3>
 <p>线程在特定时间点的状态称为检查点。检查点是在每个<a href="#super-steps">超级步骤</a>保存的图状态快照，由 <code>StateSnapshot</code> 对象表示（完整的字段参考请参见 <a href="#statesnapshot-fields">StateSnapshot 字段</a>）。</p>
 <h4>超级步骤</h4>
-<p>LangGraph 在每个**超级步骤**边界创建检查点。超级步骤是图的单个&quot;刻度&quot;，在该步骤中调度的所有节点（可能并行）都会执行。对于类似 <code>START -&gt; A -&gt; B -&gt; END</code> 的顺序图，输入、节点 A 和节点 B 都有独立的超级步骤——每个步骤后都会产生一个检查点。理解超级步骤边界对于<a href="/oss/javascript/langgraph/use-time-travel.html">时间旅行</a>很重要，因为只能从检查点（即超级步骤边界）恢复执行。</p>
-<p>除了超级步骤检查点外，LangGraph 还在**节点（任务）级别**持久化写入。当超级步骤中的每个节点完成时，其输出会作为任务条目写入检查点存储器的 <code>checkpoint_writes</code> 表，并链接到正在进行的检查点。这些按任务写入使得<a href="#pending-writes">待处理写入</a>的恢复成为可能：如果同一超级步骤中的另一个节点失败，成功节点的写入已经是持久的，无需在恢复时重新运行。完整的快照在超级步骤完成后提交。</p>
+<p>LangGraph 在每个<strong>超级步骤</strong>边界创建检查点。超级步骤是图的单个&quot;刻度&quot;，在该步骤中调度的所有节点（可能并行）都会执行。对于类似 <code>START -&gt; A -&gt; B -&gt; END</code> 的顺序图，输入、节点 A 和节点 B 都有独立的超级步骤——每个步骤后都会产生一个检查点。理解超级步骤边界对于<a href="/oss/javascript/langgraph/use-time-travel.html">时间旅行</a>很重要，因为只能从检查点（即超级步骤边界）恢复执行。</p>
+<p>除了超级步骤检查点外，LangGraph 还在<strong>节点（任务）级别</strong>持久化写入。当超级步骤中的每个节点完成时，其输出会作为任务条目写入检查点存储器的 <code>checkpoint_writes</code> 表，并链接到正在进行的检查点。这些按任务写入使得<a href="#pending-writes">待处理写入</a>的恢复成为可能：如果同一超级步骤中的另一个节点失败，成功节点的写入已经是持久的，无需在恢复时重新运行。完整的快照在超级步骤完成后提交。</p>
 <p>LangGraph 还会在超级步骤内持久化单个节点执行产生的写入。这些写入以任务形式存储，用于实现容错：同一超级步骤内某个节点失败时，成功的节点写入无需重新计算。这些任务写入不是完整的 <code>StateSnapshot</code> 检查点，因此时间旅行只能从超级步骤边界的完整检查点恢复。</p>
 <p>检查点被持久化保存，可以用来在后续时间恢复线程的状态。</p>
 <p>让我们看看调用简单图时保存了哪些检查点：</p>
@@ -1165,17 +1174,17 @@ const config = { configurable: { thread_id: &quot;1&quot; } };
 await graph.invoke({ foo: &quot;&quot;, bar: [] }, config);</code></pre>
 <p>运行图后，将有恰好 4 个检查点：</p>
 <ul>
-<li>* 空检查点，<code><a href="https://reference.langchain.com/javascript/langchain-langgraph/index/START"></code>START<code></a></code> 作为下一个要执行的节点</li>
-<li>* 检查点包含用户输入 <code>{&#x27;foo&#x27;: &#x27;&#x27;, &#x27;bar&#x27;: []}</code>，<code>nodeA</code> 作为下一个要执行的节点</li>
-<li>* 检查点包含 <code>nodeA</code> 的输出 <code>{&#x27;foo&#x27;: &#x27;a&#x27;, &#x27;bar&#x27;: [&#x27;a&#x27;]}</code>，<code>nodeB</code> 作为下一个要执行的节点</li>
-<li>* 检查点包含 <code>nodeB</code> 的输出 <code>{&#x27;foo&#x27;: &#x27;b&#x27;, &#x27;bar&#x27;: [&#x27;a&#x27;, &#x27;b&#x27;]}</code>，没有下一个节点要执行</li>
+<li>空检查点，<code><a href="https://reference.langchain.com/javascript/langchain-langgraph/index/START"></code>START<code></a></code> 作为下一个要执行的节点</li>
+<li>检查点包含用户输入 <code>{&#x27;foo&#x27;: &#x27;&#x27;, &#x27;bar&#x27;: []}</code>，<code>nodeA</code> 作为下一个要执行的节点</li>
+<li>检查点包含 <code>nodeA</code> 的输出 <code>{&#x27;foo&#x27;: &#x27;a&#x27;, &#x27;bar&#x27;: [&#x27;a&#x27;]}</code>，<code>nodeB</code> 作为下一个要执行的节点</li>
+<li>检查点包含 <code>nodeB</code> 的输出 <code>{&#x27;foo&#x27;: &#x27;b&#x27;, &#x27;bar&#x27;: [&#x27;a&#x27;, &#x27;b&#x27;]}</code>，没有下一个节点要执行</li>
 </ul>
 <p>请注意，<code>bar</code> 通道的值包含两个节点的输出，因为此示例为 <code>bar</code> 通道设置了一个 reducer。</p>
 <h4>检查点命名空间</h4>
 <p>每个检查点都有一个 <code>checkpoint_ns</code>（检查点命名空间）字段，用于标识它属于哪个图或子图：</p>
 <ul>
-<li>- **<code>&quot;&quot;</code>**（空字符串）：检查点属于父（根）图。</li>
-<li>- **<code>&quot;node_name:uuid&quot;</code>**：检查点属于作为给定节点调用的子图。对于嵌套子图，命名空间用 <code>|</code> 分隔符连接（例如 <code>&quot;outer_node:uuid|inner_node:uuid&quot;</code>）。</li>
+<li><strong><code>&quot;&quot;</code></strong>（空字符串）：检查点属于父（根）图。</li>
+<li><strong><code>&quot;node_name:uuid&quot;</code></strong>：检查点属于作为给定节点调用的子图。对于嵌套子图，命名空间用 <code>|</code> 分隔符连接（例如 <code>&quot;outer_node:uuid|inner_node:uuid&quot;</code>）。</li>
 </ul>
 <p>你可以通过 config 从节点内部访问检查点命名空间：</p>
 <pre><code data-language="typescript">function myNode(state: typeof State.Type, config: RunnableConfig) {
@@ -1192,7 +1201,7 @@ graph.get_state(config)
 # get a state snapshot for a specific checkpoint_id
 config = {&quot;configurable&quot;: {&quot;thread_id&quot;: &quot;1&quot;, &quot;checkpoint_id&quot;: &quot;1ef663ba-28fe-6528-8002-5a559208592c&quot;}}
 graph.get_state(config)</code></pre>
-<p>::: 在与保存的图形状态进行交互时，您**必须**指定一个<a href="#threads">线程标识符</a>。您可以通过调用<code>graph.getState(config)</code>来查看图形的 _最新_ 状态。这将返回一个 <code>StateSnapshot</code> 对象，该对象对应于配置中提供的线程 ID 关联的最新检查点，或者是与线程的检查点 ID 关联的检查点（如果提供的话）。</p>
+<p>::: 在与保存的图形状态进行交互时，您<strong>必须</strong>指定一个<a href="#threads">线程标识符</a>。您可以通过调用<code>graph.getState(config)</code>来查看图形的 _最新_ 状态。这将返回一个 <code>StateSnapshot</code> 对象，该对象对应于配置中提供的线程 ID 关联的最新检查点，或者是与线程的检查点 ID 关联的检查点（如果提供的话）。</p>
 <pre><code data-language="typescript">// get the latest state snapshot
 const config = { configurable: { thread_id: &quot;1&quot; } };
 await graph.getState(config);
@@ -1385,7 +1394,7 @@ for await (const state of graph.getStateHistory(config)) {
   }
 ]</code></pre>
 <p>:::</p>
-<p>!<a href="/oss/images/get_state.jpg.html">状态</a></p>
+<p><img src="/oss/images/get_state.jpg" alt="状态" loading="lazy"></p>
 <h4>查找特定检查点</h4>
 <p>您可以过滤状态历史记录以查找符合特定条件的检查点：</p>
 <pre><code data-language="typescript">const history: StateSnapshot[] = [];
@@ -1409,13 +1418,13 @@ const interrupted = history.find(
 <h3>Replay</h3>
 <p>Replay 会重新执行先前检查点之后的步骤。使用之前的 <code>checkpoint_id</code> 调用图，以重新运行该检查点之后的节点。检查点之前的节点会被跳过（其结果已保存）。检查点之后的节点会重新执行，包括任何 LLM 调用、API 请求或<a href="/oss/javascript/langgraph/interrupts.html">中断</a>——这些在重放期间总是会被重新触发。</p>
 <p>有关重放过去执行的完整详情和代码示例，请参阅<a href="/oss/javascript/langgraph/use-time-travel.html">时间旅行</a>。</p>
-<p>!<a href="/oss/images/re_play.png.html">Replay</a></p>
+<p><img src="/oss/images/re_play.png" alt="Replay" loading="lazy"></p>
 <h3>Update state</h3>
 <p>python 您可以使用 <a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.update_state"><code>update_state</code></a> 编辑图状态。这会创建一个包含更新值的新检查点——它不会修改原始检查点。更新被视为节点更新：当定义了<a href="/oss/javascript/langgraph/graph-api.html#reducers">归约器</a>函数时，值会通过归约器函数传递，因此具有归约器的通道会_累积_值而不是覆盖它们。</p>
 <p>您可以可选地指定 <code>as_node</code> 来控制更新被视为来自哪个节点，这会影响下一个执行的节点。详见<a href="/oss/javascript/langgraph/use-time-travel.html#from-a-specific-node">时间旅行：<code>as_node</code></a>。 :::</p>
 <p>您可以使用 <code>graph.updateState()</code> 编辑图状态。这会创建一个包含更新值的新检查点——它不会修改原始检查点。更新被视为节点更新：当定义了<a href="/oss/javascript/langgraph/graph-api.html#reducers">归约器</a>函数时，值会通过归约器函数传递，因此具有归约器的通道会_累积_值而不是覆盖它们。</p>
 <p>您可以可选地指定 <code>asNode</code> 来控制更新被视为来自哪个节点，这会影响下一个执行的节点。详见<a href="/oss/javascript/langgraph/use-time-travel.html#from-a-specific-node">时间旅行：<code>asNode</code></a>。</p>
-<p>!<a href="/oss/images/checkpoints_full_story.jpg.html">Update</a></p>
+<p><img src="/oss/images/checkpoints_full_story.jpg" alt="Update" loading="lazy"></p>
 <h2>Durability modes</h2>
 <p>LangGraph 支持三种持久性模式，让您在性能和数据一致性之间取得平衡。调用任何图执行方法时都可以指定持久性模式：</p>
 <pre><code data-language="typescript">await graph.stream(
@@ -1424,9 +1433,9 @@ const interrupted = history.find(
 )</code></pre>
 <p>持久性模式从最低到最高依次如下：</p>
 <ul>
-<li>* <code>&quot;exit&quot;</code>：LangGraph 仅在图执行退出时持久化更改——无论是成功退出、错误退出还是由于人在回路中断而退出。这为长时间运行的图提供了最佳性能，但意味着中间状态不会保存，因此无法从执行过程中的系统故障（如进程崩溃）中恢复。</li>
-<li>* <code>&quot;async&quot;</code>：LangGraph 在下一步执行时异步持久化更改。这提供了良好的性能和持久性，但存在一个小风险：如果进程在执行过程中崩溃，LangGraph 可能不会写入检查点。</li>
-<li>* <code>&quot;sync&quot;</code>：LangGraph 在下一步开始之前同步持久化更改。这确保 LangGraph 在继续执行之前写入每个检查点，以牺牲一定性能开销为代价提供高持久性。</li>
+<li><code>&quot;exit&quot;</code>：LangGraph 仅在图执行退出时持久化更改——无论是成功退出、错误退出还是由于人在回路中断而退出。这为长时间运行的图提供了最佳性能，但意味着中间状态不会保存，因此无法从执行过程中的系统故障（如进程崩溃）中恢复。</li>
+<li><code>&quot;async&quot;</code>：LangGraph 在下一步执行时异步持久化更改。这提供了良好的性能和持久性，但存在一个小风险：如果进程在执行过程中崩溃，LangGraph 可能不会写入检查点。</li>
+<li><code>&quot;sync&quot;</code>：LangGraph 在下一步开始之前同步持久化更改。这确保 LangGraph 在继续执行之前写入每个检查点，以牺牲一定性能开销为代价提供高持久性。</li>
 </ul>
 <h2>优化检查点存储</h2>
 <p>python 默认情况下，LangGraph 检查点会在每个超步骤中写入每个状态通道的完整值。对于具有大量累积（如多轮对话）的长时间运行线程，这会随时间产生显著的存储增长。</p>
@@ -1438,19 +1447,19 @@ const interrupted = history.find(
 <h2>检查点库</h2>
 <p>在底层，检查点由符合 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/BaseCheckpointSaver"><code>BaseCheckpointSaver</code></a> 接口的检查点对象驱动。LangGraph 提供了多个检查点实现，全部通过独立的可安装库实现。</p>
 <ul>
-<li>* <code>@langchain/langgraph-checkpoint</code>：检查点保存器的基础接口（<a href="https://reference.langchain.com/javascript/langchain-langgraph/index/BaseCheckpointSaver"><code>BaseCheckpointSaver</code></a>）和序列化/反序列化接口（<a href="https://reference.langchain.com/javascript/langchain-langgraph-checkpoint/SerializerProtocol"><code>SerializerProtocol</code></a>）。包含内存中的检查点实现（<a href="https://reference.langchain.com/javascript/langchain-langgraph/index/MemorySaver"><code>MemorySaver</code></a>）用于实验。LangGraph 自带 <code>@langchain/langgraph-checkpoint</code>。</li>
-<li>* <code>@langchain/langgraph-checkpoint-sqlite</code>：使用 SQLite 数据库的 LangGraph 检查点实现（<a href="https://reference.langchain.com/javascript/langchain-langgraph-checkpoint-sqlite/SqliteSaver"><code>SqliteSaver</code></a>）。适合实验和本地工作流。需要单独安装。</li>
-<li>* <code>@langchain/langgraph-checkpoint-postgres</code>：使用 Postgres 数据库的高级检查点（<a href="https://reference.langchain.com/javascript/langchain-langgraph-checkpoint-postgres/index/PostgresSaver"><code>PostgresSaver</code></a>），用于 LangSmith。适合生产环境使用。需要单独安装。</li>
-<li>* <code>@langchain/langgraph-checkpoint-mongodb</code>：由 MongoDB 支持的高级检查点（<code>MongoDBSaver</code>）和长期内存存储（<code>MongoDBStore</code>）。存储支持跨线程持久化，具有可选的集成向量搜索。适合生产使用。需要单独安装。</li>
-<li>* <code>@langchain/langgraph-checkpoint-redis</code>：使用 Redis 数据库的高级检查点（<code>RedisSaver</code>）。适合生产环境使用。需要单独安装。</li>
+<li><code>@langchain/langgraph-checkpoint</code>：检查点保存器的基础接口（<a href="https://reference.langchain.com/javascript/langchain-langgraph/index/BaseCheckpointSaver"><code>BaseCheckpointSaver</code></a>）和序列化/反序列化接口（<a href="https://reference.langchain.com/javascript/langchain-langgraph-checkpoint/SerializerProtocol"><code>SerializerProtocol</code></a>）。包含内存中的检查点实现（<a href="https://reference.langchain.com/javascript/langchain-langgraph/index/MemorySaver"><code>MemorySaver</code></a>）用于实验。LangGraph 自带 <code>@langchain/langgraph-checkpoint</code>。</li>
+<li><code>@langchain/langgraph-checkpoint-sqlite</code>：使用 SQLite 数据库的 LangGraph 检查点实现（<a href="https://reference.langchain.com/javascript/langchain-langgraph-checkpoint-sqlite/SqliteSaver"><code>SqliteSaver</code></a>）。适合实验和本地工作流。需要单独安装。</li>
+<li><code>@langchain/langgraph-checkpoint-postgres</code>：使用 Postgres 数据库的高级检查点（<a href="https://reference.langchain.com/javascript/langchain-langgraph-checkpoint-postgres/index/PostgresSaver"><code>PostgresSaver</code></a>），用于 LangSmith。适合生产环境使用。需要单独安装。</li>
+<li><code>@langchain/langgraph-checkpoint-mongodb</code>：由 MongoDB 支持的高级检查点（<code>MongoDBSaver</code>）和长期内存存储（<code>MongoDBStore</code>）。存储支持跨线程持久化，具有可选的集成向量搜索。适合生产使用。需要单独安装。</li>
+<li><code>@langchain/langgraph-checkpoint-redis</code>：使用 Redis 数据库的高级检查点（<code>RedisSaver</code>）。适合生产环境使用。需要单独安装。</li>
 </ul>
 <h3>检查点接口</h3>
 <p>每个检查点都符合 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/BaseCheckpointSaver"><code>BaseCheckpointSaver</code></a> 接口并实现以下方法：</p>
 <ul>
-<li>* <code>.put</code> - 使用其配置和元数据存储检查点。</li>
-<li>* <code>.putWrites</code> - 存储链接到检查点的中间写入（即<a href="#pending-writes">待处理写入</a>）。</li>
-<li>* <code>.getTuple</code> - 使用给定配置（<code>thread_id</code> 和 <code>checkpoint_id</code>）获取检查点元组。这用于在 <code>graph.getState()</code> 中填充 <code>StateSnapshot</code>。</li>
-<li>* <code>.list</code> - 列出与给定配置和过滤条件匹配的检查点。这用于在 <code>graph.getStateHistory()</code> 中填充状态历史记录。</li>
+<li><code>.put</code> - 使用其配置和元数据存储检查点。</li>
+<li><code>.putWrites</code> - 存储链接到检查点的中间写入（即<a href="#pending-writes">待处理写入</a>）。</li>
+<li><code>.getTuple</code> - 使用给定配置（<code>thread_id</code> 和 <code>checkpoint_id</code>）获取检查点元组。这用于在 <code>graph.getState()</code> 中填充 <code>StateSnapshot</code>。</li>
+<li><code>.list</code> - 列出与给定配置和过滤条件匹配的检查点。这用于在 <code>graph.getStateHistory()</code> 中填充状态历史记录。</li>
 </ul>
 <h2>构建自定义检查点器</h2>
 <aside class="callout"><strong>提示</strong>

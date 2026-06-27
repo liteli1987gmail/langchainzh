@@ -1076,16 +1076,21 @@
     <main class="content">
       <article class="doc"><p>中断允许你在特定点暂停图执行，并等待外部输入后再继续。这使得人工介入模式成为可能，在这种模式下你需要外部输入才能继续执行。当触发中断时，LangGraph 会使用其<a href="/oss/python/langgraph/persistence.html">持久化层</a>保存图状态，并无限期等待直到你恢复执行。</p>
 <p>中断的工作原理是在图的任意节点中调用 <code>interrupt()</code> 函数。该函数接受任意 JSON 可序列化的值，并将其暴露给调用者。当你准备继续时，通过使用 <code>Command</code> 重新调用图来恢复执行，此时 <code>Command</code> 会成为节点内部 <code>interrupt()</code> 调用的返回值。</p>
-<p>与静态断点（仅在特定节点前后暂停）不同，中断是 **动态的**：可以放置在代码任意位置，并能根据应用逻辑进行条件判断。</p>
+<p>与静态断点（仅在特定节点前后暂停）不同，中断是 <strong>动态的</strong>：可以放置在代码任意位置，并能根据应用逻辑进行条件判断。</p>
 <ul>
-<li>- **检查点保存你的位置：** 检查点写入精确的图状态，以便你稍后恢复，即使处于错误状态。</li>
-<li>- **<code>thread_id</code> 是你的指针：** 设置 <code>config={&quot;configurable&quot;: {&quot;thread_id&quot;: ...}}</code> 以告诉检查点应加载哪个状态。</li>
-<li>- **中断载荷通过 <code>stream.interrupts</code> 暴露：** 使用<a href="/oss/python/langgraph/event-streaming.html">事件流</a>（<code>graph.stream_events(..., version=&quot;v3&quot;)</code>）时，传递给 <code>interrupt()</code> 的值会出现在 <code>stream.interrupts</code> 上，且当运行因等待输入而暂停时 <code>stream.interrupted</code> 为 <code>True</code>。</li>
+<li><strong>检查点保存你的位置：</strong> 检查点写入精确的图状态，以便你稍后恢复，即使处于错误状态。</li>
+<li><strong><code>thread_id</code> 是你的指针：</strong> 设置 <code>config={&quot;configurable&quot;: {&quot;thread_id&quot;: ...}}</code> 以告诉检查点应加载哪个状态。</li>
+<li><strong>中断载荷通过 <code>stream.interrupts</code> 暴露：</strong> 使用<a href="/oss/python/langgraph/event-streaming.html">事件流</a>（<code>graph.stream_events(..., version=&quot;v3&quot;)</code>）时，传递给 <code>interrupt()</code> 的值会出现在 <code>stream.interrupts</code> 上，且当运行因等待输入而暂停时 <code>stream.interrupted</code> 为 <code>True</code>。</li>
 </ul>
 <p>你选择的 <code>thread_id</code> 实际上就是你的持久化游标。重复使用它会恢复同一检查点；使用新值则启动一个具有空状态的全新线程。</p>
 <h2>使用 <code>interrupt</code> 暂停</h2>
 <p><a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 函数会暂停图执行并将一个值返回给调用者。当你在节点内调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 时，LangGraph 保存当前图状态并等待你提供输入来恢复执行。</p>
-<p>要使用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a>，你需要： 1. 一个 **检查点器** 来持久化图状态（生产环境中请使用持久化检查点器） 2. 配置中的 **线程 ID**，以便运行时知道从哪个状态恢复 3. 在你想要暂停的位置调用 <code>interrupt()</code>（载荷必须可 JSON 序列化）</p>
+<p>要使用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a>，你需要：</p>
+<ol>
+<li>一个 <strong>检查点器</strong> 来持久化图状态（生产环境中请使用持久化检查点器）</li>
+<li>配置中的 <strong>线程 ID</strong>，以便运行时知道从哪个状态恢复</li>
+<li>在你想要暂停的位置调用 <code>interrupt()</code>（载荷必须可 JSON 序列化）</li>
+</ol>
 <pre><code data-language="python">from langgraph.types import interrupt
 
 def approval_node(state: State):
@@ -1096,29 +1101,29 @@ def approval_node(state: State):
     return {&quot;approved&quot;: approved}</code></pre>
 <p>当您调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 时，以下是发生的过程：</p>
 <ol>
-<li>1. **图执行在** 调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 的确切位置被**挂起**</li>
-<li>2. **状态被保存** 到检查点中，以便后续可以恢复执行，在生产环境中，这应该是持久化检查点（例如由数据库支持）</li>
-<li>3. **值被返回** 给调用者，在使用<a href="/oss/python/langgraph/event-streaming.html">事件流</a>时（<code>graph.stream_events(..., version=&quot;v3&quot;)</code>）返回到 <code>stream.interrupts</code>，或使用默认的 <code>invoke()</code> API 时返回到 <code>__interrupt__</code>；它可以是任何可 JSON 序列化的值（字符串、对象、数组等）</li>
+<li><strong>图执行在</strong> 调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 的确切位置被<strong>挂起</strong></li>
+<li><strong>状态被保存</strong> 到检查点中，以便后续可以恢复执行，在生产环境中，这应该是持久化检查点（例如由数据库支持）</li>
+<li><strong>值被返回</strong> 给调用者，在使用<a href="/oss/python/langgraph/event-streaming.html">事件流</a>时（<code>graph.stream_events(..., version=&quot;v3&quot;)</code>）返回到 <code>stream.interrupts</code>，或使用默认的 <code>invoke()</code> API 时返回到 <code><strong>interrupt</strong></code>；它可以是任何可 JSON 序列化的值（字符串、对象、数组等）</li>
 </ol>
 <ol>
-<li>4. **图无限期等待**，直到您通过响应恢复执行</li>
-<li>5. **响应在恢复时被传递回** 节点，成为 <code>interrupt()</code> 调用的返回值</li>
+<li><strong>图无限期等待</strong>，直到您通过响应恢复执行</li>
+<li><strong>响应在恢复时被传递回</strong> 节点，成为 <code>interrupt()</code> 调用的返回值</li>
 </ol>
 <h2>恢复中断</h2>
 <p>中断暂停执行后，您可以通过使用包含恢复值的 <code>Command</code> 重新调用图来恢复执行。恢复值被传递回 <code>interrupt</code> 调用，允许节点继续使用外部输入执行。</p>
 <p>驱动可能中断的图的推荐方式是<a href="/oss/python/langgraph/event-streaming.html">事件流</a>——它通过 <code>stream.interrupts</code> 和 <code>stream.interrupted</code> 暴露中断，并通过 <code>stream.output</code> 公开最终状态。</p>
 <aside class="callout"><strong>提示</strong>
-<p>默认的 <code>graph.invoke(...)</code> API 仍然有效，并在 <code>result[&quot;__interrupt__&quot;]</code> 下公开中断。当您不需要流式投影时使用它；否则优先使用 <code>graph.stream_events(..., version=&quot;v3&quot;)</code>。</p>
+<p>默认的 <code>graph.invoke(...)</code> API 仍然有效，并在 <code>result[&quot;<strong>interrupt</strong>&quot;]</code> 下公开中断。当您不需要流式投影时使用它；否则优先使用 <code>graph.stream_events(..., version=&quot;v3&quot;)</code>。</p>
 </aside>
-<p>**恢复的关键点：**</p>
+<p><strong>恢复的关键点：</strong></p>
 <ul>
-<li>- 恢复时必须使用与中断发生时**相同的线程 ID**</li>
-<li>- 传递给 <code>Command(resume=...)</code> 的值成为 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 调用的返回值</li>
-<li>- 恢复时节点从调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 的节点开头重新开始，因此 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 之前的任何代码都会再次运行</li>
-<li>- 恢复值可以是任何可 JSON 序列化的值</li>
+<li>恢复时必须使用与中断发生时<strong>相同的线程 ID</strong></li>
+<li>传递给 <code>Command(resume=...)</code> 的值成为 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 调用的返回值</li>
+<li>恢复时节点从调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 的节点开头重新开始，因此 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 之前的任何代码都会再次运行</li>
+<li>恢复值可以是任何可 JSON 序列化的值</li>
 </ul>
 <aside class="callout"><strong>警告</strong>
-<p><code>Command(resume=...)</code> 是**唯一**设计作为 <code>invoke()</code>/<code>stream()</code>/<code>stream_events()</code> 输入的 <code>Command</code> 模式。其他 <code>Command</code> 参数（<code>update</code>、<code>goto</code>、<code>graph</code>）设计用于<a href="/oss/python/langgraph/graph-api.html#command">从节点函数返回</a>。不要将 <code>Command(update=...)</code> 作为输入来继续多轮对话——请改用普通输入字典。</p>
+<p><code>Command(resume=...)</code> 是<strong>唯一</strong>设计作为 <code>invoke()</code>/<code>stream()</code>/<code>stream_events()</code> 输入的 <code>Command</code> 模式。其他 <code>Command</code> 参数（<code>update</code>、<code>goto</code>、<code>graph</code>）设计用于<a href="/oss/python/langgraph/graph-api.html#command">从节点函数返回</a>。不要将 <code>Command(update=...)</code> 作为输入来继续多轮对话——请改用普通输入字典。</p>
 </aside>
 <pre><code data-language="typescript">// Initial run - hits the interrupt and pauses
 // thread_id is the durable pointer back to the saved checkpoint
@@ -1133,12 +1138,12 @@ console.log(result.__interrupt__);
 // Resume with the human&#x27;s response
 // Command({ resume }) returns that value from interrupt() in the node
 await graph.invoke(new Command({ resume: true }), config);</code></pre>
-<p>**恢复的关键要点：**</p>
+<p><strong>恢复的关键要点：</strong></p>
 <ul>
-<li>- 恢复时必须使用**与中断发生时相同的线程 ID**</li>
-<li>- 传递给 <code>new Command({ resume: ... })</code> 的值将成为 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 调用</li>
-<li>- 恢复时，节点从调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 的节点开头重新启动，因此 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 之前的任何代码都会再次运行</li>
-<li>- 可以传递任何 JSON 可序列化的值作为恢复值</li>
+<li>恢复时必须使用<strong>与中断发生时相同的线程 ID</strong></li>
+<li>传递给 <code>new Command({ resume: ... })</code> 的值将成为 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 调用</li>
+<li>恢复时，节点从调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 的节点开头重新启动，因此 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 之前的任何代码都会再次运行</li>
+<li>可以传递任何 JSON 可序列化的值作为恢复值</li>
 </ul>
 <aside class="callout"><strong>警告</strong>
 <p><code>new Command({ resume: ... })</code> 是唯一预期作为 <code>invoke()</code>/<code>stream()</code>/<code>stream_events()</code> 输入的 <code>Command</code> 模式。其他 <code>Command</code> 参数（<code>update</code>、<code>goto</code>、<code>graph</code>）设计用于<a href="/oss/python/langgraph/graph-api.html#command">从节点函数返回</a>。不要将 <code>new Command({ update: ... })</code> 作为输入来继续多轮对话——而是传递一个普通输入对象。</p>
@@ -1147,20 +1152,24 @@ await graph.invoke(new Command({ resume: true }), config);</code></pre>
 <h2>常见模式</h2>
 <p>中断功能的核心在于能够暂停执行并等待外部输入。这对于多种用例非常有用，包括：</p>
 <ul>
-<li>- <a href="#approve-or-reject">审批工作流</a>：在执行关键操作（API 调用、数据库变更、金融交易）前暂停</li>
-<li>- <a href="#handling-multiple-interrupts">处理多个中断</a>：恢复多个中断时，将中断 ID 与恢复值配对</li>
-<li>- <a href="#review-and-edit-state">审核和编辑</a>：让人类在继续前审核和修改 LLM 输出或工具调用</li>
-<li>- <a href="#interrupts-in-tools">中断工具调用</a>：在执行工具调用前暂停，以便审核和编辑工具调用</li>
-<li>- <a href="#validating-human-input">验证人工输入</a>：在继续下一步前暂停以验证人工输入</li>
+<li><a href="#approve-or-reject">审批工作流</a>：在执行关键操作（API 调用、数据库变更、金融交易）前暂停</li>
+<li><a href="#handling-multiple-interrupts">处理多个中断</a>：恢复多个中断时，将中断 ID 与恢复值配对</li>
+<li><a href="#review-and-edit-state">审核和编辑</a>：让人类在继续前审核和修改 LLM 输出或工具调用</li>
+<li><a href="#interrupts-in-tools">中断工具调用</a>：在执行工具调用前暂停，以便审核和编辑工具调用</li>
+<li><a href="#validating-human-input">验证人工输入</a>：在继续下一步前暂停以验证人工输入</li>
 </ul>
 <h3>使用人工介入（HITL）中断进行流式处理</h3>
 <p>在构建具有人工介入工作流的交互式智能体时，可以使用<a href="/oss/python/langgraph/event-streaming.html">事件流式处理</a>来在处理中断的同时并发地消费消息块和状态快照。</p>
-<p>循环使用 <code>graph.stream_events(..., version=&quot;v3&quot;)</code> 返回的类型化投影，直到运行完成： - 通过 <code>stream.messages</code> 逐 token 流式处理 AI 响应 - 通过 <code>stream.values</code> 观察每步的状态快照 - 通过 <code>stream.interrupted</code> 检测中断，并从 <code>stream.interrupts</code> 读取其负载 - 使用 <code>Command(resume=...)</code> 再次调用 <code>stream_events</code> 来恢复执行；循环直到 <code>stream.interrupted</code> 为 false</p>
+<p>循环使用 <code>graph.stream_events(..., version=&quot;v3&quot;)</code> 返回的类型化投影，直到运行完成：</p>
 <ul>
-<li>- **<code>stream.messages</code>**：以内容块形式输出的聊天模型输出；遍历每个 <code>message.text</code> 以获取 token 增量。对于嵌套子图，从 <code>stream.subgraphs[*].messages</code> 读取消息块。</li>
-<li>- **<code>stream.values</code>**：每步后的完整状态快照</li>
-<li>- **<code>stream.interrupted</code> / <code>stream.interrupts</code>**：每次运行后检查图是否暂停；从 <code>stream.interrupts</code> 读取负载</li>
-<li>- **<code>Command(resume=...)</code>**：作为下一个 <code>stream_events</code> 输入传递以恢复；循环直到运行完成且不中断</li>
+<li>通过 <code>stream.messages</code> 逐 token 流式处理 AI 响应</li>
+<li>通过 <code>stream.values</code> 观察每步的状态快照</li>
+<li>通过 <code>stream.interrupted</code> 检测中断，并从 <code>stream.interrupts</code> 读取其负载</li>
+<li>使用 <code>Command(resume=...)</code> 再次调用 <code>stream_events</code> 来恢复执行；循环直到 <code>stream.interrupted</code> 为 false</li>
+<li><strong><code>stream.messages</code></strong>：以内容块形式输出的聊天模型输出；遍历每个 <code>message.text</code> 以获取 token 增量。对于嵌套子图，从 <code>stream.subgraphs[*].messages</code> 读取消息块。</li>
+<li><strong><code>stream.values</code></strong>：每步后的完整状态快照</li>
+<li><strong><code>stream.interrupted</code> / <code>stream.interrupts</code></strong>：每次运行后检查图是否暂停；从 <code>stream.interrupts</code> 读取负载</li>
+<li><strong><code>Command(resume=...)</code></strong>：作为下一个 <code>stream_events</code> 输入传递以恢复；循环直到运行完成且不中断</li>
 </ul>
 <h3>处理多个中断</h3>
 <p>当并行分支同时中断时（例如，扇出到多个节点，每个节点都调用 <code>interrupt()</code>），可能需要在单次调用中恢复多个中断。 当使用单次调用恢复多个中断时，将每个中断 ID 映射到其恢复值。 这确保每个响应在运行时与正确的中断配对。</p>
@@ -1294,16 +1303,16 @@ graph.stream_events(Command(resume=False), config=config, version=&quot;v3&quot;
 <p>:::</p>
 </section>
 <h3>验证人类输入</h3>
-<p>有时您需要验证来自人类的输入，并在值无效时重新提示。推荐的方法是**每次节点调用时调用一次** <code>interrupt()</code>，将错误消息存储在状态中从节点返回，并使用**条件边**循环回节点，直到提供有效值。</p>
+<p>有时您需要验证来自人类的输入，并在值无效时重新提示。推荐的方法是<strong>每次节点调用时调用一次</strong> <code>interrupt()</code>，将错误消息存储在状态中从节点返回，并使用<strong>条件边</strong>循环回节点，直到提供有效值。</p>
 <aside class="callout"><strong>警告</strong>
-<p>**避免在单个节点内使用 <code>while True</code> + <code>interrupt()</code> 循环。** 因为节点在每次恢复时从头重新运行（参见<a href="#rules-of-interrupts">中断规则</a>），所以在循环内多次调用 <code>interrupt()</code> 会导致每次恢复都重放所有先前的迭代：第一次恢复重放 1 次迭代，第二次重放 2 次，依此类推。结果是循环体内的任何代码都呈指数级重新执行。</p>
+<p><strong>避免在单个节点内使用 <code>while True</code> + <code>interrupt()</code> 循环。</strong> 因为节点在每次恢复时从头重新运行（参见<a href="#rules-of-interrupts">中断规则</a>），所以在循环内多次调用 <code>interrupt()</code> 会导致每次恢复都重放所有先前的迭代：第一次恢复重放 1 次迭代，第二次重放 2 次，依此类推。结果是循环体内的任何代码都呈指数级重新执行。</p>
 </aside>
 <p>正确的模式：</p>
 <ol>
-<li>1. 将重新提示的问题存储在状态中（例如 <code>pending_question</code>）。</li>
-<li>2. 在节点中**恰好调用一次** <code>interrupt()</code>，传递状态中的当前问题。</li>
-<li>3. 如果答案无效，返回更新后的 <code>pending_question</code>，以便下一次调用重新提示。</li>
-<li>4. 使用 <code>add_conditional_edges</code> 循环回节点，直到收集到有效值。</li>
+<li>将重新提示的问题存储在状态中（例如 <code>pending_question</code>）。</li>
+<li>在节点中<strong>恰好调用一次</strong> <code>interrupt()</code>，传递状态中的当前问题。</li>
+<li>如果答案无效，返回更新后的 <code>pending_question</code>，以便下一次调用重新提示。</li>
+<li>使用 <code>add_conditional_edges</code> 循环回节点，直到收集到有效值。</li>
 </ol>
 <p>每次恢复恰好调用一次 <code>get_age_node</code>，运行一次 <code>interrupt()</code> 调用，然后退出。当答案无效时，条件边循环回，下一个中断使用更新后的问题重新提示。没有代码在每次恢复时运行超过一次。</p>
 <p>python</p>
@@ -1326,7 +1335,15 @@ graph.stream_events(Command(resume=False), config=config, version=&quot;v3&quot;
         # Resume the graph
         graph.invoke(None, config=config)  # [!code highlight]
         </code></pre>
-<p>1. 断点是在 <code>compile</code> 时设置的。 2. <code>interrupt_before</code> 指定在执行节点之前暂停执行的节点。 3. <code>interrupt_after</code> 指定在执行节点之后暂停执行的节点。 4. 需要一个检查点器来启用断点。 5. 图会运行直到命中第一个断点。 6. 通过传入 <code>None</code> 作为输入来恢复图。这将运行图直到命中下一个断点。 :::</p>
+<ol>
+<li>断点是在 <code>compile</code> 时设置的。</li>
+<li><code>interrupt_before</code> 指定在执行节点之前暂停执行的节点。</li>
+<li><code>interrupt_after</code> 指定在执行节点之后暂停执行的节点。</li>
+<li>需要一个检查点器来启用断点。</li>
+<li>图会运行直到命中第一个断点。</li>
+<li>通过传入 <code>None</code> 作为输入来恢复图。这将运行图直到命中下一个断点。</li>
+</ol>
+<p>:::</p>
 <section class="mdx-block">
 <h3>在运行时</h3>
 <pre><code data-language="python">        config = {
@@ -1347,11 +1364,11 @@ graph.stream_events(Command(resume=False), config=config, version=&quot;v3&quot;
         graph.invoke(None, config=config)  # [!code highlight]
         </code></pre>
 <ol>
-<li>1. <code>graph.invoke</code> 使用 <code>interrupt_before</code> 和 <code>interrupt_after</code> 参数调用。这是一个运行时配置，可以在每次调用时更改。</li>
-<li>2. <code>interrupt_before</code> 指定在节点执行前暂停执行的位置。</li>
-<li>3. <code>interrupt_after</code> 指定在节点执行后暂停执行的位置。</li>
-<li>4. 图运行直到命中第一个断点。</li>
-<li>5. 通过传入 <code>None</code> 作为输入来恢复图。这将运行图直到命中下一个断点。</li>
+<li><code>graph.invoke</code> 使用 <code>interrupt_before</code> 和 <code>interrupt_after</code> 参数调用。这是一个运行时配置，可以在每次调用时更改。</li>
+<li><code>interrupt_before</code> 指定在节点执行前暂停执行的位置。</li>
+<li><code>interrupt_after</code> 指定在节点执行后暂停执行的位置。</li>
+<li>图运行直到命中第一个断点。</li>
+<li>通过传入 <code>None</code> 作为输入来恢复图。这将运行图直到命中下一个断点。</li>
 </ol>
 </section>
 <aside class="callout"><strong>建议</strong>
@@ -1359,7 +1376,7 @@ graph.stream_events(Command(resume=False), config=config, version=&quot;v3&quot;
 </aside>
 <h3>使用 LangSmith Studio</h3>
 <p>您可以使用 <a href="/langsmith/studio.html">LangSmith Studio</a> 在 UI 中运行图之前设置静态中断。您还可以使用 UI 检查执行过程中任意点的图状态。</p>
-<p>!<a href="/oss/images/static-interrupt.png.html">image</a></p>
+<p><img src="/oss/images/static-interrupt.png" alt="image" loading="lazy"></p>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>
 </aside>
