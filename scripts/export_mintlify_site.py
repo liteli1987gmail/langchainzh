@@ -87,8 +87,11 @@ def main() -> int:
         )
         output_zip.parent.mkdir(parents=True, exist_ok=True)
 
-        command = [*mint_command, "export", "--output", str(output_zip)]
-        run(command, cwd=build_dir, env=env)
+        validate_command = [*mint_command, "validate"]
+        run(validate_command, cwd=build_dir, env=env)
+
+        export_command = [*mint_command, "export", "--output", str(output_zip)]
+        run(export_command, cwd=build_dir, env=env)
 
         if not output_zip.exists():
             raise RuntimeError(f"Mintlify export did not create {output_zip}")

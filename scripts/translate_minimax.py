@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Translate LangChain docs with MiniMax's OpenAI-compatible API.
 
-The translator is intentionally conservative:
 - code fences are never sent to the model;
+- MDX/JSX tags and Markdown structure are preserved in-place;
+- only extracted prose text slots are sent to the model;
 - imports/exports are preserved;
 - unchanged files are skipped through a sha256 cache;
 - source and destination directories stay separate.
@@ -32,7 +33,7 @@ from typing import Any
 
 
 TEXT_EXTENSIONS = {".md", ".mdx", ".txt"}
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 JSON_BATCH_MAX_CHARS = 20_000
 JSON_DISPLAY_KEYS = {
     "anchor",
@@ -70,14 +71,14 @@ JSON_SKIP_KEYS = {
 
 SYSTEM_PROMPT = """You are a senior technical translator.
 Translate English developer documentation into Simplified Chinese.
-Return only the translated content.
+Return only the requested translated content.
 
 Hard rules:
-- Preserve Markdown and MDX structure.
-- Preserve JSX/Mintlify component names and attribute names.
+- You will usually receive JSON arrays of short text slots.
+- Translate only the text values.
+- Preserve ids and JSON shape exactly.
+- Preserve Markdown and MDX syntax that appears inside a text value.
 - Preserve URLs, anchors, file paths, package names, import/export statements, code identifiers, CLI commands, env var names, and API names.
-- Keep fenced code blocks unchanged. They are normally removed before you see a fragment.
-- Keep frontmatter keys unchanged, but translate human-readable values.
 - Do not include reasoning, analysis, or <think> blocks.
 - Do not add explanations, summaries, or wrappers.
 """
@@ -96,6 +97,12 @@ class TranslationConfig:
     mock: bool
 
 
+@dataclass(frozen=True)
+class TextSlot:
+    index: int
+    text: str
+
+
 class MiniMaxClient:
     def __init__(self, config: TranslationConfig) -> None:
         self.config = config
@@ -112,10 +119,8 @@ class MiniMaxClient:
 
         prompt = (
             f"Translate this {content_type} fragment into Simplified Chinese. "
-            "Keep formatting and non-prose tokens unchanged.\n\n"
-            "<fragment>\n"
+            "Return only the translated result, with no wrapper tags or commentary.\n\n"
             f"{fragment}"
-            "\n</fragment>"
         )
         payload = {
             "model": self.config.model,
@@ -488,6 +493,218 @@ def translate_json_document(text: str, client: MiniMaxClient, max_chars: int) ->
     return json.dumps(translated, ensure_ascii=False, indent=2) + "\n"
 
 
+def split_edge_whitespace(text: str) -> tuple[str, str, str]:
+    leading_len = len(text) - len(text.lstrip())
+    trailing_len = len(text) - len(text.rstrip())
+    if leading_len == len(text):
+        return text, "", ""
+    leading = text[:leading_len]
+    core_end = len(text) - trailing_len if trailing_len else len(text)
+    return leading, text[leading_len:core_end], text[core_end:]
+
+
+def should_translate_text_slot(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if not has_translatable_english(stripped):
+        return False
+    if stripped.startswith(("/", "http://", "https://", "#", "{", "$")):
+        return False
+    if "/" in stripped or "\\" in stripped:
+        return False
+    if re.fullmatch(r"[A-Za-z0-9_.:-]+", stripped) and any(
+        marker in stripped for marker in ("_", ".", ":", "-")
+    ):
+        return False
+    if re.fullmatch(r"[A-Z0-9_./:@#?=&%+${}\[\]<>-]+", stripped):
+        return False
+    return True
+
+
+def find_matching_paren(text: str, open_index: int) -> int:
+    depth = 0
+    for index in range(open_index, len(text)):
+        char = text[index]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
+
+
+def find_matching_brace(text: str, open_index: int) -> int:
+    depth = 0
+    quote = ""
+    escaped = False
+    for index in range(open_index, len(text)):
+        char = text[index]
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = ""
+            continue
+        if char in {"'", '"', "`"}:
+            quote = char
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
+
+
+def looks_like_html_or_mdx_tag(text: str, index: int) -> bool:
+    if text[index] != "<" or index + 1 >= len(text):
+        return False
+    next_char = text[index + 1]
+    return next_char.isalpha() or next_char in {"/", "!", "?"}
+
+
+def append_text_part(parts: list[str | TextSlot], raw: str, slots: list[str]) -> None:
+    if not raw:
+        return
+    leading, core, trailing = split_edge_whitespace(raw)
+    if not should_translate_text_slot(core):
+        parts.append(raw)
+        return
+    if leading:
+        parts.append(leading)
+    slot = TextSlot(len(slots), core)
+    slots.append(core)
+    parts.append(slot)
+    if trailing:
+        parts.append(trailing)
+
+
+def extract_inline_text_slots(text: str, slots: list[str]) -> list[str | TextSlot]:
+    parts: list[str | TextSlot] = []
+    buffer: list[str] = []
+    index = 0
+
+    def flush_buffer() -> None:
+        nonlocal buffer
+        if buffer:
+            append_text_part(parts, "".join(buffer), slots)
+            buffer = []
+
+    while index < len(text):
+        if text.startswith("![", index) or text.startswith("[", index):
+            is_image = text.startswith("![", index)
+            label_start = index + (2 if is_image else 1)
+            label_end = text.find("]", label_start)
+            if label_end != -1 and label_end + 1 < len(text) and text[label_end + 1] == "(":
+                target_end = find_matching_paren(text, label_end + 1)
+                if target_end != -1:
+                    flush_buffer()
+                    parts.append("![" if is_image else "[")
+                    label = text[label_start:label_end]
+                    parts.extend(extract_inline_text_slots(label, slots))
+                    parts.append(text[label_end:target_end + 1])
+                    index = target_end + 1
+                    continue
+
+        char = text[index]
+        if char == "`":
+            fence_len = 1
+            while index + fence_len < len(text) and text[index + fence_len] == "`":
+                fence_len += 1
+            close_index = text.find("`" * fence_len, index + fence_len)
+            if close_index != -1:
+                flush_buffer()
+                parts.append(text[index:close_index + fence_len])
+                index = close_index + fence_len
+                continue
+
+        if char == "<" and looks_like_html_or_mdx_tag(text, index):
+            close_index = text.find(">", index + 1)
+            if close_index != -1:
+                flush_buffer()
+                parts.append(text[index:close_index + 1])
+                index = close_index + 1
+                continue
+
+        if char == "{":
+            close_index = find_matching_brace(text, index)
+            if close_index != -1:
+                flush_buffer()
+                parts.append(text[index:close_index + 1])
+                index = close_index + 1
+                continue
+
+        if char in {"*", "_"}:
+            marker_len = 1
+            while (
+                index + marker_len < len(text)
+                and text[index + marker_len] == char
+                and marker_len < 3
+            ):
+                marker_len += 1
+            flush_buffer()
+            parts.append(text[index:index + marker_len])
+            index += marker_len
+            continue
+
+        buffer.append(char)
+        index += 1
+
+    flush_buffer()
+    return parts
+
+
+def extract_markdown_line_slots(line: str, slots: list[str]) -> list[str | TextSlot]:
+    prefix_match = re.match(
+        r"^(\s*(?:(?:#{1,6}|[-*+]|\d+\.|>)\s+))(.+)$",
+        line,
+    )
+    if not prefix_match:
+        return extract_inline_text_slots(line, slots)
+    return [
+        prefix_match.group(1),
+        *extract_inline_text_slots(prefix_match.group(2), slots),
+    ]
+
+
+def render_parts(parts: list[str | TextSlot], translated_slots: dict[int, str]) -> str:
+    rendered: list[str] = []
+    for part in parts:
+        if isinstance(part, str):
+            rendered.append(part)
+        else:
+            rendered.append(translated_slots.get(part.index, part.text))
+    return "".join(rendered)
+
+
+def translate_text_slots(
+    slots: list[str],
+    client: MiniMaxClient,
+    max_chars: int,
+) -> dict[int, str]:
+    if not slots:
+        return {}
+    batch_items = [((index,), text) for index, text in enumerate(slots)]
+    translated: dict[int, str] = {}
+    for batch in json_batches(batch_items, min(max_chars, JSON_BATCH_MAX_CHARS)):
+        translated.update(translate_json_batch(batch, client))
+    suspicious = [
+        (index, value)
+        for index, value in translated.items()
+        if re.search(r"</?[A-Za-z][A-Za-z0-9_.:-]*(?:\s[^>]*)?>", value)
+        or "<fragment" in value
+        or "</fragment" in value
+    ]
+    if suspicious:
+        sample = "; ".join(f"{index}: {value[:80]}" for index, value in suspicious[:5])
+        raise RuntimeError(f"Translated text slot contains MDX/HTML tags: {sample}")
+    return translated
+
+
 def split_fenced_blocks(text: str) -> list[tuple[str, str]]:
     units: list[tuple[str, str]] = []
     buffer: list[str] = []
@@ -600,27 +817,65 @@ def restore_edge_newlines(source: str, translated: str) -> str:
 
 
 def translate_markdown(text: str, client: MiniMaxClient, max_chars: int) -> str:
-    translated_units: list[str] = []
-    chunk_index = 0
+    document_parts: list[str | TextSlot] = []
+    slots: list[str] = []
+    in_frontmatter = False
+    frontmatter_opening = text.startswith("---\n")
+
+    def append_literal(value: str) -> None:
+        if value:
+            document_parts.append(value)
+
+    def append_translatable(value: str) -> None:
+        document_parts.extend(extract_inline_text_slots(value, slots))
+
     for unit_type, unit_text in split_fenced_blocks(text):
         if unit_type == "literal":
-            translated_units.append(unit_text)
+            append_literal(unit_text)
             continue
 
         for nested_type, nested_text in split_preserved_lines(unit_text):
             if nested_type == "literal" or not has_translatable_english(nested_text):
-                translated_units.append(nested_text)
+                append_literal(nested_text)
                 continue
-            chunks = chunk_text(nested_text, max_chars)
-            for chunk in chunks:
-                chunk_index += 1
-                print(
-                    f"translate-chunk: {chunk_index} chars={len(chunk)}",
-                    file=sys.stderr,
-                )
-                translated = client.translate(chunk, content_type="Markdown/MDX")
-                translated_units.append(restore_edge_newlines(chunk, translated))
-    return "".join(translated_units).rstrip() + "\n"
+
+            for line in nested_text.splitlines(keepends=True):
+                newline = ""
+                body = line
+                if body.endswith("\r\n"):
+                    body = body[:-2]
+                    newline = "\r\n"
+                elif body.endswith("\n"):
+                    body = body[:-1]
+                    newline = "\n"
+
+                if frontmatter_opening and body.strip() == "---":
+                    append_literal(body + newline)
+                    in_frontmatter = True
+                    frontmatter_opening = False
+                    continue
+
+                if in_frontmatter and body.strip() == "---":
+                    append_literal(body + newline)
+                    in_frontmatter = False
+                    continue
+
+                if in_frontmatter:
+                    match = re.match(r"^(\s*[A-Za-z0-9_-]+\s*:\s*)(.*)$", body)
+                    if match and should_translate_text_slot(match.group(2)):
+                        append_literal(match.group(1))
+                        append_translatable(match.group(2))
+                        append_literal(newline)
+                    else:
+                        append_literal(body + newline)
+                    continue
+
+                document_parts.extend(extract_markdown_line_slots(body, slots))
+                append_literal(newline)
+
+    print(f"translate-slots: count={len(slots)}", file=sys.stderr)
+    translated_slots = translate_text_slots(slots, client, max_chars)
+    return render_parts(document_parts, translated_slots).rstrip() + "\n"
 
 
 def translate_file(
