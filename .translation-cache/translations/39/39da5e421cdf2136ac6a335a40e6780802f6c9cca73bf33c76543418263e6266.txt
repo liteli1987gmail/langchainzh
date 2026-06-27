@@ -1,34 +1,37 @@
 ---
-title: 人在回路中
+title: Human-in-the-loop
 ---
 
 import HitlDecisionTypesTable from '/snippets/oss/hitl-decision-types-table.mdx';
 
-人工介入（HITL）[中间件](/oss/langchain/middleware/built-in#human-in-the-loop)允许您向代理的工具调用添加人工监督。当模型提出可能需要审核的操作时（例如写入文件或执行 SQL），中间件可以暂停执行并等待决策。
+人在循环中 (HITL) [中间件](/oss/langchain/middleware/built-in#human-in-the-loop) 允许您向代理工具调用添加人工监督。
+当模型提出可能需要审查的操作时（例如写入文件或执行 SQL），中间件可以暂停执行并等待决策。
 
-它通过根据可配置的策略检查每个工具调用来实现这一点。如果需要干预，中间件会发出一个 @[interrupt] 来停止执行。图形状态使用 LangGraph 的[持久化层](/oss/langgraph/persistence)保存，以便执行可以安全地暂停并在稍后恢复。
+它通过根据可配置策略检查每个工具调用来实现这一点。如果需要干预，中间件会发出一个 @[interrupt] 来停止执行。图形状态使用 LangGraph 的 [持久化层](/oss/langgraph/persistence)进行保存，因此执行可以安全暂停并稍后恢复。
 
-然后由人工决策决定后续操作：操作可以原样批准（`approve`）、在运行前修改（`edit`）、在提供反馈的情况下拒绝（`reject`），或对于"询问用户"类型的工具直接响应（`respond`）。
+然后由人工决策决定后续操作：可以按原样批准该操作 (`approve`)、修改后再运行 (`edit`)、拒绝并提供反馈 (`reject`)、或直接响应 (`respond`用于"询问用户"类型的工具。
 
 ## 中断决策类型
 
-[中间件](/oss/langchain/middleware/built-in#human-in-the-loop)定义了四种内置的人工响应中断方式：
+该 [中间件](/oss/langchain/middleware/built-in#human-in-the-loop) 定义了四种人类响应中断的内置方式：
 
 <HitlDecisionTypesTable />
 
-每个工具可用的决策类型取决于您在 `interrupt_on` 中配置的策略。当多个工具调用同时暂停时，每个操作都需要单独做出决策。决策必须按照它们在中断请求中出现的顺序提供。
+每个工具可用的决策类型取决于您在以下位置配置的策略 `interrupt_on`.
+当多个工具调用同时暂停时，每个操作都需要一个单独的决策。
+决策必须按照操作在中断请求中出现的顺序提供。
 
-当人工拒绝请求的操作时使用 `reject`。仅在人工充当工具时使用 `respond`，例如回答 `ask_user` 提示。请勿使用 `respond` 来拒绝有副作用的工具，因为其消息被视为成功的工具结果。
+使用 `reject` 当人类拒绝所请求的操作时。使用 `respond` 仅当人类充当工具时使用，例如回答一个 `ask_user` 提示。不要使用 `respond` 来拒绝有副作用的工具，因为其消息被视为成功的工具结果。
 
 <Tip>
-当**编辑**工具参数时，请保守地进行更改。对原始参数的重大修改可能导致模型重新评估其方法，并可能多次执行工具或采取意外操作。
+当 **编辑** 工具参数时，请保守地进行更改。对原始参数的显著修改可能导致模型重新评估其方法，并可能多次执行该工具或采取意外操作。
 </Tip>
 
 ## 配置中断
 
-要使用 HITL，请在创建代理时将[中间件](/oss/langchain/middleware/built-in#human-in-the-loop)添加到代理的 `middleware` 列表中。
+要使用HITL，请将 [中间件](/oss/langchain/middleware/built-in#human-in-the-loop) 添加到代理的 `middleware` 列表中。
 
-您可以通过将工具操作映射到每个操作允许的决策类型来配置它。当工具调用与映射中的某个操作匹配时，中间件将中断执行。
+您可以使用工具操作到每个操作允许的决策类型的映射来配置它。当工具调用匹配映射中的操作时，中间件将中断执行。
 
 :::python
 ```python
@@ -95,45 +98,45 @@ const agent = createAgent({
 
 
 <Info>
-    您必须配置检查点器来在中断之间持久化图状态。
-    在生产环境中，使用持久化检查点器（如 @[`AsyncPostgresSaver`]）。对于测试或原型开发，请使用 @[`InMemorySaver`]。
+    您必须配置一个检查点器来在中断之间持久化图状态。
+    在生产环境中，使用持久化检查点器，如@[`AsyncPostgresSaver`]。对于测试或原型设计，请使用@[`InMemorySaver`].
 
-    调用 agent 时，请传递包含 **thread ID** 的 `config`，以将执行与对话线程关联。
-    详见 [LangGraph 中断文档](/oss/langgraph/interrupts)。
+    调用代理时，传递一个包含 `config` 的 **线程ID** 的配置，以将执行与对话线程关联。
+    请参阅 [LangGraph中断文档](/oss/langgraph/interrupts) 了解详情。
 </Info>
 
-<Accordion title="配置选项">
+<Accordion title="Configuration options">
 
 :::python
 <ParamField body="interrupt_on" type="dict" required>
-    工具名称到审批配置的映射。值为 `True`（使用默认配置中断）、`False`（自动批准）或 `InterruptOnConfig` 对象。
+    工具名称到审批配置的映射。值可以是 `True` （使用默认配置中断）， `False` （自动批准），或者一个 `InterruptOnConfig` object.
 </ParamField>
 
 <ParamField body="description_prefix" type="string" default="Tool execution requires approval">
     操作请求描述的前缀
 </ParamField>
 
-**`InterruptOnConfig` 选项：**
+**`InterruptOnConfig` options:**
 
 <ParamField body="allowed_decisions" type="list[string]">
-    允许的决策列表：`'approve'`、`'edit'`、`'reject'` 或 `'respond'`
+    允许的决策列表： `'approve'`, `'edit'`, `'reject'`, or `'respond'`
 </ParamField>
 
 <ParamField body="description" type="string | callable">
-    自定义描述的静态字符串或可调用函数
+    静态字符串或可调用函数，用于自定义描述
 </ParamField>
 
 <ParamField body="when" type="callable">
-    可选谓词，接收 @[ToolCallRequest] 并返回 `True` 以中断或 `False` 以自动批准。用于根据调用的参数控制中断。需要 `langchain>=1.3.3`。
+    可选的谓词函数，接收 @[ToolCallRequest] 并返回 `True` 以中断或 `False` 以自动批准。使用它可以根据调用的参数来控制中断。需配合 `langchain>=1.3.3`.
 </ParamField>
 :::
 
 :::js
 <ParamField body="interruptOn" type="object" required>
-    工具名称到审批配置的映射
+    工具名称到批准配置的映射
 </ParamField>
 
-**工具审批配置选项：**
+**工具批准配置选项：**
 
 <ParamField body="allowAccept" type="boolean" default="false">
     是否允许批准
@@ -144,7 +147,7 @@ const agent = createAgent({
 </ParamField>
 
 <ParamField body="allowRespond" type="boolean" default="false">
-    是否允许回复/拒绝
+    Whether responding/rejection is allowed
 </ParamField>
 :::
 
@@ -152,11 +155,11 @@ const agent = createAgent({
 
 ## 条件中断
 
-默认情况下，`interrupt_on` 中列出的每个工具调用都会暂停等待审核。要仅暂停某些调用，请在工具的 `InterruptOnConfig` 中添加 `when` 谓词。该谓词接收 `ToolCallRequest` 并返回 `True` 以中断或 `False` 以自动批准，因此您可以根据工具的参数进行门控。
+默认情况下， `interrupt_on` 中列出的每个工具调用都会暂停等待审查。若只需暂停部分调用，请在工具的 `when` 中添加一个 `InterruptOnConfig`谓词。该谓词接收一个 `ToolCallRequest` 并返回 `True` 以中断或 `False` 以自动批准，这样您可以根据工具的参数来控制是否中断。
 
 :::python
 <Note>
-条件中断需要 `langchain>=1.3.3`。
+条件中断需要 `langchain>=1.3.3`.
 </Note>
 
 ```python
@@ -198,16 +201,16 @@ agent = create_agent(
 )
 ```
 
-当 `when` 谓词返回 `False` 时，调用不会中断地运行。当它返回 `True`，或者当您省略 `when` 时，调用照常暂停。评估为 `False` 的调用永远不会添加到中断批次中，因此审查者只会看到需要决策的操作。
+当 `when` 谓词返回 `False`时，调用会正常运行而不会中断。当返回 `True`，或省略 `when`时，调用会照常暂停。评估为 `False` 的调用不会被添加到中断批次中，因此审查者只会看到需要做决定的操作。
 :::
 
 :::js
-Conditional interrupts are currently available in Python only.
+条件中断目前仅在 Python 中可用。
 :::
 
 ## 响应中断
 
-当您调用代理时，它会运行直到完成或引发中断。当工具调用匹配您在 `interrupt_on` 中配置的策略时，会触发中断。使用 `version="v2"` 时，结果是一个带有 `interrupts` 属性的 `GraphOutput`，其中包含需要审查的操作。然后您可以向审查者展示这些操作，并在提供决策后恢复执行。
+调用代理时，它会运行直到完成或引发中断。当工具调用与您在 `interrupt_on`中配置的政策匹配时，会触发中断。使用 `version="v2"`时，返回结果是一个 `GraphOutput` ，其中包含一个 `interrupts` 属性，列出需要审查的操作。然后您可以将这些操作呈现给审查者，并在提供决定后恢复执行。
 
 
 :::python
@@ -319,8 +322,8 @@ await agent.invoke(
 ### 决策类型
 
 <Tabs>
-<Tab title="✅ 批准">
-使用 `approve` 来按原样批准工具调用并执行，无需任何更改。
+<Tab title="✅ approve">
+使用 `approve` 批准工具调用并按原样执行，不做任何修改。
 
 :::python
 ```python
@@ -365,7 +368,7 @@ await agent.invoke(
 </Tab>
 <Tab title="✏️ edit">
     使用 `edit` 在执行前修改工具调用。
-    提供带有新工具名称和参数的新动作。
+    提供包含新工具名称和参数的被编辑操作。
 
     :::python
     ```python
@@ -422,20 +425,18 @@ await agent.invoke(
         config  // Same thread ID to resume the paused conversation
     );
     ```
-:::
+    :::
 
-<Tip>
-        编辑工具参数时，请谨慎地进行更改。显著修改原始参数可能导致模型重新评估其方法，并可能多次执行工具或采取意外操作。
+    <Tip>
+        当 **编辑** 工具参数时，请保守地进行更改。对原始参数的重大修改可能导致模型重新评估其方法，并可能多次执行工具或采取意外操作。
     </Tip>
 
 </Tab>
 
 <Tab title="❌ reject">
-    使用 `reject` 来拒绝工具调用并提供反馈，而不是执行。工具不会被执行。
+    使用 `reject` 拒绝工具调用并提供反馈而不是执行。工具不会被执行。
 
     :::python
-
-</fragment>
     ```python
     agent.invoke(
         Command(
@@ -480,14 +481,16 @@ await agent.invoke(
         config  // Same thread ID to resume the paused conversation
     );
     ```
-`message` 被添加到对话中作为反馈，以帮助智能体理解为什么该操作被拒绝，以及它应该做什么。当您省略 `message` 时，中间件使用默认的拒绝消息，告诉模型该工具未被执行，并且除非用户要求，否则不要重试相同的工具调用。对于有副作用的工具，请提供一个特定领域的消息，明确说明智能体是应该放弃该操作、提出后续问题，还是尝试更安全的替代方案。
+    :::
+
+该 `message` 会作为反馈添加到对话中，以帮助代理理解为什么该操作被拒绝以及应该采取什么替代操作。当省略 `message`中间件使用默认拒绝消息，告知模型该工具未执行，不要重试同一工具调用，除非用户要求。对于有副作用的工具，请提供特定领域消息，明确说明代理应放弃该操作、提出后续问题还是尝试更安全的替代方案。
 
 </Tab>
 
 <Tab title="💬 respond">
-使用 `respond` 实现"询问用户"风格的工具，其中工具的真正实现是人类的回复。`message` 内容直接作为工具结果返回；工具本身不会被执行。
+    使用 `respond` 用于"询问用户"类型的工具，其中工具的实际实现是人类的回复。 `message` 内容直接作为工具结果返回；工具本身不会执行。
 
-:::python
+    :::python
     ```python
     agent.invoke(
         Command(
@@ -530,7 +533,9 @@ await agent.invoke(
         config  // Same thread ID to resume the paused conversation
     );
     ```
-`message` 作为成功的 `ToolMessage` 返回给代理。当工具故意作为人工输入的占位符时使用 `respond`，例如，提示澄清的 `ask_user` 工具。不要使用 `respond` 来拒绝提议的操作，因为这会告诉模型工具已成功完成。
+    :::
+
+ `message` 作为成功的 @[ToolResult] 返回给代理。使用 `ToolMessage` `respond` 当工具故意作为人类输入的占位符时，例如，一个 `ask_user` 提示澄清的工具。请勿使用 `respond` 来拒绝提议的操作，因为这会告诉模型工具已成功完成。
 
 </Tab>
 </Tabs>
@@ -539,7 +544,7 @@ await agent.invoke(
 
 ### 多个决策
 
-当有多个操作需要审查时，按其在中断中出现的顺序为每个操作提供决策：
+当多个操作正在审查中时，按其中断中出现的相同顺序为每个操作提供决策：
 
 :::python
 ```python
@@ -583,9 +588,9 @@ await agent.invoke(
 ```
 :::
 
-## 人机交互流式处理
+## 带人在环的流式处理
 
-您可以使用 `stream_events()` 在代理运行和处理中断时流式传输实时更新。使用 `stream.messages` 流式传输 LLM tokens，使用 `stream.values` 检查代理状态快照以处理中断。
+您可以在代理运行并使用以下方式处理中断时流式传输实时更新 `stream_events()` `stream.messages` 流式传输 LLM 令牌和 `stream.values` 检查代理状态快照以获取中断。
 
 :::python
 ```python
@@ -654,21 +659,21 @@ for await (const message of resumeStream.messages) {  // [!code highlight]
 ```
 :::
 
-有关流模式的更多详细信息，请参阅 [Streaming](/oss/langchain/streaming) 指南。
+请参阅 [流式传输](/oss/langchain/streaming) 指南了解更多关于流模式的详细信息。
 
 ## 执行生命周期
 
-中间件定义了一个 `after_model` 钩子，它在模型生成响应后、工具调用执行前运行：
+中间件定义了一个 `after_model` 钩子，该钩子在模型生成响应后但在任何工具调用执行前运行：
 
 1. 代理调用模型生成响应。
 2. 中间件检查响应中的工具调用。
-3. 如果任何调用需要人工输入，中间件会使用 `action_requests` 和 `review_configs` 构建一个 `HITLRequest`，并调用 @[interrupt]。
+3. 如果任何调用需要人工输入，中间件会构建一个 `HITLRequest`  `action_requests`  `review_configs` 
 4. 代理等待人工决策。
-5. 根据 `HITLResponse` 的决策，中间件执行已批准或已编辑的调用，为被拒绝的调用合成 @[ToolMessage]，对于 `respond` 决策直接将人工回复作为 @[ToolMessage] 返回，并恢复执行。
+5. 基于 `HITLResponse` 决策，中间件执行已批准或已编辑的调用，为被拒绝的调用合成 @[ToolMessage]，将人工回复直接作为 @[ToolMessage] 返回，用于 `respond` 决策，并恢复执行。
 
 
 ## 自定义 HITL 逻辑
 
-对于更专业的工作流程，您可以直接使用 @[interrupt] 原始类型和[中间件](/oss/langchain/middleware)抽象来构建自定义 HITL 逻辑。
+对于更专业的工作流，您可以直接使用 @[interrupt] 原始类型和 [中间件](/oss/langchain/middleware) abstraction.
 
-请查看上面的[执行生命周期](#execution-lifecycle)以了解如何将中断集成到代理的操作中。
+查看 [执行生命周期](#execution-lifecycle) 上文以了解如何将中断集成到代理的操作中。

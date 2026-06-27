@@ -3,23 +3,20 @@ title: 启用 TTL 和数据保留
 sidebarTitle: 启用 TTL 和数据保留
 ---
 
-LangSmith 自托管版本支持启用跟踪的自动 TTL 和数据保留功能。如果您需要遵守数据隐私法规，或者希望更高效地利用空间并自动清理跟踪，此功能会非常有用。跟踪还会根据某些操作或运行规则应用自动延长其数据保留期限。
+LangSmith 自托管版本支持启用跟踪的自动 TTL 和数据保留功能。如果您需要遵守数据隐私法规，或者希望更高效地利用空间并自动清理跟踪数据，这将非常有用。跟踪数据也会根据某些操作或运行规则应用自动延长其数据保留期限。
 
 <Note>
-**自托管版[企业](/langsmith/pricing-plans)客户：** 现在您可以通过 UI 在工作区级别配置扩展数据保留，从而提供更精细的控制，无需更改环境变量。如需了解更多信息，请参阅[自定义扩展保留策略](/langsmith/data-purging-compliance#customize-extended-retention-policy)。本文档中记录的系统级 TTL 配置仍然受支持。
+**Self-hosted [企业版](/langsmith/pricing-plans) customers:** 您现在可以通过 UI 在工作区级别配置扩展数据保留，从而提供更细粒度的控制，无需更改环境变量。更多信息，请参阅 [自定义扩展保留策略](/langsmith/data-purging-compliance#customize-extended-retention-policy)。本文档中记录的系统级 TTL 配置仍然受支持。
 </Note>
 
 ## 要求
 
-您可以通过 helm 或环境变量设置来配置保留策略。有几个可配置的选项：
+您可以通过 helm 或环境变量设置来配置保留。有几个可配置的选项：
 
-- *Enabled:* 数据保留功能是否启用或禁用。如果启用，通过 UI 可以设置默认组织和项目 TTL 层级来应用到跟踪（详见[数据保留指南](/langsmith/usage-and-billing#data-retention)）。
-- *Retention Periods:* 可以为短期和长期跟踪配置系统级保留期。配置完成后，您可以管理每个项目的保留级别，也可以为新项目设置组织级默认值。
+- *Enabled:* 数据保留是启用还是禁用。如果启用，通过 UI 您可以为跟踪应用默认组织和项目 TTL 层级（请参阅 [数据保留指南](/langsmith/usage-and-billing#data-retention) 了解详情）。
+- *保留期限：* 您可以为短期和长期跟踪配置系统级保留期限。配置后，您可以在每个项目中管理保留级别，也可以为新项目设置组织级默认设置。
 
 <CodeGroup>
-
-
-</CodeGroup>
 
 ```yaml Helm
 config:
@@ -39,22 +36,22 @@ config:
 
 ## ClickHouse TTL 清理任务
 
-从版本 **0.11** 开始，系统会在周末运行一个 cron 任务，以帮助删除 ClickHouse 内置 TTL 机制可能未能清理的过期数据。
+从版本 **0.11**开始，系统会在周末运行一个 cron 任务来协助删除 ClickHouse 内置 TTL 机制可能未清理掉的过期数据。
 
 <Warning>
-此任务使用潜在的长运行 **变更操作**（`ALTER TABLE DELETE`），这是昂贵的操作，可能会影响 ClickHouse 的性能。我们建议仅在非高峰时段（夜间和周末）运行这些操作。在使用 **1 个并发活动** 变更（默认设置）进行测试时，我们未观察到 CPU、内存或延迟的显著增加。
+此任务使用可能长时间运行的 **变更操作** (`ALTER TABLE DELETE`），这是会影响 ClickHouse 性能的昂贵操作。我们建议仅在非高峰时段（夜间和周末）运行这些操作。在使用 **1 个并发活跃** 变更操作（默认配置）进行测试时，我们未观察到 CPU、内存或延迟的显著增加。
 </Warning>
 
-### 默认计划
+### 默认调度
 
-默认情况下，清理任务会在以下时间运行：
+默认情况下，清理任务运行时间为：
 
 - **周六**：UTC 时间晚上 8 点和 10 点
-- **周日**：UTC 时间凌晨 12 点、2 点和 4 点
+- **周日**：UTC 时间凌晨 0 点、2 点和 4 点
 
-### 禁用该任务
+### 禁用任务
 
-要完全禁用清理任务：
+完全禁用清理任务：
 
 ```yaml
 queue:
@@ -63,7 +60,7 @@ queue:
       - name: "ENABLE_CLICKHOUSE_TTL_CLEANUP_CRON"
         value: "false"
 ```
-### 配置计划任务
+### 配置调度
 您可以通过修改 cron 表达式来自定义清理任务的运行时间：
 ```yaml
 queue:
@@ -77,15 +74,15 @@ queue:
         value: "0 20,22 * * 6"
 ```
 <Tip>
-要在单个 cron 计划上运行作业，请将 `CLICKHOUSE_TTL_CLEANUP_CRON_WEEKEND_EVENING` 和 `CLICKHOUSE_TTL_CLEANUP_CRON_WEEKEND_MORNING` 设置为相同的值。作业锁定可防止重叠执行。
+要使用单一 cron 调度运行任务，请将 `CLICKHOUSE_TTL_CLEANUP_CRON_WEEKEND_EVENING` 和 `CLICKHOUSE_TTL_CLEANUP_CRON_WEEKEND_MORNING` 设置为相同的值。任务锁定可防止重叠执行。
 </Tip>
 
-### 配置每个分区的最少过期行数
+### 配置每个分区的最小过期行数
 
-作业逐表进行，扫描分区并从包含最少过期行数的分区中删除数据。此阈值平衡了效率和彻底性：
+任务逐表进行，扫描分区并从包含最少过期行数的分区中删除数据。此阈值在效率和彻底性之间取得平衡：
 
-- **过低**：作业扫描整个分区以清除最少数据（效率低下）
-- **过高**：作业会遗漏包含大量过期数据的分区
+- **过低**：任务扫描整个分区以清除少量数据（效率低下）
+- **过高**：任务会遗漏包含大量过期数据的分区
 
 ```yaml
 queue:
@@ -95,9 +92,9 @@ queue:
         value: "100000" # 100k expired rows
 ```
 
-#### 检查过期行
+#### 检查过期行数
 
-使用此查询来分析表中的过期行，并相应地调整您的最小值：
+使用此查询来分析表中的过期行，并相应调整您的最小值：
 
 ```sql
 -- Query for Runs table. For other tables, replace 'ttl_seconds' with 'trace_ttl_seconds'
@@ -114,7 +111,7 @@ ORDER BY expired_rows DESC
 
 ### 配置最大活动变更数
 
-删除操作可能非常耗时（100GB 分区约需 50 分钟）。您可以增加并发变更数以加快处理速度：
+删除操作可能非常耗时（100GB 分区约需 50 分钟）。您可以增加并发变更数来加快此过程：
 
 ```yaml
 queue:
@@ -125,33 +122,33 @@ queue:
 ```
 
 <Warning>
-增加并发 DELETE 操作可能会严重影响系统性能。请仔细监控系统，仅在您能够容忍潜在更慢的插入和读取延迟时才增加此值。
+增加并发删除操作可能会严重影响系统性能。请仔细监控您的系统，仅在您可以容忍潜在较慢的插入和读取延迟时才增加此值。
 </Warning>
 
 ### 紧急情况：停止正在运行的变更
 
-如果您遇到延迟激增并需要终止正在运行的变更：
+如果您遇到延迟峰值并需要终止正在运行的变更：
 
-1. **查找活动中的变更**：
+1. **查找活动变更**:
 
    ```sql
    SELECT * FROM system.mutations WHERE is_done = 0;
    ```
 
-查找 `mutation_id`，其中 `command` 列包含 `DELETE` 语句。
+   查找 `mutation_id` 其中 `command` 列包含 `DELETE` statement.
 
-2. **终止 mutation**：
+2. **终止变更**:
    ```sql
    KILL MUTATION WHERE mutation_id = '<mutation_id>';
    ```
 
-### 备份与数据保留
+### 备份和数据保留
 
-如果运行此任务后磁盘空间未减少，或持续增加，则备份可能通过创建文件系统硬链接而导致此问题。这些链接会阻止 ClickHouse 清理数据。
+如果运行此任务后磁盘空间没有减少，或继续增加，备份可能通过创建文件系统硬链接导致此问题。这些链接会阻止 ClickHouse 清理数据。
 
-要验证，请在 ClickHouse pod 内检查以下目录：
+要验证，请在 ClickHouse Pod 内检查以下目录：
 
  - `/var/lib/clickhouse/backup`
  - `/var/lib/clickhouse/shadow`
 
-如果存在备份，请将其复制到外部文件系统或对象存储（如 S3），然后清空目录。几分钟后，您会注意到磁盘空间正在释放。
+如果存在备份，请将其复制到外部文件系统或对象存储（如 S3），然后清除这些目录。几分钟后，您将注意到磁盘空间正在释放。

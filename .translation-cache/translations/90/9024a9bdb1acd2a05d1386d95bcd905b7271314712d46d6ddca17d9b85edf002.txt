@@ -3,13 +3,13 @@ title: Agent Server 中的 MCP 端点
 sidebarTitle: Agent Server 中的 MCP 端点
 ---
 
-Model Context Protocol (MCP) 是一种开放协议，用于以模型无关格式描述工具和数据源，使 LLM 能够通过结构化 API 发现并使用它们。
+模型上下文协议（MCP）是一种开放协议，用于以模型无关的格式描述工具和数据源，使 LLM 能够通过结构化 API 发现和使用它们。
 
-[Agent Server](/langsmith/agent-server) 使用 [Streamable HTTP 传输](https://spec.modelcontextprotocol.io/specification/2025-03-26/basic/transports/#streamable-http) 实现了 MCP。这允许将 LangGraph **agent** 暴露为 **MCP 工具**，使它们可与任何支持 Streamable HTTP 的 MCP 兼容客户端配合使用。
+[Agent Server](/langsmith/agent-server) 使用 [Streamable HTTP 传输](https://spec.modelcontextprotocol.io/specification/2025-03-26/basic/transports/#streamable-http)实现 MCP。这允许 LangGraph **代理** 作为 **MCP 工具**公开，使其可与任何支持 Streamable HTTP 的 MCP 兼容客户端一起使用。
 
-MCP 端点位于 [Agent Server](/langsmith/agent-server) 上的 `/mcp`。
+MCP 端点可在此处访问 `/mcp` on [Agent Server](/langsmith/agent-server).
 
-您可以设置[自定义身份验证中间件](/langsmith/custom-auth)，以通过 MCP 服务器对用户进行身份验证，从而获取在您的 LangSmith 部署中的用户范围工具。
+您可以设置 [自定义认证中间件](/langsmith/custom-auth) 来通过 MCP 服务器认证用户，以获取对 LangSmith 部署中用户范围的工具的访问权限。
 
 此流程的示例架构：
 
@@ -57,8 +57,6 @@ sequenceDiagram
 使用以下命令安装：
 
 <CodeGroup>
-
-</CodeGroup>
 ```bash pip
 pip install "langgraph-api>=0.2.3" "langgraph-sdk>=0.1.61"
 ```
@@ -68,17 +66,17 @@ uv add "langgraph-api>=0.2.3" "langgraph-sdk>=0.1.61"
 ```
 </CodeGroup>
 
-## 使用概览
+## 用法概述
 
 启用 MCP：
 
-* 升级到使用 langgraph-api>=0.2.3。如果您正在部署 LangSmith，创建新修订版本时会自动完成此操作。
-* MCP 工具（代理）将自动暴露。
-* 使用任何支持 Streamable HTTP 的 MCP 兼容客户端进行连接。
+* 升级至 langgraph-api>=0.2.3。如果您正在部署 LangSmith，创建新版本时会自动为您完成此操作。
+* MCP 工具（代理）将自动公开。
+* 使用任何支持 Streamable HTTP 的 MCP 兼容客户端连接。
 
 ### 客户端
 
-使用 MCP 兼容客户端连接到 Agent Server。以下示例展示了如何使用不同的编程语言进行连接。
+使用 MCP 兼容客户端连接到 Agent Server。以下示例展示如何使用不同的编程语言进行连接。
 
 <Tabs>
     <Tab title="JavaScript/TypeScript">
@@ -86,8 +84,8 @@ uv add "langgraph-api>=0.2.3" "langgraph-sdk>=0.1.61"
     npm install @modelcontextprotocol/sdk
     ```
 
-> **注意**
-> 将 `serverUrl` 替换为您的 Agent Server URL，并根据需要配置身份验证标头。
+        > **注意**
+        > 将 `serverUrl` 替换为您的 Agent Server URL，并根据需要配置认证标头。
 
     ```js
     import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -119,17 +117,15 @@ uv add "langgraph-api>=0.2.3" "langgraph-sdk>=0.1.61"
             console.error("Failed to connect client:", error);
         });
     ```
-</Tab>
-<Tab title="Python">
-安装适配器：
-
-</Tab>
+    </Tab>
+    <Tab title="Python">
+    使用以下命令安装适配器：
 
     ```bash
     pip install langchain-mcp-adapters
     ```
 
-以下是一个示例，介绍如何连接到远程 MCP 端点并使用代理作为工具：
+    以下是一个如何连接到远程 MCP 端点并使用代理作为工具的示例：
 
     ```python
     # Create server parameters for stdio connection
@@ -167,20 +163,21 @@ uv add "langgraph-api>=0.2.3" "langgraph-sdk>=0.1.61"
     if __name__ == "__main__":
         asyncio.run(main())
     ```
-</Tab>
+    </Tab>
 </Tabs>
 
 ## 将代理公开为 MCP 工具
 
-部署后，您的代理将作为工具出现在 MCP 端点中，配置如下：
+部署后，您的代理将作为工具出现在 MCP 端点中
+使用此配置：
 
-- **工具名称**：代理的名称。
-- **工具描述**：代理的描述。
-- **工具输入架构**：代理的输入架构。
+* **工具名称**：代理的名称。
+* **工具描述**：代理的描述。
+* **工具输入模式**：代理的输入模式。
 
 ### 设置名称和描述
 
-您可以在 `langgraph.json` 中设置代理的名称和描述：
+您可以在 `langgraph.json`:
 
 ```json
 {
@@ -196,15 +193,15 @@ uv add "langgraph-api>=0.2.3" "langgraph-sdk>=0.1.61"
 
 部署后，您可以使用 LangGraph SDK 更新名称和描述。
 
-### 架构
+### 模式
 
-定义清晰、最小化的输入和输出架构，以避免向 LLM 暴露不必要的内部复杂性。
+定义清晰、最小化的输入和输出模式，以避免向 LLM 暴露不必要的内部复杂性。
 
-默认的 [MessagesState](/oss/langgraph/graph-api#messagesstate) 使用 `AnyMessage`，支持多种消息类型，但对于直接 LLM 使用来说过于通用。
+默认的 [MessagesState](/oss/langgraph/graph-api#messagesstate) 使用 `AnyMessage`，支持多种消息类型，但对于直接暴露给 LLM 来说过于通用。
 
-相反，请定义使用显式类型化输入和输出结构的 **自定义智能体或工作流**。
+相反，请定义 **自定义智能体或工作流** 使用明确定义类型的输入和输出结构。
 
-例如，回答文档问题的工作流可能如下所示：
+例如，用于回答文档问题的工作流可能如下所示：
 
 ```python
 from langgraph.graph import StateGraph, START, END
@@ -238,16 +235,16 @@ graph = builder.compile()
 print(graph.invoke({"question": "hi"}))
 ```
 
-有关更多详细信息，请参阅[底层概念指南](/oss/langgraph/graph-api#state)。
+更多详细信息，请参阅 [底层概念指南](/oss/langgraph/graph-api#state).
 
-## 在部署中使用用户范围的 MCP 工具
+## 在您的部署中使用用户作用域的 MCP 工具
 
 <Tip>
 **前提条件**
-您已经添加了自己的[自定义身份验证中间件](/langsmith/custom-auth)，该中间件填充 `langgraph_auth_user` 对象，使其可通过可配置的上下文访问图中的每个节点。
+您已添加您自己的 [自定义身份验证中间件](/langsmith/custom-auth) 用于填充 `langgraph_auth_user` 对象，使其可通过可配置的上下文供图中每个节点访问。
 </Tip>
 
-要使您能够使用用户范围的工具，请首先实现以下代码片段：
+要使您 LangSmith 部署中的用户作用域工具可用，请从实现类似以下代码片段开始：
 
 ```python
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -273,23 +270,23 @@ def mcp_tools_node(state, config):
     return {"messages": tool_messages}
 ```
 
-1. MCP 仅支持为 `streamable_http` 和 `sse` `transport` 服务器的请求添加标头。
+1. MCP 仅支持向发出的请求添加标头 `streamable_http` 和 `sse` `transport` servers.
 2. 您的 MCP 服务器 URL。
-3. 从您的 MCP 服务器获取可用的工具。
+3. 从您的 MCP 服务器获取可用工具。
 
-_这也可以通过[在运行时重新构建图](/langsmith/graph-rebuild)来实现，以便在新运行中使用不同的配置_
+_这也可以通过 [在运行时重建图](/langsmith/graph-rebuild) 以在新的运行中具有不同的配置_
 
 ## 会话行为
 
-当前的 LangGraph MCP 实现不支持会话。每个 `/mcp` 请求都是无状态的且相互独立的。
+当前的 LangGraph MCP 实现不支持会话。每个 `/mcp` 请求都是无状态且独立的。
 
 ## 身份验证
 
-`/mcp` 端点使用与 LangGraph API 其他部分相同的身份验证。有关设置详情，请参阅[身份验证指南](/langsmith/auth)。
+ `/mcp` 端点使用与 LangGraph API 其余部分相同的身份验证方式。请参阅 [身份验证指南](/langsmith/auth) 了解设置详情。
 
 ## 禁用 MCP
 
-要禁用 MCP 端点，请在 `langgraph.json` 配置文件中将 `disable_mcp` 设置为 `true`：
+要禁用 MCP 端点，请设置 `disable_mcp` to `true` 在您的 `langgraph.json` 配置文件中：
 
 ```json
 {
@@ -300,4 +297,4 @@ _这也可以通过[在运行时重新构建图](/langsmith/graph-rebuild)来实
 }
 ```
 
-这将防止服务器暴露 `/mcp` 端点。
+这将防止服务器暴露 `/mcp` endpoint.

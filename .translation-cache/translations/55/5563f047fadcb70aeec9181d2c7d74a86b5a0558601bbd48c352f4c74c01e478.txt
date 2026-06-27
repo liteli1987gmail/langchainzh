@@ -3,27 +3,27 @@ title: "Vectara 集成"
 description: "使用 LangChain Python 与 Vectara 向量存储集成。"
 ---
 
-[Vectara](https://vectara.com/) 是一个 RAG 平台，通过 API 暴露索引、检索及相关服务。
+[Vectara](https://vectara.com/) 是一个 RAG 平台，通过 API 暴露索引、检索和相关服务。
 Vectara 无服务器 RAG 即服务通过 API 提供 RAG 的主要组件，包括：
 
-1. 从文件（PDF、PPT、DOCX 等）中提取文本的方式
-2. 用于文本分割的 ML 分块
-3. [Boomerang](https://vectara.com/how-boomerang-takes-retrieval-augmented-generation-to-the-next-level-via-grounded-generation/) 嵌入模型。
-4. 其自己的内部向量数据库，用于存储文本块和嵌入向量。
-5. 查询服务，可自动将查询编码为嵌入，并检索最相关的文本片段，同时支持 [混合搜索](https://docs.vectara.com/docs/api-reference/search-apis/lexical-matching) 以及多种重排序选项，如[多语言相关性重排序器](https://www.vectara.com/blog/deep-dive-into-vectara-multilingual-reranker-v1-state-of-the-art-reranker-across-100-languages)、[MMR](https://vectara.com/get-diverse-results-and-comprehensive-summaries-with-vectaras-mmr-reranker/)、[UDF 重排序器](https://www.vectara.com/blog/rag-with-user-defined-functions-based-reranking)。
-6. 一个 LLM，用于根据检索到的文档（上下文）创建[生成式摘要](https://docs.vectara.com/docs/learn/grounded-generation/grounded-generation-overview)，包括引用。
+1. 一种从文件（PDF、PPT、DOCX 等）中提取文本的方法
+2. 基于 ML 的文本分块
+3. The [Boomerang](https://vectara.com/how-boomerang-takes-retrieval-augmented-generation-to-the-next-level-via-grounded-generation/) 嵌入模型。
+4. 其自带的内部向量数据库，用于存储文本块和嵌入向量。
+5. 一个查询服务，自动将查询编码为嵌入，并检索最相关的文本片段，包括支持 [混合搜索](https://docs.vectara.com/docs/api-reference/search-apis/lexical-matching) 以及多种重新排序选项，例如 [多语言相关性重排序器](https://www.vectara.com/blog/deep-dive-into-vectara-multilingual-reranker-v1-state-of-the-art-reranker-across-100-languages), [MMR](https://vectara.com/get-diverse-results-and-comprehensive-summaries-with-vectaras-mmr-reranker/), [UDF 重排序器](https://www.vectara.com/blog/rag-with-user-defined-functions-based-reranking).
+6. 一个用于创建的 LLM [生成式摘要](https://docs.vectara.com/docs/learn/grounded-generation/grounded-generation-overview)，基于检索到的文档（上下文），包括引用。
 
 更多信息：
 
 - [文档](https://docs.vectara.com/docs/)
-- [API 演练场](https://docs.vectara.com/docs/rest-api/)
+- [API 演示平台](https://docs.vectara.com/docs/rest-api/)
 - [快速入门](https://docs.vectara.com/docs/quickstart)
 
-本笔记本展示了当您仅将 Vectara 用作向量存储（不进行摘要）时如何使用基本检索功能，包括：`similarity_search` 和 `similarity_search_with_score`，以及 LangChain `as_retriever` 功能。
+本笔记本展示了如何使用基本检索功能，当您仅将 Vectara 用作向量存储（不含摘要）时，包括： `similarity_search` 和 `similarity_search_with_score`，以及 LangChain `as_retriever` functionality.
 
 ## 设置
 
-要使用 `VectaraVectorStore`，您首先需要安装合作伙伴包。
+要使用 `VectaraVectorStore` 您首先需要安装合作伙伴包。
 
 ```python
 !uv pip install -U pip && uv pip install -qU langchain-vectara
@@ -31,16 +31,16 @@ Vectara 无服务器 RAG 即服务通过 API 提供 RAG 的主要组件，包括
 
 # 开始使用
 
-要开始使用，请按照以下步骤：
+要开始使用，请按照以下步骤操作：
 
-1. 如果您还没有账户，请[注册](https://www.vectara.com/integrations/langchain)免费试用 Vectara。
-2. 在您的账户中可以创建一个或多个语料库。每个语料库代表一个区域，用于存储从输入文档中提取的文本数据。要创建语料库，请点击 **"Create Corpus"** 按钮。然后为语料库提供名称和描述。可选择性定义过滤属性并应用一些高级选项。如果点击已创建的语料库，您可以在顶部看到其名称和语料库 ID。
-3. 接下来需要创建 API 密钥来访问语料库。点击语料库视图中的 **"Access Control"** 选项卡，然后点击 **"Create API Key"** 按钮。为密钥指定一个名称，并选择密钥是仅查询权限还是查询+索引权限。点击"创建"，您现在就有了一个活跃的 API 密钥。请妥善保管此密钥。
+1. 如果您还没有账户， [注册](https://www.vectara.com/integrations/langchain) 免费 Vectara 试用版。
+2. 在您的账户中，您可以创建一个或多个语料库。每个语料库代表一个存储区域，在从输入文档摄取时存储文本数据。要创建语料库，请使用 **"创建语料库"** 按钮。然后您为语料库提供名称和描述。您可以选择定义过滤属性并应用一些高级选项。如果您点击已创建的语料库，您可以在顶部看到其名称和语料库 ID。
+3. 接下来您需要创建 API 密钥来访问语料库。点击语料库视图中的 **"访问控制"** 标签，然后点击 **"创建 API 密钥"** 按钮。为您的密钥命名，并选择您想要的是仅查询还是查询+索引密钥。点击"创建"，您现在就有了一个有效的 API 密钥。请妥善保管此密钥。
 
-要将 LangChain 与 Vectara 结合使用，您需要提供这两个值：`corpus_key` 和 `api_key`。
-您可以通过以下两种方式向 LangChain 提供 `VECTARA_API_KEY`：
+要将 LangChain 与 Vectara 结合使用，您需要提供这两个值： `corpus_key` 和 `api_key`.
+您可以通过两种方式向 LangChain 提供 `VECTARA_API_KEY` ：
 
-1. 在您的环境中包含这两个变量：`VECTARA_API_KEY`。
+1. 在您的环境中包含这两个变量： `VECTARA_API_KEY`.
 
    例如，您可以使用 os.environ 和 getpass 设置这些变量，如下所示：
 
@@ -51,7 +51,7 @@ import getpass
 os.environ["VECTARA_API_KEY"] = getpass.getpass("Vectara API Key:")
 ```
 
-2. 将它们添加到 `Vectara` vectorstore 构造函数中：
+2. 将它们添加到 `Vectara` vectorstore 构造函数：
 
 ```python
 vectara = Vectara(
@@ -59,7 +59,7 @@ vectara = Vectara(
 )
 ```
 
-在本notebook中，我们假设它们已在环境中提供。
+在本笔记本中，我们假设它们已在环境中提供。
 
 ```python
 import os
@@ -84,9 +84,9 @@ vectara = Vectara(vectara_api_key=os.getenv("VECTARA_API_KEY"))
 
 首先，我们将国情咨文文本加载到 Vectara 中。
 
-请注意，我们使用 add_files 接口，该接口无需任何本地处理或分块——Vectara 接收文件内容，并执行所有必要的预处理、分块和嵌入操作，将文件存入其知识库中。
+请注意，我们使用 add_文件接口，该接口不需要任何本地处理或分块——Vectara 接收文件内容并执行所有必要的预处理、分块和嵌入操作，将其存入知识库。
 
-在本例中，我们使用的是 .txt 文件，但同样适用于许多其他[文件类型](https://docs.vectara.com/docs/api-reference/indexing-apis/file-upload/file-upload-filetypes)。
+本例中使用的是 .txt 文件，但同样适用于许多其他 [文件类型](https://docs.vectara.com/docs/api-reference/indexing-apis/file-upload/file-upload-filetypes).
 
 ```python
 corpus_key = os.getenv("VECTARA_CORPUS_KEY")
@@ -101,12 +101,12 @@ vectara.add_files([file_obj], corpus_key)
 ['state_of_the_union.txt']
 ```
 
-## Vectara RAG (retrieval augmented generation)
+## Vectara RAG（检索增强生成）
 
-我们现在创建一个 `VectaraQueryConfig` 对象来控制检索和摘要选项：
-- 我们启用摘要功能，指定希望 LLM 选取最相关的 7 个文本块并用英语回复
+现在，我们创建一个 `VectaraQueryConfig` 对象来控制检索和摘要选项：
+- 我们启用了摘要功能，指定希望 LLM 选择前 7 个匹配块并用英语回复
 
-使用此配置，让我们使用 `as_rag` 方法创建一个封装完整 Vectara RAG 流程的 LangChain `Runnable` 对象：
+使用此配置，我们创建一个 LangChain `Runnable` 对象来封装完整的 Vectara RAG 管道，使用 `as_rag` method:
 
 ```python
 generation_config = GenerationConfig(
@@ -141,7 +141,7 @@ rag.invoke(query_str)["answer"]
 "President Biden discussed several key issues in his recent statements. He emphasized the importance of keeping schools open and noted that with a high vaccination rate and reduced hospitalizations, most Americans can safely return to normal activities without masks [1]. He addressed the need to hold social media platforms accountable for their impact on children and called for stronger privacy protections and mental health services [2]. Biden also announced measures against Russian oligarchs, including closing American airspace to Russian flights and targeting their assets, as part of efforts to weaken Russia's economy [3], [7]. Additionally, he reaffirmed the need to protect women's rights, particularly the right to choose as affirmed in Roe v. Wade [5]."
 ```
 
-我们也可以这样使用流式接口：
+我们也可以像这样使用流式接口：
 
 ```python
 output = {}
@@ -161,11 +161,11 @@ for chunk in rag.stream(query_str):
 President Biden discussed several key issues in his recent statements. He emphasized the importance of keeping schools open and noted that with a high vaccination rate and reduced hospitalizations, most Americans can safely return to normal activities without masks [1]. He addressed the need to hold social media platforms accountable for their impact on children and called for stronger privacy protections and mental health services [2]. Biden also announced measures against Russia, including preventing its central bank from defending the Ruble and targeting Russian oligarchs' assets, as part of efforts to weaken Russia's economy and military [3]. Additionally, he reaffirmed the commitment to protect women's rights, particularly the right to choose as affirmed in Roe v. Wade [5]. Lastly, he advocated for funding the police with necessary resources and training to ensure community safety [6].
 ```
 
-## 幻觉检测与事实一致性评分
+## 幻觉检测和事实一致性评分
 
-Vectara 创建了 [HHEM](https://huggingface.co/vectara/hallucination_evaluation_model) - 一个开源模型，可用于评估 RAG 响应的事实一致性。
+Vectara 创建了 [HHEM](https://huggingface.co/vectara/hallucination_evaluation_model) ——一个可用于评估 RAG 响应事实一致性的开源模型。
 
-作为 Vectara RAG 的一部分，"事实一致性评分"（或 FCS），即开源 HHEM 的改进版本，通过 API 提供。这会自动包含在 RAG 管道的输出中
+作为 Vectara RAG 的一部分，API 提供了改进版开源 HHEM 的"事实一致性评分"（或 FCS），并会自动包含在 RAG 管道的输出中
 
 ```python
 resp = rag.invoke(query_str)
@@ -178,11 +178,11 @@ President Biden discussed several key topics in his recent statements. He emphas
 Vectara FCS = 0.61621094
 ```
 
-## Vectara 作为 langchain 检索器
+## 将 Vectara 作为 LangChain 检索器
 
 Vectara 组件也可以仅用作检索器。
 
-在这种情况下，它的行为与任何其他 LangChain 检索器相同。这种模式的主要用途是语义搜索，在这种情况下我们会禁用摘要：
+在这种情况下，它的行为与任何其他 LangChain 检索器相同。此模式主要用于语义搜索，在这种情况下我们会禁用摘要：
 
 ```python
 config.generation = None
@@ -199,7 +199,7 @@ retriever.invoke(query_str)
  Document(metadata={'X-TIKA:Parsed-By': 'org.apache.tika.parser.csv.TextAndCSVParser', 'Content-Encoding': 'UTF-8', 'X-TIKA:detectedEncoding': 'UTF-8', 'X-TIKA:encodingDetector': 'UniversalEncodingDetector', 'Content-Type': 'text/plain; charset=UTF-8', 'source': 'text_file', 'framework': 'langchain'}, page_content='Putin’s latest attack on Ukraine was premeditated and unprovoked. He rejected repeated efforts at diplomacy. He thought the West and NATO wouldn’t respond. And he thought he could divide us at home. We were ready.  Here is what we did.')]
 ```
 
-为了向后兼容，你也可以在检索器中启用摘要功能，在这种情况下，摘要会被添加为一个额外的 Document 对象：
+为了向后兼容，您也可以在使用检索器时启用摘要，在这种情况下，摘要会作为附加的 Document 对象添加：
 
 ```python
 config.generation = GenerationConfig()
@@ -222,11 +222,11 @@ retriever.invoke(query_str)
  Document(metadata={'summary': True, 'fcs': (0.54785156,)}, page_content='President Biden spoke about several key issues. He emphasized the importance of the Bipartisan Infrastructure Law, calling it the most significant investment to rebuild America and highlighting it as a bipartisan effort [1]. He also announced measures against Russian oligarchs, including assembling a task force to seize their assets and closing American airspace to Russian flights, further isolating Russia economically [2]. Additionally, he expressed a commitment to investigating the health impacts of burn pits on military personnel, referencing his son, Major Beau Biden, who suffered from brain cancer [3].')]
 ```
 
-## 使用 vectara 进行高级 LangChain 查询预处理
+## 使用 Vectara 进行高级 LangChain 查询预处理
 
-Vectara 的"RAG 即服务"在创建问答或聊天机器人链方面承担了大量繁重工作。与 LangChain 的集成提供了使用额外功能（如查询预处理）的选项，例如 `SelfQueryRetriever` 或 `MultiQueryRetriever`。让我们看一个使用 [MultiQueryRetriever](https://python.langchain.com/docs/modules/data_connection/retrievers/MultiQueryRetriever) 的示例。
+Vectara 的"RAG 即服务"在创建问答或聊天机器人链时承担了大部分繁重工作。与 LangChain 的集成提供了使用额外功能（如查询预处理）的选项，例如 `SelfQueryRetriever` or `MultiQueryRetriever`。让我们看一个使用 [MultiQueryRetriever](https://python.langchain.com/docs/modules/data_connection/retrievers/MultiQueryRetriever).
 
-由于 MQR 使用 LLM，我们必须进行设置 - 这里我们选择 @[`ChatOpenAI`]：
+由于 MQR 使用 LLM，我们必须进行设置——在这里我们选择 @[`ChatOpenAI`] :
 
 ```python
 from langchain_classic.retrievers.multi_query import MultiQueryRetriever

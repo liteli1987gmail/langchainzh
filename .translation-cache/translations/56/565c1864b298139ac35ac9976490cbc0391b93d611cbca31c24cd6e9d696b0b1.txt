@@ -1,39 +1,37 @@
 ---
-title: 如何使用 Vitest/Jest 运行评估
-sidebarTitle: 使用 Vitest/Jest 运行评估
+title: How to run evaluations with Vitest/Jest
+sidebarTitle: Run evals with Vitest/Jest
 ---
 
-LangSmith 提供了与 [Vitest](https://vitest.dev/) 和 [Jest](https://jestjs.io/) 的集成，允许 JavaScript 和 TypeScript 开发人员定义他们的[数据集](/langsmith/evaluation-concepts#datasets)，并使用熟悉的语法进行评估。
+LangSmith 提供与以下工具的集成 [Vitest](https://vitest.dev/) 和 [Jest](https://jestjs.io/) 允许 JavaScript 和 TypeScript 开发人员定义他们的 [数据集](/langsmith/evaluation-concepts#datasets) 并使用熟悉的语法进行评估。
 
-![Jest/Vitest 报告输出](/langsmith/images/jest-vitest-reporter-output.png)
+![Jest/Vitest reporter output](/langsmith/images/jest-vitest-reporter-output.png)
 
-与 @[`evaluate()`][Client.evaluate] 评估流程相比，Vitest 或 Jest 测试框架在以下场景中非常有用：
+与 @[`evaluate()`][Client.evaluate] 评估流程相比，Vitest 或 Jest 测试框架在以下情况下很有用：
 
-* **每个示例需要不同的评估逻辑**：标准评估流程假设在所有数据集示例中一致地执行应用程序和评估器。对于更复杂的系统或全面的评估，特定的系统子集可能需要使用特定的输入类型和指标进行评估。这些异构评估更容易编写为独立的测试用例套件，然后一起跟踪。
-* **您想要断言二元期望**：在 LangSmith 中跟踪断言，并在本地抛出断言错误（例如在 CI 流水线中）。当同时评估系统输出并断言其基本属性时，测试工具会很有帮助。
-* **您想要利用 Vitest/Jest 生态系统的模拟、监视模式、本地结果或其他功能**。
+* **每个示例需要不同的评估逻辑**：标准评估流程假设所有数据集示例的应用程序和评估器执行保持一致。对于更复杂的系统或全面评估，特定系统子集可能需要使用特定输入类型和指标进行评估。这些异构评估作为独立的测试用例套件编写会更简单，它们可以一起跟踪。
+* **你想要断言二元期望**：在 LangSmith 中跟踪断言并在本地抛出断言错误（例如在 CI 管道中）。当同时评估系统输出并对其基本属性进行断言时，测试工具会很有帮助。
+* **You want to take advantage of mocks, watch mode, local results, or other features of the Vitest/Jest ecosystems**.
 
 <Info>
-需要 JS/TS SDK 版本 `langsmith>=0.3.1`。
+Requires JS/TS SDK version `langsmith>=0.3.1`.
 </Info>
 
 <Info>
-Python SDK 有类似的 [pytest 集成](/langsmith/pytest)。
+Python SDK 有一个类似的 [pytest 集成](/langsmith/pytest).
 </Info>
 
 ## 设置
 
-如下设置集成。请注意，虽然您可以将 LangSmith 评估与其他单元测试一起添加（作为标准的 `*.test.ts` 文件），使用您现有的测试配置文件，但以下示例还将设置一个单独的测试配置文件和命令来运行您的评估。它假设您的测试文件以 `.eval.ts` 结尾。
+按如下方式设置集成。请注意，虽然你可以将 LangSmith 评估与其他单元测试一起添加（作为标准 `*.test.ts` 文件）使用你现有的测试配置文件，但以下示例还将设置一个单独的测试配置文件和命令来运行你的评估。它假设你将测试文件以 `.eval.ts`.
 
-这确保了自定义测试报告器和 LangSmith 的其他触点不会修改您现有的测试输出。
+结尾。这确保自定义测试报告器和其他 LangSmith 接触点不会修改你现有的测试输出。
 
 ### Vitest
 
 如果尚未安装，请安装所需的开发依赖项：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```bash yarn
 yarn add -D vitest dotenv
@@ -49,7 +47,7 @@ pnpm add -D vitest dotenv
 
 </CodeGroup>
 
-以下示例还需要 `openai`（以及 `langsmith`）作为依赖项：
+以下示例还需要 `openai` （和 `langsmith`）作为依赖项：
 
 <CodeGroup>
 
@@ -67,9 +65,7 @@ pnpm add langsmith openai
 
 </CodeGroup>
 
-然后，创建一个单独的 `ls.vitest.config.ts` 文件，使用以下基础配置：
-
-</fragment>
+然后，创建一个单独的 `ls.vitest.config.ts` 文件，其中包含以下基础配置：
 
 ```typescript
 import { defineConfig } from "vitest/config";
@@ -84,16 +80,16 @@ export default defineConfig({
 });
 ```
 
-* `include` 确保只有以 `eval.ts` 变体结尾的文件会在你的项目中运行
-* `reporters` 负责将你的输出格式化为上面展示的精美格式
-* `setupFiles` 在运行你的评估之前运行 `dotenv` 来加载环境变量
-* `testTimeout` 为每个测试设置全局默认超时时间。由于 LLM 调用可能较慢，我们将其从 Vitest 默认值增加
+* `include` 确保只有以某种变体的 `eval.ts` 结尾的文件在你的项目中运行
+* `reporters` 负责如上所示很好地格式化你的输出
+* `setupFiles` 运行 `dotenv` 在运行你的评估之前加载环境变量
+* `testTimeout` 为每个测试设置全局默认超时。因为 LLM 调用可能很慢，我们从 Vitest 默认值增加了这个值
 
 <Warning>
-JSDom 环境目前不受支持。你应该从配置中省略 `"environment"` 字段，或将其设置为 `"node"`。
+JSDom 环境目前不支持。你应该从配置中省略 `"environment"` 字段或将其设置为 `"node"`.
 </Warning>
 
-最后，将以下内容添加到你的 `package.json` 的 `scripts` 字段中，以使用你刚创建的配置文件运行 Vitest：
+最后，将以下内容添加到 `scripts` 字段在你的 `package.json` 中以使用你刚创建的配置运行 Vitest：
 
 ```json
 {
@@ -110,16 +106,13 @@ JSDom 环境目前不受支持。你应该从配置中省略 `"environment"` 字
 }
 ```
 
-请注意，此脚本禁用了 Vitest 的默认监视模式以运行评估，因为许多评估器可能包含较长的 LLM 调用。
+请注意，此脚本禁用了 Vitest 的默认监视模式来运行评估，因为许多评估器可能包含更长的 LLM 调用。
 
 ### Jest
 
 如果尚未安装，请安装所需的开发依赖项：
 
 <CodeGroup>
-
-
-</CodeGroup>
 
 ```bash yarn
 yarn add -D jest dotenv
@@ -135,11 +128,9 @@ pnpm add -D jest dotenv
 
 </CodeGroup>
 
-以下示例还需要 `openai`（以及 `langsmith`）作为依赖项：
+以下示例还需要 `openai` （和 `langsmith`）作为依赖项：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```bash yarn
 yarn add langsmith openai
@@ -156,10 +147,10 @@ pnpm add langsmith openai
 </CodeGroup>
 
 <Info>
-以下设置说明适用于基本的 JS 文件和 CJS。如需添加对 TypeScript 和 ESM 的支持，请参阅 Jest 官方文档或使用 [Vitest](#vitest)。
+以下设置说明适用于基本的 JS 文件和 CJS。要添加对 TypeScript 和 ESM 的支持，请参阅 Jest 的官方文档或使用 [Vitest](#vitest).
 </Info>
 
-然后，创建一个名为 `ls.jest.config.cjs` 的独立配置文件：
+然后，创建一个名为的独立配置文件 `ls.jest.config.cjs`:
 
 ```javascript
 module.exports = {
@@ -170,16 +161,16 @@ module.exports = {
 };
 ```
 
-* `testMatch` 确保只有以 `eval.js` 各种变体结尾的文件会在项目中运行
-* `reporters` 负责将你的输出格式化为上面显示的美观格式
-* `setupFiles` 在运行 eval 之前先运行 `dotenv` 来加载环境变量
-* `testTimeout` 为每个测试设置全局默认超时时间。由于 LLM 调用可能很慢，我们将超时时间从 Jest 默认值增加
+* `testMatch` 确保只有以某种变体结尾的文件 `eval.js` 在你的项目中运行
+* `reporters` 负责将你的输出格式化为如上所示的精美形式
+* `setupFiles` 运行 `dotenv` 在运行评估之前加载环境变量
+* `testTimeout` 为每个测试设置全局默认超时。因为LLM调用可能很慢，我们将其从Jest默认值增加
 
 <Warning>
-目前不支持 JSDom 环境。你应该从配置中省略 `"testEnvironment"` 字段或将其设置为 `"node"`。
+暂不支持JSDom环境。你应该从配置中省略 `"testEnvironment"` 字段或将其设置为 `"node"`.
 </Warning>
 
-最后，将以下内容添加到 `package.json` 的 `scripts` 字段中，以使用你刚刚创建的配置运行 Jest：
+最后，将以下内容添加到 `scripts` 字段在你的 `package.json` 用你刚创建的配置运行Jest
 
 ```json
 {
@@ -196,15 +187,15 @@ module.exports = {
 }
 ```
 
-## 定义并运行评估
+## 定义和运行评估
 
-你现在可以使用熟悉的 Vitest/Jest 语法将评估定义为测试，但需要注意以下几点：
+You can now define evals as tests using familiar Vitest/Jest syntax, with a few caveats:
 
-- 你应该从 @[`langsmith/jest`][langsmith/jest] 或 @[`langsmith/vitest`][langsmith/vitest] 入口点导入 `describe` 和 `test`。
-- 你必须将测试用例包装在 `describe` 块中。
-- 声明测试时，签名略有不同——有一个额外的参数包含示例输入和预期输出。
+* 你应该导入 `describe` 和 `test` 从 @[`langsmith/jest`][langsmith/jest] or @[`langsmith/vitest`][langsmith/vitest] entrypoint.
+* 你必须将测试用例包装在 `describe` block.
+* 声明测试时，签名略有不同——有一个包含示例输入和预期输出的额外参数。
 
-请尝试创建一个名为 `sql.eval.ts`（或如果使用不带 TypeScript 的 Jest，则为 `sql.eval.js`）的文件，然后将以下代码粘贴到其中：
+通过创建一个名为的文件来尝试 `sql.eval.ts` (or `sql.eval.js` 如果你使用不带TypeScript的Jest)并将这些代码粘贴到其中
 
 ```typescript
 import * as ls from "langsmith/vitest";
@@ -255,16 +246,16 @@ ls.describe("generate sql demo", () => {
 });
 ```
 
-你可以将每个 @[ls.test][ls.test] 测试用例视为对应一个数据集示例，将 @[`ls.describe()`][ls.describe] 视为定义一个 LangSmith 数据集。如果在运行测试套件时设置了 LangSmith [追踪环境变量](#setup)，SDK 会执行以下操作：
+你可以将每个 @[ls.test][ls.test] 用例视为对应一个数据集示例，而 @[`ls.describe()`][ls.describe] 作为一个LangSmith数据集的定义。如果你设置了LangSmith [追踪环境变量](#setup) 当你运行测试套件时设置，SDK会执行以下操作
 
-* 如果不存在，会在 LangSmith 中创建一个与传递给 `ls.describe()` 的名称相同的[数据集](/langsmith/evaluation-concepts#datasets)。
-* 如果不存在匹配项，会在数据集中为每个传入测试用例的输入和预期输出创建一个[示例](/langsmith/evaluation-concepts#datasets)。
-* 会创建一个新的[实验](/langsmith/evaluation-concepts#experiment)，每个测试用例对应一个结果。
-* 会收集每个测试用例在 `pass` 反馈键下的通过/失败率。
+* 创建一个 [数据集](/langsmith/evaluation-concepts#datasets) 名称与传递给 `ls.describe()` 的名称相同（如果不存在）
+* 在数据集中创建一个 [示例](/langsmith/evaluation-concepts#datasets) 如果匹配的示例不存在，则为每个输入和预期输出创建一个测试用例
+* 创建新的 [实验](/langsmith/evaluation-concepts#experiment) 每个测试用例对应一个结果
+* Collects the pass/fail rate under the `pass` 每个测试用例的反馈密钥
 
-运行此测试时，它会根据测试用例的通过/失败情况生成一个默认的 `pass` 布尔反馈键。它还会跟踪你使用 @[`ls.logOutputs()`][ls.logOutputs] 记录或从测试函数返回的任何输出，作为应用在实验中的"实际"结果值。
+当你运行此测试时，它会有一个默认的 `pass` boolean feedback key based on the test case passing / failing. It will also track any outputs that you log with @[`ls.logOutputs()`][ls.logOutputs] 或从测试函数中返回作为实验的"实际"结果值
 
-创建一个包含 `OPENAI_API_KEY` 和 LangSmith 凭证的 `.env` 文件（如果你还没有）：
+使用你的 `.env` 和LangSmith凭证创建一个 `OPENAI_API_KEY` 文件（如果你还没有的话）
 
 ```bash
 OPENAI_API_KEY="YOUR_KEY_HERE"
@@ -272,12 +263,9 @@ LANGSMITH_API_KEY="YOUR_LANGSMITH_KEY"
 LANGSMITH_TRACING="true"
 ```
 
-现在使用我们在上一步中设置的 `eval` 脚本来运行测试：
+现在使用我们在上一步设置的 `eval` 脚本来运行测试
 
 <CodeGroup>
-
-
-</CodeGroup>
 
 ```bash yarn
 yarn run eval
@@ -293,17 +281,17 @@ pnpm run eval
 
 </CodeGroup>
 
-然后你声明的测试应该会运行！
+你声明的测试应该运行了
 
-完成后，如果你已经设置了 LangSmith 环境变量，你应该会看到一个链接，指向 LangSmith 中创建的实验以及测试结果。
+完成后，如果你设置了LangSmith环境变量，你应该会看到一个链接，指向在LangSmith中创建的实验以及测试结果
 
-以下是该测试套件的实验示例：
+以下是该测试套件对应的实验示例
 
-![Experiment](/langsmith/images/simple-vitest.png)
+![实验](/langsmith/images/simple-vitest.png)
 
 ## 追踪反馈
 
-默认情况下，LangSmith 会收集每个测试用例在 `pass` 反馈键下的通过/失败率。你可以使用 @[`ls.logFeedback()`][ls.logFeedback] 或 @[`ls.wrapEvaluator()`][ls.wrapEvaluator] 添加其他反馈。要实现这一点，请尝试将以下内容作为你的 `sql.eval.ts` 文件（或如果你使用不带 TypeScript 的 Jest，则是 `sql.eval.js`）：
+By default LangSmith collects the pass/fail rate under the `pass` 每个测试用例的反馈键。您可以使用 @[`ls.logFeedback()`][ls.logFeedback] 或 @[`ls.wrapEvaluator()`][ls.wrapEvaluator]。为此，请尝试将以下内容作为您的 `sql.eval.ts` 文件（或 `sql.eval.js` 如果您在没有 TypeScript 的情况下使用 Jest）：
 
 ```typescript
 import * as ls from "langsmith/vitest";
@@ -410,13 +398,13 @@ ls.describe("generate sql demo", () => {
 });
 ```
 
-请注意在 `myEvaluator` 函数周围使用 @[`ls.wrapEvaluator()`][ls.wrapEvaluator]。这使得 LLM 评判调用与测试用例的其余部分分开追踪以避免混乱，并且如果被包装函数的返回值匹配 `{ key: string; score: number | boolean }`，则会便捷地创建反馈。在这种情况下，评估器追踪不会显示在主测试用例运行中，而是会显示在与 `correctness` 反馈键关联的追踪中。
+注意在 @[`ls.wrapEvaluator()`][ls.wrapEvaluator] 周围使用 `myEvaluator` 函数。这使得 LLM-as-judge 调用与测试用例的其余部分分开跟踪以避免混乱，并且如果被包装函数的返回值匹配 `{ key: string; score: number | boolean }`，则会很方便地创建反馈。在这种情况下，评估器跟踪不会显示在主测试用例运行中，而是会显示在与 `correctness` 反馈键关联的跟踪中。
 
-您可以通过在 UI 中点击相应的反馈标签来查看 LangSmith 中的评估器运行情况。
+您可以在 LangSmith 中通过点击 UI 中相应的反馈标签来查看评估器运行情况。
 
 ## 针对测试用例运行多个示例
 
-您可以使用 @[`ls.test.each()`][ls.test.each] 对多个示例运行相同的测试用例并参数化测试。当您希望以相同方式针对不同输入评估您的应用时，这非常有用：
+您可以使用 @[`ls.test.each()`][ls.test.each] 对多个示例运行相同的测试用例，并参数化您的测试。当您想以相同方式针对不同输入评估您的应用时，这很有用：
 
 ```typescript
 import * as ls from "langsmith/vitest";
@@ -447,15 +435,15 @@ ls.describe("generate sql demo", () => {
 });
 ```
 
-如果启用了跟踪，本地数据集中的每个示例都将同步到 LangSmith 中创建的数据集。
+如果您启用了跟踪，本地数据集中的每个示例都将同步到在 LangSmith 中创建的示例。
 
 ## 使用现有数据集（仅限 Vitest）
 
-无需内联定义[示例](/langsmith/evaluation-concepts#examples)，您可以针对 LangSmith 中现有的数据集运行测试：
+而不是定义 [示例](/langsmith/evaluation-concepts#examples) 内联，您可以针对 LangSmith 中的现有数据集运行测试：
 
-- 使用 @[`client.listExamples()`][Client.listExamples] 从 LangSmith 中已存在的数据集中获取示例。
-- 通过迭代异步生成器将示例收集到一个数组中（例如 `testExamples`）。
-- 将数组传递给 @[`ls.test.each()`][ls.test.each]，以针对数据集中的每个示例运行测试逻辑。
+- 使用 @[`client.listExamples()`][Client.listExamples] 从 LangSmith 中已存在的数据集获取示例。
+- 将示例收集到一个数组中（例如 `testExamples`），通过遍历异步生成器。
+- 将数组传递给 @[`ls.test.each()`][ls.test.each] 来针对数据集中的每个示例运行您的测试逻辑。
 
 ```typescript {3,30-43,47}
 import * as ls from "langsmith/vitest";
@@ -516,9 +504,9 @@ ls.describe(
 );
 ```
 
-## 日志输出
+## 记录输出
 
-每次运行测试时，我们都会将其同步到数据集示例中，并将其作为运行进行跟踪。要跟踪运行的最终输出，你可以像这样使用 @[`ls.logOutputs()`][ls.logOutputs]：
+每次运行测试时，我们都会将其同步到数据集示例并将其作为运行进行跟踪。要跟踪运行的最终输出，您可以使用 @[`ls.logOutputs()`][ls.logOutputs]，如下所示：
 
 ```typescript
 import * as ls from "langsmith/vitest";
@@ -538,9 +526,9 @@ ls.describe("generate sql demo", () => {
 });
 ```
 
-记录输出将显示在您的报告摘要和 LangSmith 中。
+记录的输出将显示在您的报告器摘要和 LangSmith 中。
 
-您也可以直接从测试函数中返回值：
+您也可以直接从测试函数返回值：
 
 ```typescript
 import * as ls from "langsmith/vitest";
@@ -560,15 +548,15 @@ ls.describe("generate sql demo", () => {
 });
 ```
 
-但是请记住，如果你这样做，如果测试因断言失败或其他错误而未能完成，你的输出将不会显示。
+但请记住，如果您这样做，由于断言失败或其他错误导致测试无法完成，您的输出将不会显示。
 
-## 追踪中间调用
+## 跟踪中间调用
 
-LangSmith 会自动追踪测试用例执行过程中发生的任何可追踪的中间调用。
+LangSmith 将自动跟踪测试用例执行过程中发生的任何可跟踪中间调用。
 
 ## 聚焦或跳过测试
 
-你可以在 `ls.test()` 和 `ls.describe()` 上链式调用 Vitest/Jest 的 `.skip` 和 `.only` 方法：
+You can chain the Vitest/Jest `.skip` 和 `.only` 上的方法 `ls.test()` 和 `ls.describe()`:
 
 ```typescript
 import * as ls from "langsmith/vitest";
@@ -600,7 +588,7 @@ ls.describe("generate sql demo", () => {
 
 ## 配置测试套件
 
-你可以通过向 `ls.describe()` 传递额外参数来为整个测试套件配置元数据或自定义客户端等值，也可以通过向 `ls.test()` 传递 `config` 字段来为单个测试配置：
+您可以通过向 `ls.describe()` 传递额外参数来配置测试套件，例如元数据或自定义客户端，或者通过向 `config` 字段传递 `ls.test()` 来为各个测试进行配置：
 
 ```typescript
 ls.describe("test suite name", () => {
@@ -627,12 +615,12 @@ ls.describe("test suite name", () => {
 });
 ```
 
-测试套件还会自动从 `process.env.ENVIRONMENT`、`process.env.NODE_ENV` 和 `process.env.LANGSMITH_ENVIRONMENT` 中提取环境变量，并将它们设置为创建实验的元数据。然后你可以在 LangSmith 的 UI 中按元数据筛选实验。
+测试套件还会自动从 `process.env.ENVIRONMENT`, `process.env.NODE_ENV` 和 `process.env.LANGSMITH_ENVIRONMENT` 并将其设置为已创建实验的元数据。然后您可以在 LangSmith 的 UI 中按元数据筛选实验。
 
-请参阅 [API 参考文档](https://docs.smith.langchain.com/reference/js/functions/vitest.describe) 获取完整的配置选项列表。
+参见 [API 参考文档](https://docs.smith.langchain.com/reference/js/functions/vitest.describe) 获取完整的配置选项列表。
 
 ## 试运行模式
 
-如果你想在不同步结果到 LangSmith 的情况下运行测试，可以省略你的 LangSmith tracing 环境变量，或在环境中设置 `LANGSMITH_TEST_TRACKING=false`。
+如果您想在不将结果同步到 LangSmith 的情况下运行测试，可以省略 LangSmith 追踪环境变量或设置 `LANGSMITH_TEST_TRACKING=false` 在您的环境中。
 
-测试会正常运行，但实验日志不会发送到 LangSmith。
+测试将正常运行，但实验日志不会发送到 LangSmith。

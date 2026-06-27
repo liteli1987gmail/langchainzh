@@ -1,0 +1,305 @@
+---
+title: 批量导出追踪数据
+sidebarTitle: 设置批量导出
+description: 将 LangSmith 追踪数据导出到 S3 兼容的存储桶，格式为 Parquet。
+---
+
+<Info>
+**计划限制适用**
+
+请注意，数据导出功能仅支持 [LangSmith Plus 或 Enterprise 层级](https://www.langchain.com/pricing-langsmith).
+</Info>
+
+LangSmith 的批量数据导出功能可让您将特定项目和日期范围内的追踪数据导出到 S3 兼容的存储桶中，格式为 [Parquet](https://parquet.apache.org/docs/overview/) 格式，与 [运行数据格式](/langsmith/run-data-format)中的字段匹配。这对于在 BigQuery、Snowflake、Redshift 或 Jupyter Notebooks 等工具中进行离线分析非常有用。
+
+本页面涵盖以下内容：
+
+- 创建导出目标
+- 创建和配置导出作业，包括计划导出和字段过滤
+- 监控导出进度
+
+**开始之前：** 根据数据量，导出可能需要一些时间，且 LangSmith 限制了可同时运行的导出数量。批量导出的运行时超时为 72 小时——请参阅 [自动重试行为](/langsmith/data-export-monitor#automatic-retry-behavior) 了解更多详情。启动后，LangSmith 负责编排和 [导出流程的弹性](/langsmith/data-export-monitor#failure-modes-and-retry-policy) automatically.
+
+## 1. 创建目标
+
+目标用于指定 LangSmith 写入导出数据的位置。在发出此请求之前，您需要准备：
+
+- 您的 [LangSmith API 密钥](/langsmith/create-account-api-key) 和 [工作区 ID](/langsmith/set-up-hierarchy#set-up-a-workspace).
+- 一个 S3 或 S3 兼容的存储桶，且 **写入权限** 已授予 LangSmith（请参阅 [所需权限](/langsmith/data-export-destinations#permissions-required)).
+- 存储桶名称、前缀，以及 AWS 区域（用于 AWS S3）或端点 URL（用于 GCS、MinIO 或其他 S3 兼容提供商）。
+- 存储桶的访问密钥和密钥。
+
+```bash
+curl --request POST \
+  --url 'https://api.smith.langchain.com/api/v1/bulk-exports/destinations' \
+  --header 'Content-Type: application/json' \
+  --header 'X-API-Key: YOUR_API_KEY' \
+  --header 'X-Tenant-Id: YOUR_WORKSPACE_ID' \
+  --data '{
+    "destination_type": "s3",
+    "display_name": "My S3 Destination",
+    "config": {
+      "bucket_name": "your-s3-bucket-name",
+      "prefix": "root_folder_prefix",
+      "region": "your aws s3 region",
+      "endpoint_url": "your endpoint url for s3 compatible buckets"
+    },
+    "credentials": {
+      "access_key_id": "YOUR_S3_ACCESS_KEY_ID",
+      "secret_access_key": "YOUR_S3_SECRET_ACCESS_KEY"
+    }
+  }'
+```
+
+凭据以加密形式安全存储。在保存之前，API 会验证目标位置和凭据的有效性。如果请求失败，请参阅 [调试目标错误](/langsmith/data-export-destinations#debug-destination-errors).
+
+保存 `id` 从响应中获取；在创建导出作业时需要用到。
+
+请参阅 [管理批量导出目标](/langsmith/data-export-destinations) 了解权限设置、提供商特定配置（AWS S3、GCS、MinIO）以及凭据选项。
+
+## 2. 创建导出作业
+
+导出作业针对特定项目（或工作区中的所有实验）和日期范围。您需要：
+
+- 目标 `id` 来自 [上一步](#1-create-a-destination).
+- 项目 ID（`session_id`) or `"all_experiments": true`——从 [**追踪项目** 列表中复制项目 ID](https://smith.langchain.com).
+- A `start_time` 和 `end_time` 采用 UTC ISO 8601 格式。
+
+```bash
+curl --request POST \
+  --url 'https://api.smith.langchain.com/api/v1/bulk-exports' \
+  --header 'Content-Type: application/json' \
+  --header 'X-API-Key: YOUR_API_KEY' \
+  --header 'X-Tenant-Id: YOUR_WORKSPACE_ID' \
+  --data '{
+    "bulk_export_destination_id": "your_destination_id",
+    "session_id": "project_uuid",
+    "start_time": "2024-01-01T00:00:00Z",
+    "end_time": "2024-01-03T00:00:00Z",
+    "format_version": "v2_beta"
+  }'
+```
+
+该 `start_time` 是包含性的且 `end_time` 是排除性的。导出将包含所有满足以下条件的运行 `run.start_time >= start_time` 和 `run.start_time < end_time`.
+
+保存响应中的 `id` 以监控导出的进度。
+
+您可以选择添加一个 `filter` 表达式来缩小导出的运行集合。请参阅我们的 [过滤查询语言](/langsmith/trace-query-syntax#filter-query-language) 和 [示例](/langsmith/export-traces#use-filter-query-language) 了解语法。如果不设置 `filter` 字段，将导出所有运行。
+
+<Note>
+**LangSmith Cloud 限制：每个工作区每小时最多创建 250 个批量导出**
+
+On [LangSmith Cloud](/langsmith/cloud)，每个工作区每小时最多创建 250 个批量导出。此配额包括一次性导出和由 [计划批量导出](#schedule-recurring-exports)生成的导出，因此拥有多个活动计划的工作区会自动消耗部分每小时配额。
+
+如果您的空间达到限制，新创建请求将被拒绝并返回 429 错误，直到之前的请求超过滚动 60 分钟窗口。要提高限制，请通过以下方式联系支持 [support.langchain.com](https://support.langchain.com).
+
+[自托管 LangSmith](/langsmith/self-hosted) 默认情况下不执行此限制。
+</Note>
+
+### 导出所有实验
+
+<Note>
+[Self-hosted](/langsmith/self-hosted)：目前仅在 `v0.16.1rc1` [预览版本](/langsmith/release-versions#preview)上可用。请等待 `v0.16.1` 稳定版本
+</Note>
+
+要导出工作区中的所有实验而不是针对单个项目 `session_id`，请设置 `all_experiments: true`。LangSmith 会在您针对数据集运行评估时创建实验，任何具有 `reference_dataset_id` 设置的跟踪项目都符合条件。
+
+`all_experiments` 和 `session_id` 是互斥的——只能设置其中一个。
+
+```bash
+curl --request POST \
+  --url 'https://api.smith.langchain.com/api/v1/bulk-exports' \
+  --header 'Content-Type: application/json' \
+  --header 'X-API-Key: YOUR_API_KEY' \
+  --header 'X-Tenant-Id: YOUR_WORKSPACE_ID' \
+  --data '{
+    "bulk_export_destination_id": "your_destination_id",
+    "all_experiments": true,
+    "start_time": "2024-01-01T00:00:00Z",
+    "end_time": "2024-02-01T00:00:00Z",
+    "format_version": "v2_beta"
+  }'
+```
+
+LangSmith 在运行时解析实验会话集，因此导出会在您提交任务后、编排器开始处理前获取您创建的任何实验。
+
+相同的 `all_experiments` 标志适用于 [计划导出](#schedule-recurring-exports)——包含 `interval_hours` 和排除 `end_time` 而不是提供 `end_time`.
+
+<Note>
+**云端限制：每次导出最多 250 个实验**
+
+On [LangSmith 云端](/langsmith/cloud)，每个 `all_experiments` 导出最多包含 250 个实验。要导出更多：
+
+- 查询已完成的 `all_experiments` 导出以查看包含的跟踪项目，然后使用 `session_id` 为剩余的实验创建标准批量导出。
+- 或者，通过以下方式联系支持 [support.langchain.com](https://support.langchain.com) 为您的空间请求更高的限制。
+
+[自托管 LangSmith](/langsmith/self-hosted) 没有每次导出限制。
+</Note>
+
+### 计划定期导出
+
+<Note>
+需要 LangSmith Helm 版本 >= `0.10.42` （应用程序版本 >= `0.10.109`)
+</Note>
+
+计划导出定期收集运行并导出到配置的目的地。要创建计划导出，请包含 `interval_hours` 并省略 `end_time`:
+
+```bash
+curl --request POST \
+  --url 'https://api.smith.langchain.com/api/v1/bulk-exports' \
+  --header 'Content-Type: application/json' \
+  --header 'X-API-Key: YOUR_API_KEY' \
+  --header 'X-Tenant-Id: YOUR_WORKSPACE_ID' \
+  --data '{
+    "bulk_export_destination_id": "your_destination_id",
+    "session_id": "project_uuid",
+    "start_time": "2024-01-01T00:00:00Z",
+    "interval_hours": 1,
+    "format_version": "v2_beta"
+  }'
+```
+
+- `interval_hours` 必须介于 1 到 168（一周）之间（含）。
+- `end_time` 计划导出必须省略此字段；一次性导出仍需要此字段。
+- 每个生成的导出覆盖 `start_time` to `start_time + interval_hours`，然后前进 `interval_hours` 用于每个后续运行。因为 `end_time` 是排他的，连续的导出不会重叠。
+- 生成的导出运行于 `end_time + 10 minutes` 以考虑最近提交的运行 `end_time` 。
+- 生成的导出具有 `source_bulk_export_id` 属性填充。如果需要，必须单独取消——取消源导出 **不会** 取消已生成的导出。
+- 要停止计划导出， [取消它](/langsmith/data-export-monitor#stop-an-export).
+
+<Note>
+**LangSmith Cloud 限制：每个工作区 200 个计划批量导出**
+
+On [LangSmith Cloud](/langsmith/cloud)，每个工作区最多可以有 200 个活跃的 **计划的** （定期）批量导出。也就是说，配置了 `interval_hours` 值的数量。此限制限制了 **计划**的数量，而不是它们运行的次数：产生数千个历史导出运行的计划仍计为一个。
+
+一次性（非定期）批量导出不受此限制。
+
+如果您的 Workspace 达到限制，新的计划导出请求将被拒绝并显示 `429` ，直到您 [取消](/langsmith/data-export-monitor#stop-an-export) 现有计划。如需提高限制，请通过以下方式联系支持 [support.langchain.com](https://support.langchain.com).
+
+[自托管 LangSmith](/langsmith/self-hosted) 默认不强制执行此限制。
+</Note>
+
+**示例**
+
+如果使用以下内容创建计划批量导出 `start_time=2025-07-16T00:00:00Z` 和 `interval_hours=6`:
+
+| 导出 | 开始时间              | 结束时间              | 运行时间              |
+| ------ | -------------------- | -------------------- | -------------------- |
+| 1      | 2025-07-16T00:00:00Z | 2025-07-16T06:00:00Z | 2025-07-16T06:10:00Z |
+| 2      | 2025-07-16T06:00:00Z | 2025-07-16T12:00:00Z | 2025-07-16T12:10:00Z |
+| 3      | 2025-07-16T12:00:00Z | 2025-07-16T18:00:00Z | 2025-07-16T18:10:00Z |
+
+### 限制导出字段
+
+<Note>
+需要 LangSmith Helm 版本 >= `0.12.11` （应用程序版本 >= `0.12.42`）。支持一次性导出和计划导出。
+</Note>
+
+您可以使用以下方式限制包含的字段来提高导出速度并减小文件大小 `export_fields` 参数。省略时，包含所有字段。
+
+```bash
+curl --request POST \
+  --url 'https://api.smith.langchain.com/api/v1/bulk-exports' \
+  --header 'Content-Type: application/json' \
+  --header 'X-API-Key: YOUR_API_KEY' \
+  --header 'X-Tenant-Id: YOUR_WORKSPACE_ID' \
+  --data '{
+    "bulk_export_destination_id": "your_destination_id",
+    "session_id": "project_uuid",
+    "start_time": "2024-01-01T00:00:00Z",
+    "end_time": "2024-01-03T00:00:00Z",
+    "export_fields": ["id", "name", "run_type", "start_time", "end_time", "status", "total_tokens", "total_cost"],
+    "format_version": "v2_beta"
+  }'
+```
+
+<Tip>
+排除 `inputs` 和 `outputs` 可以显著提高导出性能并减小文件大小，特别是对于大型运行。仅在分析需要时才包含这些字段。
+</Tip>
+
+### 可导出字段
+
+默认情况下，批量导出包含以下每个运行的字段：
+
+**标识符和层级：**
+
+| 字段 | 描述 |
+|-------|-------------|
+| `id` | 运行 ID |
+| `tenant_id` | Workspace/tenant ID |
+| `session_id` | Project/session ID |
+| `trace_id` | 追踪 ID |
+| `parent_run_id` | 父运行 ID |
+| `parent_run_ids` | 所有父运行 ID 列表 |
+| `reference_example_id` | 如果是数据集的一部分，则为示例引用 |
+
+**基本元数据：**
+
+| 字段 | 描述 |
+|-------|-------------|
+| `name` | 运行名称 |
+| `run_type` | 运行类型（例如 "chain"、"llm"、"tool"）|
+| `start_time` | 开始时间戳 (UTC) |
+| `end_time` | 结束时间戳 (UTC) |
+| `status` | 运行状态（例如 "success"、"error"）|
+| `is_root` | 这是否为根级别运行 |
+| `dotted_order` | 层级排序字符串 |
+| `trace_tier` | Trace tier/retention level |
+
+**运行数据：**
+
+| 字段 | 描述 |
+|-------|-------------|
+| `inputs` | 运行输入 (JSON) |
+| `outputs` | 运行输出 (JSON) |
+| `error` | 失败时的错误消息 |
+| `extra` | 额外元数据 (JSON) |
+| `events` | 运行事件 (JSON) |
+
+**标签和反馈：**
+
+| 字段 | 描述 |
+|-------|-------------|
+| `tags` | 标签列表 |
+| `feedback_stats` | 反馈统计信息 (JSON)。有关聚合限制，请参阅以下说明。|
+
+<Note>
+**`feedback_stats` 聚合限制**
+
+该 `feedback_stats` 字段仅包含字符串类型反馈的值细分。非字符串值（数字、布尔值、复杂类型）的反馈不包含在这些细分中。要分析非字符串反馈值，请单独导出原始反馈数据。
+</Note>
+
+**令牌使用量和成本：**
+
+| 字段 | 描述 |
+|-------|-------------|
+| `total_tokens` | 总令牌数 |
+| `prompt_tokens` | 提示令牌数 |
+| `completion_tokens` | 完成令牌数 |
+| `total_cost` | 总成本 |
+| `prompt_cost` | 提示成本 |
+| `completion_cost` | 完成成本 |
+| `first_token_time` | 首个令牌时间 |
+
+### 分区方案
+
+数据使用以下 Hive 分区结构导出到您的存储桶：
+
+```
+<bucket>/<prefix>/export_id=<export_id>/tenant_id=<tenant_id>/session_id=<session_id>/runs/year=<year>/month=<month>/day=<day>
+```
+
+## 3. 监控您的导出
+
+使用 `id` 从 [上一步](#2-create-an-export-job):
+
+```bash
+curl --request GET \
+  --url 'https://api.smith.langchain.com/api/v1/bulk-exports/{export_id}' \
+  --header 'Content-Type: application/json' \
+  --header 'X-API-Key: YOUR_API_KEY' \
+  --header 'X-Tenant-Id: YOUR_WORKSPACE_ID'
+```
+
+轮询导出状态 `status` 响应中的字段将是以下之一 `CREATED`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`, or `TIMEDOUT`。根据数据量，导出可能需要一些时间。一旦状态为 `COMPLETED`，Parquet 文件将在您的存储桶中可用。
+
+请参阅 [监控和排查批量导出](/langsmith/data-export-monitor) 关于如何列出运行、停止导出和诊断失败。

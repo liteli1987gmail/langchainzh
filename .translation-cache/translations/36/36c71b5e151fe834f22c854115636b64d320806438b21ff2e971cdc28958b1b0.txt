@@ -3,16 +3,16 @@ title: Studio 中的可观测性
 sidebarTitle: 追踪、数据集、提示词
 ---
 
-LangSmith [Studio](/langsmith/studio) 提供了工具来检查、调试和改进应用超越执行层面的内容。通过追踪、数据集和提示词，您可以详细了解应用的行为，衡量其性能，并优化输出：
+LangSmith [Studio](/langsmith/studio) 提供工具用于检查、调试和改进您的应用，不仅仅是执行。通过使用追踪、数据集和提示词，您可以详细了解应用程序的行为、衡量其性能并优化其输出：
 
-- [优化提示词](#iterate-on-prompts)：直接在图节点中修改提示词，或使用 Playground。
-- [在数据集上运行实验](#run-experiments-over-a-dataset)：在 LangSmith 数据集上执行助手以评分并比较结果。
+- [迭代提示词](#iterate-on-prompts)：直接在图形节点内或使用 Playground 修改提示词。
+- [在数据集上运行实验](#run-experiments-over-a-dataset)：在 LangSmith 数据集上执行助手以评分和比较结果。
 - [调试 LangSmith 追踪](#debug-langsmith-traces)：将追踪的运行导入到 Studio，并可选择将其克隆到本地代理中。
-- [将节点添加到数据集](#add-node-to-dataset)：将对话历史的某些部分转化为数据集示例，用于评估或进一步分析。
+- [将节点添加到数据集](#add-node-to-dataset)：将对话历史的某些部分转换为数据集示例，用于评估或进一步分析。
 
-## 优化提示词
+## 迭代提示词
 
-Studio 支持以下修改图中提示词的方法：
+Studio 支持以下方法来修改图形中的提示词：
 
 - [直接节点编辑](#direct-node-editing)
 - [Playground 界面](#playground)
@@ -21,16 +21,16 @@ Studio 支持以下修改图中提示词的方法：
 
 Studio 允许您直接从图形界面编辑各个节点中使用的提示词。
 
-### 图配置
+### 图形配置
 
-定义您的[配置](/oss/langgraph/use-graph-api#add-runtime-configuration)，使用 `langgraph_nodes` 和 `langgraph_type` 键指定提示词字段及其关联的节点。
+定义您的 [配置](/oss/langgraph/use-graph-api#add-runtime-configuration) 来指定提示词字段及其关联的节点，使用 `langgraph_nodes` 和 `langgraph_type` keys.
 
 #### `langgraph_nodes`
 
-- **描述**：指定配置字段关联的图节点。
-- **值类型**：字符串数组，其中每个字符串都是图中节点的名称。
-- **使用上下文**：包含在 Pydantic 模型的 `json_schema_extra` 字典或 dataclass 的 `metadata["json_schema_extra"]` 字典中。
-- **示例**：
+- **描述**：指定配置字段关联的图形节点。
+- **值类型**：字符串数组，其中每个字符串都是图形中节点的名称。
+- **使用上下文**：包含在 Pydantic 模型的 `json_schema_extra` 字典中，或 dataclass 的 `metadata["json_schema_extra"]` 字典中。
+- **示例**:
   ```python
   system_prompt: str = Field(
       default="You are a helpful AI assistant.",
@@ -40,11 +40,11 @@ Studio 允许您直接从图形界面编辑各个节点中使用的提示词。
 
 #### `langgraph_type`
 
-- **描述**: 指定配置字段的类型，该类型决定其在 UI 中的处理方式。
-- **值类型**: 字符串
+- **描述**：指定配置字段的类型，决定其在 UI 中的处理方式。
+- **值类型**：字符串
 - **支持的值**:
-  * `"prompt"`: 表示该字段包含提示文本，在 UI 中应被特殊处理。
-- **使用上下文**: 包含在 Pydantic 模型的 `json_schema_extra` 字典中，或数据类的 `metadata["json_schema_extra"]` 字典中。
+  * `"prompt"`：表示该字段包含提示词文本，应在 UI 中进行特殊处理。
+- **使用上下文**：包含在 Pydantic 模型的 `json_schema_extra` 字典中，或 dataclass 的 `metadata["json_schema_extra"]` 字典中。
 - **示例**:
   ```python
   system_prompt: str = Field(
@@ -56,10 +56,7 @@ Studio 允许您直接从图形界面编辑各个节点中使用的提示词。
   )
   ```
 
-<Accordion title="完整示例配置">
-
-
-</Accordion>
+<Accordion title="Full example configuration">
 
 ```python
 ## Using Pydantic
@@ -122,3 +119,104 @@ class Configuration:
     )
 
 ```
+
+</Accordion>
+
+#### 在 UI 中编辑提示词
+
+1. 在具有关联配置字段的节点上找到齿轮图标。
+1. 点击打开配置模态框。
+1. 编辑值。
+1. 保存以更新当前助手版本或创建新版本。
+
+### Playground
+
+此 [游乐场](/langsmith/create-a-prompt) 界面允许测试单个 LLM 调用，无需运行完整图：
+
+1. 选择一个线程。
+1. 点击 **查看 LLM 运行** 在节点上。这会列出节点内所有 LLM 调用（如果有）。
+1. 选择一个 LLM 运行以在游乐场中打开。
+1. 修改提示并测试不同的模型和工具设置。
+1. 将更新的提示复制回您的图。
+
+## 在数据集上运行实验
+
+Studio 让您运行 [评估](/langsmith/evaluation-concepts) 通过针对预定义的 LangSmith [数据集](/langsmith/evaluation-concepts#datasets)执行您的助手。这允许您测试各种输入的性能，将输出与参考答案进行比较，并使用配置的 [评估器](/langsmith/evaluation-concepts#evaluators).
+
+本指南向您展示如何直接从 Studio 运行完整的端到端实验。
+
+### 前提条件
+
+在运行实验之前，请确保您满足以下条件：
+
+- **LangSmith 数据集**：您的数据集应包含要测试的输入，以及可选的参考输出用于比较。输入的架构必须与助手所需的输入架构匹配。有关架构的更多信息，请参阅 [图 API 架构文档](/oss/langgraph/graph-api#schema)。有关创建数据集的更多信息，请参阅 [如何管理数据集](/langsmith/manage-datasets-in-application#create-a-dataset-and-add-examples).
+- **（可选）评估器**：您可以在 LangSmith 中向数据集附加评估器（例如 LLM-as-a-Judge、启发式方法或自定义函数）。这些将在图处理完所有输入后自动运行。
+- **正在运行的应用程序**：可以针对以下项运行实验：
+  - 部署在 [LangSmith](/langsmith/deployment).
+  - 上的应用程序通过 [langgraph-cli](/langsmith/local-dev-testing).
+
+<Note>
+Studio 实验遵循与其他实验相同的 [数据保留](/langsmith/usage-and-billing#data-retention) 规则。默认情况下，跟踪具有基础层保留期（14 天）。但是，如果向跟踪添加反馈，它们将自动升级到扩展层保留期（400 天）。可以通过以下两种方式之一添加反馈：
+
+-  [数据集配置了评估器](/langsmith/bind-evaluator-to-dataset).
+- [反馈](/langsmith/observability-concepts#feedback) 手动添加到跟踪。
+
+此自动升级会增加跟踪的保留期和成本。更多详情，请参阅 [数据保留自动升级](/langsmith/usage-and-billing#how-it-works).
+</Note>
+
+### 实验设置
+
+1. 启动实验。点击 **运行实验** 按钮在 Studio 页面右上角。
+1. 选择您的数据集。在出现的模态框中，选择用于实验的数据集（或特定数据集拆分）并点击 **开始**.
+1. 监控进度。数据集中的所有输入现在将在活动助手上运行。通过右上角的徽章监控实验进度。
+1. 您可以在实验于后台运行时继续在Studio中工作。随时点击箭头图标按钮导航到LangSmith并查看详细的实验结果。
+
+## 调试LangSmith追踪
+
+本指南说明如何在Studio中打开LangSmith追踪进行交互式调查和调试。
+
+### 打开已部署的线程
+
+1. 打开LangSmith追踪，选择根运行。
+1. 点击 **在Studio中运行**.
+
+这将打开Studio并连接到相关部署，同时选中追踪的父线程。
+
+### 使用远程追踪测试本地代理
+
+本节说明如何使用LangSmith中的远程追踪测试本地代理。这使您能够将生产追踪作为本地测试的输入，允许您在开发环境中调试和验证代理修改。
+
+#### 前置条件
+
+- 已追踪的LangSmith线程
+- A [本地运行的代理](/langsmith/local-dev-testing).
+
+<Info>
+**本地代理要求**
+* langgraph>=0.3.18
+* langgraph-api>=0.0.32
+* 包含与远程追踪中相同的节点集
+</Info>
+
+#### 克隆线程
+
+1. 打开LangSmith追踪，选择根运行。
+2. 点击 **在Studio中运行**.
+3. 输入您本地代理的URL。
+4. 选择 **在本地克隆线程**.
+5. 如果存在多个图，请选择目标图。
+
+将在您的本地代理中创建一个新线程，其中线程历史从远程线程推断和复制，并将导航到Studio查看您本地运行的应用程序。
+
+## 将节点添加到数据集
+
+添加 [示例](/langsmith/evaluation-concepts#examples) to [LangSmith数据集](/langsmith/manage-datasets) 从线程日志中的节点。这对于评估代理的各个步骤非常有用。
+
+1. 选择一个线程。
+1. 点击 **添加到数据集**.
+1. Select nodes whose input/output you want to add to a dataset.
+1. 对于每个选中的节点，选择要创建示例的目标数据集。默认情况下，将选择特定助手和节点的数据集。如果此数据集尚不存在，将会被创建。
+1. Edit the example's input/output as needed before adding it to the dataset.
+1. 选择 **添加到数据集** 在页面底部将所有选中的节点添加到各自的数据集。
+
+更多详细信息，请参阅 [如何评估应用程序的中间步骤](/langsmith/evaluate-on-intermediate-steps).

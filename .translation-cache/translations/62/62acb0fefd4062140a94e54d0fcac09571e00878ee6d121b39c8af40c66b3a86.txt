@@ -1,32 +1,44 @@
 ---
-title: "Kinetica 语言到 SQL 的集成"
+title: "Kinetica 语言到 SQL 集成"
 description: "使用 LangChain Python 与 Kinetica 语言到 SQL 聊天模型集成。"
 ---
 
-[Kinetica](https://www.kinetica.com/) 是一个内置文本到 SQL 生成支持的数据库。
+[Kinetica](https://www.kinetica.com/) 是一个支持文本到 SQL 生成集成的数据库。
 
-本笔记本演示如何使用 Kinetica 将自然语言转换为 SQL，并简化数据检索过程。本演示旨在展示文本生成工作流程，而非 LLM 的能力。
+本笔记本演示如何使用 Kinetica 将自然语言转换为 SQL
+并简化数据检索过程。此演示旨在展示文本生成工作流程，而非 LLM 的能力。
 
 ## 概述
 
-使用 Kinetica LLM 工作流，您可以在数据库中创建一个 LLM 上下文，该上下文提供推理所需的信息，包括表、注解、规则和样本。调用 `ChatKinetica.load_messages_from_context()` 将从数据库中检索上下文信息，以便用于创建聊天提示。
+使用 Kinetica LLM 工作流程，您可以在数据库中创建一个 LLM 上下文，提供
+推理所需的信息，包括表、注解、规则和
+样本。调用 `ChatKinetica.load_messages_from_context()` 将检索
+数据库中的上下文信息，以便可用于创建聊天提示。
 
-聊天提示由一个 @[`SystemMessage`] 和多对 `HumanMessage`/`AIMessage` 组成，这些对包含问题/SQL 对的样本。您可以向此列表追加样本对，但这不是用于促进典型自然语言对话的目的。
+聊天提示由 @[`SystemMessage`] 和
+`HumanMessage`/`AIMessage` that contain the samples which are question/SQL
+对组成。您可以向此列表追加样本，但这并非用于
+促进典型的自然语言对话。
 
-当您从聊天提示创建链并执行时，Kinetica LLM 将从输入生成 SQL。可选地，您可以使用 `KineticaSqlOutputParser` 来执行 SQL 并将结果作为数据框返回。
+从聊天提示创建链并执行后，Kinetica LLM 将
+从输入生成 SQL。可选地，您可以使用 `KineticaSqlOutputParser` to
+执行 SQL 并将结果作为 DataFrame 返回。
 
-目前支持 2 个用于 SQL 生成的 LLM：
+目前，支持 2 个用于 SQL 生成的 LLM：
 
 1. **Kinetica SQL-GPT**：此 LLM 基于 OpenAI ChatGPT API。
-2. **Kinetica SqlAssist**：此 LLM 专门构建用于与 Kinetica 数据库集成，可运行在安全的客户场所。
+2. **Kinetica SqlAssist**：此 LLM 专门构建用于与 Kinetica
+   数据库集成，可运行在安全的客户 premises。
 
-本演示我们将使用 **SqlAssist**。更多信息请参阅 [Kinetica 文档站点](https://docs.kinetica.com/7.1/sql-gpt/concepts/)。
+在此演示中，我们将使用 **SqlAssist**。请参阅 [Kinetica 文档
+site](https://docs.kinetica.com/7.1/sql-gpt/concepts/) for more information.
 
-## 先决条件
+## 前置条件
 
-要开始使用，您需要一个 Kinetica DB 实例。如果没有，您可以获取一个 [免费开发实例](https://cloud.kinetica.com/trynow)。
+要开始使用，您需要 Kinetica DB 实例。如果您没有，可以
+获取一个 [免费开发实例](https://cloud.kinetica.com/trynow).
 
-您需要安装以下软件包...
+您需要安装以下包...
 
 
 ```python
@@ -36,13 +48,13 @@ pip install -qU langchain-kinetica faker
 
 ## 数据库连接
 
-您必须在以下环境变量中设置数据库连接。如果您使用的是虚拟环境，可以在项目的 `.env` 文件中设置这些变量：
+您必须在以下环境变量中设置数据库连接。如果您使用虚拟环境，可以在 `.env` 项目文件中设置：
 
-* `KINETICA_URL`：数据库连接 URL（例如 `http://localhost:9191`）
+* `KINETICA_URL`：数据库连接 URL（例如 `http://localhost:9191`)
 * `KINETICA_USER`：数据库用户
 * `KINETICA_PASSWD`：安全密码。
 
-如果您能成功创建 `KineticaChatLLM` 实例，则说明已成功连接。
+如果可以创建 `KineticaChatLLM` 的实例，则表示您已成功连接。
 
 
 ```python
@@ -63,11 +75,11 @@ kinetica_ctx = "demo.test_llm_ctx"
 
 ## 创建测试数据
 
-在生成 SQL 之前，我们需要创建一个 Kinetica 表和一个可以对该表进行推理的 LLM 上下文。
+在生成 SQL 之前，我们需要创建一个 Kinetica 表和一个可以推理该表的 LLM 上下文。
 
-### 创建一些虚假用户资料
+### 创建一些假用户资料
 
-我们将使用 `faker` 包创建一个包含 100 个虚假资料的 dataframe。
+我们将使用 `faker` 包创建一个包含 100 个假资料的数据框。
 
 ```python
 from collections.abc import Generator
@@ -116,7 +128,7 @@ id
 4  1932-11-30
 ```
 
-### 从 dataframe 创建 kinetica 表
+### 从数据框创建 Kinetica 表
 
 
 ```python
@@ -146,9 +158,9 @@ print(gpudb_table.type_as_df())
 
 ### 创建 LLM 上下文
 
-您可以使用 Kinetica Workbench UI 创建 LLM 上下文，也可以使用 `CREATE OR REPLACE CONTEXT` 语法手动创建。
+您可以使用 Kinetica Workbench UI 创建 LLM 上下文，也可以使用 `CREATE OR REPLACE CONTEXT` syntax.
 
-这里我们从 SQL 语法创建上下文，引用我们之前创建的表。
+这里我们从引用我们创建的表的 SQL 语法创建一个上下文。
 
 
 ```python
@@ -196,11 +208,11 @@ CREATE OR REPLACE CONTEXT "demo"."test_llm_ctx" (
 
 ## 使用 LangChain 进行推理
 
-在下面的示例中，我们将从之前创建的表和 LLM 上下文创建一个链。该链将生成 SQL 并将结果数据作为数据框返回。
+在下面的示例中，我们将从之前创建的表和 LLM 上下文创建一个链。这个链将生成 SQL 并将结果数据作为 dataframe 返回。
 
-### 从 kinetica DB 加载聊天提示
+### 从 kinetica 数据库加载聊天提示
 
-`load_messages_from_context()` 函数将从数据库中检索上下文，并将其转换为我们用于创建 `ChatPromptTemplate` 的聊天消息列表。
+该 `load_messages_from_context()` 函数将从数据库中检索上下文并将其转换为我们用于创建 `ChatPromptTemplate`.
 
 ```python
 from langchain_core.prompts import ChatPromptTemplate
@@ -247,7 +259,7 @@ select count(1) as num_users
 
 ### 创建链
 
-这个链的最后一个元素是 `KineticaSqlOutputParser`，它将执行 SQL 并返回 dataframe。这是可选的，如果我们省略它，那么只会返回 SQL。
+这个链的最后一个元素是 `KineticaSqlOutputParser` ，它将执行 SQL 并返回一个 dataframe。这是可选的，如果我们省略它，则只返回 SQL。
 
 
 ```python
@@ -261,7 +273,7 @@ chain = prompt_template | kinetica_llm | KineticaSqlOutputParser(kdbc=kinetica_l
 
 ### 生成 SQL
 
-我们创建的链将问题作为输入，并返回包含生成的 SQL 和数据的 `KineticaSqlResponse`。问题必须与用于创建提示的 LLM 上下文相关。
+我们创建的链将一个问题作为输入并返回一个 `KineticaSqlResponse` ，其中包含生成的 SQL 和数据。该问题必须与我们用来创建提示的 LLM 上下文相关。
 
 
 ```python

@@ -1,35 +1,35 @@
 ---
-title: 按用户隔离 store 数据
-sidebarTitle: 按用户隔离 store
-description: 使用认证处理程序在 LangSmith Deployment 中将长期 store 数据限定到每个已认证用户。
+title: 隔离每个用户的存储数据
+sidebarTitle: 隔离每个用户的存储
+description: 使用认证处理程序在 LangSmith Deployment 中将长期存储数据限定到每个已认证用户。
 ---
 
-每个 [LangSmith Deployment](/langsmith/deployment) 都包含一个 Postgres 支持的 [store](/oss/langgraph/stores)，用于长期记忆和跨线程数据。默认情况下，store 命名空间在所有调用者之间共享。要为每个用户提供独立的隔离 store，请配置[自定义认证](/langsmith/custom-auth)并添加一个 store [授权处理程序](/langsmith/auth#authorization)，用于重写命名空间以包含已认证用户的身份。
+每个 [LangSmith Deployment](/langsmith/deployment) 包含一个基于 Postgres 的 [存储](/oss/langgraph/stores) 用于长期记忆和跨线程数据。默认情况下，存储命名空间在所有调用者之间共享。要为每个用户提供独立的隔离存储，请配置 [自定义认证](/langsmith/custom-auth) 并添加一个存储 [授权处理程序](/langsmith/auth#authorization) 来重写命名空间以包含已认证用户的身份。
 
-本指南介绍如何在 LangSmith Deployment 中配置该隔离。相同的模式也适用于启用了自定义认证的[自托管](/langsmith/self-hosted)部署。
+本指南展示了如何在 LangSmith Deployment 中配置该隔离。同样的模式适用于 [self-hosted](/langsmith/self-hosted) 启用了自定义认证的部署。
 
 ## 工作原理
 
-Store 项由 **namespace** 元组（例如 `("memories", "preferences")`）和 **key** 组织。与线程和助手不同，store 命名空间由您的应用程序定义，因此授权的工作方式不同：
+存储项通过 **命名空间** 元组（例如， `("memories", "preferences")`）和一个 **键**组织。与线程和助手不同，存储命名空间由你的应用程序定义，因此授权的工作方式不同：
 
-1. 您的 `@auth.authenticate` 处理程序验证调用者并为每个用户返回唯一的 `identity`。
-2. 您的 `@auth.on.store` 处理程序**验证**命名空间以该身份开头，或者**重写**命名空间以添加该身份前缀。
-3. 服务器使用验证或重写后的命名空间执行实际读取或写入操作。
+1. 你的 `@auth.authenticate` 处理程序验证调用者并返回一个唯一的 `identity` 给每个用户。
+2. 你的 `@auth.on.store` 处理程序要么 **验证** 命名空间以该身份开头，要么 **重写** 命名空间并在其前面添加该身份。
+3. 服务器使用经过验证或重写的命名空间执行实际读取或写入操作。
 
-用户写入逻辑命名空间 `("memories",)` 时，自动前缀重写实际上会将数据存储在 `("user-123", "memories")`。其他用户无法读取或覆盖该数据，因为他们的请求被限定在 `("user-456", ...)` 范围内。
+写入逻辑命名空间的用户 `("memories",)` 通过自动前缀重写实际将数据存储在 `("user-123", "memories")`。其他用户无法读取或覆盖该数据，因为他们的请求被限定在 `("user-456", ...)`.
 
 <Note>
-Store 授权处理程序接收一个**可变的** `value` 字典。对 `value["namespace"]` 的更改会在操作中生效。您不需要像线程那样返回元数据过滤器。
+存储授权处理程序接收一个 **可变** `value` 字典。对 `value["namespace"]` 的更改会影响操作。与线程不同，你不需要返回元数据过滤器。
 </Note>
 
-## 前置条件
+## 前提条件
 
-- 已配置[自定义认证](/langsmith/set-up-custom-auth)的 LangSmith Deployment。
-- 一个 `@auth.authenticate` 处理程序，为每个最终用户返回稳定且唯一的 `identity`。
+- 一个带有 [自定义认证](/langsmith/set-up-custom-auth) configured.
+- An `@auth.authenticate` 处理程序，且该处理程序为每个最终用户返回稳定且唯一的 `identity` 。
 
 ## 在 LangSmith Deployment 中配置认证
 
-在 [`langgraph.json`](/langsmith/application-structure#configuration-file-concepts) 中将您的部署指向认证模块：
+在你的部署中指向你的认证模块 [`langgraph.json`](/langsmith/application-structure#configuration-file-concepts):
 
 ```json
 {
@@ -43,26 +43,26 @@ Store 授权处理程序接收一个**可变的** `value` 字典。对 `value["n
 }
 ```
 
-`auth` 对象必须暴露一个 `langgraph_sdk.Auth` 实例（通常命名为 `auth`）。
+该 `auth` 对象必须公开一个 `langgraph_sdk.Auth` （通常命名为 `auth`).
 
-## 选择存储授权模式
+## 选择一种存储授权模式
 
-存储隔离需要一个 `@auth.on.store` 处理器。有两种常见模式效果良好；请根据您希望用户作用域位于何处来选择。
+存储隔离需要一个 `@auth.on.store` 处理程序。两种常见模式效果良好；根据你希望用户作用域所在的位置来选择。
 
-| 模式 | 用户作用域设置位置 | 最佳场景 |
+| 模式 | 用户范围设置位置 | 最佳使用场景 |
 | --- | --- | --- |
-| **显式命名空间 + 拒绝** | 应用程序代码将 `user_id` 放在每个命名空间的第一位 | 您已经将用户身份传递到图代码中，或者您希望命名空间反映完整存储路径 |
-| **自动前缀重写** | 认证处理器在逻辑命名空间前添加 `ctx.user.identity` | 您希望更简单的代理代码和在 API 层透明的隔离 |
+| **显式命名空间 + 拒绝** | 应用程序代码将 `user_id` 放在每个命名空间的首位 | 您已经在将用户身份传递给图形代码，或者您希望命名空间反映完整存储路径 |
+| **自动前缀重写** | 认证处理器预先添加 `ctx.user.identity` 到逻辑命名空间 | 您希望代码更简单且在 API 层实现透明隔离 |
 
-两种模式都使用单一的 `@auth.on.store` 处理器来覆盖所有存储操作（`put`、`get`、`search`、`delete` 和 `list_namespaces`）。只有在需要为每个操作设置不同规则时，才需要特定操作的处理器，如 `@auth.on.store.put`。
+两种模式都使用单个 `@auth.on.store` 处理器覆盖所有存储操作（`put`, `get`, `search`, `delete`和 `list_namespaces`）。仅当您需要对不同操作使用不同规则时才需要特定于操作的处理器，例如 `@auth.on.store.put` （如果您希望每个操作使用不同的规则）。
 
 <Tip>
-如果您使用全局 `@auth.on` 处理器拒绝未处理的请求，请显式注册 `@auth.on.store` 以允许存储操作。请参阅 [Auth 参考文档](https://reference.langchain.com/python/langgraph-sdk/auth/Auth) 了解特定操作的处理器名称。
+如果您使用全局 `@auth.on` 处理器拒绝未处理的请求，请注册 `@auth.on.store` 以明确允许存储操作。请参阅 [认证参考](https://reference.langchain.com/python/langgraph-sdk/auth/Auth) 了解特定于操作的处理器名称。
 </Tip>
 
 ### 显式命名空间 + 拒绝
 
-您的应用程序代码将用户身份作为每个命名空间的第一段（例如 `("user-123", "memories")`）。认证处理器验证调用者是否与该前缀匹配，并拒绝不匹配的情况：
+应用程序代码将用户身份作为每个命名空间的第一段（例如， `("user-123", "memories")`）。认证处理器验证调用者是否与此前缀匹配，并拒绝不匹配的情况：
 
 ```python
 from langgraph_sdk import Auth
@@ -85,11 +85,11 @@ async def authorize_store(
         )
 ```
 
-此模式使存储布局在你的图代码中显式化。如果已认证用户是 `user-123`，则对命名空间 `("user-456", "memories")` 的请求会立即失败。权衡之处在于，代理中的每个存储调用都必须包含用户前缀，通常来自运行时上下文，例如 `config["configurable"]["langgraph_auth_user_id"]`。
+此模式使存储布局在图形代码中明确。对命名空间的请求 `("user-456", "memories")` 如果经过身份验证的用户是 `user-123`，则会立即失败。权衡在于代理中的每个存储调用必须包含用户前缀，通常来自运行时上下文，例如 `config["configurable"]["langgraph_auth_user_id"]`.
 
 ### 自动前缀重写
 
-你的应用代码使用逻辑命名空间，不带用户前缀（例如 `("memories", "preferences")`）。认证处理程序在每个存储操作前添加已认证用户的身份：
+应用程序代码使用不包含用户前缀的逻辑命名空间（例如， `("memories", "preferences")`）。认证处理器在每次存储操作时预先添加经过身份验证的用户身份：
 
 ```python
 from langgraph_sdk import Auth
@@ -110,13 +110,13 @@ async def scope_store(
     value["namespace"] = namespace
 ```
 
-当客户端调用 `list_namespaces` 不带前缀时，`value["namespace"]` 为空。上面的处理器将空命名空间视为 `(ctx.user.identity,)`，因此用户只能看到自己的命名空间。
+当客户端调用 `list_namespaces` 而没有前缀时， `value["namespace"]` 为空。上面的处理器将空命名空间视为 `(ctx.user.identity,)`，因此用户只能看到自己的命名空间。
 
-此模式使代理代码更简单，因为认证层透明地处理用户隔离。代价是你不能在应用代码中也为命名空间添加前缀，否则你会双重作用域数据并破坏读取。选择一个作用域层：认证重写 **或** 应用级命名空间，不要两者都用。
+此模式使代理代码更简单，因为认证层透明地处理用户隔离。权衡在于您不能在应用程序代码中也为命名空间添加前缀，否则会导致数据双重作用域并破坏读取。选择一个作用域层：认证重写 **or** 应用程序级命名空间，而不是两者兼用。
 
 ## 在代理代码中使用命名空间
 
-如果使用自动前缀重写，你的图代码使用逻辑命名空间，不带用户前缀。认证层在请求时自动添加用户作用域。将以下内容放入你的图节点或工具中（例如 `graph.py`）：
+如果您使用自动前缀重写，图形代码使用不包含用户前缀的逻辑命名空间。认证层在请求时自动添加用户范围。将以下内容放在图形节点或工具中（例如， `graph.py`):
 
 ```python
 from langgraph.store.base import BaseStore
@@ -136,9 +136,9 @@ async def load_preference(state: State, *, store: BaseStore):
     return item.value if item else {}
 ```
 
-当 User A 调用 store API 时，服务器会将数据持久化到 `("user-a", "memories", "preferences")`。User B 的请求永远不会到达该命名空间。
+当用户 A 调用存储 API 时，服务器将数据持久化到 `("user-a", "memories", "preferences")`。用户 B 的请求永远不会到达该命名空间。
 
-如果你使用 **explicit namespace + deny**，请改为在代码的每个命名空间中包含用户身份：
+如果您使用 **显式命名空间 + 拒绝**，请改为从图形代码中在每个命名空间包含用户身份：
 
 ```python
 from langchain_core.runnables import RunnableConfig
@@ -153,9 +153,9 @@ async def save_preference(state: State, *, store: BaseStore, config: RunnableCon
     )
 ```
 
-### Deep Agents 与 StoreBackend
+### 深度代理和 StoreBackend
 
-如果你使用配合 @[`StoreBackend`] 的 [Deep Agents](/oss/deepagents/overview)，请将你的命名空间工厂与 auth-scoped 布局对齐。当 auth 在前面添加 `ctx.user.identity` 时，在后端使用逻辑命名空间，并让 auth 处理用户隔离：
+如果您使用 [深度代理](/oss/deepagents/overview) 与 @[`StoreBackend`]，请将您的命名空间工厂与认证作用域布局对齐。当认证预先添加 `ctx.user.identity`，在后端使用逻辑命名空间，让 auth 处理用户隔离：
 
 :::python
 ```python
@@ -177,13 +177,13 @@ new StoreBackend({
 ```
 :::
 
-或者，如果您通过图内用户进行作用域限定（例如，使用 `rt.server_info.user.identity`），请确保您的 auth handler 不会重复添加命名空间前缀。选择一种作用域层：auth 重写**或**应用级命名空间，不要两者同时使用。
+或者，如果你在图内部按用户进行作用域划分（例如，使用 `rt.server_info.user.identity`），请确保你的 auth 处理程序不会对命名空间进行双重前缀。选择一个作用域划分层：auth 重写 **or** 应用级命名空间，而不是两者。
 
-有关命名空间设计的更多信息，请参阅 [Deep Agents 后端](/oss/deepagents/backends#namespace-factories) 和 [用户级内存](/oss/deepagents/memory#user-scoped-memory)。
+有关命名空间设计的更多信息，请参阅 [深度智能体后端](/oss/deepagents/backends#namespace-factories) 和 [用户作用域内存](/oss/deepagents/memory#user-scoped-memory).
 
-## 测试 store 隔离
+## 测试存储隔离
 
-在 `langgraph dev` 运行且 auth handler 中配置了两个测试用户的情况下，验证 store 数据不会在用户之间泄露：
+使用 `langgraph dev` 运行且在 auth 处理程序中配置了两个测试用户，验证存储数据不会跨用户泄露：
 
 ```python
 import asyncio
@@ -235,19 +235,19 @@ if __name__ == "__main__":
 
 ## 与线程隔离结合使用
 
-存储隔离和[线程隔离](/langsmith/resource-auth)解决不同的问题：
+存储隔离和 [线程隔离](/langsmith/resource-auth) 解决不同的问题：
 
-| 关注点 | 机制 | 范围 |
+| 关注点 | 机制 | 作用域 |
 | --- | --- | --- |
-| 对话历史 | 线程元数据过滤器（`owner`） | 每个线程的检查点和消息 |
+| 对话历史 | 线程元数据过滤器（`owner`） | 每线程检查点和消息 |
 | 长期记忆 | 存储命名空间重写 | 跨线程记忆、偏好设置和文档 |
 
-对于多用户代理，请同时配置两者。参见[使对话保持私密](/langsmith/resource-auth)了解线程和运行范围。
+对于多用户智能体，请同时配置两者。参阅 [使对话私有化](/langsmith/resource-auth) 了解线程和运行作用域划分。
 
 ## 另请参阅
 
 - [身份验证和访问控制](/langsmith/auth)
 - [设置自定义身份验证](/langsmith/set-up-custom-auth)
-- [使对话保持私密](/langsmith/resource-auth)
+- [使对话私有化](/langsmith/resource-auth)
 - [部署中的语义搜索](/langsmith/semantic-search)
 - [LangGraph 存储](/oss/langgraph/stores)

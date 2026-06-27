@@ -3,18 +3,18 @@ title: 评估聊天机器人
 sidebarTitle: 评估聊天机器人
 ---
 
-在本指南中，我们将为聊天机器人设置评估。这些评估允许您通过一组数据来衡量应用程序的运行表现。能够快速、可靠地获得这些洞察，将使您能够充满信心地进行迭代。
+在本指南中，我们将为聊天机器人设置评估。这些评估允许您衡量应用程序在一组数据上的表现。能够快速可靠地获得这些洞察将使您能够充满信心地进行迭代。
 
-从高层次来看，在本教程中我们将：
+从高层来看，在本教程中我们将：
 
-* *创建一个初始的黄金数据集来衡量性能*
+* *创建一个初始黄金数据集来衡量性能*
 * *定义用于衡量性能的指标*
 * *在几个不同的提示或模型上运行评估*
 * *手动比较结果*
-* *随时间跟踪结果*
-* *设置自动化测试以在 CI/CD 中运行*
+* *跟踪结果随时间的变化*
+* *Set up automated testing to run in CI/CD*
 
-有关 LangSmith 支持的评估工作流程的更多信息，请查看[操作指南](/langsmith/evaluation)，或参阅 @[evaluate][Client.evaluate] 及其异步对应方法 @[aevaluate][Client.aevaluate] 的参考文档。
+有关 LangSmith 支持的评估工作流程的更多信息，请查看 [操作指南](/langsmith/evaluation)，或查看 @[evaluate][Client.evaluate] 的参考文档及其异步对应物 @[aevaluate][Client.aevaluate]。
 
 内容很多，让我们开始吧！
 
@@ -23,8 +23,6 @@ sidebarTitle: 评估聊天机器人
 首先安装本教程所需的依赖项。我们恰好使用 OpenAI，但 LangSmith 可以与任何模型一起使用：
 
 <CodeGroup>
-
-</fragment>
 ```bash pip
 pip install -U langsmith openai
 ```
@@ -34,7 +32,7 @@ uv add langsmith openai
 ```
 </CodeGroup>
 
-然后设置环境变量以启用 LangSmith 追踪：
+并设置环境变量以启用 LangSmith 跟踪：
 
 ```bash
 export LANGSMITH_TRACING="true"
@@ -44,21 +42,21 @@ export OPENAI_API_KEY="<Your OpenAI API key>"
 
 ## 创建数据集
 
-在准备测试和评估应用程序时，第一步是定义要评估的数据点。需要考虑以下几个方面：
+在准备测试和评估应用程序时，第一步是定义要评估的数据点。这里有几个方面需要考虑：
 
-* 每个数据点的模式应该是什么样的？
-* 我应该收集多少数据点？
+* 每个数据点的架构应该是什么？
+* 我应该收集多少个数据点？
 * 我应该如何收集这些数据点？
 
-**模式：** 每个数据点至少应该包含应用程序的输入。如果可以，定义预期输出也很有帮助——这些输出代表您期望一个正常运行的应用程序应该输出的内容。通常您无法定义完美的输出——没关系！评估是一个迭代的过程。有时您可能还想为每个示例定义更多信息——比如 RAG 中要获取的预期文档，或代理要执行的预期步骤。LangSmith 数据集非常灵活，允许您定义任意模式。
+**Schema:** 每个数据点至少应包含应用程序的输入。如果可以的话，定义预期输出也很有帮助——这些代表您期望正常运行的应用程序会输出的内容。通常您无法定义完美的输出——没关系！评估是一个迭代过程。有时您可能还想为每个示例定义更多信息——比如 RAG 中要获取的预期文档，或代理要采取的预期步骤。LangSmith 数据集非常灵活，允许您定义任意架构。
 
-**收集数量：** 收集多少数据点没有硬性规定。关键是要确保对您想要防范的边缘情况有适当的覆盖。即使 10-50 个示例也能提供很大价值！不要担心开始时数量太少——您可以（也应该）随时增加！
+**数量：** 关于应该收集多少，没有硬性规定。主要的是确保您对可能需要防范的边缘情况有适当的覆盖。即使是 10-50 个示例也能提供很多价值！不要担心一开始获得大量数据——您可以（也应该）随着时间不断添加！
 
-**如何获取：** 这可能是最棘手的部分。一旦您知道自己想要收集一个数据集......您实际上如何去做？对于大多数刚开始新项目的团队，我们通常看到他们首先手动收集前 10-20 个数据点。在开始使用这些数据点后，这些数据集通常是 *活的* 结构，会随着时间增长。它们通常在看到真实用户如何使用您的应用程序、发现存在的痛点，然后将其中一些数据点移入这个集合后增长。还有一些方法可以合成生成数据来扩充您的数据集。我们建议先不要担心这些，直接手动标注约 10-20 个示例。
+**如何获取：** 这可能是最棘手的部分。一旦您知道要收集数据集...您实际上如何进行？对于大多数刚开始新项目的团队，我们通常看到他们从手动收集前 10-20 个数据点开始。在从这些数据点开始后，这些数据集通常是 *动态的* constructs and grow over time. They generally grow after seeing how real users will use your application, seeing the pain points that exist, and then moving a few of those datapoints into this set. There are also methods like synthetically generating data that can be used to augment your dataset. To start, we recommend not worrying about those and just hand labeling \~10-20 examples.
 
-一旦您有了数据集，有几种不同的方式可以将其上传到 LangSmith。在本教程中，我们将使用客户端，但您也可以通过 UI 上传（甚至可以在 UI 中创建它们）。
+一旦您有了数据集，有几种不同的方式可以将它们上传到 LangSmith。对于本教程，我们将使用客户端，但您也可以通过 UI 上传（甚至在 UI 中创建它们）。
 
-在本教程中，我们将创建 5 个数据点进行评估。我们将评估一个问答应用程序。输入将是一个问题，输出将是一个答案。由于这是一个问答应用程序，我们可以定义预期答案。让我们展示如何创建这个数据集并上传到 LangSmith！
+对于本教程，我们将创建 5 个数据点来评估。我们将评估一个问答应用程序。输入将是一个问题，输出将是一个答案。由于这是一个问答应用程序，我们可以定义预期的答案。让我们展示如何创建并上传此数据集到 LangSmith！
 
 ```python
 from langsmith import Client
@@ -96,19 +94,19 @@ client.create_examples(
 )
 ```
 
-现在，如果我们打开 LangSmith UI，在 `Datasets & Testing` 页面中查找 `QA Example Dataset`，当我们点击进入时，应该会看到五个新示例。
+现在，如果我们转到 LangSmith UI 并查找 `QA Example Dataset` 在 `Datasets & Testing` 页面中，当我们点击进入时，我们应该会看到五个新示例。
 
-![Testing tutorial dataset](/langsmith/images/testing-tutorial-dataset.png)
+![测试教程数据集](/langsmith/images/testing-tutorial-dataset.png)
 
 ## 定义指标
 
-创建数据集后，我们现在可以定义一些指标来评估我们的响应。由于我们有一个预期答案，我们可以将其作为评估的一部分进行比较。但是，我们并不期望应用程序输出那些**完全相同**的答案，而是期望输出相似的内容。这使我们的评估变得稍微复杂一些。
+创建数据集后，我们现在可以定义一些指标来评估我们的响应。由于我们有预期的答案，我们可以将其作为评估的一部分进行比较。但是，我们并不期望我们的应用程序输出这些 **完全一致** 答案，而是相似的答案。这使得我们的评估变得稍微复杂一些。
 
-除了评估正确性之外，我们还要确保答案简短且简洁。这会稍微容易一些——我们可以定义一个简单的 Python 函数来测量响应的长度。
+除了评估正确性，我们还要确保答案简短精炼。这会更容易一些——我们可以定义一个简单的Python函数来测量响应的长度。
 
-让我们继续定义这两个指标。
+让我们开始定义这两个指标。
 
-对于第一个指标，我们将使用 LLM 来**判断**输出是否正确（相对于预期输出）。这种**LLM-as-a-judge**方法在过于复杂而无法用简单函数衡量的场景中相对常见。我们可以在这里定义自己的提示和 LLM 用于评估：
+对于第一个指标，我们将使用LLM来 **判断** 输出是否正确（相对于预期输出）。这 **LLM-as-a-judge** 对于太复杂而无法用简单函数衡量的案例来说，这相对常见。我们可以在此处定义自己的提示和LLM用于评估：
 
 ```python
 import openai
@@ -138,7 +136,7 @@ Grade:"""
     return response == "CORRECT"
 ```
 
-对于评估响应的长度，这要简单得多！我们可以直接定义一个简单的函数来检查实际输出是否小于预期结果长度的 2 倍。
+对于评估响应的长度，这要简单得多！我们只需定义一个简单的函数来检查实际输出是否小于预期结果长度的2倍。
 
 ```python
 def concision(outputs: dict, reference_outputs: dict) -> bool:
@@ -147,7 +145,7 @@ def concision(outputs: dict, reference_outputs: dict) -> bool:
 
 ## 运行评估
 
-太好了！现在我们如何运行评估？既然我们有了数据集和评估器，我们需要的只是我们的应用程序了！我们将构建一个简单的应用程序，它只有一个带有响应指令的系统消息，然后将其传递给 LLM。我们将直接使用 OpenAI SDK 来构建这个应用：
+很好！现在如何运行评估？既然我们有了数据集和评估器，我们需要的只是应用程序！我们将构建一个简单的应用程序，它只需要一条系统消息，其中包含响应指令，然后将其传递给LLM。我们将直接使用OpenAI SDK构建这个：
 
 ```python
 default_instructions = "Respond to the users question in a short, concise manner (one short sentence)."
@@ -163,14 +161,14 @@ def my_app(question: str, model: str = "gpt-5.4-mini", instructions: str = defau
     ).choices[0].message.content
 ```
 
-在通过 LangSmith 评估运行之前，我们需要定义一个简单的包装器，它将数据集中的输入键映射到我们想要调用的函数，然后再将函数的输出映射到我们期望的输出键。
+在通过LangSmith评估运行之前，我们需要定义一个简单的包装器，将数据集中的输入键映射到我们想要调用的函数，然后也将函数的输出映射到我们期望的输出键。
 
 ```python
 def ls_target(inputs: str) -> dict:
     return {"response": my_app(inputs["question"])}
 ```
 
-太棒了！现在我们已经准备好运行评估了。开始吧！
+很好！现在我们准备好运行评估了。让我们开始吧！
 
 ```python
 experiment_results = client.evaluate(
@@ -181,15 +179,15 @@ experiment_results = client.evaluate(
 )
 ```
 
-这将输出一个 URL。如果我们点击它，应该能看到评估结果！
+这将输出一个URL。如果我们点击它，我们应该能看到评估结果！
 
-![Testing tutorial run](/langsmith/images/testing-tutorial-run.png)
+![测试教程运行](/langsmith/images/testing-tutorial-run.png)
 
-如果我们回到数据集页面并选择 `Experiments` 标签，现在就能看到我们一次运行的摘要！
+如果我们返回数据集页面并选择 `Experiments` 标签，我们现在可以看到一次运行的摘要！
 
-![Testing tutorial one run](/langsmith/images/testing-tutorial-one-run.png)
+![测试教程单次运行](/langsmith/images/testing-tutorial-one-run.png)
 
-现在让我们用不同的模型来试试！让我们尝试 `gpt-4-turbo`
+现在让我们用不同的模型试试！让我们尝试 `gpt-4-turbo`
 
 ```python
 def ls_target_v2(inputs: str) -> dict:
@@ -203,7 +201,7 @@ experiment_results = client.evaluate(
 )
 ```
 
-现在让我们使用 GPT-4，但也要更新提示词，要求回答更加简短一些。
+现在让我们使用GPT-4，但也要更新提示，使其对答案简短的要求更严格。
 
 ```python
 instructions_v3 = "Respond to the users question in a short, concise manner (one short sentence). Do NOT use more than ten words."
@@ -224,29 +222,29 @@ experiment_results = client.evaluate(
 )
 ```
 
-如果我们回到数据集页面的 `Experiments` 实验标签，应该能看到所有三个运行都显示出来了！
+如果我们返回 `Experiments` 数据集页面上的标签，我们应该看到现在所有三次运行都显示出来了！
 
-![Testing tutorial three runs](/langsmith/images/testing-tutorial-three-runs.png)
+![测试教程三次运行](/langsmith/images/testing-tutorial-three-runs.png)
 
 ## 比较结果
 
-太棒了，我们已经评估了三个不同的运行。但如何比较结果呢？第一种方法就是直接在 `Experiments` 实验标签中查看运行情况。这样我们可以看到每个运行的高级指标视图：
+太棒了，我们已经评估了三次不同的运行。但我们如何比较结果呢？第一种方法是我们可以通过查看 `Experiments` 标签中的运行来实现。如果我们这样做，我们可以看到每次运行指标的高级视图：
 
-![Testing tutorial compare metrics](/langsmith/images/testing-tutorial-compare-metrics.png)
+![测试教程比较指标](/langsmith/images/testing-tutorial-compare-metrics.png)
 
-我们可以看出 GPT-4 在了解公司信息方面比 GPT-3.5 表现更好，而严格的提示词对长度控制有很大帮助。但如果想更详细地探索呢？
+我们可以看出GPT-4在了解公司身份方面比GPT-3.5更好，而且严格的提示对长度有很大帮助。但如果我们要更详细地探索呢？
 
-为了做到这一点，我们可以选择所有想要比较的运行（在这个案例中是全部三个），然后在比较视图中打开它们。我们会立即看到所有三个测试并排显示。某些单元格有颜色编码——这显示了相对于某个基准的*某个指标*的回归。我们会自动选择基准和指标的默认值，但你可以自己更改这些。你也可以使用 `Display` 显示控制来选择你看到的列和指标。你还可以通过点击顶部的图标自动筛选只看有改进/回归的运行。
+为了做到这一点，我们可以选择所有想要比较的运行（在这种情况下是全部三个）并将它们打开在比较视图中。我们立即看到所有三个测试并排显示。某些单元格用颜色编码——这显示了某个指标的 *某个指标* 相对于 *某个基准*的回归情况。我们自动选择基准和指标的默认值，但您可以自己更改这些。您也可以通过使用来选择您看到的列和指标 `Display` control. You can also automatically filter to only see the runs that have improvements/regressions by clicking on the icons at the top.
 
-![Testing tutorial compare runs](/langsmith/images/testing-tutorial-compare-runs.png)
+![测试教程比较运行](/langsmith/images/testing-tutorial-compare-runs.png)
 
-如果我们想查看更多信息，还可以选择悬停在行上时出现的 `Expand` 展开按钮，打开带有更详细信息的面板：
+如果我们想查看更多信息，我们也可以选择 `Expand` 悬停在某一行上时出现的按钮，以打开带有更详细信息的侧边面板：
 
-![Testing tutorial side panel](/langsmith/images/testing-tutorial-side-panel.png)
+![测试教程侧边面板](/langsmith/images/testing-tutorial-side-panel.png)
 
-## 设置在 CI/CD 中运行的自动化测试
+## Set up automated testing to run in CI/CD
 
-既然我们以一次性方式运行了测试，就可以将其设置为自动化运行。我们可以通过将其作为在 CI/CD 中运行的 pytest 文件来轻松实现这一点。作为其中的一部分，我们可以只记录结果，或者设置一些标准来判断是否通过。例如，如果我想确保生成的响应始终至少有 80% 通过 `length` 长度检查，我们可以用这样的测试来设置：
+Now that we've run this in a one-off manner, we can set it to run in an automated fashion. We can do this pretty easily by just including it as a pytest file that we run in CI/CD. As part of this, we can either just log the results OR set up some criteria to determine if it passes or not. For example, if I wanted to ensure that we always got at least 80% of generated responses passing the `length` 检查，我们可以像这样设置测试：
 
 ```python
 def test_length_score() -> None:
@@ -267,25 +265,23 @@ def test_length_score() -> None:
 
 ## 随时间追踪结果
 
-现在我们已经让这些实验以自动化方式运行，我们希望随时间追踪这些结果。我们可以通过数据集页面中的整体 `Experiments`（实验）标签页来执行此操作。默认情况下，我们会随时间展示评估指标（红色高亮显示）。我们还会自动追踪 git 指标，以便轻松地将其与代码分支关联（黄色高亮显示）。
+现在我们已经让这些实验以自动化方式运行，我们想随时间追踪这些结果。我们可以从数据集页面的总体 `Experiments` 标签页中进行此操作。默认情况下，我们显示随时间变化的评估指标（红色高亮）。我们还会自动追踪 git 指标，以便轻松地将其与您的代码分支关联（黄色高亮）。
 
-![随时间测试教程](/langsmith/images/testing-tutorial-over-time.png)
+![测试教程随时间变化](/langsmith/images/testing-tutorial-over-time.png)
 
 ## 结论
 
 本教程到此结束！
 
-我们已经介绍了如何创建初始测试集、定义一些评估指标、运行实验、手动比较、设置 CI/CD，以及随时间追踪结果。这可以帮助您充满信心地进行迭代。
+We've gone over how to create an initial test set, define some evaluation metrics, run experiments, compare them manually, set up CI/CD, and track results over time. This can help you iterate with confidence.
 
-这只是开始。如前所述，评估是一个持续的过程。例如，您希望评估的数据点可能会随着时间继续变化。您可能希望探索许多类型的评估器。要了解更多信息，请参阅[操作指南](/langsmith/evaluation)。
+这只是开始。如前所述，评估是一个持续的过程。例如——您想要评估的数据点可能会随着时间继续变化。您可能希望探索多种类型的评估器。如需了解更多信息，请参阅 [操作指南](/langsmith/evaluation).
 
-此外，除了这种"离线"方式外，还有其他评估数据的方法（例如，您可以评估生产数据）。要了解有关在线评估的更多信息，请参阅[设置 LLM-as-a-judge 在线评估器](/langsmith/online-evaluations-llm-as-judge)。
+此外，还有其他方式来评估数据，而不仅仅是这种"离线"方式（例如您可以评估生产数据）。有关在线评估的更多信息，请参阅 [设置 LLM 即评判者的在线评估器](/langsmith/online-evaluations-llm-as-judge).
 
 ## 参考代码
 
-<Accordion title="点击查看合并的代码片段">
-
-</Accordion>
+<Accordion title="Click to see a consolidated code snippet">
 ```python
 import openai
 from langsmith import Client, wrappers

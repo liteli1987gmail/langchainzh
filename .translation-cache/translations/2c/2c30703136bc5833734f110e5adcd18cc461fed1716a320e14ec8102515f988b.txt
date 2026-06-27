@@ -2,18 +2,16 @@
 title: 如何在同一线程上运行多个代理
 sidebarTitle: 在同一线程上运行多个代理
 ---
-在 LangSmith Deployment 中，线程并未显式关联到特定的代理。
+在 LangSmith Deployment 中，线程不会显式关联到特定代理。
 这意味着您可以在同一线程上运行多个代理，从而允许不同的代理从初始代理的进度继续执行。
 
-在此示例中，我们将创建两个代理，然后在同一线程上调用它们。
-您将看到第二个代理将使用第一个代理在线程中生成的[检查点](/oss/langgraph/checkpointers#checkpoints)作为上下文进行响应。
+在这个示例中，我们将创建两个代理，然后在同一线程上调用它们。
+您将看到第二个代理将使用来自 [检查点](/oss/langgraph/checkpointers#checkpoints) 的信息进行回复，这是由第一个代理在线程中生成的。
 
 ## 设置
 
 <Tabs>
     <Tab title="Python">
-
-</fragment>
     ```python
     from langgraph_sdk import get_client
 
@@ -27,8 +25,8 @@ sidebarTitle: 在同一线程上运行多个代理
     assistants = await client.assistants.search()
     default_assistant = [a for a in assistants if not a["config"]][0]
     ```
-</Tab>
-    <Tab title="JavaScript">
+    </Tab>
+    <Tab title="Javascript">
     ```js
     import { Client } from "@langchain/langgraph-sdk";
 
@@ -41,7 +39,7 @@ sidebarTitle: 在同一线程上运行多个代理
     const assistants = await client.assistants.search();
     const defaultAssistant = assistants.find(a => !a.config);
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
     ```bash
     curl --request POST \
@@ -59,29 +57,31 @@ sidebarTitle: 在同一线程上运行多个代理
             "offset": 0
         }' | jq -c 'map(select(.config == null or .config == {})) | .[0]'
     ```
-</Tab>
+    </Tab>
 </Tabs>
 
-我们可以看到这些智能体是不同的：
+我们可以看到这些代理是不同的：
 
 <Tabs>
     <Tab title="Python">
     ```python
     print(openai_assistant)
     ```
-</Tab>
-    <Tab title="JavaScript">
+    </Tab>
+    <Tab title="Javascript">
     ```js
     console.log(openAIAssistant);
     ```
-</Tab>
-<Tab title="CURL">
+    </Tab>
+    <Tab title="CURL">
     ```bash
     curl --request GET \
         --url <DEPLOYMENT_URL>/assistants/<OPENAI_ASSISTANT_ID>
     ```
-</Tab>
+    </Tab>
 </Tabs>
+
+Output:
 
 ```
 {
@@ -100,26 +100,24 @@ sidebarTitle: 在同一线程上运行多个代理
 
 <Tabs>
     <Tab title="Python">
-
-</Tabs>
     ```python
     print(default_assistant)
     ```
-</Tab>
-    <Tab title="JavaScript">
-
-</fragment>
+    </Tab>
+    <Tab title="Javascript">
     ```js
     console.log(defaultAssistant);
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
     ```bash
     curl --request GET \
         --url <DEPLOYMENT_URL>/assistants/<DEFAULT_ASSISTANT_ID>
     ```
-</Tab>
+    </Tab>
 </Tabs>
+
+Output:
 
 ```
 {
@@ -155,7 +153,7 @@ sidebarTitle: 在同一线程上运行多个代理
         print(event.data)
         print("\n\n")
     ```
-</Tab>
+    </Tab>
     <Tab title="Javascript">
     ```js
     const thread = await client.threads.create();
@@ -175,10 +173,8 @@ sidebarTitle: 在同一线程上运行多个代理
       console.log("\n\n");
     }
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
-
-</Tab>
     ```bash
     thread_id=$(curl --request POST \
         --url <DEPLOYMENT_URL>/threads \
@@ -222,8 +218,10 @@ sidebarTitle: 在同一线程上运行多个代理
         }
     '
     ```
-</Tab>
+    </Tab>
 </Tabs>
+
+Output:
 
 ```
 Receiving event of type: metadata
@@ -235,12 +233,10 @@ Receiving event of type: updates
 
 ### 运行默认助手
 
-现在，我们可以在默认助手上运行它，并看到这个第二个助手能够感知到最初的问题，并且能够回答"你呢？"这个问题：
+现在，我们可以在默认助手上运行它，并看到这个第二个助手了解最初的问题，并且可以回答“你呢？”这个问题：
 
 <Tabs>
     <Tab title="Python">
-
-</fragment>
     ```python
     input = {"messages": [{"role": "user", "content": "and you?"}]}
     async for event in client.runs.stream(
@@ -253,8 +249,8 @@ Receiving event of type: updates
         print(event.data)
         print("\n\n")
     ```
-</Tab>
-<Tab title="Javascript">
+    </Tab>
+    <Tab title="Javascript">
     ```js
     let input =  {"messages": [{"role": "user", "content": "and you?"}]}
 
@@ -272,10 +268,8 @@ Receiving event of type: updates
       console.log("\n\n");
     }
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
-
-</fragment>
     ```bash
     curl --request POST \
         --url <DEPLOYMENT_URL>/threads/<THREAD_ID>/runs/stream \
@@ -315,8 +309,10 @@ Receiving event of type: updates
         }
     '
     ```
-</Tab>
+    </Tab>
 </Tabs>
+
+Output:
 
 ```
 Receiving event of type: metadata

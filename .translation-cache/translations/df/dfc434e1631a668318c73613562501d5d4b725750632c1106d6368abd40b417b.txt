@@ -1,28 +1,28 @@
 ---
-title: 构建具有按需技能的 SQL 助手
+title: 构建按需加载技能的 SQL 助手
 sidebarTitle: "技能：SQL 助手"
 ---
 
 import ChatModelTabsPy from '/snippets/chat-model-tabs.mdx';
 import ChatModelTabsJs from '/snippets/chat-model-tabs-js.mdx';
 
-本教程展示了如何使用**渐进式披露**——一种上下文管理技术，其中代理按需加载信息而非预先加载——来实现**技能**（基于提示的专业指令）。代理通过工具调用来加载技能，而非动态更改系统提示，只发现并加载每个任务所需的技能。
+本教程演示如何使用 **渐进式披露** - 一种上下文管理技术，代理按需加载信息而非预先加载 - 用于实现 **技能** （基于提示的专业化指令）。代理通过工具调用加载技能，而非动态更改系统提示，仅发现并加载每个任务所需的技能。
 
-**用例：** 想象构建一个代理来帮助编写大型企业不同业务垂直领域的 SQL 查询。您的组织可能为每个垂直领域设置独立的数据存储，也可能使用包含数千张表的单一巨型数据库。无论哪种方式，预先加载所有模式都会耗尽上下文窗口。渐进式披露通过仅在需要时加载相关模式来解决这个问题。这种架构还使不同的产品所有者和利益相关者能够独立贡献和维护其特定业务垂直领域的技能。
+**使用案例：** 想象构建一个帮助编写 SQL 查询的代理，覆盖大型企业的不同业务领域。您的组织可能为每个领域设置独立的数据存储，或者使用包含数千张表的单一整体数据库。无论哪种方式，预先加载所有模式都会使上下文窗口不堪重负。渐进式披露通过仅在需要时加载相关模式来解决此问题。这种架构还使不同的产品负责人和利益相关者能够独立贡献和维护其特定业务领域的技能。
 
-**您将构建的内容：** 一个具有两个技能（销售分析和库存管理）的 SQL 查询助手。代理在系统提示中看到轻量级技能描述，然后仅当与用户查询相关时，通过工具调用加载完整的数据库模式和业务逻辑。
+**您将构建的内容：** 一个 SQL 查询助手，具有两项技能（销售分析和库存管理）。代理在系统提示中看到轻量级技能描述，然后仅在与用户查询相关时通过工具调用加载完整的数据库模式。
 
 <Note>
-有关具有查询执行、错误纠正和验证功能的完整 SQL 代理示例，请参阅我们的 [SQL Agent 教程](/oss/langchain/sql-agent)。本教程专注于渐进式披露模式，该模式可应用于任何领域。
+有关带有查询执行、错误修正和验证功能的 SQL 代理完整示例，请参阅我们的 [SQL 代理教程](/oss/langchain/sql-agent)。本教程专注于可应用于任何领域的渐进式披露模式。
 </Note>
 
 <Tip>
-渐进式披露由 Anthropic 推广，作为构建可扩展代理技能系统的技术。这种方法采用三层架构（元数据 → 核心内容 → 详细资源），其中代理仅在需要时加载信息。有关此技术的更多信息，请参阅 [使用代理技能为现实世界配备工具](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills)。
+渐进式披露由 Anthropic 推广为构建可扩展代理技能系统的技术。此方法使用三层架构（元数据 → 核心内容 → 详细资源），代理仅在需要时加载信息。有关此技术的更多内容，请参阅 [为现实世界配备代理技能](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills).
 </Tip>
 
 ## 工作原理
 
-以下是用户请求 SQL 查询时的工作流程：
+当用户请求 SQL 查询时，流程如下：
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#E5F4FF','primaryTextColor':'#030710','primaryBorderColor':'#006DDD','lineColor':'#40668D','secondaryColor':'#F6FFDB','tertiaryColor':'#FDF3FF','tertiaryBorderColor':'#7E65AE','tertiaryTextColor':'#504B5F'}}}%%
@@ -51,40 +51,40 @@ flowchart TD
     class Schema enrichment
 ```
 
-**为什么渐进式披露：**
-- **减少上下文使用** - 只需加载任务所需的 2-3 个技能，而非所有可用技能
-- **支持团队自治** - 不同团队可以独立开发专用技能（类似于其他多智能体架构）
-- **高效扩展** - 可以添加数十或数百个技能而不会使上下文不堪重负
-- **简化对话历史** - 单个智能体只需一个对话线程
+**为什么选择渐进式披露：**
+- **减少上下文使用量** - 仅加载任务所需的 2-3 项技能，而非所有可用技能
+- **实现团队自治** - 不同团队可以独立开发专业化技能（类似于其他多代理架构）
+- **高效扩展** - 添加数十或数百项技能而不会使上下文不堪重负
+- **简化对话历史** - 单个代理配合单一对话线程
 
-**什么是技能：** 技能，作为 Claude Code 推广的概念，主要是基于提示词的：针对特定业务任务的专业化指令的自包含单元。在 Claude Code 中，技能作为文件系统上的目录和文件暴露，通过文件操作发现。技能通过提示词指导行为，并可提供关于工具使用的信息，或包含示例代码供编码智能体执行。
+**什么是技能：** 技能，由 Claude Code 推广开来，主要是基于提示的：针对特定业务任务的自包含专业化指令单元。在 Claude Code 中，技能作为文件系统上的目录暴露，通过文件操作发现。技能通过提示引导行为，并可提供有关工具使用的信息或包含供编码代理执行的示例代码。
 
 <Tip>
-采用渐进式披露的技能可以视为一种 [RAG（检索增强生成）](/oss/langchain/rag) 的形式，其中每个技能都是一个检索单元——虽然不一定由嵌入或关键词搜索支持，但通过浏览内容的工具（如文件操作或本教程中的直接查找）来实现。
+具有渐进式披露的技能可以视为一种 [RAG（检索增强生成）](/oss/langchain/rag)形式，其中每项技能都是一个检索单元——虽然不一定由嵌入或关键词搜索支持，而是通过浏览内容的工具（如文件操作，或在本教程中，直接查找）。
 </Tip>
 
-**权衡：**
-- **延迟**：按需加载技能需要额外的工具调用，这会给首次需要每个技能的请求增加延迟
-- **工作流控制**：基本实现依赖提示词来引导技能使用——如果不添加自定义逻辑，就无法强制执行硬性约束，如"始终在技能 B 前尝试技能 A"
+**Trade-offs:**
+- **延迟**：按需加载技能需要额外的工具调用，这会增加每个技能首次请求时的延迟
+- **工作流控制**：基本实现依赖提示词来引导技能使用——如果没有自定义逻辑，你无法强制执行硬性约束（如"始终先尝试技能 A，再尝试技能 B"）
 
 <Tip>
-**实现您自己的技能系统**
+**实现你自己的技能系统**
 
-在构建自己的技能实现（正如我们在本教程中所做的）时，核心概念是渐进式披露——按需加载信息。除此之外，实现上完全灵活：
+在构建你自己的技能实现时（正如我们在本教程中所做的那样），核心概念是渐进式披露——按需加载信息。除此之外，你在实现上拥有完全的灵活性：
 
 - **存储**：数据库、S3、内存数据结构或任何后端
-- **发现**：直接查找（本教程）、RAG 用于大型技能集合、文件系统扫描或 API 调用
-- **加载逻辑**：自定义延迟特性，添加搜索技能内容或排名相关性的逻辑
-- **副作用**：定义技能加载时发生的情况，例如暴露与该技能关联的工具（第 8 节中介绍）
+- **发现**：直接查找（本教程）、用于大型技能集合的 RAG、文件系统扫描或 API 调用
+- **加载逻辑**：自定义延迟特性，并添加逻辑以搜索技能内容或排名相关性
+- **副作用**：定义技能加载时发生的情况，例如暴露与该技能关联的工具（第 8 节将介绍）
 
-这种灵活性让您可以针对性能、存储和工作流控制方面的特定需求进行优化。
+这种灵活性让你能够针对性能、存储和工作流控制方面的特定需求进行优化。
 </Tip>
 
 ## 设置
 
 ### 安装
 
-本教程需要 `langchain` 包：
+本教程需要 `langchain` package:
 
 :::python
 <CodeGroup>
@@ -114,11 +114,11 @@ pnpm add langchain
 </CodeGroup>
 :::
 
-更多详情，请参阅我们的[安装指南](/oss/langchain/install)。
+更多详情，请参阅我们的 [安装指南](/oss/langchain/install).
 
 ### LangSmith
 
-设置 [LangSmith](https://smith.langchain.com) 以检查代理内部正在发生的情况。然后设置以下环境变量：
+设置 [LangSmith](https://smith.langchain.com) 来检查你的智能体内部发生了什么。然后设置以下环境变量：
 
 :::python
 <CodeGroup>
@@ -163,7 +163,7 @@ process.env.LANGSMITH_API_KEY = "...";
 
 ## 1. 定义技能
 
-首先，定义技能的结构。每个技能都有一个名称、一个简短描述（显示在系统提示中）以及完整内容（按需加载）：
+首先，定义技能的结构。每个技能都有一个名称、一个简短描述（在系统提示中显示）和完整内容（按需加载）：
 
 :::python
 ```python
@@ -192,13 +192,11 @@ type Skill = z.infer<typeof SkillSchema>;
 ```
 :::
 
-现在为 SQL 查询助手定义示例技能。这些技能的设计原则是**描述简洁**（在代理启动时显示），但**内容详尽**（仅在需要时加载）：
+现在为 SQL 查询助手定义示例技能。这些技能的设计原则是 **描述简洁** （预先展示给代理）但 **内容详细** （仅在需要时加载）：
 
 <Accordion title="View complete skill definitions">
 
 :::python
-
-::
 ```python
 SKILLS: list[Skill] = [
     {
@@ -536,14 +534,16 @@ policies, and guidelines for the skill area.`,
   }
 );
 ```
-`load_skill` 工具以字符串形式返回完整的技能内容，该内容作为 ToolMessage 的一部分进入对话。如需了解创建和使用工具的更多详情，请参阅[工具指南](/oss/langchain/tools)。
+:::
+
+该 `load_skill` 工具将完整技能内容作为字符串返回，该字符串作为 ToolMessage 成为对话的一部分。有关创建和使用工具的更多详细信息，请参阅 [工具指南](/oss/langchain/tools).
 
 ## 3. 构建技能中间件
 
-创建自定义中间件，将技能描述注入系统提示词中。此中间件使技能可被发现，而无需预先加载其完整内容。
+创建自定义中间件，将技能描述注入系统提示中。此中间件使技能可被发现，而无需预先加载其完整内容。
 
 <Note>
-本指南演示如何创建自定义中间件。如需了解中间件概念和模式的完整指南，请参阅[自定义中间件文档](/oss/langchain/middleware/custom)。
+本指南演示了创建自定义中间件的方法。关于中间件概念和模式的完整指南，请参阅 [自定义中间件文档](/oss/langchain/middleware/custom).
 </Note>
 
 :::python
@@ -622,15 +622,15 @@ const skillMiddleware = createMiddleware({  // [!code highlight]
 ```
 :::
 
-中间件将技能描述附加到系统提示中，使代理了解可用的技能，而无需加载其完整内容。`load_skill` 工具被注册为类变量，使其对代理可用。
+中间件将技能描述追加到系统提示中，使代理能够了解可用技能而无需加载其完整内容。该 `load_skill` 工具注册为类变量，可供代理使用。
 
 <Note>
-**生产环境注意事项**：为简单起见，本教程在 `__init__` 中加载技能列表。在生产系统中，您可能希望在 `before_agent` 钩子中加载技能，以便定期刷新它们以反映最新变化（例如，添加新技能或修改现有技能时）。有关详细信息，请参阅 [before_agent 钩子文档](/oss/langchain/middleware/custom#node-style-hooks)。
+**生产环境注意事项**：本教程在 `__init__` 为简单起见。在生产系统中，您可能希望在 `before_agent` hook中加载技能，允许它们定期刷新以反映最新变化（例如，当添加新技能或修改现有技能时）。请参阅 [之前的_agent hook文档](/oss/langchain/middleware/custom#node-style-hooks) 了解详情。
 </Note>
 
-## 4. 创建支持技能的代理
+## 4. 创建带有技能支持的agent
 
-现在创建带有技能中间件和检查点以保持状态持久性的代理：
+现在创建带有技能中间件和检查点以实现状态持久化的agent：
 
 :::python
 ```python
@@ -667,11 +667,11 @@ const agent = createAgent({
 ```
 :::
 
-智能体现在其系统提示中可以访问技能描述，并可以在需要时调用 `load_skill` 来获取完整的技能内容。检查点器在多个轮次之间维护对话历史。
+agent现在可以在其系统提示中访问技能描述，并可以调用 `load_skill` 在需要时检索完整的技能内容。检查点可以在不同轮次之间维护对话历史。
 
 ## 5. 测试渐进式披露
 
-使用需要特定技能知识的问题测试智能体：
+用需要特定技能知识的问题测试agent：
 
 :::python
 ```python
@@ -733,6 +733,8 @@ for (const message of result.messages) {
 }
 ```
 :::
+
+预期输出：
 
 ```
 ================================ Human Message =================================
@@ -802,19 +804,19 @@ This query:
 - Returns distinct customers to avoid duplicates if they made multiple qualifying orders
 ```
 
-## 6. Advanced: Add constraints with custom state
+agent在其系统提示中看到了轻量级技能描述，识别出问题需要销售数据库知识，调用了 `load_skill("sales_analytics")` 获取完整的模式与业务逻辑，然后利用这些信息按照数据库约定编写正确的查询。
+
+## 6. 高级：使用自定义状态添加约束
 
 <Accordion title="Optional: Track loaded skills and enforce tool constraints">
 
-您可以添加约束条件，强制某些工具只有在特定技能加载后才能使用。这需要在自定义代理状态中跟踪已加载的技能。
+您可以添加约束以强制某些工具仅在加载特定技能后才可用。这需要在自定义agent状态中追踪已加载的技能。
 
-### Define custom state
+### 定义自定义状态
 
-首先，扩展代理状态以跟踪已加载的技能：
+首先，扩展agent状态以追踪已加载的技能：
 
 :::python
-
-</fragment>
 ```python
 from langchain.agents.middleware import AgentState
 
@@ -834,9 +836,9 @@ const CustomState = new StateSchema({
 ```
 :::
 
-### Update load_skill to modify state
+### 更新_skill以修改状态
 
-修改 `load_skill` 工具以更新状态当技能被加载时：
+修改 `load_skill` 工具以在加载技能时更新状态：
 
 :::python
 ```python
@@ -940,9 +942,9 @@ const loadSkill = tool(  // [!code highlight]
 ```
 :::
 
-### 创建受限工具
+### 创建受约束的工具
 
-创建一个仅在特定技能加载后才可使用的工具：
+创建一个仅在特定技能加载后才可用的工具：
 
 :::python
 ```python
@@ -1019,9 +1021,9 @@ appropriate skill first to understand the database schema.`,
 ```
 :::
 
-### 更新中间件和代理
+### 更新中间件和agent
 
-更新中间件以使用自定义状态架构：
+更新中间件以使用自定义状态schema：
 
 :::python
 ```python
@@ -1046,7 +1048,7 @@ const skillMiddleware = createMiddleware({  // [!code highlight]
 ```
 :::
 
-使用注册约束工具的中间件创建代理：
+使用注册了受约束工具的中间件创建agent：
 
 :::python
 ```python
@@ -1073,15 +1075,17 @@ const agent = createAgent({
   checkpointer: new MemorySaver(),
 });
 ```
-现在，如果代理在加载所需技能之前尝试使用 `write_sql_query`，它将收到一条错误消息，提示它先加载适当的技能（例如 `sales_analytics` 或 `inventory_management`）。这确保代理在尝试验证查询之前具有必要的模式知识。
+:::
+
+现在，如果agent在加载所需技能之前尝试使用 `write_sql_query` ，它将收到错误消息，提示其首先加载适当的技能（例如 `sales_analytics` or `inventory_management`）。这确保agent在尝试验证查询之前具备必要的schema知识。
 
 </Accordion>
 
 ## 完整示例
 
-<Accordion title="查看完整的可运行脚本">
+<Accordion title="View complete runnable script">
 
-以下是一个完整的、可运行的实现，结合了本教程的所有内容：
+以下是整合了本教程所有内容的完整可运行实现：
 
 :::python
 ```python
@@ -1589,79 +1593,79 @@ for (const message of result.messages) {
 :::
 
 此完整示例包括：
-- 包含完整数据库架构的技能定义
+- 带有完整数据库schema的技能定义
 - 用于按需加载的 `load_skill` 工具
-- 将技能描述注入系统提示词的 `SkillMiddleware`
-- 使用中间件和检查点创建代理
-- 示例用法展示代理如何加载技能和编写 SQL 查询
+- `SkillMiddleware` 可将技能描述注入系统提示的
+- 带有中间件和检查点的agent创建
+- 展示agent如何加载技能和编写SQL查询的示例用法
 
-运行此示例，你需要：
-1. 安装所需包：`pip install langchain langchain-openai langgraph`
-2. 设置你的 API 密钥（例如 `export OPENAI_API_KEY=...`）
-3. 用你喜欢的 LLM 提供商替换模型初始化
+要运行此代码，您需要：
+1. 安装所需的包： `pip install langchain langchain-openai langgraph`
+2. 设置您的API密钥（例如 `export OPENAI_API_KEY=...`)
+3. 用您首选的LLM提供商替换模型初始化
 
 </Accordion>
 
 ## 实现变体
 
-<Accordion title="查看实现选项和权衡">
+<Accordion title="View implementation options and trade-offs">
 
-本教程将技能实现为通过工具调用加载的内存中 Python 字典。然而，有多种方式可以实现技能的分级披露：
+本教程将技能实现为通过工具调用加载的内存中 Python 字典。然而，有多种方式可以实现技能的分层渐进式披露：
 
 **存储后端：**
-- **内存中**（本教程）：技能定义为 Python 数据结构，访问速度快，无 I/O 开销
-- **文件系统**（Claude Code 方式）：技能为包含文件的目录，通过文件操作如 `read_file` 发现
-- **远程存储**：技能存放在 S3、数据库、Notion 或 API 中，按需获取
+- **In-memory** (this tutorial): Skills defined as Python data structures, fast access, no I/O overhead
+- **文件系统** （Claude Code 方案）：技能以目录和文件的形式存在，通过文件操作如 `read_file`
+- **远程存储**：技能存储在 S3、数据库、Notion 或 API 中，按需获取
 
-**技能发现**（代理如何了解存在哪些技能）：
-- **系统提示列表**：技能描述在系统提示词中（本教程使用的方式）
-- **基于文件**：通过扫描目录发现技能（Claude Code 方式）
-- **基于注册表**：查询技能注册服务或 API 获取可用技能
-- **动态查找**：通过工具调用列出可用技能
+**技能发现** （代理如何了解存在哪些技能）：
+- **系统提示列表**：在系统提示中列出技能描述（本教程使用的方法）
+- **File-based**：通过扫描目录发现技能（Claude Code 方案）
+- **Registry-based**：查询技能注册服务或 API 以获取可用技能
+- **动态查询**：通过工具调用列出可用技能
 
-**分级披露策略**（如何加载技能内容）：
-- **单次加载**：在一次工具调用中加载整个技能内容（本教程使用的方式）
-- **分页**：分多页/多块加载技能内容，适用于大型技能
-- **基于搜索**：在特定技能内容中搜索相关部分（例如，对技能文件使用 grep/读取操作）
-- **层级式**：先加载技能概览，再深入具体子部分
+**分层渐进式披露策略** （技能内容如何加载）：
+- **一次性加载**：在一个工具调用中加载整个技能内容（本教程使用的方法）
+- **分页加载**: Load skill content in multiple pages/chunks for large skills
+- **Search-based**: Search within a specific skill's content for relevant sections (e.g., using grep/read operations on skill files)
+- **分层加载**：先加载技能概览，然后深入特定子部分
 
-**大小注意事项**（未校准的 mental model - 根据你的系统优化）：
-- **小型技能**（< 1K tokens / ~750 词）：可直接包含在系统提示词中，并使用提示词缓存以节省成本并加快响应
-- **中型技能**（1-10K tokens / ~750-7.5K 词）：受益于按需加载以避免上下文开销（本教程）
-- **大型技能**（> 10K tokens / ~7.5K 词，或 > 5-10% 的上下文窗口）：应使用分级披露技术，如分页、基于搜索的加载或层级式探索，以避免消耗过多上下文
+**大小考量** （未经校准的心理模型——请根据您的系统进行优化）：
+- **小型技能** (< 1K tokens / ~750 words): Can be included directly in system prompt and cached with prompt caching for cost savings and faster responses
+- **中型技能** (1-10K tokens / ~750-7.5K words): Benefit from on-demand loading to avoid context overhead (this tutorial)
+- **大型技能** (> 10K tokens / ~7.5K words, or > 5-10% of context window): Should use progressive disclosure techniques like pagination, search-based loading, or hierarchical exploration to avoid consuming excessive context
 
-选择取决于你的需求：内存中方式最快，但技能更新需要重新部署，而基于文件或远程存储可实现无需代码更改的动态技能管理。
+选择取决于您的需求：内存存储最快，但需要重新部署才能更新技能；而基于文件或远程存储则可以在不修改代码的情况下实现技能的动态管理。
 
 </Accordion>
 
-## 分级披露与上下文工程
+## 分层渐进式披露与上下文工程
 
-<Accordion title="结合少样本提示和其他技术">
+<Accordion title="Combining with few-shot prompting and other techniques">
 
-分级披露本质上是一种 **[上下文工程](/oss/langchain/context-engineering) 技术** - 你在管理哪些信息对代理可用以及何时可用。本教程重点介绍加载数据库架构，但相同原则适用于其他类型的上下文。
+分层渐进式披露本质上是一种 **[上下文工程](/oss/langchain/context-engineering) 技术** ——您正在管理哪些信息在何时可供代理使用。本教程侧重于加载数据库 schema，但相同原则也适用于其他类型的上下文。
 
 ### 与少样本提示结合
 
-对于 SQL 查询用例，你可以扩展分级披露以动态加载与用户查询匹配的**少样本示例**：
+对于 SQL 查询用例，您可以将分层渐进式披露扩展为动态加载 **少样本示例** ，这些示例与用户查询相匹配：
 
 **示例方法：**
-1. 用户问："找出 6 个月未下单的客户"
-2. 代理加载 `sales_analytics` 架构（如本教程所示）
-3. 代理还通过语义搜索或标签查找加载 2-3 个相关示例查询：
+1. 用户提问：“找出 6 个月内未下单的客户”
+2. 代理加载 `sales_analytics` schema（如本教程所示）
+3. 代理还加载 2-3 个相关示例查询（通过语义搜索或基于标签的查找）：
    - 查找不活跃客户的查询
    - 基于日期过滤的查询
    - 连接客户表和订单表的查询
-4. 代理结合架构知识和示例模式编写查询
+4. 代理使用 schema 知识和示例模式编写查询
 
-这种分级披露（按需加载架构）和动态少样本提示（加载相关示例）的组合创建了一个强大的上下文工程模式，可扩展到大型知识库，同时提供高质量、基于事实的输出。
+这种渐进式披露（按需加载模式）和动态少样本提示（加载相关示例）的组合创建了一种强大的上下文工程模式，可扩展到大型知识库，同时提供高质量、有依据的输出。
 
 </Accordion>
 
-## 下一步
+## 后续步骤
 
-- 了解 **[中间件](/oss/langchain/middleware)** 以实现更动态的代理行为
-- 探索 **[上下文工程](/oss/langchain/context-engineering)** 技术来管理代理上下文
-- 探索 **[交接模式](/oss/langchain/multi-agent/handoffs-customer-support)** 用于顺序工作流
-- 阅读 **[子代理模式](/oss/langchain/multi-agent/subagents-personal-assistant)** 用于并行任务路由
-- 查看 **[多代理模式](/oss/langchain/multi-agent)** 了解专业代理的其他方法
+- 了解 [中间件](/oss/langchain/middleware) 了解更多动态代理行为
+- 探索 [上下文工程](/oss/langchain/context-engineering) 管理代理上下文的技术
+- 探索 [交接模式](/oss/langchain/multi-agent/handoffs-customer-support) 了解顺序工作流
+- 阅读 [子代理模式](/oss/langchain/multi-agent/subagents-personal-assistant) 了解并行任务路由
+- 查看 [多代理模式](/oss/langchain/multi-agent) 了解其他专业代理方法
 - 使用 [LangSmith](https://smith.langchain.com) 调试和监控技能加载

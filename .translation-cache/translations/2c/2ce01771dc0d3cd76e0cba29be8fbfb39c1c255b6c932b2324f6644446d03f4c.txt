@@ -3,18 +3,17 @@ title: 如何使用 REST API
 sidebarTitle: 使用 API
 ---
 
-在 LangSmith 中运行[评估](/langsmith/evaluation-concepts)的推荐方式是使用 [Python](https://reference.langchain.com/python/langsmith/) 和 [TypeScript](https://reference.langchain.com/javascript/modules/langsmith.html) SDK。它们包含了可增强性能和可靠性的优化和功能。
+The [Python](https://reference.langchain.com/python/langsmith/) 和 [TypeScript](https://reference.langchain.com/javascript/modules/langsmith.html) SDK 是运行 [评估](/langsmith/evaluation-concepts) 的推荐方式。它们包含优化和功能，可增强性能和可靠性。
 
-如果您无法使用 SDK（例如，如果您正在使用其他语言或受限环境中工作），您可以直接使用 REST API。本指南演示如何使用 Python 的 [`requests`](https://requests.readthedocs.io/) 库通过 [REST API](/langsmith/smith-api-ref) 运行评估，但相同的原则适用于任何语言。
+如果您无法使用 SDK（例如，如果您使用其他语言或在受限环境中工作），您可以直接使用 REST API。本指南演示如何使用 [REST API](/langsmith/smith-api-ref) 和 Python 的 [`requests`](https://requests.readthedocs.io/) 库运行评估，但相同的原则适用于任何语言。
 
-在深入了解此内容之前，阅读以下内容可能会有所帮助：
-
-- [评估 LLM 应用程序](/langsmith/evaluate-llm-application)。
+在深入了解此内容之前，您可能需要阅读以下内容：
+- [评估 LLM 应用程序](/langsmith/evaluate-llm-application).
 - [LangSmith API 参考](/langsmith/smith-api-ref)：本指南中使用的所有端点的完整 API 文档。
 
 ## 创建数据集
 
-在此示例中，我们使用 Python SDK 快速创建[数据集](/langsmith/evaluation-concepts#datasets)。若要通过 API 或 UI 创建数据集，请参阅[管理数据集](/langsmith/manage-datasets-in-application)。
+在此示例中，我们使用 Python SDK 快速创建一个 [数据集](/langsmith/evaluation-concepts#datasets) 。要通过 API 或 UI 创建数据集，请参阅 [管理数据集](/langsmith/manage-datasets-in-application).
 
 ```python
 import os
@@ -63,14 +62,14 @@ client.create_examples(dataset_id=dataset.id, examples=examples)
 
 ## 运行单个实验
 
-要通过 API 运行实验，你需要：
+要通过 API 运行实验，您需要：
 
-1. 从数据集中获取示例。
+1. 获取数据集中的示例。
 1. 创建实验（也称为 API 中的"会话"）。
-1. 对于每个示例，创建引用该示例和实验的运行记录。
-1. 通过设置 `end_time` 来关闭实验。
+1. 为每个示例创建引用示例和实验的运行。
+1. 通过设置其 `end_time`.
 
-首先，使用 `/examples` 端点拉取你想在实验中使用的所有示例：
+首先，使用 `/examples` endpoint:
 
 ```python
 #  Pick a dataset id. In this case, we are using the dataset we created above.
@@ -88,11 +87,11 @@ examples = resp.json()
 ```
 from langsmith import uuid7
 
-接下来，定义一个函数，该函数将对单个示例运行模型并将结果记录到 LangSmith。直接使用 API 时，你需要负责：
+接下来，定义一个函数来对单个示例运行模型并将结果记录到 LangSmith。当直接使用 API 时，您需要负责：
 
-- 通过 POST 请求到 `/runs` 创建运行对象，并设置 `reference_example_id` 和 `session_id`。
-- 跟踪运行之间的父子关系（例如，包含子 "llm" 运行的父 "chain" 运行）。
-- 通过 PATCH 请求到 `/runs/{run_id}` 更新运行的输出。
+- 通过 POST 创建运行对象到 `/runs` 和 `reference_example_id` 以及 `session_id` set.
+- 跟踪运行之间的父子关系（例如，包含子"llm"运行的父"chain"运行）。
+- 通过 PATCH 到 `/runs/{run_id}`.
 
 ```python
 os.environ["OPENAI_API_KEY"] = "sk-..."
@@ -173,7 +172,7 @@ def run_completion_on_example(example, model_name, experiment_id):
     _patch_run(parent_run_id, {"label": output_text})
 ```
 
-现在创建实验并对所有示例运行补全。在 API 中，"实验"表示为一个会话（或"追踪会话"），它通过 `reference_dataset_id` 引用数据集。与常规追踪的关键区别在于，实验中的运行必须具有一个 `reference_example_id`，该 ID 将每次运行与数据集中的特定示例相关联。
+现在在所有示例上创建实验并运行完成。在 API 中，"实验"表示为通过 `reference_dataset_id`引用数据集的会话（或"tracer session"）。与常规跟踪的关键区别在于，实验中的运行必须具有 `reference_example_id` 将每个运行链接到数据集中的特定示例。
 
 ```python
 #  Create a new experiment using the /sessions endpoint
@@ -214,11 +213,11 @@ for model_name in model_names:
 
 ### 添加评估反馈
 
-运行完你的[实验](/langsmith/evaluation-concepts#experiment)后，你通常会希望通过添加反馈分数来评估结果。这允许你跟踪正确性、准确性或任何自定义评估标准等指标。
+运行完您的 [实验](/langsmith/evaluation-concepts#experiment)后，您通常需要通过添加反馈分数来评估结果。这允许您跟踪正确性、准确性或任何自定义评估标准等指标。
 
-在这个示例中，评估会检查每个模型的输出是否与数据集中的预期标签匹配。该代码发布一个"正确性"分数（正确为 1.0，不正确为 0.0）来跟踪每个模型对有毒文本与非有毒文本分类的准确程度。
+在此示例中，评估检查每个模型的输出是否与数据集中的预期标签匹配。该代码发布一个"正确性"分数（正确为 1.0，不正确为 0.0）来跟踪每个模型对有毒与无毒文本分类的准确程度。
 
-以下代码会向[单个实验示例](#run-a-single-experiment)中的运行添加反馈：
+以下代码将反馈添加到 [单个实验示例](#run-a-single-experiment):
 
 ```python
 # Fetch the runs from one of the experiments
@@ -268,13 +267,13 @@ for run in runs:
     resp.raise_for_status()
 ```
 
-您可以使用不同的键添加多个反馈分数来跟踪各种指标。例如，您可以同时添加"correctness"分数和"toxicity_detected"分数。
+您可以使用不同的键添加多个反馈分数来跟踪各种指标。例如，您可能同时添加一个 "correctness" 分数和一个 "toxicity_detected" 分数。
 
 ## 运行配对实验
 
-接下来，我们将演示如何运行配对实验。在配对实验中，您需要比较两个示例。
+接下来，我们将演示如何运行配对实验。在配对实验中，您将两个示例相互比较。
 
-更多信息，请参阅[如何运行配对评估](/langsmith/evaluate-pairwise)。
+更多信息，请参阅 [如何运行配对评估](/langsmith/evaluate-pairwise).
 
 ```python
 #  A comparative experiment allows you to provide a preferential ranking on the outputs of two or more experiments

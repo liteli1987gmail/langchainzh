@@ -3,99 +3,99 @@ title: LangSmith 数据平面
 sidebarTitle: 数据平面
 ---
 
-_数据平面_ 由您的 [Agent Servers](/langsmith/agent-server)（部署）及其支持基础设施，以及持续轮询 [LangSmith 控制平面](/langsmith/control-plane) 更新的"监听器"应用程序组成。
+该 _数据平面_ 由您的 [Agent 服务器](/langsmith/agent-server) （部署）及其支持基础设施，以及持续轮询以获取更新信息的"监听器"应用程序组成 [LangSmith 控制平面](/langsmith/control-plane).
 
 ## 服务器基础设施
 
-除了 [Agent Server](/langsmith/agent-server) 本身，每个服务器的以下基础设施组件也包含在"数据平面"的广义定义中：
+除 [Agent 服务器](/langsmith/agent-server) 本身外，每个服务器的以下基础设施组件也包含在广义的"数据平面"定义中：
 
 - **PostgreSQL**：用户、运行和内存数据的持久化层。
-- **Redis**：worker 之间的通信和临时元数据。
+- **Redis**：工作线程的通信和临时元数据。
 - **密钥存储**：环境密钥的安全管理。
-- **自动扩缩器**：根据负载扩展服务器容器。
+- **自动扩缩容器**：根据负载扩展服务器容器。
 
-## "监听器"应用程序
+## “监听器”应用程序
 
-数据平面"监听器"应用程序定期调用[控制平面 API](/langsmith/control-plane#control-plane-api)来：
+数据平面"监听器"应用程序定期调用 [控制平面 API](/langsmith/control-plane#control-plane-api) to:
 
 * 确定是否应创建新部署。
 * 确定是否应更新现有部署（即新版本）。
 * 确定是否应删除现有部署。
 
-换句话说，数据平面"监听器"读取控制平面的最新状态（期望状态）并采取行动来协调现有部署（当前状态）以匹配最新状态。
+换句话说，数据平面"监听器"读取控制平面的最新状态（期望状态）并采取行动将现有部署（当前状态）协调至最新状态。
 
 ## PostgreSQL
 
-PostgreSQL 存储服务器资源（线程、运行、助手、定时任务）和保存在[长期内存存储](/oss/langgraph/persistence#memory-store)中的项目。它也是[检查点](/oss/langgraph/persistence)（图执行状态）的默认后端。您可以选择将检查点存储在 MongoDB 中——请参阅[配置检查点后端](/langsmith/configure-checkpointer)。无论检查点后端如何，PostgreSQL 始终是必需的。
+PostgreSQL 存储服务器资源（线程、运行、助手、计划任务）以及保存在 [长期记忆存储](/oss/langgraph/persistence#memory-store)中的项目。它也是 [检查点](/oss/langgraph/persistence) （图执行状态）的默认后端。您也可以选择将检查点存储在 MongoDB 中——请参阅 [配置检查点后端](/langsmith/configure-checkpointer)。无论检查点后端如何配置，PostgreSQL 始终是必需的。
 
 ## Redis
 
-Redis 在每个 Agent Server 中用作服务器和队列 worker 之间通信的方式，并存储临时元数据。Redis 中不存储任何用户或运行数据。
+Redis 在每个 Agent 服务器中用作服务器和队列工作线程之间的通信方式，并存储临时元数据。用户或运行数据不会存储在 Redis 中。
 
 ### 通信
 
-Agent Server 中的所有运行都由属于每个部署的后台 worker 池执行。为了在这些运行中启用某些功能（如取消和输出流式传输），我们需要一个双向通信通道，用于服务器与处理特定运行的 worker 之间进行通信。我们使用 Redis 来组织这种通信。
+Agent 服务器中的所有运行都由作为每个部署一部分的后台工作线程池执行。为了启用这些运行的一些功能（如取消和输出流式传输），我们需要在服务器和处理特定运行的工作线程之间建立双向通信通道。我们使用 Redis 来组织这种通信。
 
-1. Redis 列表用作在新运行创建时立即唤醒 worker 的机制。该列表中仅存储一个哨兵值，不存储任何实际运行信息。Worker 随后从 PostgreSQL 中检索运行信息。
-2. Redis 字符串和 Redis PubSub 通道的组合用于服务器向适当的 worker 传达运行取消请求。
-3. Redis PubSub 通道由 worker 用于在处理运行时分发代理的流式输出。服务器中任何打开的 `/stream` 请求都会订阅该通道，并在事件到达时将其转发到响应中。Redis 中不会在任何时候存储任何事件。
+1. Redis 列表用作在新运行创建时立即唤醒工作线程的机制。此列表中仅存储一个哨兵值，不存储任何实际运行信息。运行信息由工作线程从 PostgreSQL 中检索。
+2. Redis 字符串和 Redis PubSub 通道的组合用于服务器向相应工作线程传达运行取消请求。
+3. Redis PubSub 通道用于工作线程在处理运行时分发代理的流式输出。任何打开的 `/stream` 服务器中的请求将订阅该频道，并将事件在到达时转发到响应中。Redis 中不会存储任何事件。
 
 ### 临时元数据
 
-Agent Server 中的运行可能会因特定失败而重试（目前仅针对运行期间遇到的临时 PostgreSQL 错误）。为了限制重试次数（目前限制为每个运行 3 次尝试），我们在拾取运行时将尝试次数记录在 Redis 字符串中。这不包含除其 ID 之外的任何特定运行信息，并且会在短时间后过期。
+Agent Server 中的运行可能会针对特定失败进行重试（目前仅针对运行期间遇到的临时 PostgreSQL 错误）。为了限制重试次数（目前限制为每次运行 3 次尝试），我们在拾取运行时将尝试次数记录在 Redis 字符串中。这不包含任何特定于运行的信息，仅包含其 ID，并在短暂延迟后过期。
 
 ## 数据平面功能
 
-本节描述数据平面的各种功能。对于平台特定行为，请参阅[云平台功能](/langsmith/cloud-platform-features)或[部署到自托管](/langsmith/deploy-to-self-hosted-overview)。
+本节介绍数据平面的各种功能。关于平台特定行为，请参阅 [云平台功能](/langsmith/cloud-platform-features) or [部署到自托管](/langsmith/deploy-to-self-hosted-overview).
 
-### 自动扩缩
+### 自动扩缩容
 
-[`Production` 类型](/langsmith/cloud-platform-features#deployment-types)的部署会自动扩展到最多 10 个容器。扩缩基于 3 个指标：
+[`Production` 类型](/langsmith/cloud-platform-features#deployment-types) 部署自动扩展最多 10 个容器。扩缩容基于 3 个指标：
 
 1. CPU 利用率
 2. 内存利用率
-3. 待处理（进行中）[运行](/langsmith/runs)数量
+3. 待处理（进行中）运行数 [运行](/langsmith/runs)
 
-对于 CPU 利用率，自动扩缩器以 75% 利用率为目标。这意味着自动扩缩器将向上或向下扩展容器数量，以确保 CPU 利用率接近或等于 75%。对于内存利用率，自动扩缩器也以 75% 利用率为目标。
+对于 CPU 利用率，自动扩缩器以 75% 利用率为目标。这意味着自动扩缩器将向上或向下扩展容器数量，以确保 CPU 利用率接近或达到 75%。对于内存利用率，自动扩缩器同样以 75% 利用率为目标。
 
-对于待处理运行数量，自动扩缩器以 10 个待处理运行为目标。例如，如果当前容器数量为 1，但待处理运行数量为 20，则自动扩缩器将把部署扩展到 2 个容器（20 个待处理运行 / 2 个容器 = 每个容器 10 个待处理运行）。
+For number of pending runs, the autoscaler targets 10 pending runs. For example, if the current number of containers is 1, but the number of pending runs is 20, the autoscaler will scale up the deployment to 2 containers (20 pending runs / 2 containers = 10 pending runs per container).
 
-每个指标都是独立计算的，自动扩缩器将根据导致最大容器数量的指标来确定扩缩操作。
+每个指标独立计算，自动扩缩器将根据导致最大容器数量的指标来确定扩缩操作。
 
-这些指标并非都适用于每种容器类型。[队列 worker](/langsmith/agent-server#runtime-architecture) 根据待处理运行数量进行扩缩——当积压增加时，会启动更多 worker 来处理。[API 服务器](/langsmith/agent-server#runtime-architecture) 根据 CPU 和内存进行扩缩，响应客户端请求量。这意味着运行提交的高峰不会减慢获取线程状态等读取操作的速度。自托管配置详情，请参阅[为扩缩配置 Agent Server](/langsmith/agent-server-scale)。
+这些指标并非适用于所有容器类型。 [队列工作器](/langsmith/agent-server#runtime-architecture) 基于待处理运行数进行扩缩容——当积压增加时，会启动更多工作器来消化它。 [API 服务器](/langsmith/agent-server#runtime-architecture) 基于 CPU 和内存进行扩缩容，响应客户端请求量。这意味着运行提交的高峰不会减慢获取线程状态等读取操作。关于自托管配置详情，请参阅 [配置 Agent Server 以实现扩缩容](/langsmith/agent-server-scale).
 
-缩减操作会延迟 30 分钟后再执行。换句话说，如果自动扩缩器决定缩减部署，它将首先等待 30 分钟后再进行缩减。30 分钟后，将重新计算指标，如果重新计算的指标得出的容器数量低于当前数量，则部署将缩减。否则，部署将保持扩展状态。这个"冷却"期确保部署不会过于频繁地扩展和缩减。
+缩减操作会延迟 30 分钟后才执行。换句话说，如果自动扩缩器决定缩减部署，它将首先等待 30 分钟，然后再进行缩减。30 分钟后，将重新计算指标，如果重新计算的指标得出的容器数量低于当前数量，则部署将缩减。否则，部署将保持扩展状态。这个"冷却"期确保部署不会过于频繁地扩展和缩减。
 
 ### MongoDB 检查点
 
 <Info>
-适用于[云](/langsmith/cloud)（使用外部托管的 MongoDB 实例）和[独立](/langsmith/deploy-standalone-server)部署。
+适用于 [云端](/langsmith/cloud) （使用外部管理的 MongoDB 实例）和 [独立部署](/langsmith/deploy-standalone-server) deployments.
 </Info>
 
 您可以使用 MongoDB 作为检查点存储的替代后端。配置后，MongoDB 仅处理检查点数据——PostgreSQL 仍需要用于所有其他服务器资源。
 
-请参阅[配置检查点后端](/langsmith/configure-checkpointer)获取设置说明。
+请参阅 [配置检查点后端](/langsmith/configure-checkpointer) 了解设置说明。
 
 ### LangSmith 追踪
 
-Agent Server 会自动配置为向 LangSmith 发送追踪。根据各部署选项，详见下表。
+Agent Server 自动配置为向 LangSmith 发送追踪。请参阅下表了解每种部署选项的详细信息。
 
-| Cloud | Hybrid | Self-Hosted |
+| 云端 | 混合 | 自托管 |
 |------------|------------------------|----------------------|
-| 必需<br />追踪到 LangSmith SaaS。 | 可选<br />禁用追踪或追踪到 LangSmith SaaS。 | 可选<br />禁用追踪、追踪到 LangSmith SaaS 或追踪到自托管 LangSmith。 |
+| 必需<br />追踪到 LangSmith SaaS。 | 可选<br />禁用追踪或追踪到 LangSmith SaaS。 | 可选<br />禁用追踪、追踪至 LangSmith SaaS 或追踪至自托管 LangSmith。 |
 
 ### 遥测
 
-Agent Server 会自动配置为报告用于计费的遥测元数据。根据各部署选项，详见下表。
+Agent Server 会自动配置为报告用于计费的遥测元数据。有关各部署选项的详细信息，请参见下表。
 
-| Cloud | Hybrid | Self-Hosted |
+| 云端 | 混合 | 自托管 |
 |------------|------------------------|----------------------|
-| 遥测数据发送到 LangSmith SaaS。 | 遥测数据发送到 LangSmith SaaS。 | 空气隙隔离许可证密钥的自我报告使用量（审计）。<br />LangSmith 许可证密钥的遥测数据发送到 LangSmith SaaS。 |
+| 遥测数据发送至 LangSmith SaaS。 | 遥测数据发送至 LangSmith SaaS。 | 气隙许可证密钥的自我报告使用量（审计）。<br />用于 LangSmith 许可证密钥的遥测数据发送至 LangSmith SaaS。 |
 
 ### 许可
 
-Agent Server 会自动配置为执行许可证密钥验证。根据各部署选项，详见下表。
+Agent Server 会自动配置为执行许可证密钥验证。有关各部署选项的详细信息，请参见下表。
 
-| Cloud | Hybrid | Self-Hosted |
+| 云端 | 混合 | 自托管 |
 |------------|------------------------|----------------------|
-| LangSmith API Key 在 LangSmith SaaS 上验证。 | LangSmith API Key 在 LangSmith SaaS 上验证。 | 空气隙隔离许可证密钥或平台许可证密钥在 LangSmith SaaS 上验证。 |
+| LangSmith API Key 在 LangSmith SaaS 上进行验证。 | LangSmith API Key 在 LangSmith SaaS 上进行验证。 | 气隙许可证密钥或平台许可证密钥在 LangSmith SaaS 上进行验证。 |

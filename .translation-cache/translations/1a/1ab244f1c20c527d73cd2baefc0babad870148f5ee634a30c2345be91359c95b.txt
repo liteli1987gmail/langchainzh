@@ -1,13 +1,13 @@
 ---
-title: "交叉编码器重排序集成"
-description: "使用 LangChain Python 和开源交叉编码器模型对检索到的文档进行重排序。"
+title: "跨编码器重排序器集成"
+description: "使用 LangChain Python 和开源跨编码器模型对检索到的文档进行重排序。"
 ---
 
 import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
 
-交叉编码器直接对每个`(query, document)`对进行评分，而不是比较独立的嵌入向量，这会产生更准确的排序结果，但每个文档需要额外一次推理。在向量搜索之上应用重排序器（通过嵌入向量检索前20条，然后重排序至前5条）是RAG管道中影响最大的质量改进之一，而且当你使用Hugging Face的小型交叉编码器时，它可以在本地CPU上免费运行。
+跨编码器直接对每一对 `(query, document)` 进行评分，而不是比较独立嵌入，这虽然每个文档需要额外一次推理，但能产生更准确的排序。在向量搜索之上应用重排序器（通过嵌入检索前20条，再重排序至前5条）是 RAG 流水线中影响最大的质量改进之一，而且使用 Hugging Face 的小型跨编码器时可以在本地 CPU 上免费运行。
 
-本指南展示了如何将`HuggingFaceCrossEncoder`与LangChain的`CrossEncoderReranker`和`ContextualCompressionRetriever`结合使用。该模式适用于Hugging Face上的任何交叉编码器模型，包括`BAAI/bge-reranker-*`、`mixedbread-ai/mxbai-rerank-*`、`Alibaba-NLP/gte-multilingual-reranker-*`、`Qwen/Qwen3-Reranker-*`以及经典的`cross-encoder/ms-marco-*`系列。
+本指南展示如何将 `HuggingFaceCrossEncoder` 与 LangChain 的 `CrossEncoderReranker` 和 `ContextualCompressionRetriever`结合使用。该模式适用于任何 [Hugging Face 上的跨编码器模型](https://huggingface.co/models?pipeline_tag=text-ranking)，包括 `BAAI/bge-reranker-*`, `mixedbread-ai/mxbai-rerank-*`, `Alibaba-NLP/gte-multilingual-reranker-*`, `Qwen/Qwen3-Reranker-*`，以及经典的 `cross-encoder/ms-marco-*` family.
 
 ## 设置
 
@@ -17,7 +17,7 @@ pip install -qU langchain-huggingface langchain-community langchain-classic fais
 
 ## 构建基础检索器
 
-从一个标准的向量存储检索器开始。检索一个相对较大的 `k`；重排序器会将其缩小。
+从一个标准的向量存储检索器开始。检索相对较大的 `k`；重排序器会将其缩小。
 
 <LangchainCommunityUnmaintained />
 
@@ -40,9 +40,9 @@ retriever = FAISS.from_documents(texts, embeddings).as_retriever(
 )
 ```
 
-## 使用交叉编码器重新排序
+## 使用跨编码器进行重排序
 
-`CrossEncoderReranker` 封装任意交叉编码器并插入到 `ContextualCompressionRetriever`。
+`CrossEncoderReranker` 包装任意跨编码器并插入 `ContextualCompressionRetriever`.
 
 ```python
 from langchain_classic.retrievers.contextual_compression import ContextualCompressionRetriever
@@ -62,21 +62,21 @@ for i, doc in enumerate(compressed_docs, 1):
     print(f"Document {i}:\n{doc.page_content}\n")
 ```
 
-## 选择交叉编码器
+## 选择跨编码器
 
-| 模型 | 参数量 | 备注 |
+| 模型 | 大小 | 备注 |
 |---|---|---|
-| `cross-encoder/ms-marco-MiniLM-L6-v2` | 22M | 最快；仅英语，2022时代的基线模型 |
-| `BAAI/bge-reranker-v2-m3` | 568M | 多语言，大多数工作负载的强力默认选择 |
-| `mixedbread-ai/mxbai-rerank-large-v2` | 1.5B | 顶级英语质量，建议使用GPU |
-| `Alibaba-NLP/gte-multilingual-reranker-base` | 306M | 多语言，8192-token上下文 |
+| `cross-encoder/ms-marco-MiniLM-L6-v2` | 22M | 最快；仅限英语，2022年基线模型 |
+| `BAAI/bge-reranker-v2-m3` | 568M | 多语言，大多数工作负载的强劲默认选择 |
+| `mixedbread-ai/mxbai-rerank-large-v2` | 1.5B | 顶级英语质量，推荐使用 GPU |
+| `Alibaba-NLP/gte-multilingual-reranker-base` | 306M | 多语言，8192 token 上下文 |
 | `Qwen/Qwen3-Reranker-0.6B` | 595M | 指令感知，多语言 |
 
-`HuggingFaceCrossEncoder` 自动选择最佳可用设备（CUDA > MPS > CPU）。若要固定到特定设备，请传入 `model_kwargs={"device": "cpu"}` 或类似参数。
+`HuggingFaceCrossEncoder` 自动选择最佳可用设备（CUDA > MPS > CPU）。要固定到特定设备，请传递 `model_kwargs={"device": "cpu"}` 或类似参数。
 
 ## 部署到 SageMaker
 
-您也可以在 SageMaker 端点上托管交叉编码器，并使用 `SagemakerEndpointCrossEncoder`。以下是一个示例 `inference.py`，在运行时动态加载模型（无需 `model.tar.gz` 工件）。参见[本教程](https://huggingface.co/blog/kchoe/deploy-any-huggingface-model-to-sagemaker)获取分步指导。
+您也可以将跨编码器托管在 SageMaker 端点上并使用 `SagemakerEndpointCrossEncoder`。以下是示例 `inference.py` ，可动态加载模型（无需 `model.tar.gz` 产物）。请参阅 [本教程](https://huggingface.co/blog/kchoe/deploy-any-huggingface-model-to-sagemaker) 获取分步指导。
 
 ```python
 import json

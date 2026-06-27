@@ -1,23 +1,22 @@
 ---
-title: 运行时重建图
-sidebarTitle: 运行时重建图
-description: 使用 ServerRuntime 在每次运行时使用不同配置重建图。
+title: 在运行时重建图
+sidebarTitle: 在运行时重建图
+description: 使用 ServerRuntime 为每次运行使用不同配置重建您的图。
 ---
-
-您可能需要在新运行时使用不同配置重建图。例如，您可能想根据用户凭证加载不同工具。本指南展示如何通过 `ServerRuntime` 实现这一点。
+您可能需要为新的运行使用不同配置重建您的图。例如，您可能想根据用户凭证加载不同的工具。本指南展示了如何使用 `ServerRuntime`.
 
 <Note>
-在大多数情况下，最好在单个节点内根据配置进行条件判断来处理自定义，而不是动态更改整个图结构。这样更易于测试和管理。
+在大多数情况下，自定义最好通过在各个节点内部根据配置进行条件判断来处理，而不是动态更改整个图结构。这样更容易测试和管理。
 </Note>
 
-## 前置条件
+## 前提条件
 
-- 确保先查看[此操作指南](/langsmith/setup-app-requirements-txt)以了解如何设置应用程序以进行部署。
-- `ServerRuntime` 需要 `langgraph-api >= 0.7.31` 和 `langgraph-sdk >= 0.3.5`。在此之前，图工厂只接受单个 `config: RunnableConfig` 参数。
+- 请务必查看 [本操作指南](/langsmith/setup-app-requirements-txt) 关于设置应用程序以进行部署的内容。
+- `ServerRuntime` 需要 `langgraph-api >= 0.7.31` 和 `langgraph-sdk >= 0.3.5`。在此之前，图工厂只接受单个 `config: RunnableConfig` argument.
 
 ## 定义图
 
-假设您有一个简单图的应用程序，该图调用 LLM 并将响应返回给用户。应用程序文件目录如下：
+假设您有一个简单的图应用程序，该图调用 LLM 并将响应返回给用户。应用程序文件目录如下：
 
 ```
 my-app/
@@ -28,11 +27,11 @@ my-app/
 |-- pyproject.toml
 ```
 
-其中图在 `agents.py` 中定义。
+其中图定义在 `agents.py`.
 
-### 无需重新构建
+### 不重建
 
-部署 Agent Server 最常见的方式是引用在文件顶层定义的编译图实例。下面是一个示例：
+部署代理服务器最常见的方式是引用在文件顶层定义的已编译图实例。示例如下：
 
 ```python
 # my_project/agents.py
@@ -47,7 +46,7 @@ graph_workflow.add_edge(START, "model")
 agent = graph_workflow.compile()
 ```
 
-要使服务器识别您的图，您需要在 LangGraph API 配置（`langgraph.json`）中指定包含 @[`CompiledStateGraph`] 实例的变量路径，例如：
+为了让服务器识别您的图，您需要指定包含 @[`CompiledStateGraph`] 实例的变量路径到您的 LangGraph API 配置（`langgraph.json`), e.g.:
 
 ```json
 {
@@ -61,15 +60,15 @@ agent = graph_workflow.compile()
 
 ### 重建
 
-要在每次新运行时重建你的图，请提供一个 **工厂函数**，该函数返回（或生成）一个图。工厂可以可选地接受 `ServerRuntime` 参数或 `RunnableConfig`。服务器会检查你函数的类型注解来确定要注入哪些参数，因此请确保包含正确的类型提示。服务器的队列工作线程会在需要处理运行时随时调用你的工厂函数。该函数也会被某些其他端点调用，以更新状态、读取状态或获取助手架构。`ServerRuntime` 会告诉你是什么上下文触发了调用。
+若要每次新运行时重建图，请提供一个 **工厂函数** 返回（或生成）图。工厂可选择接受 `ServerRuntime` 参数或 `RunnableConfig`。服务器检查函数的类型注解以确定要注入哪些参数，因此请确保包含正确的类型提示。服务器的队列工作线程在需要处理运行时随时调用工厂函数。该函数还会在某些其他端点被调用，用于更新状态、读取状态或获取助手架构。 `ServerRuntime` 告诉您是哪个上下文触发了调用。
 
 <Note>
-`ServerRuntime` 处于[测试阶段](/langsmith/release-stages)，可能在未来版本中发生变化。
+`ServerRuntime` is in [测试版](/langsmith/release-stages) 未来版本中可能会发生变化。
 </Note>
 
 #### 简单工厂
 
-最简单的形式是一个普通的 `async def`，它返回一个编译后的图：
+最简单形式是一个普通 `async def` 返回已编译图：
 
 ```python
 from langchain_openai import ChatOpenAI
@@ -101,7 +100,7 @@ async def make_graph(config: RunnableConfig, runtime: ServerRuntime):
 
 #### 上下文管理器工厂
 
-如果需要设置和清理资源（数据库连接、加载 MCP 工具等），请使用异步上下文管理器。使用 `runtime.execution_runtime` 检查图表是否正在被调用进行实际执行，还是仅用于自省（架构、可视化）：
+如果需要设置和清理资源（数据库连接、加载 MCP 工具等），请使用异步上下文管理器。使用 `runtime.execution_runtime` 检查图是被调用执行还是仅被用于自省（架构、可视化）：
 
 ```python
 import contextlib
@@ -143,7 +142,7 @@ async def make_graph(runtime: ServerRuntime):
         yield make_agent_graph(tools=[])
 ```
 
-最后，在 `langgraph.json` 中指定工厂的路径：
+最后，在中指定工厂路径 `langgraph.json`:
 
 ```json
 {
@@ -157,34 +156,34 @@ async def make_graph(runtime: ServerRuntime):
 
 ## ServerRuntime 参考
 
-您的工厂函数接收一个包含以下属性的 `ServerRuntime` 实例：
+您的工厂函数接收一个 `ServerRuntime` 实例，包含以下属性：
 
-| 属性 | 类型 | 说明 |
+| 属性 | 类型 | 描述 |
 |---|---|---|
-| `access_context` | `str` | 调用工厂的原因：`"threads.create_run"`、`"threads.update"`、`"threads.read"` 或 `"assistants.read"`。 |
-| `user` | `BaseUser \| None` | 已认证的用户，如果未配置[自定义认证](/langsmith/custom-auth)，则为 `None`。 |
-| `store` | `BaseStore` | 用于持久化和记忆的存储实例。 |
+| `access_context` | `str` | 工厂被调用的原因： `"threads.create_run"`, `"threads.update"`, `"threads.read"`, or `"assistants.read"`. |
+| `user` | `BaseUser \| None` | 已认证用户，或 `None` if no [自定义身份验证](/langsmith/custom-auth) 已配置。|
+| `store` | `BaseStore` | 用于持久化和内存的存储实例。|
 
-**方法：**
+**Methods:**
 
 | 方法 | 说明 |
 |---|---|
-| `ensure_user()` | 返回已认证的用户。如果未提供用户，则抛出 `PermissionError`。 |
-| `execution_runtime` | 当 `access_context` 为 `"threads.create_run"` 时返回执行运行时，否则返回 `None`。使用此方法可以有条件地在执行期间设置昂贵的资源。 |
+| `ensure_user()` | 返回已认证的用户。如果没有提供用户则抛出 `PermissionError` 错误。 |
+| `execution_runtime` | 返回执行运行时，当 `access_context` is `"threads.create_run"`, or `None` 时否则返回。使用此方法可以有条件地仅在执行期间设置昂贵的资源。 |
 
 ### 访问上下文
 
-服务器不仅在执行运行时会调用您的工厂函数。在所有上下文中，返回的图应具有**相同的拓扑结构**（节点、边、状态模式）。写入上下文（`threads.create_run`、`threads.update`）中的拓扑不匹配可能导致状态更新不正确。在读取上下文（`threads.read`、`assistants.read`）中，不匹配会影响待处理任务、模式和可视化的报告，但不会损坏数据。使用 `execution_runtime` 可以有条件地设置昂贵的资源，而无需更改图结构。
+服务器会在多种上下文中调用您的工厂函数，而不仅仅是执行运行时。在所有上下文中，返回的图应该具有相同的 **拓扑结构** （节点、边、状态模式）。在写入上下文中（`threads.create_run`, `threads.update`）拓扑结构不匹配可能导致不正确的状态更新。在读取上下文中（`threads.read`, `assistants.read`），不匹配会影响待处理任务、模式和可视化报告，但不会损坏数据。使用 `execution_runtime` 可以有条件地设置昂贵的资源而不改变图结构。
 
 | 上下文 | 说明 |
 |---|---|
-| `threads.create_run` | 完整图执行。`execution_runtime` 可用。 |
-| `threads.update` | 通过 `aupdate_state` 更新状态。不执行节点函数，但可以更改待处理任务。 |
-| `threads.read` | 通过 `aget_state` / `aget_state_history` 读取状态。 |
-| `assistants.read` | 用于可视化、MCP、A2A 等的模式和图自省。 |
+| `threads.create_run` | 完整图执行。 `execution_runtime` 可用。 |
+| `threads.update` | 通过 `aupdate_state`进行状态更新。不执行节点函数，但可以改变待处理任务。 |
+| `threads.read` | 通过 `aget_state` / `aget_state_history`. |
+| `assistants.read` | 用于可视化、MCP、A2A等的模式和图自省。 |
 
-## 自定义每个图的跟踪
+## 自定义每个图的追踪
 
-您可以使用工厂函数自定义或禁用特定图的跟踪。请参阅[条件跟踪：在已部署代理中自定义跟踪](/langsmith/conditional-tracing#customize-tracing-in-deployed-agents)获取示例。
+您可以使用工厂函数为特定图自定义或禁用追踪。参见 [条件追踪：在部署的代理中自定义追踪](/langsmith/conditional-tracing#customize-tracing-in-deployed-agents) 获取示例。
 
-有关更多信息，请参阅 [LangGraph API 配置文件](/langsmith/cli#configuration-file)。
+更多相关信息请参见 [LangGraph API 配置文件](/langsmith/cli#configuration-file).

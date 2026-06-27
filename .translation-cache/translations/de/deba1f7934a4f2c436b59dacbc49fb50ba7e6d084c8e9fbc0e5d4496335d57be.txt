@@ -1,5 +1,5 @@
 ---
-title: 使用 `HanaSparqlQAChain` 进行问答
+title: 问答与 `HanaSparqlQAChain`
 ---
 
 ## 设置与安装
@@ -10,7 +10,7 @@ title: 使用 `HanaSparqlQAChain` 进行问答
 npm install @sap/hana-langchain @langchain/core@latest @langchain/classic@latest langchain@latest
 ```
 
-创建与您的 SAP HANA Cloud 实例的连接
+创建到 SAP HANA Cloud 实例的连接。
 
 ```typescript
 import * as dotenv from 'dotenv';
@@ -43,16 +43,16 @@ await new Promise<void>((resolve, reject) => {
 
 `HanaSparqlQAChain` 将以下内容整合在一起：
 
-1. **支持模式的 SPARQL 生成**
-2. **针对 SAP HANA 的查询执行**
+1. **模式感知的 SPARQL 生成**
+2. **查询执行** 针对 SAP HANA
 3. **自然语言答案格式化**
 
 ## 初始化
 
-* 一个 **LLM** 用于生成和解释查询
-* 一个 **`HanaRdfGraph`**（包含连接、`graph_uri` 和本体）
+* An **LLM** 生成和解释查询
+* A **`HanaRdfGraph`** （使用连接、 `graph_uri`和本体）
 
-请按照此处 [HanaRdfGraph](/oss/integrations/graphs/sap_hana_rdf_graph) 的步骤操作，详细了解如何创建 `HanaRdfGraph` 实例。
+请按照以下步骤操作 [HanaRdfGraph](/oss/integrations/graphs/sap_hana_rdf_graph) 了解更多关于创建 `HanaRdfGraph` instance.
 
 导入 `HanaSparqlQAChain`
 
@@ -61,32 +61,32 @@ import { HanaSparqlQAChain } from "@sap/hana-langchain";
 const qaChain = HanaSparqlQAChain.fromLLM({ llm, graph, allowDangerousRequests: true, verbose: true });
 ```
 
-## 流水线概述
+## 管道概述
 
 1. SPARQL 生成
-   - 使用 SPARQL 生成提示词
-   - 输入：`schema`（来自 `graph.getSchema()` 的 Turtle 格式）、`prompt`（用户问题）
+   - 使用 SPARQL 生成提示
+   - Inputs: `schema` （来自 Turtle `graph.getSchema()`), `prompt` （用户问题）
 2. 查询后处理
    - 从模型输出中提取 SPARQL
-   - 如果缺失则注入 `FROM <graph_uri>`
-   - 确保常用前缀（`rdf:`、`rdfs:`、`owl:`、`xsd:`）
+   - 注入 `FROM <graph_uri>` 如果缺失
+   - 确保常用前缀（`rdf:`, `rdfs:`, `owl:`, `xsd:`)
 3. 执行
    - `graph.query(generatedSparql)`
-4. 答案生成
-   - 使用问答提示词，输入：`context`（结果）、`prompt`（原始问题）
+4. 答案组织
+   - 使用包含以下输入的 QA 提示： `context` （结果）、 `prompt` （原始问题）
 
-## 提示词模板
+## 提示模板
 
-### "SPARQL 生成"提示词
+### “SPARQL 生成”提示
 
-`sparqlGenerationPrompt` 用于指导 LLM 根据用户问题和提供的架构生成 SPARQL 查询。
+ `sparqlGenerationPrompt` 用于指导 LLM 根据用户问题和提供的模式生成 SPARQL 查询。
 
-### 问答提示词
+### 问答提示
 
-`qaPrompt` 指示 LLM 仅根据数据库结果生成自然语言答案。
-默认提示词可在此处找到：[`prompts.ts`](https://github.com/SAP/langchainjs-integration-for-sap-hana-cloud/blob/main/src/chains/graph_qa/prompts.ts)
+ `qaPrompt` 指导 LLM 仅根据数据库结果创建自然语言答案。
+默认提示可在此处找到： [`prompts.ts`](https://github.com/SAP/langchainjs-integration-for-sap-hana-cloud/blob/main/src/chains/graph_qa/prompts.ts)
 
-## 自定义提示词
+## 自定义提示
 
 您可以在初始化时覆盖默认值：
 
@@ -101,25 +101,25 @@ const qaChain = HanaSparqlQAChain.fromLLM({
 });
 ```
 
-> - `sparql_generation_prompt` 必须有输入变量：`["schema", "prompt"]`
-> - `qa_prompt` 必须有输入变量：`["context", "prompt"]`
+> - `sparql_generation_prompt` 必须具有以下输入变量： `["schema", "prompt"]`
+> - `qa_prompt` 必须具有以下输入变量： `["context", "prompt"]`
 
-## 示例：针对"电影"知识图谱的问答
+## 示例：基于“电影”知识图的问答
 
-**前提条件**：
-您必须拥有启用了 **triple store** 功能的 SAP HANA Cloud 实例。
-有关详细说明，请参阅：[启用 Triple Store](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/enable-triple-store/)<br />
-加载 `kgdocu_movies` 示例数据。请参阅[知识图谱示例](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/knowledge-graph-example)。
+**前提条件**:
+您必须拥有已启用 **三元组存储** 功能的 SAP HANA Cloud 实例。
+详细说明请参阅： [启用三元组存储](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/enable-triple-store/)<br />
+加载 `kgdocu_movies` 示例数据。请参阅 [知识图示例](https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-knowledge-graph-guide/knowledge-graph-example).
 
 下面我们将：
 
-1. 实例化指向"movies"数据图的 `HanaRdfGraph`
-2. 使用 LLM 驱动的 `HanaSparqlQAChain` 包装它
+1. 实例化 `HanaRdfGraph` 指向我们的“movies”数据图
+2. 将其包装在 `HanaSparqlQAChain` 由LLM驱动
 3. 提出自然语言问题并打印出链的响应
 
-这展示了 LLM 如何在后台生成 SPARQL，针对 SAP HANA 执行，并返回人类可读的答案。
+这演示了LLM如何在底层生成SPARQL，对SAP HANA执行它，并返回人类可读的答案。
 
-首先，创建到 SAP HANA Cloud 实例的连接。
+首先，创建到SAP HANA Cloud实例的连接。
 
 ```typescript
 import * as dotenv from 'dotenv';
@@ -150,7 +150,7 @@ await new Promise<void>((resolve, reject) => {
 });
 ```
 
-然后，设置知识图谱实例
+然后，设置知识图实例
 
 ```typescript
 import { HanaRdfGraph, HanaRdfGraphOptions } from "@sap/hana-langchain";
@@ -240,14 +240,14 @@ rdfs:label a owl:DatatypeProperty;
     rdfs:range <http://kg.demo.sap.com/Genre>.
 ```
 
-之后，初始化 LLM。
+之后，初始化LLM。
 
 ```typescript
 import { ChatOpenAI } from "@langchain/openai"; // or your chosen LLM
 const llm = new ChatOpenAI({ model: "gpt-4o" });
 ```
 
-然后，我们创建 SPARQL QA Chain
+然后，我们创建一个SPARQL问答链
 
 ```typescript
 import { HanaSparqlQAChain, HanaSparqlQAChainOptions } from "@sap/hana-langchain";
@@ -323,11 +323,11 @@ The actors who acted in Blade Runner include Morgan Paull, William Sanderson, Ja
 
 ## 底层发生了什么？
 
-1. **SPARQL 生成**
-   该链使用您的 Turtle 格式本体（`graph.getSchema()`）和用户的问题，通过 `SPARQL_GENERATION_SELECT_PROMPT` 调用 LLM。然后 LLM 会根据您的架构发出有效的 `SELECT` 查询。
+1. **SPARQL生成**
+   该链使用您的Turtle格式本体（`graph.getSchema()`）和用户的问题，使用 `SPARQL_GENERATION_SELECT_PROMPT`。然后LLM发出一个有效的 `SELECT` 针对您的模式定制的查询。
 2. **预处理与执行**
-   * **提取与清洗**：从 LLM 的响应中提取原始 SPARQL 文本。
-   * **注入图上下文**：如果缺少则添加 `FROM <graph_uri>`，并确保声明常用前缀（`rdf:`、`rdfs:`、`owl:`、`xsd:`）。
-   * **在 HANA 上运行**：通过 `HanaRdfGraph.query()` 在您的命名图上执行最终确定的查询。
-3. **答案组织**
-   返回的 CSV（或 Turtle）结果再次输入到 LLM——这次使用 `SPARQL_QA_PROMPT`。LLM 会严格根据检索到的数据生成简洁、易读的答案，不会产生幻觉。
+   * **提取与清洗**：从LLM的响应中提取原始SPARQL文本。
+   * **注入图上下文**：添加 `FROM <graph_uri>` 如果缺失则添加，并确保声明常见前缀（`rdf:`, `rdfs:`, `owl:`, `xsd:`）。
+   * **在HANA上运行**：通过以下方式执行最终查询 `HanaRdfGraph.query()` 对您的命名图执行。
+3. **答案构建**
+   返回的CSV（或Turtle）结果再次输入LLM——这次附带 `SPARQL_QA_PROMPT`。LLM根据检索到的数据生成简洁、易读的答案，不会产生幻觉。

@@ -3,15 +3,16 @@ title: 如何使用 REST API 上传在 LangSmith 外部运行的实验
 sidebarTitle: 上传在 LangSmith 外部运行的实验
 ---
 
-部分用户倾向于在 LangSmith 外部管理数据集和运行实验，但希望使用 LangSmith UI 来查看结果。这是通过我们的端点支持的。
+一些用户更喜欢在 LangSmith 外部管理他们的数据集和运行实验，但希望使用 LangSmith UI 来查看结果。这通过我们的端点支持。
 
-本指南将向您展示如何使用 REST API 上传评估，使用 Python 中的 `requests` 库作为示例。不过，相同的原则适用于任何语言。
 
-## 请求体架构
+本指南将向您展示如何使用 REST API 上传评估，使用 `requests` 作为 Python 中的示例。但是，相同的原则适用于任何语言。
 
-上传实验需要为您的实验和数据集指定相关的高级信息，以及实验内各个示例和运行的单独数据。`results` 中的每个对象代表实验中的一"行"——一个单独的数据集示例，以及相关的运行。请注意，`dataset_id` 和 `dataset_name` 指的是您外部系统中的数据集标识符，将用于将外部实验分组到单个数据集中。它们不应引用 LangSmith 中现有的数据集（除非该数据集是通过此端点创建的）。
+## 请求体模式
 
-您可以使用以下架构将实验上传到 `/datasets/upload-experiment` 端点：
+上传实验需要指定实验和数据集的相关高级信息，以及实验中示例和运行各自的单独数据。中的每个对象 `results` 代表实验中的一"行"——一个单独的数据集示例，以及一个关联的运行。注意 `dataset_id` 和 `dataset_name` 指您外部系统中的数据集标识符，用于将外部实验分组到单个数据集中。它们不应引用 LangSmith 中已存在的数据集（除非该数据集是通过此端点创建的）。
+
+您可以使用以下模式将实验上传到 `/datasets/upload-experiment` endpoint:
 
 ```json
 {
@@ -99,21 +100,21 @@ sidebarTitle: 上传在 LangSmith 外部运行的实验
 }
 ```
 
-返回的 JSON 是一个字典，包含 `experiment` 和 `dataset` 两个键，每个键对应的值都是一个对象，包含所创建实验和数据集的相关信息。
+响应 JSON 将是一个包含键的字典 `experiment` 和 `dataset`，每个键都是一个对象，包含有关创建的实验和数据集的相关信息。
 
 ## 注意事项
 
-您可以通过在多次调用中提供相同的 `dataset_id` 或 `dataset_name` 来将多个实验上传到同一数据集。您的实验将被归入同一个数据集，您将能够使用比较视图来比较不同实验的结果。
+You may upload multiple experiments to the same dataset by providing the same dataset\_id or dataset\_在多次调用之间的名称。您的实验将被分组到单个数据集中，您将能够 [使用比较视图来比较实验之间的结果](/langsmith/compare-experiment-results).
 
-请确保每行的开始时间和结束时间都在实验的开始时间和结束时间范围内。
+确保您各行的开始时间和结束时间都在实验的开始时间和结束时间之间。
 
-您必须提供 `dataset_id` 或 `dataset_name` 中的一个。如果您只提供 ID 且数据集尚不存在，我们会为您生成一个名称，反之亦然如果您只提供名称的话。
+You must provide either a dataset\_id or a dataset\_name。如果您只提供ID且数据集尚不存在，我们会为您生成一个名称，反之，如果您只提供名称，情况则相反。
 
-您无法将实验上传到非通过此端点创建的数据集。实验上传功能仅支持外部管理的数据集。
+您不能将实验上传到不是通过此端点创建的数据集。上传实验仅支持外部管理的数据集。
 
 ## 示例请求
 
-以下是对 `/datasets/upload-experiment` 的简单调用示例。这是一个基本示例，仅使用最重要的字段作为说明。
+以下是简单调用的示例 `/datasets/upload-experiment`。这是一个仅使用最重要字段作为说明的基本示例。
 
 ```python
 import os
@@ -192,12 +193,7 @@ resp = requests.post(
 print(resp.json())
 ```
 
-<fragment>
-
-Below is the response received:
-
-
-</fragment>
+以下是收到的响应：
 
 ```json
 {
@@ -250,14 +246,14 @@ Below is the response received:
 }
 ```
 
-请注意，实验结果中的延迟和反馈统计数据为 null，因为运行还没有被持久化，可能需要几秒钟。如果您保存实验 ID 并在几秒钟后再次查询，您将看到所有统计数据（尽管 tokens/cost 仍然为 null，因为我们没有在请求体中请求此信息）。
+Note that the latency and feedback stats in the experiment results are null because the runs haven't had a chance to be persisted yet, which may take a few seconds. If you save the experiment id and query again in a few seconds, you will see all the stats (although tokens/cost will still be null, because we don't ask for this information in the request body).
 
-## 在 UI 中查看实验
+## 在UI中查看实验
 
-现在，登录 UI 并点击您新创建的数据集！您应该会看到一个实验：![已上传的实验表](/langsmith/images/uploaded-dataset.png)
+现在，登录UI并点击您新创建的数据集！您应该会看到一个实验： ![已上传的实验表](/langsmith/images/uploaded-dataset.png)
 
-您的示例已被上传：![已上传的示例](/langsmith/images/uploaded-dataset-examples.png)
+您的示例将被上传： ![已上传的示例](/langsmith/images/uploaded-dataset-examples.png)
 
-点击您的实验将进入比较视图：![已上传的实验比较视图](/langsmith/images/uploaded-experiment.png)
+点击您的实验将进入比较视图： ![已上传实验比较视图](/langsmith/images/uploaded-experiment.png)
 
-随着您向数据集上传更多实验，您将能够比较结果，并在比较视图中轻松识别回归问题。
+随着您向数据集上传更多实验，您将能够在比较视图中比较结果并轻松识别回归。

@@ -1,33 +1,33 @@
 ---
-title: 导出追踪数据到 BigQuery
+title: 将追踪数据导出到 BigQuery
 sidebarTitle: 导出到 BigQuery
 description: 使用批量导出到 GCS 将 LangSmith 追踪数据加载到 BigQuery。
 ---
 
 <Info>
-**适用计划限制**
+**计划限制适用**
 
-批量导出仅在 [LangSmith Plus 或 Enterprise 级别](https://www.langchain.com/pricing-langsmith) 可用。
+批量导出仅在以下版本可用 [LangSmith Plus 或 Enterprise 套餐](https://www.langchain.com/pricing-langsmith).
 </Info>
 
-LangSmith 可以将追踪数据导出到 Google Cloud Storage (GCS) 存储桶，格式为 Parquet。从此，您可以将数据加载到 BigQuery 作为外部表（从 GCS 就地查询）或作为原生表（复制到 BigQuery 存储）。
+LangSmith 可以将追踪数据导出到 Google Cloud Storage (GCS) 存储桶，格式为 Parquet。从那里，您可以将其加载到 BigQuery 作为外部表（在 GCS 中原地查询）或本机表（复制到 BigQuery 存储中）。
 
 本指南涵盖：
 
-- 设置用于 LangSmith 的 GCS 存储桶和 HMAC 凭证。
+- 为 LangSmith 设置 GCS 存储桶和 HMAC 凭据。
 - 创建批量导出目标位置和导出作业。
 - 将导出的数据加载到 BigQuery。
 
-有关批量导出配置选项的完整详情，请参阅[批量导出追踪数据](/langsmith/data-export)和[管理批量导出目标位置](/langsmith/data-export-destinations)。
+有关批量导出配置选项的完整详细信息，请参阅 [批量导出追踪数据](/langsmith/data-export) 和 [管理批量导出目标位置](/langsmith/data-export-destinations).
 
-## 前置条件
+## 前提条件
 
-- LangSmith [追踪项目](https://smith.langchain.com/projects)中的数据。
-- 已安装 [`gcloud` CLI](https://docs.cloud.google.com/sdk/docs/install-sdk)。（您也可以使用 Google Cloud 控制台进行设置。）
+- 您的 LangSmith 中的数据 [追踪项目](https://smith.langchain.com/projects).
+- [`gcloud` 已安装 CLI](https://docs.cloud.google.com/sdk/docs/install-sdk)。（您也可以使用 Google Cloud 控制台进行设置。）
 
 ## 1. 创建 GCS 存储桶
 
-为 LangSmith 导出创建一个专用的 GCS 存储桶。使用专用存储桶可以更轻松地授予受限权限，而不影响其他数据：
+为 LangSmith 导出创建一个专用 GCS 存储桶。使用专用存储桶可以更轻松地授予有限范围的权限，而不会影响其他数据：
 
 ```bash
 gcloud storage buckets create gs://YOUR_BUCKET_NAME \
@@ -35,20 +35,20 @@ gcloud storage buckets create gs://YOUR_BUCKET_NAME \
   --uniform-bucket-level-access
 ```
 
-选择靠近 BigQuery 数据集的区域，以减少延迟并避免跨区域出口费用。
+选择靠近 BigQuery 数据集的区域，以最大程度地减少延迟并避免跨区域出口费用。
 
 ## 2. 创建服务账号并授予访问权限
 
-创建一个 GCP 服务账号，LangSmith 将使用该账号向 GCS 写入数据：
+创建一个 LangSmith 将用于向 GCS 写入数据的 GCP 服务账号：
 
 ```bash
 gcloud iam service-accounts create langsmith-bulk-export \
   --display-name="LangSmith Bulk Export"
 ```
 
-授予服务账号对您的存储桶的写访问权限。最低要求的权限是 `storage.objects.create`。授予 `storage.objects.delete` 是可选的，但建议执行。LangSmith 使用它来清理目标验证期间创建的临时测试文件。如果缺少此权限，存储桶中可能会保留一个 `tmp/` 文件夹。
+授予服务账号对您的存储桶的写入访问权限。所需的最小权限是 `storage.objects.create`。授予 `storage.objects.delete` 是可选的，但推荐使用。LangSmith 使用它来清理目标位置验证期间创建的临时测试文件。如果此权限缺失， `tmp/` 文件夹可能会留在您的存储桶中。
 
-"Storage Object Admin" 预定义角色包含所有必需和推荐的权限：
+“存储对象管理员”预定义角色包含所有必需和推荐的权限：
 
 ```bash
 gcloud storage buckets add-iam-policy-binding gs://YOUR_BUCKET_NAME \
@@ -58,14 +58,14 @@ gcloud storage buckets add-iam-policy-binding gs://YOUR_BUCKET_NAME \
 
 要使用最小自定义角色，请仅授予：
 
-- `storage.objects.create`（必需）
-- `storage.objects.delete`（可选，用于测试文件清理）
-- `storage.objects.get`（可选但建议，用于文件大小验证）
-- `storage.multipartUploads.create`（可选但建议，用于大文件上传）
+- `storage.objects.create` （必需）
+- `storage.objects.delete` （可选，用于测试文件清理）
+- `storage.objects.get` （可选但推荐，用于文件大小验证）
+- `storage.multipartUploads.create` （可选但推荐，用于大文件上传）
 
 ## 3. 生成 HMAC 密钥
 
-LangSmith 使用 S3 兼容的 XML API 连接到 GCS，这需要 HMAC 密钥，而不是服务账号 JSON 密钥。
+LangSmith 使用 S3 兼容的 XML API 连接到 GCS，这需要 HMAC 密钥而不是服务账号 JSON 密钥。
 
 为您的服务账号生成 HMAC 密钥：
 
@@ -74,13 +74,13 @@ gcloud storage hmac create \
   langsmith-bulk-export@YOUR_PROJECT.iam.gserviceaccount.com
 ```
 
-保存输出中的 `accessId` 和 `secret`。您也可以在 GCP Console 中的 **Cloud Storage → Settings → Interoperability → Create a key for a service account** 下生成 HMAC 密钥。
+保存输出中的 `accessId` 和 `secret` 。您也可以在 GCP 控制台中的 **Cloud Storage → 设置 → 互操作性 → 为服务账号创建密钥**.
 
-## 4. 创建批量导出目标
+## 4. 创建批量导出目标位置
 
-在 LangSmith 中创建一个指向您 GCS 存储桶的目标。将 `endpoint_url` 设置为 `https://storage.googleapis.com` 以使用 GCS S3 兼容 API。
+在 LangSmith 中创建一个指向您的 GCS 存储桶的目标位置。设置 `endpoint_url` to `https://storage.googleapis.com` 以使用 GCS S3 兼容 API。
 
-您需要您的 [LangSmith API key](/langsmith/create-account-api-key) 和 [workspace ID](/langsmith/set-up-hierarchy#set-up-a-workspace)。
+您将需要您的 [LangSmith API 密钥](/langsmith/create-account-api-key) 和 [工作区 ID](/langsmith/set-up-hierarchy#set-up-a-workspace).
 
 ```bash
 curl --request POST \
@@ -103,23 +103,23 @@ curl --request POST \
   }'
 ```
 
-`prefix` 是存储桶内的一个路径，LangSmith 将在此路径下写入导出的文件。例如，`langsmith-exports` 或 `data/traces`。选择任何适合您存储桶布局的值。
+`prefix` 是存储桶内 LangSmith 将写入导出文件的路径。例如， `langsmith-exports` or `data/traces`。选择任何适合您存储桶布局的值。
 
-LangSmith 通过执行测试写入来验证凭证，然后再保存目标。如果请求返回 `400` 错误，请参阅[调试目标错误](/langsmith/data-export-destinations#debug-destination-errors)。
+LangSmith 通过执行测试写入来验证凭据，然后再保存目标。如果请求返回 `400` 错误，请参阅 [调试目标错误](/langsmith/data-export-destinations#debug-destination-errors).
 
-保存响应中的 `id`；您将在下一步需要它。
+保存 `id` 从响应中；您将在下一步需要它。
 
 ### 临时验证文件
 
-在创建目标（以及[凭证轮换](#credential-rotation)）期间，LangSmith 会将临时 `.txt` 文件写入 `YOUR_PREFIX/tmp/` 以验证写入权限，然后尝试删除它。删除操作是尽力而为的：如果服务账户缺少 `storage.objects.delete` 权限，文件将不会被删除，`tmp/` 文件夹将保留在您的存储桶中。
+在目标创建期间（和 [凭据轮换](#credential-rotation)）期间，LangSmith 会写入一个临时 `.txt` 文件到 `YOUR_PREFIX/tmp/` 来验证写访问权限，然后尝试删除它。删除是尽力而为的：如果服务账号缺少 `storage.objects.delete`，则不会删除该文件，并且 `tmp/` 文件夹将保留在您的存储桶中。
 
-`tmp/` 文件夹不会影响导出，但它会被包含在广泛的 GCS URI 通配符中（例如 `gs://YOUR_BUCKET_NAME/YOUR_PREFIX/*`）。
+ `tmp/` 文件夹不会影响导出，但它将包含在广泛的 GCS URI 通配符中（例如， `gs://YOUR_BUCKET_NAME/YOUR_PREFIX/*`).
 
-## 5. 创建批量导出作业
+## 5. 创建批量导出任务
 
-创建针对特定项目的导出。使用 `format_version: v2_beta` 以实现 BigQuery 兼容性——它会产生 BigQuery 正确处理的 UTC 时区感知时间戳。
+创建一个针对特定项目的导出。使用 `format_version: v2_beta` 以实现 BigQuery 兼容性——它生成 UTC 时区感知的时间戳，BigQuery 可以正确处理。
 
-您将需要项目 ID（`session_id`），您可以从[**跟踪项目**列表](https://smith.langchain.com)中的项目视图复制它。
+您将需要项目 ID（`session_id`），您可以从 [**追踪项目** 列表中复制](https://smith.langchain.com).
 
 **一次性导出：**
 
@@ -139,7 +139,7 @@ curl --request POST \
   }'
 ```
 
-**定期（重复）导出：**
+**计划（重复）导出：**
 
 ```bash
 curl --request POST \
@@ -157,83 +157,83 @@ curl --request POST \
   }'
 ```
 
-Snappy 压缩速度快，且被 BigQuery 广泛支持。所有可用选项，请参阅[批量导出追踪数据](/langsmith/data-export#2-create-an-export-job)，包括字段过滤和过滤表达式。
+Snappy 压缩快速且被 BigQuery 广泛支持。有关所有可用选项，请参阅 [批量导出追踪数据](/langsmith/data-export#2-create-an-export-job)，包括字段过滤和过滤表达式。
 
 ### 输出文件结构
 
-导出文件将使用 Hive 分区路径结构存入 GCS：
+导出的文件使用 Hive 分区路径结构放入 GCS：
 
 ```
 gs://YOUR_BUCKET_NAME/YOUR_PREFIX/export_id=<uuid>/tenant_id=<uuid>/session_id=<uuid>/resource=runs/year=<year>/month=<month>/day=<day>/<filename>.parquet
 ```
 
-路径中的分区列（`export_id`、`tenant_id`、`session_id`、`resource`、`year`、`month`、`day`）在启用 Hive 分区检测后可在 BigQuery 中作为可查询列使用。
+路径中的分区列（`export_id`, `tenant_id`, `session_id`, `resource`, `year`, `month`, `day`）在启用 Hive 分区检测时可用作 BigQuery 中的可查询列。
 
 ## 6. 将数据加载到 BigQuery
 
-BigQuery 提供两种访问导出数据的方式。两者都需要先授予 BigQuery 服务账号对 GCS 存储桶的读取权限。请根据您的需求选择：
+BigQuery 提供两种访问导出数据的方式。两种方式都需要先授予 BigQuery 服务账号对您 GCS 存储桶的读取权限。请根据您的需求选择：
 
-- **外部表：** 数据保留在 GCS 中，BigQuery 直接查询原地数据。BigQuery 中不产生存储费用，但查询性能比原生存储慢。请参阅[所需角色](https://docs.cloud.google.com/bigquery/docs/query-cloud-storage-data#required-roles)。
-- **原生表：** 数据复制到 BigQuery 存储中。查询更快，支持完整的 BigQuery 功能，但会产生 BigQuery 存储费用。请参阅[所需权限](https://docs.cloud.google.com/bigquery/docs/cloud-storage-transfer#required_permissions)。
+- **外部表：** 数据保留在 GCS 中，BigQuery 直接在原位置查询。BigQuery 中没有存储费用，但查询性能比原生存储慢。请参阅 [所需角色](https://docs.cloud.google.com/bigquery/docs/query-cloud-storage-data#required-roles).
+- **原生表：** 数据被复制到 BigQuery 存储中。查询速度更快，完全支持 BigQuery 功能，但会产生 BigQuery 存储费用。请参阅 [所需权限](https://docs.cloud.google.com/bigquery/docs/cloud-storage-transfer#required_permissions).
 
 ### 创建表
 
 <Tabs>
-  <Tab title="外部表">
+  <Tab title="External table">
     外部表直接从 GCS 查询数据，无需复制到 BigQuery。
 
-    1. 在 BigQuery 控制台中，在 **Explorer** 窗格中展开您的项目和数据集。
-    1. 点击数据集的 **操作** 菜单（三个点）并选择 **创建表**。
-    1. 在 **Source** 下：
-       - 将 **Create table from** 设置为 **Google Cloud Storage**。
-       - 将文件路径设置为 `gs://YOUR_BUCKET_NAME/YOUR_PREFIX/export_id=*`。使用 `export_id=*` 可将 BigQuery 的查询范围限定为 Hive 分区导出目录，并排除 LangSmith 在目标验证期间写入的 `tmp/` 文件夹（请参阅[临时验证文件](#temporary-validation-file)）。
-       - 将 **File format** 设置为 **Parquet**。
-    1. 勾选 **Source data partitioning**，然后：
-       - 将 **Source URI prefix** 设置为 `gs://YOUR_BUCKET_NAME/YOUR_PREFIX`。
-       - 将 **Partition inference mode** 设置为 **Automatically infer types**。
-    1. 在 **Destination** 下：
-       - 选择您的项目和数据集。
-       - 输入表名，例如 `langsmith_runs`。
-       - 将 **Table type** 设置为 **External table**。
-    1. 在 **Schema** 下，启用 **Auto-detect**。
-    1. 点击 **Create table**。
+    1. 在 BigQuery 控制台中，在 **资源管理器** pane.
+    1. 点击数据集的 **操作** 菜单（三个点）并选择 **创建表**.
+    1. 在 **源**:
+       - 下设置 **从以下位置创建表** to **Google Cloud Storage**.
+       - 将文件路径设置为 `gs://YOUR_BUCKET_NAME/YOUR_PREFIX/export_id=*`。使用 `export_id=*` 将 BigQuery 限定为 Hive 分区导出目录，并排除 `tmp/` LangSmith 在目标验证期间写入的文件夹（请参阅 [临时验证文件](#temporary-validation-file)).
+       - 设置 **文件格式** to **Parquet**.
+    1. 勾选 **源数据分区**，然后：
+       - 设置 **源 URI 前缀** to `gs://YOUR_BUCKET_NAME/YOUR_PREFIX`.
+       - 设置 **分区推理模式** to **自动推断类型**.
+    1. 在 **目标**:
+       - 下选择您的项目和数据集。
+       - 输入表名，例如 `langsmith_runs`.
+       - 设置 **表类型** to **外部表**.
+    1. 在 **架构**下，启用 **Auto-detect**.
+    1. 点击 **创建表**.
 
-    分区路径列（`export_id`、`tenant_id`、`session_id`、`resource`、`year`、`month`、`day`）可作为可查询列使用。在查询中筛选 `year`、`month` 或 `day` 以启用分区裁剪。
+    分区路径列（`export_id`, `tenant_id`, `session_id`, `resource`, `year`, `month`, `day`）可作为可查询列使用。在 `year`, `month`, or `day` 上筛选以启用分区剪枝。
   </Tab>
-  <Tab title="原生表">
-    原生表将 Parquet 数据传输到 BigQuery 存储中，以获得完整的查询性能。
+  <Tab title="Native table">
+    原生表将 Parquet 数据传输到 BigQuery 存储中，以实现完整的查询性能。
 
-    1. 前往 Google Cloud 控制台中的[数据传输页面](https://console.cloud.google.com/bigquery/transfers)并选择 **+ Create transfer**。
-    1. 对于 **Source type**，选择 **Google Cloud Storage**。
-    1. 输入 **Transfer name**。您可以在必要时访问并编辑该传输。
-    1. 选择 **Schedule option**。如果您不想重复导出，可以选择 **On demand** 并手动触发导出。
+    1. 转到 [数据传输页面](https://console.cloud.google.com/bigquery/transfers) 在 Google Cloud 控制台中并选择 **+ 创建传输**.
+    1. 对于 **源类型**，选择 **Google Cloud Storage**.
+    1. 输入 **传输名称**。如有必要，您可以随时访问并编辑传输。
+    1. 选择 **计划选项**。如果您不想重复导出，可以选择 **按需** 并手动触发导出。
 
-    1. 在 BigQuery 控制台中，在 **Explorer** 窗格中展开您的项目和数据集。
-    1. 点击数据集的 **操作** 菜单（三个点）并选择 **创建表**。
-    1. 在 **Source** 下：
-       - 将 **Create table from** 设置为 **Google Cloud Storage**。
-       - 将文件路径设置为 `gs://YOUR_BUCKET_NAME/YOUR_PREFIX/export_id=*`。使用 `export_id=*` 可排除 LangSmith 在目标验证期间写入的 `tmp/` 文件夹（请参阅[临时验证文件](#temporary-validation-file)）。
-       - 将 **File format** 设置为 **Parquet**。
-    1. 勾选 **Source data partitioning**，然后：
-       - 将 **Source URI prefix** 设置为 `gs://YOUR_BUCKET_NAME/YOUR_PREFIX`。
-       - 将 **Partition inference mode** 设置为 **Automatically infer types**。
-    1. 在 **Destination** 下：
-       - 选择您的项目和数据集。
-       - 输入表名，例如 `langsmith_runs`。
-       - 将 **Table type** 设置为 **Native table**。
-    1. 在 **Advanced options** 下，将 **Write preference** 设置为 **Write if empty** 用于新表。
-    1. 点击 **Create table**。
+    1. 在 BigQuery 控制台中，在 **资源管理器** pane.
+    1. 点击数据集的 **操作** 菜单（三个点）并选择 **创建表**.
+    1. 在 **源**:
+       - 下设置 **从以下位置创建表** to **Google Cloud Storage**.
+       - 设置文件路径为 `gs://YOUR_BUCKET_NAME/YOUR_PREFIX/export_id=*`。使用 `export_id=*` 排除了 `tmp/` LangSmith 在目标验证期间写入的文件夹（请参阅 [临时验证文件](#temporary-validation-file)).
+       - 设置 **文件格式** to **Parquet**.
+    1. 勾选 **源数据分区**，然后：
+       - 设置 **源 URI 前缀** to `gs://YOUR_BUCKET_NAME/YOUR_PREFIX`.
+       - 设置 **分区推断模式** to **自动推断类型**.
+    1. 在 **目标**:
+       - 下，选择您的项目和数据集。
+       - 输入表名，例如 `langsmith_runs`.
+       - 设置 **表类型** to **原生表**.
+    1. 在 **高级选项**下，设置 **写入偏好** to **仅在为空时写入** 用于新表。
+    1. 点击 **创建表**.
 
-    BigQuery 运行加载作业来复制数据。Hive 分区列作为常规列出现在表中。可用的数据列完整列表，请参阅[可导出字段](/langsmith/data-export#exportable-fields)。
+    BigQuery 运行加载作业来复制数据。Hive 分区列作为常规列出现在表中。有关可用的数据列完整列表，请参阅 [可导出字段](/langsmith/data-export#exportable-fields).
   </Tab>
 </Tabs>
 
 ## 凭证轮换
 
-要在不中断活跃导出的情况下轮换您的 HMAC 密钥：
+如需轮换 HMAC 密钥而不中断活动中的导出：
 
-1. **在 GCP 中为同一服务账号生成新的 HMAC 密钥**。
-2. **使用新凭据调用 PATCH 端点**：
+1. **在 GCP 中为同一服务账号生成新的 HMAC 密钥** 。
+2. **调用 PATCH 端点** 并提供新凭证：
 
    ```bash
    curl --request PATCH \
@@ -249,22 +249,22 @@ BigQuery 提供两种访问导出数据的方式。两者都需要先授予 BigQ
      }'
    ```
 
-LangSmith 在保存前会使用测试写入来验证新凭据。在此验证过程中，存储桶中可能会出现新的 `tmp/` 文件（请参阅[临时验证文件](#temporary-validation-file)）。
+   LangSmith 会使用测试写入来验证新凭证，然后再保存。在验证期间，您的工作桶中可能会出现一个新的 `tmp/` 文件（请参阅 [临时验证文件](#temporary-validation-file)).
 
-3. **保持旧的 HMAC 密钥有效**，直到所有进行中的导出运行完成。在过渡期间，两组凭据同时有效。
-4. 确认没有进行中的运行使用旧密钥后，**删除 GCP 中的旧 HMAC 密钥**。
+3. **保持旧的 HMAC 密钥处于活动状态** 直到所有正在进行的导出运行完成。在过渡期间，两组凭证可以同时有效。
+4. **删除旧的 HMAC 密钥** ，在 GCP 中确认没有正在进行的运行使用它们后。
 
-如需了解完整详情，请参阅[轮换目标凭据](/langsmith/data-export-destinations#rotate-destination-credentials)。
+有关完整详情，请参阅 [轮换目标凭证](/langsmith/data-export-destinations#rotate-destination-credentials).
 
 ## 故障排除
 
-| 症状 | 可能原因 | 解决方法 |
+| 症状 | 可能的原因 | 修复方法 |
 |---------|--------------|-----|
-| 创建目标时出现 `400 Access denied` | HMAC 凭据缺少写入权限 | 验证服务账号对存储桶具有 `storage.objects.create` 权限 |
+| `400 Access denied` 创建目标时 | HMAC 凭据缺少写入权限 | 验证服务账号具有 `storage.objects.create` 对该存储桶的权限 |
 | `400 Key ID you provided does not exist` | HMAC 访问 ID 无效 | 在 GCP 中重新生成 HMAC 密钥 |
-| `400 Invalid endpoint` | 端点 URL 格式错误 | 必须使用 `https://storage.googleapis.com` |
-| BigQuery 表显示无行 | 导出尚未完成 | 使用 `GET /api/v1/bulk-exports/{export_id}` 检查导出状态 |
-| BigQuery 分区裁剪不生效 | 源 URI 前缀不正确 | 确保源 URI 前缀在第一个分区键之前结束，例如 `gs://BUCKET/PREFIX` |
-| BigQuery 拾取了 `tmp/` 文件 | 文件路径通配符范围过宽 | 在文件路径中使用 `export_id=*` 而不是 `*` |
+| `400 Invalid endpoint` | 端点 URL 格式错误 | 使用准确的 `https://storage.googleapis.com` |
+| BigQuery 表中没有数据行 | 导出尚未完成 | 使用以下方式检查导出状态 `GET /api/v1/bulk-exports/{export_id}` |
+| BigQuery 分区裁剪不工作 | 源 URI 前缀不正确 | 确保源 URI 前缀在第一个分区键之前结束，例如 `gs://BUCKET/PREFIX` |
+| BigQuery 拾取了 `tmp/` 文件 | 文件路径 glob 模式过宽 | 使用 `export_id=*` 在文件路径中而不是 `*` |
 
-有关其他错误代码和导出状态详情，请参阅[监控和排查批量导出](/langsmith/data-export-monitor)。
+有关其他错误代码和导出状态详细信息，请参阅 [监控和排查批量导出](/langsmith/data-export-monitor).

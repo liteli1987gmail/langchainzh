@@ -14,33 +14,33 @@ import LanggraphInterruptsValidateConditionalEdgePatternJs from '/snippets/code-
 import LanggraphInterruptsValidateConditionalEdgeJs from '/snippets/code-samples/langgraph-interrupts-validate-conditional-edge-js.mdx';
 import LanggraphInterruptsValidateConditionalEdgePy from '/snippets/code-samples/langgraph-interrupts-validate-conditional-edge-py.mdx';
 
-中断允许你在特定点暂停图执行，并等待外部输入后再继续。这使得人工介入模式成为可能，在这种模式下你需要外部输入才能继续执行。当触发中断时，LangGraph 会使用其[持久化层](/oss/langgraph/persistence)保存图状态，并无限期等待直到你恢复执行。
+中断允许您在特定点暂停图执行并等待外部输入后再继续。这实现了人机协作模式，在此模式下您需要外部输入才能继续。当触发中断时，LangGraph 使用其 [持久化](/oss/langgraph/persistence) 层保存图状态，并无限期等待直到您恢复执行。
 
-中断的工作原理是在图的任意节点中调用 `interrupt()` 函数。该函数接受任意 JSON 可序列化的值，并将其暴露给调用者。当你准备继续时，通过使用 `Command` 重新调用图来恢复执行，此时 `Command` 会成为节点内部 `interrupt()` 调用的返回值。
+中断通过调用 `interrupt()` 函数来实现，您可以在图的任意节点中调用它。该函数接受任何可序列化为 JSON 的值，并将其暴露给调用者。当您准备继续时，使用 `Command`重新调用图来恢复执行，这将成为 `interrupt()` 从节点内部调用的返回值。
 
-与静态断点（仅在特定节点前后暂停）不同，中断是 **动态的**：可以放置在代码任意位置，并能根据应用逻辑进行条件判断。
+与静态断点（在特定节点之前或之后暂停）不同，中断是 **动态的**：它们可以放置在代码的任何位置，并且可以根据应用逻辑有条件地触发。
 
 :::python
-- **检查点保存你的位置：** 检查点写入精确的图状态，以便你稍后恢复，即使处于错误状态。
-- **`thread_id` 是你的指针：** 设置 `config={"configurable": {"thread_id": ...}}` 以告诉检查点应加载哪个状态。
-- **中断载荷通过 `stream.interrupts` 暴露：** 使用[事件流](/oss/langgraph/event-streaming)（`graph.stream_events(..., version="v3")`）时，传递给 `interrupt()` 的值会出现在 `stream.interrupts` 上，且当运行因等待输入而暂停时 `stream.interrupted` 为 `True`。
+- **检查点保存您的位置：** 检查点写入器会精确保存图的状态，以便您稍后可以恢复，即使处于错误状态。
+- **`thread_id` 是指针：** 设置 `config={"configurable": {"thread_id": ...}}` 以指定检查点要加载的状态。
+- **中断负载通过以下方式暴露 `stream.interrupts`:** 当使用 [事件流](/oss/langgraph/event-streaming) (`graph.stream_events(..., version="v3")`时，您传递给 `interrupt()` 的值显示在 `stream.interrupts`，并且 `stream.interrupted` is `True` 当运行暂停等待输入时。
 :::
 :::js
-- **检查点保存你的位置：** 检查点写入精确的图状态，以便你稍后恢复，即使处于错误状态。
-- **`thread_id` 是你的指针：** 使用 `{ configurable: { thread_id: ... } }` 作为 `invoke` 方法的选项，以告诉检查点应加载哪个状态。
-- **中断载荷作为 `__interrupt__` 暴露：** 传递给 `interrupt()` 的值在 `__interrupt__` 字段中返回给调用者，以便你了解图正在等待什么。
+- **检查点保存您的位置：** 检查点写入器会精确保存图的状态，以便您稍后可以恢复，即使处于错误状态。
+- **`thread_id` 是指针：** 使用 `{ configurable: { thread_id: ... } }` 作为 `invoke` 方法的选项来指定检查点要加载的状态。
+- **中断负载作为 `__interrupt__`:** 传递给 `interrupt()` 的值通过 `__interrupt__` 字段返回给调用者，以便您知道图正在等待什么。
 :::
 
-你选择的 `thread_id` 实际上就是你的持久化游标。重复使用它会恢复同一检查点；使用新值则启动一个具有空状态的全新线程。
+您选择的 `thread_id` 实际上就是您的持久游标。重用它会从同一检查点恢复；使用新值会启动一个具有空状态的新线程。
 
-## 使用 `interrupt` 暂停
+## 使用以下方式暂停 `interrupt`
 
-@[`interrupt`] 函数会暂停图执行并将一个值返回给调用者。当你在节点内调用 @[`interrupt`] 时，LangGraph 保存当前图状态并等待你提供输入来恢复执行。
+@[`interrupt`] 函数会暂停图执行并向调用者返回值。当您调用 @[`interrupt`] 时，LangGraph 会保存当前图状态并等待您恢复执行并提供输入。
 
-要使用 @[`interrupt`]，你需要：
-1. 一个 **检查点器** 来持久化图状态（生产环境中请使用持久化检查点器）
-2. 配置中的 **线程 ID**，以便运行时知道从哪个状态恢复
-3. 在你想要暂停的位置调用 `interrupt()`（载荷必须可 JSON 序列化）
+要使用 @[`interrupt`]，您需要：
+1. A **检查点** 持久保存图状态（生产环境中使用持久化检查点）
+2. A **线程 ID** 在配置中，以便运行时知道从哪个状态恢复
+3. 在您想暂停的位置调用 `interrupt()` （负载必须可序列化为 JSON）
 
 :::python
 ```python
@@ -69,50 +69,48 @@ async function approvalNode(state: State) {
 ```
 :::
 
-当您调用 @[`interrupt`] 时，以下是发生的过程：
+当您调用 @[`interrupt`], 发生的事情如下：
 
-1. **图执行在** 调用 @[`interrupt`] 的确切位置被**挂起**
-2. **状态被保存** 到检查点中，以便后续可以恢复执行，在生产环境中，这应该是持久化检查点（例如由数据库支持）
+1. **图执行被挂起** 在恰好调用 @[`interrupt`] 的位置
+2. **状态被保存** 使用检查点器，以便稍后可以恢复执行，在生产环境中，这应该是一个持久化检查点器（例如，由数据库支持）
 :::python
-3. **值被返回** 给调用者，在使用[事件流](/oss/langgraph/event-streaming)时（`graph.stream_events(..., version="v3")`）返回到 `stream.interrupts`，或使用默认的 `invoke()` API 时返回到 `__interrupt__`；它可以是任何可 JSON 序列化的值（字符串、对象、数组等）
+3. **值被返回** 给调用方， `stream.interrupts` 当使用 [事件流](/oss/langgraph/event-streaming) (`graph.stream_events(..., version="v3")`时），或在 `__interrupt__` 使用默认 `invoke()` API 时；它可以是任何 JSON 可序列化值（字符串、对象、数组等）
 :::
 :::js
-3. **值被返回** 给调用者，存储在 `__interrupt__` 中；它可以是任何可 JSON 序列化的值（字符串、对象、数组等）
+3. **值被返回** 给调用方， `__interrupt__`；它可以是任何 JSON 可序列化值（字符串、对象、数组等）
 :::
-4. **图无限期等待**，直到您通过响应恢复执行
+4. **图无限期等待** 直到你使用响应恢复执行
 5. **响应在恢复时被传递回** 节点，成为 `interrupt()` 调用的返回值
 
-## 恢复中断
+## 恢复会中断
 
-中断暂停执行后，您可以通过使用包含恢复值的 `Command` 重新调用图来恢复执行。恢复值被传递回 `interrupt` 调用，允许节点继续使用外部输入执行。
+在中断暂停执行后，你可以通过使用包含恢复值的 `Command` 再次调用图来恢复它。恢复值被传递回 `interrupt` 调用，使节点能够使用外部输入继续执行。
 
 :::python
-驱动可能中断的图的推荐方式是[事件流](/oss/langgraph/event-streaming)——它通过 `stream.interrupts` 和 `stream.interrupted` 暴露中断，并通过 `stream.output` 公开最终状态。
+驱动可能中断的图的推荐方式是 [事件流](/oss/langgraph/event-streaming) —— 它通过 `stream.interrupts` 和 `stream.interrupted`暴露中断，并通过 `stream.output`.
 
 <LanggraphInterruptsResumeV2Py />
 
 <Note>
-默认的 `graph.invoke(...)` API 仍然有效，并在 `result["__interrupt__"]` 下公开中断。当您不需要流式投影时使用它；否则优先使用 `graph.stream_events(..., version="v3")`。
+默认 `graph.invoke(...)` API 仍然有效，并在 `result["__interrupt__"]`下暴露中断。当你不需要流式投影时使用它；否则优先使用 `graph.stream_events(..., version="v3")`.
 </Note>
 
-**恢复的关键点：**
+**关于恢复的关键要点：**
 
-- 恢复时必须使用与中断发生时**相同的线程 ID**
+- 你必须使用相同的 **线程 ID** 来恢复，该 ID 是在发生中断时使用的
 - 传递给 `Command(resume=...)` 的值成为 @[`interrupt`] 调用的返回值
-- 恢复时节点从调用 @[`interrupt`] 的节点开头重新开始，因此 @[`interrupt`] 之前的任何代码都会再次运行
-- 恢复值可以是任何可 JSON 序列化的值
+- 节点从 @[`interrupt`] 被调用的节点开头重新启动，所以 @[`interrupt`] 之前的任何代码都会再次运行
+- 你可以传递任何 JSON 可序列化值作为恢复值
 
 <Warning>
 
-`Command(resume=...)` 是**唯一**设计作为 `invoke()`/`stream()`/`stream_events()` 输入的 `Command` 模式。其他 `Command` 参数（`update`、`goto`、`graph`）设计用于[从节点函数返回](/oss/langgraph/graph-api#command)。不要将 `Command(update=...)` 作为输入来继续多轮对话——请改用普通输入字典。
+`Command(resume=...)` 是 **唯一** `Command` 设计作为 `invoke()`/`stream()`/`stream_events()`输入的模式。其他 `Command` 参数（`update`, `goto`, `graph`）是设计用于 [从节点函数返回](/oss/langgraph/graph-api#command)。不要将 `Command(update=...)` 作为多轮对话的输入传递——而应传递一个普通的输入字典。
 
 </Warning>
 
 :::
 
 :::js
-
-:::
 ```typescript
 import { Command } from "@langchain/langgraph";
 
@@ -131,16 +129,16 @@ console.log(result.__interrupt__);
 await graph.invoke(new Command({ resume: true }), config);
 ```
 
-**恢复的关键要点：**
+**关于恢复的关键要点：**
 
-- 恢复时必须使用**与中断发生时相同的线程 ID**
-- 传递给 `new Command({ resume: ... })` 的值将成为 @[`interrupt`] 调用
-- 恢复时，节点从调用 @[`interrupt`] 的节点开头重新启动，因此 @[`interrupt`] 之前的任何代码都会再次运行
-- 可以传递任何 JSON 可序列化的值作为恢复值
+- 你必须使用 **相同的线程 ID** 恢复时必须使用中断发生时所使用的
+- 传递给 `new Command({ resume: ... })` 的值将成为 @[`interrupt`] 调用的返回值
+- 节点从 @[`interrupt`] 被调用的节点开始处重新启动，因此 @[`interrupt`] 之前的任何代码都会再次运行
+- 你可以传递任何可 JSON 序列化的值作为恢复值
 
 <Warning>
 
-`new Command({ resume: ... })` 是唯一预期作为 `invoke()`/`stream()`/`stream_events()` 输入的 `Command` 模式。其他 `Command` 参数（`update`、`goto`、`graph`）设计用于[从节点函数返回](/oss/langgraph/graph-api#command)。不要将 `new Command({ update: ... })` 作为输入来继续多轮对话——而是传递一个普通输入对象。
+`new Command({ resume: ... })` 是 **唯一** `Command` 的模式，作为输入用于 `invoke()`/`stream()`/`stream_events()`。其他 `Command` 参数 (`update`, `goto`, `graph`) 旨在用于 [从节点函数返回](/oss/langgraph/graph-api#command)。请勿将 `new Command({ update: ... })` 作为输入来继续多轮对话——请改用普通输入对象。
 
 </Warning>
 
@@ -148,47 +146,47 @@ await graph.invoke(new Command({ resume: true }), config);
 
 ## 常见模式
 
-中断功能的核心在于能够暂停执行并等待外部输入。这对于多种用例非常有用，包括：
+中断解锁的关键在于能够暂停执行并等待外部输入。这对于多种用例非常有用，包括：
 
-- <Icon icon="circle-check" /> [审批工作流](#approve-or-reject)：在执行关键操作（API 调用、数据库变更、金融交易）前暂停
-- <Icon icon="link" /> [处理多个中断](#handling-multiple-interrupts)：恢复多个中断时，将中断 ID 与恢复值配对
-- <Icon icon="pencil" /> [审核和编辑](#review-and-edit-state)：让人类在继续前审核和修改 LLM 输出或工具调用
-- <Icon icon="tool" /> [中断工具调用](#interrupts-in-tools)：在执行工具调用前暂停，以便审核和编辑工具调用
-- <Icon icon="shield-check" /> [验证人工输入](#validating-human-input)：在继续下一步前暂停以验证人工输入
+- <Icon icon="circle-check" /> [审批工作流](#approve-or-reject)：在执行关键操作（API 调用、数据库更改、金融交易）之前暂停
+- <Icon icon="link" /> [处理多个中断](#handling-multiple-interrupts)：在单次调用中恢复多个中断时，将中断 ID 与恢复值配对
+- <Icon icon="pencil" /> [审查和编辑](#review-and-edit-state)：让人类在继续之前审查和修改 LLM 输出或工具调用
+- <Icon icon="tool" /> [中断工具调用](#interrupts-in-tools)：在执行工具调用之前暂停，以审查和编辑工具调用
+- <Icon icon="shield-check" /> [验证人工输入](#validating-human-input)：在继续下一步之前暂停以验证人工输入
 
-### 使用人工介入（HITL）中断进行流式处理
+### 使用人在回路 (HITL) 中断进行流式传输
 
-在构建具有人工介入工作流的交互式智能体时，可以使用[事件流式处理](/oss/langgraph/event-streaming)来在处理中断的同时并发地消费消息块和状态快照。
+在构建具有人在回路工作流的交互式代理时，你可以使用 [事件流式传输](/oss/langgraph/event-streaming) 在处理中断的同时并发消费消息块和状态快照。
 
-循环使用 `graph.stream_events(..., version="v3")` 返回的类型化投影，直到运行完成：
-- 通过 `stream.messages` 逐 token 流式处理 AI 响应
-- 通过 `stream.values` 观察每步的状态快照
-- 通过 `stream.interrupted` 检测中断，并从 `stream.interrupts` 读取其负载
-- 使用 `Command(resume=...)` 再次调用 `stream_events` 来恢复执行；循环直到 `stream.interrupted` 为 false
+在循环中使用 `graph.stream_events(..., version="v3")` 返回的类型化投影，直到运行完成：
+- 通过 `stream.messages`
+- 按 token 流式传输 AI 响应 `stream.values`
+- 通过 `stream.interrupted` 观察每步状态快照 `stream.interrupts`
+- 通过 `stream_events` 检测中断 `Command(resume=...)` 并从 `stream.interrupted` 读取其负载
 
 :::python
 <LanggraphInterruptsHitlStreamPy />
 
-- **`stream.messages`**：以内容块形式输出的聊天模型输出；遍历每个 `message.text` 以获取 token 增量。对于嵌套子图，从 `stream.subgraphs[*].messages` 读取消息块。
-- **`stream.values`**：每步后的完整状态快照
-- **`stream.interrupted` / `stream.interrupts`**：每次运行后检查图是否暂停；从 `stream.interrupts` 读取负载
-- **`Command(resume=...)`**：作为下一个 `stream_events` 输入传递以恢复；循环直到运行完成且不中断
+- **`stream.messages`**通过调用 `message.text` 恢复执行 `stream.subgraphs[*].messages`.
+- **`stream.values`**并重复直到
+- **`stream.interrupted` / `stream.interrupts`**为 false `stream.interrupts`
+- **`Command(resume=...)`**: 传递为下一个 `stream_events` 输入以恢复；循环直到运行完成而不中断
 :::
 
 :::js
 <LanggraphInterruptsHitlStreamJs />
 
-- **`stream.messages`**：以内容块形式输出的聊天模型输出；遍历每个 `message.text` 以获取 token 增量。对于嵌套子图，从 `stream.subgraphs[*].messages` 读取消息块。
-- **`stream.values`**：每步后的完整状态快照
-- **`stream.interrupted` / `stream.interrupts`**：每次运行后检查图是否暂停；从 `stream.interrupts` 读取负载
-- **`Command(resume=...)`**：作为下一个 `streamEvents` 输入传递以恢复；循环直到运行完成且不中断
+- **`stream.messages`**: 聊天模型输出为内容块；迭代 `message.text` 用于令牌增量。对于嵌套子图，从...读取消息块 `stream.subgraphs[*].messages`.
+- **`stream.values`**: 每步后的完整状态快照
+- **`stream.interrupted` / `stream.interrupts`**: 每次运行后，检查图是否暂停；从...读取负载 `stream.interrupts`
+- **`Command(resume=...)`**: 传递为下一个 `streamEvents` 输入以恢复；循环直到运行完成而不中断
 :::
 
 ### 处理多个中断
 
-当并行分支同时中断时（例如，扇出到多个节点，每个节点都调用 `interrupt()`），可能需要在单次调用中恢复多个中断。
-当使用单次调用恢复多个中断时，将每个中断 ID 映射到其恢复值。
-这确保每个响应在运行时与正确的中断配对。
+当并行分支同时中断时（例如，扇出到多个节点，每个节点调用 `interrupt()`），您可能需要在一次调用中恢复多个中断。
+使用单次调用恢复多个中断时，请将每个中断ID映射到其恢复值。
+这确保了每个响应在运行时与正确的中断配对。
 
 :::python
 
@@ -274,7 +272,7 @@ main().catch(console.error);
 
 ### 批准或拒绝
 
-中断最常见的用途之一是在执行关键操作之前暂停并请求批准。例如，您可能希望让人工批准 API 调用、数据库变更或任何其他重要决策。
+中断最常见的用途之一是在关键操作之前暂停并请求批准。例如，您可能希望让人类批准API调用、数据库更改或任何其他重要决策。
 
 :::python
 ```python
@@ -318,7 +316,7 @@ const approvalNode: typeof State.Node = (state) => {
 :::
 
 :::python
-当你恢复图时，传递 `True` 以批准或 `False` 以拒绝：
+当您恢复图时，传递 `True` 以批准，或 `False` 以拒绝：
 ```python
 # To approve
 graph.stream_events(Command(resume=True), config=config, version="v3").output
@@ -329,9 +327,7 @@ graph.stream_events(Command(resume=False), config=config, version="v3").output
 :::
 
 :::js
-当你恢复图时，传入 `true` 以批准或 `false` 来拒绝：
-
-</fragment>
+当您恢复图时，传递 `true` 以批准，或 `false` 以拒绝：
 ```typescript
 // To approve
 await graph.invoke(new Command({ resume: true }), config);
@@ -340,7 +336,8 @@ await graph.invoke(new Command({ resume: true }), config);
 await graph.invoke(new Command({ resume: false }), config);
 ```
 :::
-<Accordion title="完整示例">
+
+<Accordion title="Full example">
     :::python
 
     <LanggraphInterruptsApprovalPy />
@@ -397,17 +394,15 @@ await graph.invoke(new Command({ resume: false }), config);
     const resumed = await graph.invoke(new Command({ resume: true }), config);
     console.log(resumed.status); // -> "approved"
     ```
-:::
+    :::
 
 </Accordion>
 
-### 审查和编辑状态
+### 审阅和编辑状态
 
-有时您希望让人类在继续之前审查和编辑部分图状态。这对于纠正 LLM、添加缺失信息或进行调整非常有用。
+有时您希望让人类在继续之前审阅和编辑图状态的部分内容。这对于纠正LLM、添加缺失信息或进行调整非常有用。
 
 :::python
-
-</fragment>
 ```python
 from langgraph.types import interrupt
 
@@ -440,7 +435,7 @@ const reviewNode: typeof State.Node = (state) => {
 ```
 :::
 
-恢复时，提供编辑后的内容：
+恢复时，提供编辑的内容：
 
 :::python
 ```python
@@ -461,7 +456,7 @@ await graph.invoke(
 ```
 :::
 
-<Accordion title="完整示例">
+<Accordion title="Full example">
     :::python
 
     <LanggraphInterruptsReviewPy />
@@ -469,8 +464,6 @@ await graph.invoke(
     :::
 
     :::js
-
-</fragment>
 
     ```typescript
     import {
@@ -515,13 +508,15 @@ await graph.invoke(
     );
     console.log(finalState.generatedText); // -> "Improved draft after review"
     ```
-:::
+    :::
+
+</Accordion>
 
 ### 工具中的中断
 
-您也可以将中断直接放置在工具函数内部。这样可以使工具本身在每次被调用时暂停以等待批准，并允许在工具调用执行之前进行人工审查和编辑。
+您也可以直接在工具函数中放置中断。这使得工具本身在每次被调用时暂停以等待批准，并允许在执行前对工具调用进行人工审阅和编辑。
 
-首先，定义一个使用 @[`interrupt`] 的工具：
+首先，定义一个使用@[`interrupt`]:
 
 :::python
 ```python
@@ -588,9 +583,11 @@ const sendEmailTool = tool(
   },
 );
 ```
-这种方法在你希望审批逻辑与工具本身共存，使其可以在图的不同部分重复使用时非常有用。LLM 可以自然地调用该工具，而中断会在工具被调用时暂停执行，允许你批准、编辑或取消该操作。
+:::
 
-<Accordion title="完整示例">
+当您希望审批逻辑与工具本身绑定，使其可在图的不同部分重复使用时，这种方法特别有用。LLM可以自然地调用工具，而中断会在工具被触发时暂停执行，让您可以批准、编辑或取消该操作。
+
+<Accordion title="Full example">
     :::python
 
     ```python
@@ -786,50 +783,49 @@ const sendEmailTool = tool(
     );
     console.log(resumed.messages.at(-1)); // -> Tool result returned by send_email
     ```
-<fragment>
     :::
 
 </Accordion>
 
-### 验证人类输入
+### 验证人工输入
 
-有时您需要验证来自人类的输入，并在值无效时重新提示。推荐的方法是**每次节点调用时调用一次** `interrupt()`，将错误消息存储在状态中从节点返回，并使用**条件边**循环回节点，直到提供有效值。
+有时您需要验证人工输入的值，若无效则重新提示。建议的方法是调用 `interrupt()` **每节点调用一次**，从节点返回并将错误信息存储在状态中，然后使用 **条件边** 循环回到节点，直到提供有效值。
 
 <Warning>
 
-**避免在单个节点内使用 `while True` + `interrupt()` 循环。** 因为节点在每次恢复时从头重新运行（参见[中断规则](#rules-of-interrupts)），所以在循环内多次调用 `interrupt()` 会导致每次恢复都重放所有先前的迭代：第一次恢复重放 1 次迭代，第二次重放 2 次，依此类推。结果是循环体内的任何代码都呈指数级重新执行。
+**避免 `while True` + `interrupt()` 单个节点内的循环。** 因为节点在每次恢复时都从头重新运行（参见 [中断规则](#rules-of-interrupts)），一个调用 `interrupt()` 多次的循环会导致每次恢复都重放所有先前的迭代：第一次恢复重放1次迭代，第二次重放2次，依此类推。结果是循环体内的任何代码都会被指数级重新执行。
 
 </Warning>
 
 :::python
 正确的模式：
 
-1. 将重新提示的问题存储在状态中（例如 `pending_question`）。
-2. 在节点中**恰好调用一次** `interrupt()`，传递状态中的当前问题。
-3. 如果答案无效，返回更新后的 `pending_question`，以便下一次调用重新提示。
-4. 使用 `add_conditional_edges` 循环回节点，直到收集到有效值。
+1. 将重新提示的问题存储在状态中（例如。 `pending_question`).
+2. 在节点中，调用 `interrupt()` **恰好一次**，传递状态中的当前问题。
+3. 如果答案无效，返回更新后的 `pending_question` 以便下次调用时重新提示。
+4. 使用 `add_conditional_edges` 路由回节点，直到收集到有效值。
 
 <LanggraphInterruptsValidateConditionalEdgePatternPy />
 
-每次恢复恰好调用一次 `get_age_node`，运行一次 `interrupt()` 调用，然后退出。当答案无效时，条件边循环回，下一个中断使用更新后的问题重新提示。没有代码在每次恢复时运行超过一次。
+每次恢复调用 `get_age_node` 恰好一次，运行 `interrupt()` 调用一次，然后退出。当答案无效时，条件边会循环返回，下次中断会用更新后的问题重新提示。每次恢复不会有代码运行超过一次。
 
 :::
 
 :::js
 正确的模式：
 
-1. 将重新提示的问题存储在状态中（例如 `pendingQuestion`）。
-2. 在节点中**恰好调用一次** `interrupt()`，传递状态中的当前问题。
-3. 如果答案无效，返回更新后的 `pendingQuestion`，以便下一次调用重新提示。
-4. 使用 `addConditionalEdges` 循环回节点，直到收集到有效值。
+1. 将重新提示的问题存储在状态中（例如 `pendingQuestion`).
+2. 在节点中，调用 `interrupt()` **恰好一次**，传递状态中的当前问题。
+3. 如果答案无效，返回更新后的 `pendingQuestion` 以便下次调用时重新提示。
+4. 使用 `addConditionalEdges` 路由回节点，直到收集到有效值。
 
 <LanggraphInterruptsValidateConditionalEdgePatternJs />
 
-每次恢复恰好调用一次 `getAgeNode`，运行一次 `interrupt()` 调用，然后退出。当答案无效时，条件边循环回，下一个中断使用更新后的问题重新提示。
+每次恢复调用 `getAgeNode` 恰好一次，运行 `interrupt()` 调用一次，然后退出。当答案无效时，条件边会循环返回，下次中断会用更新后的问题重新提示。
 
 :::
 
-<Accordion title="完整示例">
+<Accordion title="Full example">
     :::python
 
     <LanggraphInterruptsValidateConditionalEdgePy />
@@ -837,9 +833,6 @@ const sendEmailTool = tool(
     :::
 
     :::js
-
-
-</fragment>
 
     ```typescript
     import {
@@ -888,23 +881,25 @@ const sendEmailTool = tool(
     const final = await graph.invoke(new Command({ resume: 30 }), config);
     console.log(final.age); // -> 30
     ```
-## Rules of interrupts
+    :::
 
-当你在节点中调用 @[`interrupt`] 时，LangGraph 会通过抛出一个异常来暂停执行，该异常通知运行时暂停。此异常会向上传播到调用栈中，被运行时捕获，然后通知图保存当前状态并等待外部输入。
+</Accordion>
 
-当执行恢复时（在你提供请求的输入之后），运行时从头重新启动整个节点——它不会从调用 @[`interrupt`] 的确切行继续。这意味着在 @[`interrupt`] 之前运行的任何代码都会再次执行。因此，在使用中断时需要遵循一些重要规则以确保它们按预期运行。
+## 中断规则
+
+当你在节点内调用 @[`interrupt`] 时，LangGraph 通过抛出一个特殊异常来暂停执行，该异常向运行时发出暂停信号。这个异常会向上传播通过调用栈，被运行时捕获，运行时通知图保存当前状态并等待外部输入。
+
+当执行恢复时（在你提供请求的输入之后），运行时从头重新启动整个节点——它不会从调用 @[`interrupt`] 的确切行继续。这意味着在 @[`interrupt`] 之前运行的任何代码都会再次执行。正因为如此，在使用中断时需要遵循一些重要规则以确保它们按预期行为。
 
 :::python
-### 不要将 `interrupt` 调用包装在 try/except 中
+### 不要包装 `interrupt` calls in try/except
 
-@[`interrupt`] 通过抛出特殊异常来在调用处暂停执行的方式。如果你将 @[`interrupt`] 调用包装在 try/except 块中，你会捕获这个异常，中断将不会传递回图中。
+@[`interrupt`] 通过抛出一个特殊异常来在调用点暂停执行。如果你用 try-catch 包装 @[`interrupt`] call in a try/except block, you will catch this exception and the interrupt will not be passed back to the graph.
 
 * ✅ 将 @[`interrupt`] 调用与易出错的代码分开
-* ✅ 在 try/except 块中使用特定的异常类型
+* ✅ Use specific exception types in try/except blocks
 
 <CodeGroup>
-
-</fragment>
 ```python Separating logic
 def node_a(state: State):
     # ✅ Good: interrupting first, then handling
@@ -927,7 +922,9 @@ def node_a(state: State):
         print(e)
     return state
 ```
-* 🔴 不要将 @[`interrupt`] 调用包装在裸露的 try/except 块中
+</CodeGroup>
+
+* 🔴 不要包装 @[`interrupt`] calls in bare try/except blocks
 
 ```python
 def node_a(state: State):
@@ -942,16 +939,14 @@ def node_a(state: State):
 :::
 
 :::js
-### 不要将 `interrupt` 调用包装在 try/catch 中
+### 不要包装 `interrupt` calls in try/catch
 
-@[`interrupt`] 通过抛出一个特殊的异常来在调用处暂停执行。如果你将 @[`interrupt`] 调用包装在 try/catch 块中，你会捕获这个异常，并且中断不会被传递回图。
+@[`interrupt`] 通过抛出一个特殊异常来在调用点暂停执行。如果你用 try-catch 包装 @[`interrupt`] call in a try/catch block, you will catch this exception and the interrupt will not be passed back to the graph.
 
 * ✅ 将 @[`interrupt`] 调用与易出错的代码分开
-* ✅ 如有需要，条件性地捕获错误
+* ✅ 必要时可以有条件地捕获错误
 
 <CodeGroup>
-
-</fragment>
 ```typescript Separating logic
 const nodeA: GraphNode<typeof State> = async (state) => {
   // ✅ Good: interrupting first, then handling error conditions separately
@@ -981,7 +976,9 @@ const nodeA: GraphNode<typeof State> = async (state) => {
   return state;
 }
 ```
-* 🔴 不要在裸露的 try/catch 块中包裹 @[`interrupt`] 调用
+</CodeGroup>
+
+* 🔴 不要包装 @[`interrupt`] calls in bare try/catch blocks
 
 ```typescript
 async function nodeA(state: State) {
@@ -996,13 +993,13 @@ async function nodeA(state: State) {
 ```
 :::
 
-### 请勿对节点内的 `interrupt` 调用重新排序
+### 不要重新排序 `interrupt` 节点内的调用
 
-在单个节点中使用多个中断是很常见的，但如果处理不当，可能会导致意外行为。
+在单个节点中使用多个中断很常见，但如果处理不当可能会导致意外行为。
 
-当节点包含多个中断调用时，LangGraph 会维护一个特定于执行该节点的任务的恢复值列表。每当执行恢复时，它会从节点的开头开始。对于遇到的每个中断，LangGraph 会检查任务的恢复列表中是否存在匹配的值。匹配是**严格基于索引的**，因此节点内中断调用的顺序很重要。
+当节点包含多个 interrupt 调用时，LangGraph 会为执行该节点的任务维护一个特定的恢复值列表。每当执行恢复时，它会从节点的开头开始。对于遇到的每个 interrupt，LangGraph 会检查任务的恢复列表中是否存在匹配的值。匹配是 **严格基于索引的**，因此节点内 interrupt 调用的顺序很重要。
 
-* ✅ 在节点执行过程中保持 @[`interrupt`] 调用的一致性
+* ✅ 保持 @[`interrupt`] 调用在节点执行过程中保持一致
 
 :::python
 ```python
@@ -1036,13 +1033,11 @@ async function nodeA(state: State) {
 ```
 :::
 
-* 🔴 不要在节点内有条件地跳过 @[`interrupt`] 调用
-* 🔴 不要使用在多次执行中非确定性的逻辑来循环 @[`interrupt`] 调用，包括 `while True` 验证循环。请改用条件边（请参阅[验证人工输入](#validating-human-input)））
+* 🔴 不要有条件地跳过 @[`interrupt`] 在节点内的调用
+* 🔴 不要循环 @[`interrupt`] 使用在执行过程中不确定的逻辑进行调用，包括 `while True` 验证循环。请改用条件边（请参阅 [验证人工输入](#validating-human-input))
 
 :::python
 <CodeGroup>
-
-</fragment>
 ```python Skipping interrupts
 def node_a(state: State):
     # ❌ Bad: conditionally skipping interrupts changes the order
@@ -1101,17 +1096,18 @@ const nodeA: GraphNode<typeof State> = async (state) => {
   return { results };
 }
 ```
-### 请勿在 `interrupt` 调用中返回复杂值
+</CodeGroup>
+:::
 
-根据所使用的检查点器，复杂值可能无法被序列化（例如，你无法序列化一个函数）。为了让你的图适应任何部署，最佳实践是只使用可以被合理序列化的值。
+### 不要在 `interrupt` 调用中返回复杂值
 
-* ✅ 传递简单的、可 JSON 序列化的类型给 @[`interrupt`]
-* ✅ 传递包含简单值的字典/对象
+根据所使用的检查点不同，复杂值可能无法序列化（例如，您无法序列化函数）。为了使图能够适应任何部署环境，最佳实践是仅使用可以合理序列化的值。
+
+* ✅ 传递简单的、JSON 可序列化的类型到 @[`interrupt`]
+* ✅ Pass dictionaries/objects with simple values
 
 :::python
 <CodeGroup>
-</CodeGroup>
-:::
 ```python Simple values
 def node_a(state: State):
     # ✅ Good: passing simple types that are serializable
@@ -1132,8 +1128,9 @@ def node_a(state: State):
 
     return {"user": response}
 ```
-<CodeGroup>
-</js>
+</CodeGroup>
+:::
+
 :::js
 <CodeGroup>
 ```typescript Simple values
@@ -1161,12 +1158,10 @@ const nodeA: GraphNode<typeof State> = async (state) => {
 </CodeGroup>
 :::
 
-* 🔴 请勿将函数、类实例或其他复杂对象传递给 @[`interrupt`]
+* 🔴 不要将函数、类实例或其他复杂对象传递给 @[`interrupt`]
 
 :::python
 <CodeGroup>
-
-</fragment>
 ```python Functions
 def validate_input(value):
     return len(value) > 0
@@ -1233,14 +1228,17 @@ const nodeA: GraphNode<typeof State> = async (state) => {
   return { result: response };
 }
 ```
+</CodeGroup>
+:::
+
 ### 在 `interrupt` 之前调用的副作用必须是幂等的
 
-因为中断的工作原理是重新运行它们被调用的节点，所以在 @[`interrupt`] 之前调用的副作用（理想情况下）应该是幂等的。作为背景知识，幂等性意味着同一操作可以应用多次，而不会改变初始执行之后的结果。
+由于 interrupt 的工作方式是通过重新运行调用它们的节点，因此在 @[`interrupt`] 之前调用的副作用（理想情况下）应该是幂等的。从上下文来看，幂等性意味着同一操作可以多次应用，而不会改变初次执行之后的结果。
 
-例如，您可能在节点内部有一个更新记录的 API 调用。如果在调用完成后调用 @[`interrupt`]，则当节点恢复时它将被重新运行多次，这可能会覆盖初始更新或创建重复记录。
+例如，您可能在节点内部有一个 API 调用来更新记录。如果 @[`interrupt`] 在该调用之后被调用，那么当节点恢复时它会被重新运行多次，可能会覆盖初始更新或创建重复记录。
 
-* ✅ 在 @[`interrupt`] 之前使用幂等操作
-* ✅ 将副作用放在 @[`interrupt`] 调用之后
+* ✅ 在 @[`interrupt`]
+* ✅ 将副作用放在 @[`interrupt`] 之后
 * ✅ 尽可能将副作用分离到单独的节点中
 
 :::python
@@ -1349,8 +1347,8 @@ const notificationNode: GraphNode<typeof State> = async (state) => {
 </CodeGroup>
 :::
 
-* 🔴 不要在 @[`interrupt`] 之前执行非幂等操作
-* 🔴 不要在未检查是否存在的情况下创建新记录
+* 🔴 不要在 @[`interrupt`]
+* 🔴 不要在创建新记录前不检查其是否存在
 
 :::python
 <CodeGroup>
@@ -1378,13 +1376,11 @@ def node_a(state: State):
 
     return {"approved": approved}
 ```
-<CodeGroup>
+</CodeGroup>
 :::
 
 :::js
 <CodeGroup>
-
-</CodeGroup>
 ```typescript Creating records
 const nodeA: GraphNode<typeof State> = async (state) => {
   // ❌ Bad: creating a new record before interrupt
@@ -1414,9 +1410,9 @@ const nodeA: GraphNode<typeof State> = async (state) => {
 </CodeGroup>
 :::
 
-## 将子图作为函数调用使用
+## 将 interrupt 与作为函数调用的子图结合使用
 
-在节点内调用子图时，父图将从**节点开头**恢复执行，即子图被调用的位置以及 @[`interrupt`] 被触发的位置。同样，**子图**也将从调用 @[`interrupt`] 的节点开头恢复执行。
+在节点内调用子图时，父图将从 **节点的开头** （子图被调用的位置）恢复执行，并且 @[`interrupt`] 被触发时也会发生类似情况 **子图** 也将从节点的开头恢复执行`interrupt`被调用的位置）
 
 :::python
 ```python
@@ -1451,24 +1447,22 @@ async function nodeInSubgraph(state: State) {
 ```
 :::
 
-## 使用中断进行调试
+## 使用 interrupt 进行调试
 
 :::python
-要调试和测试图，您可以使用静态中断作为断点，一次一个节点地逐步执行图。静态中断在定义的点触发（在节点执行之前或之后）。您可以通过在编译图时指定 `interrupt_before` 和 `interrupt_after` 来设置这些中断。
+要调试和测试图，您可以使用静态 interrupt 作为断点来逐步执行图，每次一个节点。静态 interrupt 在定义的点触发，要么在节点执行之前，要么在节点执行之后。您可以通过指定 `interrupt_before` 和 `interrupt_after` 来设置这些参数
 :::
 :::js
-要调试和测试图，您可以使用静态中断作为断点，一次一个节点地逐步执行图。静态中断在定义的点触发（在节点执行之前或之后）。您可以通过在编译图时指定 `interruptBefore` 和 `interruptAfter` 来设置这些中断。
+要调试和测试图，您可以使用静态 interrupt 作为断点来逐步执行图，每次一个节点。静态 interrupt 在定义的点触发，要么在节点执行之前，要么在节点执行之后。您可以通过指定 `interruptBefore` 和 `interruptAfter` 编译图时。
 :::
 
 <Note>
-    静态中断**不**建议用于人在环工作流。请改用 @[`interrupt`] 函数。
+    静态中断 **不** 推荐用于人机协作工作流。请使用 @[`interrupt`] 函数。
 </Note>
 
 <Tabs>
-    <Tab title="在编译时">
+    <Tab title="At compile time">
         :::python
-
-</fragment>
         ```python
         graph = builder.compile(
             interrupt_before=["node_a"],  # [!code highlight]
@@ -1490,11 +1484,11 @@ async function nodeInSubgraph(state: State) {
         graph.invoke(None, config=config)  # [!code highlight]
         ```
 
-1. 断点是在 `compile` 时设置的。
-        2. `interrupt_before` 指定在执行节点之前暂停执行的节点。
-        3. `interrupt_after` 指定在执行节点之后暂停执行的节点。
-        4. 需要一个检查点器来启用断点。
-        5. 图会运行直到命中第一个断点。
+        1. 断点在 `compile` time.
+        2. `interrupt_before` 指定执行应在节点执行之前暂停的节点。
+        3. `interrupt_after` 指定执行应在节点执行之后暂停的节点。
+        4. 需要检查点器来启用断点。
+        5. 图运行直到命中第一个断点。
         6. 通过传入 `None` 作为输入来恢复图。这将运行图直到命中下一个断点。
         :::
         :::js
@@ -1518,20 +1512,16 @@ async function nodeInSubgraph(state: State) {
         await graph.invoke(null, config);  # [!code highlight]
         ```
 
-<fragment>
-
-        1. 断点在 `compile`（编译）时设置。
-        2. `interruptBefore` 指定在节点执行前暂停执行的位置。
-        3. `interruptAfter` 指定在节点执行后暂停执行的位置。
-        4. 需要一个检查点器来启用断点。
-        5. 图会运行直到触发第一个断点。
-        6. 通过传入 `null` 作为输入来恢复图的运行。这将运行图直到下一个断点被触发。
+        1. 断点在 `compile` time.
+        2. `interruptBefore` 指定执行应在节点执行之前暂停的节点。
+        3. `interruptAfter` 指定执行应在节点执行之后暂停的节点。
+        4. 需要检查点器来启用断点。
+        5. 图运行直到命中第一个断点。
+        6. 通过传入 `null` 作为输入来恢复图。这将运行图直到命中下一个断点。
         :::
     </Tab>
-    <Tab title="在运行时">
+    <Tab title="At run time">
         :::python
-
-</fragment>
         ```python
         config = {
             "configurable": {
@@ -1551,9 +1541,9 @@ async function nodeInSubgraph(state: State) {
         graph.invoke(None, config=config)  # [!code highlight]
         ```
 
-1. `graph.invoke` 使用 `interrupt_before` 和 `interrupt_after` 参数调用。这是一个运行时配置，可以在每次调用时更改。
-        2. `interrupt_before` 指定在节点执行前暂停执行的位置。
-        3. `interrupt_after` 指定在节点执行后暂停执行的位置。
+        1. `graph.invoke` 使用 `interrupt_before` 和 `interrupt_after` 参数调用。这是一种运行时配置，可以在每次调用时更改。
+        2. `interrupt_before` 指定执行应在节点执行之前暂停的节点。
+        3. `interrupt_after` 指定执行应在节点执行之后暂停的节点。
         4. 图运行直到命中第一个断点。
         5. 通过传入 `None` 作为输入来恢复图。这将运行图直到命中下一个断点。
         :::
@@ -1572,23 +1562,21 @@ async function nodeInSubgraph(state: State) {
         await graph.invoke(null, config);  // [!code highlight]
         ```
 
-1. `graph.invoke` 使用 `interruptBefore` 和 `interruptAfter` 参数调用。这是一个运行时配置，可以在每次调用时更改。
-        2. `interruptBefore` 指定在节点执行之前暂停执行的位置。
-        3. `interruptAfter` 指定在节点执行之后暂停执行的位置。
-        4. 图会运行直到触发第一个断点。
-        5. 通过传入 `null` 作为输入来恢复图运行。这将运行图直到触发下一个断点。
+        1. `graph.invoke` 使用 `interruptBefore` 和 `interruptAfter` 参数调用。这是一种运行时配置，可以在每次调用时更改。
+        2. `interruptBefore` 指定执行应在节点执行之前暂停的节点。
+        3. `interruptAfter` 指定执行应在节点执行之后暂停的节点。
+        4. 图运行直到命中第一个断点。
+        5. 通过传入 `null` 作为输入来恢复图。这将运行图直到命中下一个断点。
         :::
     </Tab>
 </Tabs>
 
 <Tip>
-若要调试中断，请使用 [LangSmith](/langsmith/observability)。
+要调试中断，请使用 [LangSmith](/langsmith/observability).
 </Tip>
 
 ### 使用 LangSmith Studio
 
-您可以使用 [LangSmith Studio](/langsmith/studio) 在 UI 中运行图之前设置静态中断。您还可以使用 UI 检查执行过程中任意点的图状态。
+您可以使用 [LangSmith Studio](/langsmith/studio) 在 UI 中运行图之前设置静态中断。您还可以使用 UI 检查执行过程中任何点的图状态。
 
-![image](/oss/images/static-interrupt.png)
-
-</fragment>
+![图片](/oss/images/static-interrupt.png)

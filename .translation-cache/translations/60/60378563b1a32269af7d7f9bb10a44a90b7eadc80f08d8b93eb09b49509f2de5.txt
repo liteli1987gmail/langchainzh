@@ -1,30 +1,30 @@
 ---
-title: 为 LangSmith 部署部署可观测性堆栈
-sidebarTitle: 部署可观测性堆栈
+title: 为您的 LangSmith 部署配置可观测性堆栈
+sidebarTitle: 配置可观测性堆栈
 ---
 
 <Danger>
-**已弃用**：LangSmith 可观测性 Helm chart 已弃用。我们不再维护或提供支持。下面的文档仅供保留参考。
+**已弃用**：LangSmith 可观测性 Helm chart 已弃用。我们不再维护或为其提供支持。下面的文档仅供您参考保留。
 </Danger>
 
 <Warning>
 **本节仅适用于 Kubernetes 部署。**
 </Warning>
 
-LangSmith 应用程序暴露可发送至您所选后端的遥测数据。如果您还没有可观测性堆栈，或希望将 LangSmith 遥测数据与主应用程序分开，可以使用 LangSmith 可观测性 Helm chart 部署一个基本的可观测性堆栈。
+LangSmith 应用暴露的遥测数据可发送到您选择的后端。如果您还没有可观测性堆栈，或希望将 LangSmith 遥测数据与主应用程序分开，可以使用 LangSmith 可观测性 Helm chart 部署一个基本的可观测性堆栈。
 
 # 第 1 节：Prometheus 导出器
 
-如果您只想为自托管部署中的组件部署指标导出器（然后使用遥测工具进行抓取），请使用本节。如果您希望获得完整的可观测性堆栈部署，请前往[端到端部署部分](/langsmith/observability-stack#prerequisites)。
+如果您只想为自托管部署中的组件部署指标导出器（然后可以使用您的遥测系统进行抓取），请使用本节。如果您希望我们为您部署完整的可观测性堆栈，请转到 [端到端部署章节](/langsmith/observability-stack#prerequisites).
 
-Helm chart 提供了一组 Prometheus 导出器，用于从 [Redis](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-redis-exporter)、[Postgres](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-postgres-exporter)、[Nginx](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-nginx-exporter) 和 [Kube state metrics](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-state-metrics) 暴露指标。
+Helm chart 提供了一组 Prometheus 导出器，用于从以下服务暴露指标： [Redis](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-redis-exporter), [Postgres](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-postgres-exporter), [Nginx](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-nginx-exporter)和 [Kube 状态指标](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-state-metrics).
 
-1. 创建一个名为 `langsmith_obs_config.yaml` 的本地文件
-2. 将此[文件](https://github.com/langchain-ai/helm/blob/main/charts/langsmith-observability/examples/metric-exporters-only.yaml)中的值复制到 `langsmith_obs_config.yaml` 中，确保修改值以匹配您的 LangSmith 部署。
-3. 通过运行 `helm search repo langchain/langsmith-observability --versions` 查找 chart 的最新版本。
+1. 创建一个名为以下文件的本地文件： `langsmith_obs_config.yaml`
+2. 将以下文件中的值复制过来： [文件](https://github.com/langchain-ai/helm/blob/main/charts/langsmith-observability/examples/metric-exporters-only.yaml) 到 `langsmith_obs_config.yaml`，请务必修改值以匹配您的 LangSmith 部署。
+3. 通过运行以下命令找到 chart 的最新版本： `helm search repo langchain/langsmith-observability --versions`.
 4. 获取最新版本号，然后运行 `helm install langsmith-observability langchain/langsmith-observability --values langsmith_obs_config.yaml --version <version> -n <namespace> --wait --debug`
 
-这将允许您在以下服务端点抓取指标：
+这将允许您抓取以下服务端点的指标：
 
 * Postgres: `langsmith-observability-postgres-exporter:9187/metrics`
 * Redis: `langsmith-observability-redis-exporter:9121/metrics`
@@ -37,46 +37,46 @@ Helm chart 提供了一组 Prometheus 导出器，用于从 [Redis](https://gith
 Release "langsmith-observability" has been installed. Happy Helming!NAME: langsmith-observabilityLAST DEPLOYED: Wed Jun 25 11:17:34 2025NAMESPACE: langsmith-observabilitySTATUS: deployedREVISION: 1
 ```
 
-如果你运行 `kubectl get pods -n langsmith-observability`，你应该会看到：
+如果您运行 `kubectl get pods -n langsmith-observability`，您应该会看到：
 
 ```bash
 langsmith-observability-kube-state-metrics-b58bb8db4-bm4g5        1/1     Running   0          2m22slangsmith-observability-nginx-exporter-6d686d9d4b-5qw9v           1/1     Running   0          2m22slangsmith-observability-postgres-exporter-67d5db5684-tffbm        1/1     Running   0          2m22slangsmith-observability-redis-exporter-846c4d65cb-vbtwd           1/1     Running   0          2m22s
 ```
 
-# 第 2 部分：完整可观测性堆栈
+# 第 2 节：完整可观测性堆栈
 
 <Warning>
-**这不是生产环境的可观测性堆栈。使用它可以快速了解部署的日志、指标和追踪。此配置仅能处理每天几十 GB 的数据。**
+**这不是生产级别的可观测性堆栈。使用它可以快速了解部署的日志、指标和追踪。这只是为了处理每天几十 GB 的数据而设计的。**
 </Warning>
 
-本节将向您展示如何使用 [Helm Chart](https://github.com/langchain-ai/helm/tree/main/charts/langsmith-observability) 部署 LangSmith 的端到端可观测性堆栈。
+本节将向您展示如何使用 [Helm Chart](https://github.com/langchain-ai/helm/tree/main/charts/langsmith-observability).
 
-此 Chart 基于 Grafana 的开源 LGTM 堆栈构建，由以下组件组成：
+为 LangSmith 部署端到端可观测性堆栈。该 chart 基于 Grafana 的开源 LGTM 堆栈构建，由以下组件组成：
 
 * [Loki](https://grafana.com/docs/loki/latest/) 用于日志。
-* [Mimir](https://grafana.com/docs/mimir/latest/) 用于指标 + 告警。
+* [Mimir](https://grafana.com/docs/mimir/latest/) 用于指标和告警。
 * [Tempo](https://grafana.com/docs/tempo/latest/) 用于追踪。
-* [Grafana](https://grafana.com/docs/grafana/latest/) 用于监控界面。
+* [Grafana](https://grafana.com/docs/grafana/latest/) 用于监控 UI。
 
-以及用于收集遥测数据的 [OpenTelemetry Collectors](https://opentelemetry.io/docs/collector/)。
+以及 [OpenTelemetry 收集器](https://opentelemetry.io/docs/collector/) 用于收集遥测数据。
 
-## 前置条件
+## 前提条件
 
 ### 1. 计算资源
 
-堆栈中每个部分的资源请求和限制可以在 Helm Chart 中修改。以下是当前的资源配置（请求/限制）：
+The resource requests and limits for each part of the stack can be modified in the helm chart. Here are the current allocations (request/limit):
 
-* Loki：`2vCPU/3vCPU + 2Gi/4Gi`
-* Mimir：`1vCPU/2vCPU + 2Gi/4Gi`
-* Tempo：`1vCPU/2vCPU + 4Gi/6Gi`
+* Loki: `2vCPU/3vCPU + 2Gi/4Gi`
+* Mimir: `1vCPU/2vCPU + 2Gi/4Gi`
+* Tempo: `1vCPU/2vCPU + 4Gi/6Gi`
 
-启动 Helm Chart 前请确保已分配这些资源，或在 Helm 配置文件中修改资源值。
+在启动 helm chart 之前，请确保已分配这些资源，或在 helm 配置文件中修改资源值。
 
 ### 2. Cert-Manager
 
-Helm Chart 使用 OpenTelemetry Operator 来配置收集器。Operator 要求您在 Kubernetes 集群中已安装 [cert-manager](https://cert-manager.io/docs/installation/)。
+Helm chart 使用 OpenTelemetry Operator 来配置收集器。该操作符要求您已经在 [cert-manager](https://cert-manager.io/docs/installation/) 中安装了您的 Kubernetes 集群。
 
-如果尚未安装，可以运行以下命令：
+如果您尚未安装，可以运行以下命令：
 
 ```bash
 helm repo add jetstack https://charts.jetstack.iohelm repo updatehelm install cert-manager jetstack/cert-manager -n cert-manager --create-namespace
@@ -92,30 +92,30 @@ helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm
 
 ## 安装
 
-以下说明将启动 OTel 采集器、LGTM 堆栈、Grafana 和 Prometheus 导出器。
+以下说明将启动 OTel 收集器、LGTM 堆栈、Grafana 和 Prometheus 导出器。
 
-1. 创建名为 `langsmith_obs_config.yaml` 的本地文件
-2. 将此[文件](https://github.com/langchain-ai/helm/blob/main/charts/langsmith-observability/examples/e2e-stack.yaml)中的值复制到 `langsmith_obs_config.yaml` 中，并确保修改值以匹配您的 LangSmith 部署。
-3. 运行 `helm search repo langchain/langsmith-observability --versions` 查找图表的最新版本。
+1. 创建一个名为 `langsmith_obs_config.yaml`
+2. 的本地文件，然后从以下 [文件](https://github.com/langchain-ai/helm/blob/main/charts/langsmith-observability/examples/e2e-stack.yaml) 中复制值到 `langsmith_obs_config.yaml`，并确保修改值以匹配您的 LangSmith 部署。
+3. 通过运行以下命令找到 chart 的最新版本： `helm search repo langchain/langsmith-observability --versions`.
 4. 获取最新版本号，然后运行 `helm install langsmith-observability langchain/langsmith-observability --values langsmith_obs_config.yaml --version <version> -n <namespace> --wait --debug`
 
 <Note>
-**您可以通过修改配置文件中 `otelCollector` 下的布尔值来有选择地收集日志、指标或追踪。您还可以有选择地启动后端的各个部分（Loki、Mimir、Tempo）。**
+**您可以通过修改配置文件中 `otelCollector` 下的布尔值来选择性地收集日志、指标或追踪。您还可以选择性地启动后端的各个组件（Loki、Mimir、Tempo）。**
 </Note>
 
-如果安装成功，您应该会看到以下内容：
+如果安装成功，您应该看到以下内容：
 
 ```bash
 Release "langsmith-observability" has been installed. Happy Helming!NAME: langsmith-observabilityLAST DEPLOYED: Wed Jun 25 11:17:34 2025NAMESPACE: langsmith-observabilitySTATUS: deployedREVISION: 1
 ```
 
-如果你运行 `kubectl get pods -n langsmith-observability`，你应该会看到：
+如果您运行 `kubectl get pods -n langsmith-observability`，您应该看到：
 
 ```bash
 langsmith-observability-collector-gateway-collector-7746fb8pzbg   1/1     Running   0          5m26slangsmith-observability-grafana-7c6fc976f9-cdbvr                  1/1     Running   0          2m49slangsmith-observability-kube-state-metrics-b58bb8db4-bm4g5        1/1     Running   0          5m27slangsmith-observability-loki-0                                    2/2     Running   0          5m27slangsmith-observability-loki-chunks-cache-0                       2/2     Running   0          5m27slangsmith-observability-loki-gateway-769fb6fff8-zjsn5             1/1     Running   0          5m27slangsmith-observability-loki-results-cache-0                      2/2     Running   0          5m27slangsmith-observability-mimir-0                                   1/1     Running   0          5m26slangsmith-observability-nginx-exporter-6d686d9d4b-5qw9v           1/1     Running   0          5m27slangsmith-observability-postgres-exporter-67d5db5684-tffbm        1/1     Running   0          5m27slangsmith-observability-redis-exporter-846c4d65cb-vbtwd           1/1     Running   0          5m27slangsmith-observability-tempo-0                                   1/1     Running   0          5m27sopentelemetry-operator-756dff697-vblbn                            2/2     Running   0          12m
 ```
 
-## 安装后
+## Post-Installation
 
 ### 在 LangSmith 中启用日志和追踪
 
@@ -134,32 +134,28 @@ observability:
 ```
 
 <Info>
-1. 要获取 `${LANGSMITH_OTEL_CRD_NAME}`，可以运行 `kubectl get opentelemetrycollectors -n ${LANGSMITH_OBS_NAMESPACE}` 并选择 MODE = `sidecar` 的那个的名称
-2. 要获取 `${GATEWAY_COLLECTOR_SERVICE_NAME}` 名称，运行 `kubectl get services -n ${LANGSMITH_OBS_NAMESPACE}` 并选择端口为 4317/4318 且设置了 ClusterIP 的那个。它应该是类似于 `langsmith-observability-collector-gateway-collector` 这样的名称
+1. 要获取 `${LANGSMITH_OTEL_CRD_NAME}`，您可以运行 `kubectl get opentelemetrycollectors -n ${LANGSMITH_OBS_NAMESPACE}` 并选择 MODE = `sidecar`
+2. 要获取 `${GATEWAY_COLLECTOR_SERVICE_NAME}` 名称，请运行 `kubectl get services -n ${LANGSMITH_OBS_NAMESPACE}` and select the one with Ports 4317/4318 AND a ClusterIP set. It should be something like `langsmith-observability-collector-gateway-collector`
 </Info>
 
 现在运行 `helm upgrade langsmith langchain/langsmith --values langsmith_config.yaml -n <langsmith-namespace> --wait --debug`
 
-升级完成后，如果运行 `kubectl get pods -n <langsmith-namespace>`，你应该看到以下内容（注意 sidecar 收集器的 2/2）：
+升级后，如果您运行 `kubectl get pods -n <langsmith-namespace>` you should see the following (note the 2/2 for sidecar collectors):
 
 ```bash
 langsmith-ace-backend-7dc85f7dff-xjbkj         2/2     Running     0               7m53slangsmith-backend-566b66979c-rgcfh             2/2     Running     1               7m53slangsmith-clickhouse-0                         2/2     Running     0               7m49slangsmith-frontend-7cf8549885-vpkns            2/2     Running     0               7m53slangsmith-platform-backend-5d46db7d9d-f6gh7    2/2     Running     0               7m52slangsmith-platform-backend-5d46db7d9d-lrr4d    2/2     Running     1               7m41slangsmith-platform-backend-5d46db7d9d-pcp27    2/2     Running     0               7m28slangsmith-playground-65d4c9699c-h656r          2/2     Running     0               7m52slangsmith-postgres-0                           2/2     Running     0               7m51slangsmith-queue-bdcd45bd6-htssd                2/2     Running     0               7m52slangsmith-queue-bdcd45bd6-pwdx4                2/2     Running     0               6m31slangsmith-queue-bdcd45bd6-xqrb8                2/2     Running     0               5m11slangsmith-redis-0                              2/2     Running     0               7m51s
 ```
 
-## Grafana 使用方法
+## Grafana 使用
 
-安装完所有组件后，请执行以下操作来获取您的 Grafana 密码：
-
-```bash
-echo "Your Grafana password is:" && oc get secret prometheus-grafana -o jsonpath="{.data['admin-password']}" | base64 -D && echo ""
-```
+安装所有组件后，执行以下操作：获取 Grafana 密码：
 
 ```bash
 kubectl get secret langsmith-observability-grafana -n <langsmith_observability_namespace> -o jsonpath="{.data.admin-password}" | base64 --decode
 ```
 
-然后通过端口转发连接到 `langsmith-observability-grafana` 容器，端口为 3000，然后在浏览器中访问 `localhost:3000`。使用用户名 `admin` 和上面 secret 中的密码登录 Grafana。
+然后将 `langsmith-observability-grafana` 容器端口转发到 3000，并在浏览器中打开 `localhost:3000`。使用用户名 `admin` 和上述密钥中的密码登录 Grafana。
 
-进入 Grafana 后，您可以使用界面来监控日志、指标和追踪。Grafana 还预置了仪表板集合，用于监控部署的主要组件。
+进入 Grafana 后，您可以使用界面监控日志、指标和追踪。Grafana 还预置了监控部署主要组件的仪表板集合。
 
-![LangSmith Grafana Dashboards](/langsmith/images/langsmith-grafana-dashboards.png)
+![LangSmith Grafana 仪表板](/langsmith/images/langsmith-grafana-dashboards.png)

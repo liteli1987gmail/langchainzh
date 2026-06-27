@@ -100,6 +100,14 @@ class TranslationConfig:
 @dataclass(frozen=True)
 class TextSlot:
     index: int
+    line_number: int
+    text: str
+
+
+@dataclass(frozen=True)
+class SlotSource:
+    index: int
+    line_number: int
     text: str
 
 
@@ -276,6 +284,8 @@ def cached_translation_text(
 ) -> str | None:
     if not cache_entry:
         return None
+    if cache_entry.get("cache_version") != CACHE_VERSION:
+        return None
     if cache_entry.get("sha256") != source_hash or cache_entry.get("model") != model:
         return None
 
@@ -308,6 +318,7 @@ def remember_translation(
     text_path.parent.mkdir(parents=True, exist_ok=True)
     text_path.write_text(translated_text, encoding="utf-8")
     cache.setdefault("files", {})[rel_path] = {
+        "cache_version": CACHE_VERSION,
         "sha256": source_hash,
         "model": model,
         "cache_file": text_path.relative_to(cache_path.parent).as_posix(),
@@ -430,7 +441,14 @@ def translate_json_batch(
     if client.config.mock:
         return {item_id: text for item_id, _, text in batch}
 
-    payload = [{"id": item_id, "text": text} for item_id, _, text in batch]
+    payload = []
+    for item_id, path, text in batch:
+        item: dict[str, Any] = {"id": item_id, "text": text}
+        if len(path) >= 2 and path[0] == "line" and isinstance(path[1], int):
+            item["line"] = path[1]
+        if len(path) >= 4 and path[2] == "slot" and isinstance(path[3], int):
+            item["slot"] = path[3]
+        payload.append(item)
     fragment = (
         "Translate only the text values to Simplified Chinese. "
         "Return valid JSON only: an array with the same id values and translated text values. "
@@ -463,6 +481,47 @@ def translate_json_batch(
     return translations
 
 
+def is_retriable_json_batch_error(exc: Exception) -> bool:
+    if isinstance(exc, json.JSONDecodeError):
+        return True
+    if not isinstance(exc, RuntimeError):
+        return False
+    message = str(exc)
+    return message.startswith("MiniMax JSON batch")
+
+
+def translate_json_batch_resilient(
+    batch: list[tuple[int, tuple[str | int, ...], str]],
+    client: MiniMaxClient,
+) -> dict[int, str]:
+    try:
+        return translate_json_batch(batch, client)
+    except Exception as exc:
+        if not is_retriable_json_batch_error(exc):
+            raise
+        if len(batch) == 1:
+            item_id, _, text = batch[0]
+            print(
+                f"translate-json-batch: fallback-single id={item_id} after {exc}",
+                file=sys.stderr,
+            )
+            return {
+                item_id: client.translate(
+                    text,
+                    content_type="plain text value",
+                )
+            }
+
+        middle = len(batch) // 2
+        print(
+            f"translate-json-batch: split size={len(batch)} after {exc}",
+            file=sys.stderr,
+        )
+        translated = translate_json_batch_resilient(batch[:middle], client)
+        translated.update(translate_json_batch_resilient(batch[middle:], client))
+        return translated
+
+
 def translate_json_values_batched(
     parsed: Any,
     client: MiniMaxClient,
@@ -476,7 +535,7 @@ def translate_json_values_batched(
         file=sys.stderr,
     )
     for batch in batches:
-        translations = translate_json_batch(batch, client)
+        translations = translate_json_batch_resilient(batch, client)
         for item_id, path, _ in batch:
             set_json_path(parsed, path, translations[item_id])
     return parsed
@@ -567,7 +626,12 @@ def looks_like_html_or_mdx_tag(text: str, index: int) -> bool:
     return next_char.isalpha() or next_char in {"/", "!", "?"}
 
 
-def append_text_part(parts: list[str | TextSlot], raw: str, slots: list[str]) -> None:
+def append_text_part(
+    parts: list[str | TextSlot],
+    raw: str,
+    slots: list[SlotSource],
+    line_number: int,
+) -> None:
     if not raw:
         return
     leading, core, trailing = split_edge_whitespace(raw)
@@ -576,14 +640,18 @@ def append_text_part(parts: list[str | TextSlot], raw: str, slots: list[str]) ->
         return
     if leading:
         parts.append(leading)
-    slot = TextSlot(len(slots), core)
-    slots.append(core)
+    slot = TextSlot(len(slots), line_number, core)
+    slots.append(SlotSource(slot.index, line_number, core))
     parts.append(slot)
     if trailing:
         parts.append(trailing)
 
 
-def extract_inline_text_slots(text: str, slots: list[str]) -> list[str | TextSlot]:
+def extract_inline_text_slots(
+    text: str,
+    slots: list[SlotSource],
+    line_number: int,
+) -> list[str | TextSlot]:
     parts: list[str | TextSlot] = []
     buffer: list[str] = []
     index = 0
@@ -591,7 +659,7 @@ def extract_inline_text_slots(text: str, slots: list[str]) -> list[str | TextSlo
     def flush_buffer() -> None:
         nonlocal buffer
         if buffer:
-            append_text_part(parts, "".join(buffer), slots)
+            append_text_part(parts, "".join(buffer), slots, line_number)
             buffer = []
 
     while index < len(text):
@@ -605,7 +673,7 @@ def extract_inline_text_slots(text: str, slots: list[str]) -> list[str | TextSlo
                     flush_buffer()
                     parts.append("![" if is_image else "[")
                     label = text[label_start:label_end]
-                    parts.extend(extract_inline_text_slots(label, slots))
+                    parts.extend(extract_inline_text_slots(label, slots, line_number))
                     parts.append(text[label_end:target_end + 1])
                     index = target_end + 1
                     continue
@@ -658,16 +726,20 @@ def extract_inline_text_slots(text: str, slots: list[str]) -> list[str | TextSlo
     return parts
 
 
-def extract_markdown_line_slots(line: str, slots: list[str]) -> list[str | TextSlot]:
+def extract_markdown_line_slots(
+    line: str,
+    slots: list[SlotSource],
+    line_number: int,
+) -> list[str | TextSlot]:
     prefix_match = re.match(
         r"^(\s*(?:(?:#{1,6}|[-*+]|\d+\.|>)\s+))(.+)$",
         line,
     )
     if not prefix_match:
-        return extract_inline_text_slots(line, slots)
+        return extract_inline_text_slots(line, slots, line_number)
     return [
         prefix_match.group(1),
-        *extract_inline_text_slots(prefix_match.group(2), slots),
+        *extract_inline_text_slots(prefix_match.group(2), slots, line_number),
     ]
 
 
@@ -682,16 +754,18 @@ def render_parts(parts: list[str | TextSlot], translated_slots: dict[int, str]) 
 
 
 def translate_text_slots(
-    slots: list[str],
+    slots: list[SlotSource],
     client: MiniMaxClient,
     max_chars: int,
 ) -> dict[int, str]:
     if not slots:
         return {}
-    batch_items = [((index,), text) for index, text in enumerate(slots)]
+    batch_items = [
+        (("line", slot.line_number, "slot", slot.index), slot.text) for slot in slots
+    ]
     translated: dict[int, str] = {}
     for batch in json_batches(batch_items, min(max_chars, JSON_BATCH_MAX_CHARS)):
-        translated.update(translate_json_batch(batch, client))
+        translated.update(translate_json_batch_resilient(batch, client))
     suspicious = [
         (index, value)
         for index, value in translated.items()
@@ -806,6 +880,10 @@ def chunk_text(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
+def count_source_lines(text: str) -> int:
+    return len(text.splitlines()) if text else 0
+
+
 def has_translatable_english(text: str) -> bool:
     return bool(re.search(r"[A-Za-z]{3,}", text))
 
@@ -818,28 +896,34 @@ def restore_edge_newlines(source: str, translated: str) -> str:
 
 def translate_markdown(text: str, client: MiniMaxClient, max_chars: int) -> str:
     document_parts: list[str | TextSlot] = []
-    slots: list[str] = []
+    slots: list[SlotSource] = []
     in_frontmatter = False
     frontmatter_opening = text.startswith("---\n")
+    line_number = 0
 
     def append_literal(value: str) -> None:
         if value:
             document_parts.append(value)
 
-    def append_translatable(value: str) -> None:
-        document_parts.extend(extract_inline_text_slots(value, slots))
+    def append_translatable(value: str, source_line_number: int) -> None:
+        document_parts.extend(
+            extract_inline_text_slots(value, slots, source_line_number)
+        )
 
     for unit_type, unit_text in split_fenced_blocks(text):
         if unit_type == "literal":
             append_literal(unit_text)
+            line_number += count_source_lines(unit_text)
             continue
 
         for nested_type, nested_text in split_preserved_lines(unit_text):
             if nested_type == "literal" or not has_translatable_english(nested_text):
                 append_literal(nested_text)
+                line_number += count_source_lines(nested_text)
                 continue
 
             for line in nested_text.splitlines(keepends=True):
+                line_number += 1
                 newline = ""
                 body = line
                 if body.endswith("\r\n"):
@@ -864,13 +948,15 @@ def translate_markdown(text: str, client: MiniMaxClient, max_chars: int) -> str:
                     match = re.match(r"^(\s*[A-Za-z0-9_-]+\s*:\s*)(.*)$", body)
                     if match and should_translate_text_slot(match.group(2)):
                         append_literal(match.group(1))
-                        append_translatable(match.group(2))
+                        append_translatable(match.group(2), line_number)
                         append_literal(newline)
                     else:
                         append_literal(body + newline)
                     continue
 
-                document_parts.extend(extract_markdown_line_slots(body, slots))
+                document_parts.extend(
+                    extract_markdown_line_slots(body, slots, line_number)
+                )
                 append_literal(newline)
 
     print(f"translate-slots: count={len(slots)}", file=sys.stderr)

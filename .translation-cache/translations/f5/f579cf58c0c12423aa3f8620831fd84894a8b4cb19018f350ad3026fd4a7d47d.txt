@@ -1,24 +1,22 @@
 ---
-title: 流式传输
+title: 流式输出
 ---
 
 import NostreamTagPy from '/snippets/code-samples/nostream-tag-py.mdx';
 import NostreamTagJs from '/snippets/code-samples/nostream-tag-js.mdx';
 
 <Tip>
-对于新应用，我们推荐使用[事件流](/oss/langgraph/event-streaming)——这是 LangGraph v1.2 引入的类型化投影 API。事件流为每个投影（messages、values、subgraphs、output）提供独立的迭代器，因此您可以独立使用它们，而无需基于 `stream_mode` 块进行分支。
+对于新应用，我们推荐 [事件流式输出](/oss/langgraph/event-streaming)— LangGraph v1.2 中引入的 typed-projection API。事件流式输出为您提供了每个投影（messages、values、subgraphs、output）的独立迭代器，因此您可以独立消费它们，而无需根据 `stream_mode` chunks.
 </Tip>
 
-本页介绍 LangGraph 的流模式 API。它通过流模式（如 `updates`、`values`、`messages`、`custom`、`checkpoints`、`tasks` 和 `debug`）暴露图执行过程。当您需要直接访问图运行时事件或特定的流模式输出时使用它。
+本页面介绍了 LangGraph 的流式输出模式 API。它通过以下流式输出模式公开图执行： `updates`, `values`, `messages`, `custom`, `checkpoints`, `tasks`和 `debug`。当您需要直接访问图运行时事件或特定的流式输出模式输出时使用它。
 
-## 开始使用
+## 快速开始
 
 ### 基本用法
 
 :::python
-LangGraph 图公开了 @[`stream`][Pregel.stream]（同步）和 @[`astream`][Pregel.astream]（异步）方法，以迭代器形式返回流式输出。传递一个或多个[流模式](#stream-modes)来控制您接收的数据。
-
-::
+LangGraph 图公开了 @[`stream`][Pregel.stream]（同步）和 @[`astream`][Pregel.astream]（异步）方法以迭代器形式产生流式输出。传递一个或多个 [流式输出模式](#stream-modes) 来控制您接收的数据。
 
 ```python
 for chunk in graph.stream(
@@ -38,7 +36,7 @@ Status: thinking of a joke...
 Node generate_joke updated: {'joke': 'Why did the ice cream go to school? To get a sundae education!'}
 ```
 
-<Accordion title="完整示例">
+<Accordion title="Full example">
 ```python
 from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
@@ -83,8 +81,7 @@ Node generate_joke updated: {'joke': 'Why did the ice cream go to school? To get
 :::
 
 :::js
-LangGraph 图公开 @[`stream`][Pregel.stream] 方法，以将流式输出作为迭代器返回。
-:::
+LangGraph 图公开了 @[`stream`][Pregel.stream] 方法以迭代器形式产生流式输出。
 
 ```typescript
 for await (const chunk of await graph.stream(inputs, {
@@ -96,17 +93,17 @@ for await (const chunk of await graph.stream(inputs, {
 :::
 
 <Tip>
-使用 [LangSmith](https://smith.langchain.com) 调试流式事件、检查 token-by-token LLM 输出并监控延迟。遵循[追踪快速入门](/langsmith/trace-with-langgraph)进行设置。
+使用 [LangSmith](https://smith.langchain.com)调试流式输出事件、检查逐 token 的 LLM 输出以及监控延迟。遵循 [追踪快速入门](/langsmith/trace-with-langgraph) 进行设置。
 </Tip>
 
 :::python
-### 流式输出格式 (v2)
+### 流式输出格式（v2）
 
 <Note>
-需要 LangGraph >= 1.1。本页所有示例均使用 `version="v2"`。
+需要 LangGraph >= 1.1。本页面所有示例均使用 `version="v2"`.
 </Note>
 
-传递 `version="v2"` 到 `stream()` 或 `astream()` 以获取统一输出格式。每个数据块都是具有一致结构的 `StreamPart` 字典——无论流模式、模式数量或子图设置如何：
+传递 `version="v2"` to `stream()` or `astream()` 以获取统一的输出格式。每个数据块都是一个 `StreamPart` dict，具有一致的形状——无论流式输出模式、模式数量或子图设置如何：
 
 ```python
 {
@@ -116,13 +113,11 @@ for await (const chunk of await graph.stream(inputs, {
 }
 ```
 
-每种流模式都有对应的 `TypedDict`，包含 @[`ValuesStreamPart`]、@[`UpdatesStreamPart`]、@[`MessagesStreamPart`]、@[`CustomStreamPart`]、@[`CheckpointStreamPart`]、@[`TasksStreamPart`]、@[`DebugStreamPart`]。你可以从 `langgraph.types` 导入这些类型。联合类型 @[`StreamPart`] 是关于 `part["type"]` 的不相交联合类型，可以在编辑器和类型检查器中实现完整的类型收窄。
+每个流式输出模式都有对应的 `TypedDict` 包含 @[`ValuesStreamPart`], @[`UpdatesStreamPart`], @[`MessagesStreamPart`], @[`CustomStreamPart`], @[`CheckpointStreamPart`], @[`TasksStreamPart`], @[`DebugStreamPart`]。您可以从 `langgraph.types`导入这些类型。联合类型 @[`StreamPart`] 是在 `part["type"]`上的不相交联合，支持编辑器和类型检查器的完整类型收窄。
 
-使用 v1（默认）时，输出格式会根据你的流选项而变化（单模式返回原始数据，多模式返回 `(mode, data)` 元组，子图返回 `(namespace, data)` 元组）。使用 v2 时，格式始终相同：
+使用 v1（默认），输出格式会根据您的流式输出选项而变化（单模式返回原始数据，多模式返回 `(mode, data)` 元组，子图返回 `(namespace, data)` 元组）。使用 v2，格式始终相同：
 
 <CodeGroup>
-
-</CodeGroup>
 ```python v2 (new)
 for chunk in graph.stream(inputs, stream_mode="updates", version="v2"):
     print(chunk["type"])  # "updates"
@@ -135,7 +130,7 @@ for chunk in graph.stream(inputs, stream_mode="updates"):
 ```
 </CodeGroup>
 
-v2 格式还支持类型收窄，这意味着您可以通过 `chunk["type"]` 筛选 chunks，并获取正确的 payload 类型。每个分支将 `part["data"]` 收窄为该模式对应的特定类型：
+v2 格式还支持类型收窄，这意味着您可以按 `chunk["type"]` 过滤数据块并获得正确的载荷类型。每个分支将 `part["data"]` 收窄到该模式对应的特定类型：
 
 ```python
 for part in graph.stream(
@@ -160,20 +155,20 @@ for part in graph.stream(
 ```
 :::
 
-## 流模式
+## 流式输出模式
 
 :::python
-将以下一个或多个流模式作为列表传递给 @[`stream`][CompiledStateGraph.stream] 或 @[`astream`][CompiledStateGraph.astream] 方法：
+将以下一个或多个流式输出模式作为列表传递给 @[`stream`][CompiledStateGraph.stream] 或 @[`astream`][CompiledStateGraph.astream] 方法：
 
 | 模式 | 类型 | 描述 |
 | :--- | :--- | :---------- |
 | [values](#graph-state) | @[`ValuesStreamPart`] | 每步后的完整状态。 |
-| [updates](#graph-state) | @[`UpdatesStreamPart`] | 每步后的状态更新。同一步中的多个更新会分别流式传输。 |
-| [messages](#llm-tokens) | @[`MessagesStreamPart`] | 来自 LLM 调用的(LLM token, metadata) 元组。 |
-| [custom](#custom-data) | @[`CustomStreamPart`] | 通过 @[`get_stream_writer`] 从节点发出的自定义数据。 |
-| [checkpoints](#checkpoints) | @[`CheckpointStreamPart`] | 检查点事件（格式与 `get_state()` 相同）。需要 checkpointer。 |
-| [tasks](#tasks) | @[`TasksStreamPart`] | 带有结果和错误的任务开始/结束事件。需要 checkpointer。 |
-| [debug](#debug) | @[`DebugStreamPart`] | 所有可用信息——组合了 `checkpoints` 和 `tasks` 以及额外的元数据。 |
+| [updates](#graph-state) | @[`UpdatesStreamPart`] | 每步后的状态更新。同一步骤中的多个更新会单独流式输出。 |
+| [messages](#llm-tokens) | @[`MessagesStreamPart`] | LLM调用的2元组（LLM token，元数据）。|
+| [custom](#custom-data) | @[`CustomStreamPart`] | 通过 @[`get_stream_writer`]. |
+| [checkpoints](#checkpoints) | @[`CheckpointStreamPart`] | 检查点事件（格式与 `get_state()`相同）。需要检查pointer。|
+| [tasks](#tasks) | @[`TasksStreamPart`] | Task start/finish events with results and errors. Requires a checkpointer. |
+| [debug](#debug) | @[`DebugStreamPart`] | 所有可用信息——结合 `checkpoints` 和 `tasks` 并附带额外元数据。|
 :::
 
 :::js
@@ -181,26 +176,24 @@ for part in graph.stream(
 
 | 模式 | 描述 |
 | :--- | :---------- |
-| [values](#graph-state) | 每步后的完整状态。 |
-| [updates](#graph-state) | 每步后的状态更新。同一步中的多个更新会分别流式传输。 |
-| [messages](#llm-tokens) | 来自 LLM 调用的(LLM token, metadata) 元组。 |
-| [custom](#custom-data) | 通过 `writer` 配置参数从节点发出的自定义数据。 |
-| [tools](#tool-progress) | 工具调用生命周期事件（`on_tool_start`、`on_tool_event`、`on_tool_end`、`on_tool_error`）。 |
-| [debug](#debug) | 图执行过程中的所有可用信息。 |
+| [values](#graph-state) | 每步后的完整状态。|
+| [updates](#graph-state) | 每步后的状态更新。同一步骤中的多个更新会单独流式传输。|
+| [messages](#llm-tokens) | LLM调用的2元组（LLM token，元数据）。|
+| [custom](#custom-data) | 通过 `writer` config参数从节点发出的自定义数据。|
+| [tools](#tool-progress) | 工具调用生命周期事件（`on_tool_start`, `on_tool_event`, `on_tool_end`, `on_tool_error`). |
+| [debug](#debug) | 图形执行过程中的所有可用信息。|
 :::
 
 <a id="messages"></a>
 
-### 图状态
+### 图形状态
 
-使用 `updates` 和 `values` 流模式在图执行时流式传输图的状态。
+使用流模式 `updates` 和 `values` 来在图形执行时流式传输其状态。
 
-* `updates` 流式传输每个图步骤后的状态**更新**。
-* `values` 流式传输每个图步骤后的状态**完整值**。
+* `updates` 流式传输 **updates** 到图形每步之后的状态。
+* `values` 流式传输 **完整值** ，即图形每步之后的状态。
 
 :::python
-
-</fragment>
 ```python
 from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
@@ -252,9 +245,11 @@ const graph = new StateGraph(State)
   .addEdge("generateJoke", END)
   .compile();
 ```
+:::
+
 <Tabs>
-    <Tab title="更新">
-    使用此选项可以仅流式传输节点在每个步骤后返回的 **状态更新**。流式输出包括节点名称以及更新内容。
+    <Tab title="updates">
+    使用此选项仅流式传输 **state updates** ，即每步后节点返回的状态更新。流式输出包括节点名称和更新内容。
 
     :::python
     ```python
@@ -285,7 +280,12 @@ const graph = new StateGraph(State)
       }
     }
     ```
-::: </Tab> <Tab title="values"> 使用此选项可流式传输每一步后图形的**完整状态**。 :::python
+    :::
+    </Tab>
+    <Tab title="values">
+    使用此选项流式传输 **完整状态** ，即图形每步之后的状态。
+
+    :::python
     ```python
     for chunk in graph.stream(
         {"topic": "ice cream"},
@@ -312,25 +312,25 @@ const graph = new StateGraph(State)
       console.log(`topic: ${chunk.topic}, joke: ${chunk.joke}`);
     }
     ```
-:::
+    :::
     </Tab>
 </Tabs>
 
-### LLM token
+### LLM tokens
 
-使用 `messages` 流式模式从图形的任何部分（包括节点、工具、子图或任务）**逐 token** 流式传输大型语言模型 (LLM) 输出。
+使用 `messages` 流式模式来流式传输大语言模型（LLM）输出 **逐token** ，包括图形中的节点、工具、子图形或任务。
 
 :::python
-从 [`messages` 模式](#stream-modes) 流式传输的输出是一个元组 `(message_chunk, metadata)`，其中：
+从 [`messages` mode](#stream-modes) 模式流式传输的输出是一个元组 `(message_chunk, metadata)` where:
 
-* `message_chunk`：来自 LLM 的 token 或消息片段。
-* `metadata`：包含图形节点和 LLM 调用详情的字典。
+* `message_chunk`：LLM的token或消息段。
+* `metadata`：包含图形节点和LLM调用详细信息的字典。
 
-> 如果您的 LLM 没有 LangChain 集成，您可以使用 `custom` 模式来流式传输其输出。详见[与任何 LLM 配合使用](#use-with-any-llm)。
+> 如果你的LLM没有作为LangChain集成，你可以通过使用 `custom` mode来流式传输其输出。另请参见 [与任何 LLM 配合使用](#use-with-any-llm) 查看详情。
 
 <Warning>
-**Python < 3.11 中 async 需要手动配置**
-在 Python < 3.11 中使用 async 代码时，必须显式传递 @[`RunnableConfig`] 到 `ainvoke()` 以启用正确的流式传输。详见 [Python < 3.11 中的 Async](#async) 或升级到 Python 3.11+。
+**Python < 3.11 中异步需要手动配置**
+在 Python < 3.11 中使用异步代码时，必须显式传递 @[`RunnableConfig`] to `ainvoke()` 以启用正确的流式传输。参见 [Python < 3.11 中的异步](#async) 查看详情，或升级到 Python 3.11+。
 </Warning>
 
 ```python
@@ -377,13 +377,15 @@ for chunk in graph.stream(
         if message_chunk.content:
             print(message_chunk.content, end="|", flush=True)
 ```
+:::
+
 :::js
-从 [`messages` 模式](#stream-modes) 流式传输的输出是一个元组 `[message_chunk, metadata]`，其中：
+的流式输出来自 [`messages` 模式](#stream-modes) 是一个元组 `[message_chunk, metadata]` where:
 
-* `message_chunk`：来自 LLM 的令牌或消息片段。
-* `metadata`：一个包含图节点和 LLM 调用详细信息的字典。
+* `message_chunk`：来自 LLM 的 token 或消息片段。
+* `metadata`：包含有关图节点和 LLM 调用详情的字典。
 
-> 如果您的 LLM 不可用作 LangChain 集成，您可以改用 `custom` 模式流式传输其输出。 有关详细信息，请参阅[与任何 LLM 配合使用](#use-with-any-llm)。
+> 如果你的 LLM 没有 LangChain 集成版本，你可以通过以下方式流式传输其输出 `custom` 模式。参见 [与任何 LLM 配合使用](#use-with-any-llm) 查看详情。
 
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
@@ -427,7 +429,7 @@ for await (const [messageChunk, metadata] of await graph.stream(
 
 #### 按 LLM 调用筛选
 
-您可以将 `tags` 与 LLM 调用关联，以按 LLM 调用筛选流式传输的令牌。
+你可以将 `tags` 与 LLM 调用关联，以按 LLM 调用筛选流式 token。
 
 :::python
 ```python
@@ -488,7 +490,7 @@ for await (const [msg, metadata] of await graph.stream(
 ```
 :::
 
-<Accordion title="扩展示例：按标签筛选">
+<Accordion title="Extended example: filtering by tags">
   :::python
   ```python
   from typing import TypedDict
@@ -608,17 +610,17 @@ for await (const [msg, metadata] of await graph.stream(
     }
   }
   ```
-:::
+  :::
 </Accordion>
 
-#### 从流中忽略消息
+#### 从流中省略消息
 
-使用 `nostream` 标签将 LLM 输出完全排除在流之外。使用 `nostream` 标记的调用仍会运行并产生输出；其标记在 `messages` 模式下不会被发送。
+使用 `nostream` 标签可完全从流中排除 LLM 输出。使用标记的调用 `nostream` 仍会运行并产生输出；其 token 不会在 `messages` mode.
 
 这在以下情况下很有用：
 
-- 您需要 LLM 输出用于内部处理（例如结构化输出），但不想将其流式传输给客户端
-- 您通过其他渠道流式传输相同的内容（例如自定义 UI 消息），并希望避免 `messages` 流中的重复输出
+- 你需要 LLM 输出用于内部处理（例如结构化输出），但不想将其流式传输到客户端
+- 你通过其他通道（例如自定义 UI 消息）流式传输相同内容，并希望避免在 `messages` 流中重复输出
 
 :::python
 
@@ -632,9 +634,9 @@ for await (const [msg, metadata] of await graph.stream(
 
 :::
 
-#### 按节点过滤
+#### 按节点筛选
 
-要仅从特定节点流式传输标记，请使用 `stream_mode="messages"` 并根据流式元数据中的 `langgraph_node` 字段过滤输出：
+要仅从特定节点流式传输 token，请使用 `stream_mode="messages"` 并按流式元数据中的 `langgraph_node` 字段筛选输出：
 
 :::python
 ```python
@@ -672,7 +674,7 @@ for await (const [msg, metadata] of await graph.stream(
 ```
 :::
 
-<Accordion title="扩展示例：从特定节点流式传输 LLM token">
+<Accordion title="Extended example: streaming LLM tokens from specific nodes">
   :::python
   ```python
   from typing import TypedDict
@@ -782,23 +784,26 @@ for await (const [msg, metadata] of await graph.stream(
     }
   }
   ```
-:::python
-要从 LangGraph 节点或工具内部发送**自定义用户定义数据**，请按照以下步骤操作：
+  :::
+</Accordion>
 
-1. 使用 @[`get_stream_writer`] 访问流写入器并发出自定义数据。
-2. 调用 `.stream()` 或 `.astream()` 时设置 `stream_mode="custom"` 以在流中获取自定义数据。您可以组合多种模式（例如 `["updates", "custom"]`），但至少有一种必须是 `"custom"`。
+### 自定义数据
+
+:::python
+要发送 **自定义用户数据** 从 LangGraph 节点或工具内部发送，请按照以下步骤操作：
+
+1. 使用 @[`get_stream_writer`访问流写入器并发出自定义数据。
+2. 设置 `stream_mode="custom"` 调用时 `.stream()` or `.astream()` 以在流中获取自定义数据。你可以组合多种模式（例如， `["updates", "custom"]`），但至少一个必须为 `"custom"`.
 
 <Warning>
-**Python < 3.11 异步中无 @[`get_stream_writer`]**
-在 Python < 3.11 上运行的异步代码中，@[`get_stream_writer`] 将无法正常工作。
-请改用，在节点或工具中添加 `writer` 参数并手动传递。
-有关使用示例，请参阅 [Python < 3.11 的异步](#async)。
+**No @[`get_stream_writer`在 Python < 3.11 的异步中**
+在 Python < 3.11 上运行的异步代码中，@[`get_stream_writer`将不起作用。
+请改为添加 `writer` 参数到你的节点或工具，并手动传递它。
+参见 [Python < 3.11 中的异步](#async) 查看使用示例。
 </Warning>
 
 <Tabs>
     <Tab title="node">
-
-</fragment>
     ```python
     from typing import TypedDict
     from langgraph.config import get_stream_writer
@@ -829,7 +834,7 @@ for await (const [msg, metadata] of await graph.stream(
         if chunk["type"] == "custom":
             print(f"Custom event: {chunk['data']['custom_key']}")
     ```
-</Tab>
+    </Tab>
     <Tab title="tool">
     ```python
     from langchain.tools import tool
@@ -855,20 +860,18 @@ for await (const [msg, metadata] of await graph.stream(
         if chunk["type"] == "custom":
             print(f"{chunk['data']['type']}: {chunk['data']['data']}")
 ```
-</Tab>
+    </Tab>
 </Tabs>
 :::
 
 :::js
-要从 LangGraph 节点或工具内部发送 **自定义用户数据**，请按照以下步骤操作：
+要发送 **自定义用户数据** 从 LangGraph 节点或工具内部发送，请按照以下步骤操作：
 
-1. 使用 `LangGraphRunnableConfig` 中的 `writer` 参数来发送自定义数据。
-2. 调用 `.stream()` 时设置 `streamMode: "custom"` 以在流中获取自定义数据。您可以组合多种模式（例如 `["updates", "custom"]`），但至少必须有一种为 `"custom"`。
+1. 使用 `writer` 中的参数 `LangGraphRunnableConfig` 来发送自定义数据。
+2. 设置 `streamMode: "custom"` 在调用 `.stream()` 来在流中获取自定义数据。你可以组合多种模式（例如， `["updates", "custom"]`），但至少一个必须是 `"custom"`.
 
 <Tabs>
     <Tab title="node">
-
-</fragment>
     ```typescript
     import { StateGraph, StateSchema, GraphNode, START, LangGraphRunnableConfig } from "@langchain/langgraph";
     import * as z from "zod";
@@ -896,8 +899,8 @@ for await (const [msg, metadata] of await graph.stream(
       console.log(chunk);
     }
     ```
-</Tab>
-    <Tab title="工具">
+    </Tab>
+    <Tab title="tool">
     ```typescript
     import { tool } from "@langchain/core/tools";
     import { LangGraphRunnableConfig } from "@langchain/langgraph";
@@ -928,7 +931,7 @@ for await (const [msg, metadata] of await graph.stream(
       console.log(chunk);
     }
     ```
-</Tab>
+    </Tab>
 </Tabs>
 :::
 
@@ -936,20 +939,20 @@ for await (const [msg, metadata] of await graph.stream(
 
 ### 工具进度
 
-使用 `tools` 流式模式接收工具执行时的实时生命周期事件。这对于在工具运行时在 UI 中显示进度指示器、部分结果和错误状态非常有用。
+使用 `tools` 流模式来接收工具执行的实时生命周期事件。这对于在工具运行期间在UI中显示进度指示器、部分结果和错误状态很有用。
 
-`tools` 流式模式会发出四种事件类型：
+该 `tools` 流模式发出四种事件类型：
 
-| 事件 | 何时 | 负载 |
+| 事件 | 何时 | 载荷 |
 |-------|------|---------|
-| `on_tool_start` | 工具调用开始时 | `name`、`input`、`toolCallId` |
-| `on_tool_event` | 工具产生中间数据时 | `name`、`data`、`toolCallId` |
-| `on_tool_end` | 工具返回最终结果时 | `name`、`output`、`toolCallId` |
-| `on_tool_error` | 工具抛出错误时 | `name`、`error`、`toolCallId` |
+| `on_tool_start` | 工具调用开始 | `name`, `input`, `toolCallId` |
+| `on_tool_event` | 工具产生中间数据 | `name`, `data`, `toolCallId` |
+| `on_tool_end` | 工具返回其最终结果 | `name`, `output`, `toolCallId` |
+| `on_tool_error` | 工具抛出错误 | `name`, `error`, `toolCallId` |
 
 #### 定义流式进度的工具
 
-要发出 `on_tool_event` 事件，请将工具函数定义为 **异步生成器**（`async function*`）。每个 `yield` 都会将中间数据发送到流中，而 `return` 值则用作工具的最终结果。
+要发出 `on_tool_event` 事件，请将你的工具函数定义为 **异步生成器** (`async function*`）。每个 `yield` 向流发送中间数据，而 `return` 值被用作工具的最终结果。
 
 ```typescript
 import { tool } from "@langchain/core/tools";
@@ -992,12 +995,12 @@ const searchFlights = tool(
 ```
 
 <Note>
-返回 `Promise` 的现有工具完全兼容。它们发出 `on_tool_start` 和 `on_tool_end` 事件，但不发出 `on_tool_event` 事件。
+现有的返回 `Promise` 的工具完全兼容。它们会发出 `on_tool_start` 和 `on_tool_end` 事件，但没有 `on_tool_event` events.
 </Note>
 
-#### 服务端消费工具事件
+#### 在服务端消费工具事件
 
-将 `streamMode: ["tools"]`（或与其他模式组合）传递给 `graph.stream()`：
+传递 `streamMode: ["tools"]` （或与其他模式结合）来 `graph.stream()`:
 
 ```typescript
 for await (const [mode, chunk] of await graph.stream(
@@ -1023,19 +1026,19 @@ for await (const [mode, chunk] of await graph.stream(
 }
 ```
 
-#### 在 React 中配合 `useStream` 使用工具进度
+#### 在 React 中使用工具进度 `useStream`
 
-来自 `@langchain/langgraph-sdk/react` 的 `@[`useStream`]` 钩子会在流模式中包含 `"tools"` 时暴露一个 `toolProgress` 数组。每个条目都是一个 `ToolProgress` 对象，用于追踪正在运行的工具的当前状态：
+中的 @[`useStream`] 钩子提供 `@langchain/langgraph-sdk/react` 暴露了一个 `toolProgress` 数组当你包含 `"tools"` 在流模式中。每个条目是一个 `ToolProgress` 对象，用于跟踪正在运行的工具的当前状态：
 
 | 字段 | 描述 |
 |-------|-------------|
 | `name` | 工具名称 |
-| `state` | 当前生命周期状态：`"starting"`、`"running"`、`"completed"` 或 `"error"` |
+| `state` | 当前生命周期状态： `"starting"`, `"running"`, `"completed"`, or `"error"` |
 | `toolCallId` | 来自 LLM 的工具调用 ID |
 | `input` | 工具的输入参数 |
-| `data` | 从 `on_tool_event` 产生的最新数据 |
-| `result` | 最终结果，在 `on_tool_end` 时设置 |
-| `error` | 错误，在 `on_tool_error` 时设置 |
+| `data` | 最近从 `on_tool_event` |
+| `result` | 最终结果，在 `on_tool_end` |
+| `error` | 错误，在 `on_tool_error` |
 
 ```typescript
 import { useStream } from "@langchain/langgraph-sdk/react";
@@ -1071,14 +1074,11 @@ function Chat() {
 }
 ```
 
-<Accordion title="扩展示例：带工具进度的旅行规划智能体">
+<Accordion title="Extended example: travel planning agent with tool progress">
 
-本示例展示了一个完整的智能体，它使用异步生成器工具将搜索进度流式传输到 React UI。
+这个示例展示了一个完整的代理，包含流式搜索进度到 React UI 的异步生成器工具。
 
-**智能体定义：**
-
-
-</Accordion>
+**代理定义：**
 
 ```typescript
 import { tool } from "@langchain/core/tools";
@@ -1159,7 +1159,7 @@ export const agent = createAgent({
 });
 ```
 
-**带进度卡片的 React 组件：**
+**带进度卡的 React 组件：**
 
 ```typescript
 import { useStream } from "@langchain/langgraph-sdk/react";
@@ -1215,25 +1215,25 @@ function TravelPlanner() {
 ```
 </Accordion>
 
-#### `tools` 与 `custom` 流模式对比
+#### `tools` vs `custom` 流模式
 
-两种流模式都可以展示工具进度，但它们用途不同：
+两种流模式都可以显示工具进度，但它们用途不同：
 
-* **`tools`**—自动发送结构化的生命周期事件（`on_tool_start`、`on_tool_event`、`on_tool_end`、`on_tool_error`），你的工具只需使用 `async function*`，无需修改其他代码。`useStream` hook 提供了开箱即用的响应式 `toolProgress` 数组。
-* **`custom`**—使用 `config.writer()` 完全控制发送的数据内容和时间。当你需要不符合工具生命周期的自由格式数据，或想要从节点（不仅仅是工具）进行流式传输时，请使用此模式。
+* **`tools`**—自动发出结构化的生命周期事件（`on_tool_start`, `on_tool_event`, `on_tool_end`, `on_tool_error`），你的工具无需修改代码，只需使用 `async function*`。该 `useStream` hook 提供响应式 `toolProgress` 数组开箱即用。
+* **`custom`**—让您完全控制发出的数据以及使用 `config.writer()`的时间。当您需要不映射到工具生命周期的自由格式数据，或想从节点（不仅仅是工具）流式传输时使用。
 
 :::
 
 ### 子图输出
 
 :::python
-要将[子图](/oss/langgraph/use-subgraphs)的输出包含在流式输出中，可以在父图的 `.stream()` 方法中设置 `subgraphs=True`。这将同时流式传输父图和任何子图的输出。
+要包含来自 [子图](/oss/langgraph/use-subgraphs) 的输出到流式输出中，可以设置 `subgraphs=True` 在 `.stream()` 方法的父图中。这将从父图和任何子图流式传输输出。
 
-输出将以元组 `(namespace, data)` 的形式流式传输，其中 `namespace` 是指向子图被调用节点的路径元组，例如 `("parent_node:<task_id>", "child_node:<task_id>")`。
+输出将作为元组流式传输 `(namespace, data)`，其中 `namespace` 是一个包含调用子图的节点路径的元组，例如 `("parent_node:<task_id>", "child_node:<task_id>")`.
 
 <Tabs>
     <Tab title="v2 (LangGraph >= 1.1)">
-    使用 `version="v2"` 时，子图事件采用相同的 `StreamPart` 格式。`ns` 字段标识来源：
+    使用 `version="v2"`，子图事件使用相同的 `StreamPart` 格式。字段 `ns` 标识来源：
 
     ```python
     for chunk in graph.stream(
@@ -1246,10 +1246,8 @@ function TravelPlanner() {
         print(chunk["ns"])    # () for root, ("node_name:<task_id>",) for subgraph
         print(chunk["data"])  # {"node_name": {"key": "value"}}
     ```
-</Tab>
-    <Tab title="v1 (默认)">
-
-</fragment>
+    </Tab>
+    <Tab title="v1 (default)">
     ```python
     for chunk in graph.stream(
         {"foo": "foo"},
@@ -1259,16 +1257,14 @@ function TravelPlanner() {
     ):
         print(chunk)
     ```
-</Tab>
+    </Tab>
 </Tabs>
 :::
 
 :::js
-要在流式输出中包含[子图](/oss/langgraph/use-subgraphs)的输出，您可以在父图的 `.stream()` 方法中设置 `subgraphs: true`。这将同时流式输出父图和任何子图的输出。
+要包含来自 [子图](/oss/langgraph/use-subgraphs) 的输出到流式输出中，可以设置 `subgraphs: true` 在 `.stream()` 方法的父图中。这将从父图和任何子图流式传输输出。
 
-输出将作为元组 `[namespace, data]` 流式传输，其中 `namespace` 是调用子图的节点路径元组，例如 `["parent_node:<task_id>", "child_node:<task_id>"]`。
-
-</fragment>
+输出将作为元组流式传输 `[namespace, data]`，其中 `namespace` 是一个包含调用子图的节点路径的元组，例如 `["parent_node:<task_id>", "child_node:<task_id>"]`.
 
 ```typescript
 for await (const chunk of await graph.stream(
@@ -1284,7 +1280,7 @@ for await (const chunk of await graph.stream(
 ```
 :::
 
-<Accordion title="扩展示例：从子图流式传输">
+<Accordion title="Extended example: streaming from subgraphs">
   :::python
   ```python
   from langgraph.graph import START, StateGraph
@@ -1384,7 +1380,7 @@ for await (const chunk of await graph.stream(
     console.log(chunk);
   }
   ```
-:::
+  :::
 
   :::python
   ```
@@ -1402,17 +1398,15 @@ for await (const chunk of await graph.stream(
   [['node2:dfddc4ba-c3c5-6887-5012-a243b5b377c2'], {'subgraphNode2': {'foo': 'hi! foobar'}}]
   [[], {'node2': {'foo': 'hi! foobar'}}]
   ```
-::::
+  :::
 
-**请注意**，我们不仅接收节点更新，还接收命名空间，这些命名空间告诉我们正在从哪个图（或子图）进行流式传输。
+  **注意** 我们不仅接收节点更新，还接收命名空间，这些命名空间告诉我们正在从哪个图（或子图）流式传输。
 </Accordion>
 
 :::python
 ### 检查点
 
-使用 `checkpoints` 流式传输模式来接收图执行过程中的检查点事件。每个检查点事件的格式与 `get_state()` 的输出格式相同。需要使用 [checkpointer](/oss/langgraph/persistence)。
-
-:::
+使用 `checkpoints` 流式传输模式可在图执行时接收检查点事件。每个检查点事件的格式与 `get_state()`的输出格式相同。需要 [检查点](/oss/langgraph/persistence).
 
 ```python
 from langgraph.checkpoint.memory import MemorySaver
@@ -1441,7 +1435,7 @@ for chunk in graph.stream(
 
 ### 任务
 
-使用 `tasks` 流式模式来在图执行时接收任务开始和完成事件。任务事件包含有关正在运行的节点、其结果以及任何错误的信息。需要使用 [checkpointer](/oss/langgraph/persistence)。
+使用 `tasks` 流式传输模式可在图执行时接收任务开始和完成事件。任务事件包括正在运行的节点、其结果及任何错误的相关信息。需要 [检查点](/oss/langgraph/persistence).
 
 ```python
 from langgraph.checkpoint.memory import MemorySaver
@@ -1472,7 +1466,7 @@ for chunk in graph.stream(
 <a id="debug"></a>
 ### 调试
 
-使用 `debug` 流式模式在图执行过程中尽可能多地流式传输信息。流式输出的内容包括节点名称以及完整状态。
+使用 `debug` 流式传输模式可在图执行过程中尽可能多地流式传输信息。流式输出包括节点名称和完整状态。
 
 :::python
 ```python
@@ -1499,20 +1493,18 @@ for await (const chunk of await graph.stream(
 
 :::python
 <Note>
-`debug` 模式将 `checkpoints` 和 `tasks` 事件与附加元数据结合在一起。如果你只需要部分调试信息，可以直接使用 `checkpoints` 或 `tasks`。
+模式结合 `debug` 和 `checkpoints` 事件并附带额外元数据。如果只需部分调试信息，可直接使用 `tasks` 事件，并附带额外元数据。使用 `checkpoints` or `tasks` 如果您只需要部分调试信息。
 </Note>
 :::
 
-### 同时使用多种模式
+### 同时使用多个模式
 
 :::python
-你可以将列表作为 `stream_mode` 参数，以同时流式传输多种模式。
+您可以将列表作为 `stream_mode` 参数传递以同时流式传输多个模式。
 
-使用 `version="v2"` 时，每个 chunk 都是一个 `StreamPart` 字典。使用 `chunk["type"]` 来区分不同模式：
+使用 `version="v2"`，每个数据块都是一个 `StreamPart` 字典。使用 `chunk["type"]` 区分不同模式：
 
 <CodeGroup>
-
-</fragment>
 ```python v2
 for chunk in graph.stream(inputs, stream_mode=["updates", "custom"], version="v2"):
     if chunk["type"] == "updates":
@@ -1529,11 +1521,9 @@ for mode, chunk in graph.stream(inputs, stream_mode=["updates", "custom"]):
 :::
 
 :::js
-你可以将数组作为 `streamMode` 参数传递，以同时流式传输多种模式。
+您可以传递一个数组作为 `streamMode` 参数来一次流式传输多个模式。
 
-流式输出的结果将是 `[mode, chunk]` 元组，其中 `mode` 是流模式的名称，`chunk` 是该模式流式传输的数据。
-
-</fragment>
+流式输出的结果将是 `[mode, chunk]` 的元组，其中 `mode` 是流式模式的名称， `chunk` 是该模式流式传输的数据。
 
 ```typescript
 for await (const [mode, chunk] of await graph.stream(inputs, {
@@ -1546,15 +1536,12 @@ for await (const [mode, chunk] of await graph.stream(inputs, {
 
 ## 高级
 
-### 与任何 LLM 配合使用
+### 适用于任何 LLM
 
 :::python
-您可以使用 `stream_mode="custom"` 从**任何 LLM API**流式传输数据——即使该 API **没有**实现 LangChain 聊天模型接口。
+您可以使用 `stream_mode="custom"` 从 **任何 LLM API**流式传输数据——即使该 API **没有** 实现 LangChain 聊天模型接口。
 
-这让您可以集成原始 LLM 客户端或提供自己流式接口的外部服务，使 LangGraph 在自定义设置中具有极高的灵活性。
-
-
-:::
+这使您可以集成原始 LLM 客户端或提供自己流式接口的外部服务，使 LangGraph 在自定义设置中具有极高的灵活性。
 
 ```python
 from langgraph.config import get_stream_writer
@@ -1589,12 +1576,9 @@ for chunk in graph.stream(
 :::
 
 :::js
-您可以使用 `streamMode: "custom"` 从**任何 LLM API**流式传输数据——即使该 API **未**实现 LangChain 聊天模型接口。
+您可以使用 `streamMode: "custom"` 从 **任何 LLM API**流式传输数据——即使该 API **没有** 实现 LangChain 聊天模型接口。
 
-这让您可以集成原始 LLM 客户端或提供自身流式接口的外部服务，使 LangGraph 在自定义设置中具有极高的灵活性。
-
-
-</fragment>
+这使您可以集成原始 LLM 客户端或提供自己流式接口的外部服务，使 LangGraph 在自定义设置中具有极高的灵活性。
 
 ```typescript
 import { StateGraph, GraphNode, StateSchema } from "@langchain/langgraph";
@@ -1629,7 +1613,7 @@ for await (const chunk of await graph.stream(
 ```
 :::
 
-<Accordion title="扩展示例：流式传输任意聊天模型">
+<Accordion title="Extended example: streaming arbitrary chat model">
   :::python
   ```python
   import operator
@@ -1719,7 +1703,7 @@ for await (const chunk of await graph.stream(
   )
   ```
 
-让我们使用包含工具调用的 @[`AIMessage`] 来调用图：
+  让我们使用包含工具调用的 @[`AIMessage`] 来调用图：
 
   ```python
   inputs = {
@@ -1842,7 +1826,7 @@ for await (const chunk of await graph.stream(
     .compile();
   ```
 
-让我们用一个包含工具调用的 @[`AIMessage`] 来调用图：
+  让我们使用包含工具调用的 @[`AIMessage`] 来调用图：
 
   ```typescript
   const inputs = {
@@ -1871,20 +1855,19 @@ for await (const chunk of await graph.stream(
     console.log(chunk.content + "|");
   }
   ```
-::::
+  :::
 </Accordion>
 
-### 禁用特定聊天模型的流式输出
+### 为特定聊天模型禁用流式传输
 
-如果你的应用程序混合使用了支持流式输出和不支持流式输出的模型，你可能需要为不支持流式输出的模型显式禁用流式输出。
+如果您的应用程序混合使用支持流式传输和不支持流式传输的模型，您可能需要为
+不支持流式传输的模型显式禁用流式传输。
 
 :::python
-初始化模型时设置 `streaming=False`。
+在初始化模型时设置 `streaming=False` 。
 
 <Tabs>
     <Tab title="init_chat_model">
-
-</fragment>
     ```python
     from langchain.chat_models import init_chat_model
 
@@ -1894,22 +1877,20 @@ for await (const chunk of await graph.stream(
         streaming=False  # [!code highlight]
     )
     ```
-</Tab>
-<Tab title="聊天模型接口">
+    </Tab>
+    <Tab title="Chat model interface">
     ```python
     from langchain_openai import ChatOpenAI
 
     # Set streaming=False to disable streaming for the chat model
     model = ChatOpenAI(model="o1-preview", streaming=False)
     ```
-</Tab>
+    </Tab>
 </Tabs>
 :::
 
 :::js
-在初始化模型时设置 `streaming: false`。
-
-</fragment>
+在初始化模型时设置 `streaming: false` 。
 
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
@@ -1924,13 +1905,13 @@ const model = new ChatOpenAI({
 
 :::python
 <Note>
-并非所有聊天模型集成都支持 `streaming` 参数。如果你的模型不支持，请使用 `disable_streaming=True`。此参数通过基类在所有聊天模型上可用。
+并非所有聊天模型集成都支持 `streaming` 参数。如果您的模型不支持，请使用 `disable_streaming=True` 代替。所有聊天模型都可以通过基类使用此参数。
 </Note>
 :::
 
 :::js
 <Note>
-并非所有聊天模型集成都支持 `streaming` 参数。如果你的模型不支持，请使用 `disableStreaming: true`。此参数通过基类在所有聊天模型上可用。
+并非所有聊天模型集成都支持 `streaming` 参数。如果您的模型不支持，请使用 `disableStreaming: true` 代替。所有聊天模型都可以通过基类使用此参数。
 </Note>
 :::
 
@@ -1938,24 +1919,22 @@ const model = new ChatOpenAI({
 
 ### 迁移到 v2
 
-v2 流式格式（贯穿本页使用）提供了统一的输出格式。以下是关键差异和迁移方法的摘要：
+v2 流式传输格式（贯穿本页使用）提供统一的输出格式。以下是关键差异和迁移方法的总结：
 
-| 场景 | v1（默认） | v2（`version="v2"`） |
+| 场景 | v1（默认） | v2（`version="v2"`) |
 |---|---|---|
-| 单流模式 | 原始数据（dict） | 带有 `type`、`ns`、`data` 的 `StreamPart` dict |
-| 多流模式 | `(mode, data)` 元组 | 相同的 `StreamPart` dict，根据 `chunk["type"]` 过滤 |
-| 子图流式传输 | `(namespace, data)` 元组 | 相同的 `StreamPart` dict，检查 `chunk["ns"]` |
-| 多模式 + 子图 | `(namespace, mode, data)` 三元组 | 相同的 `StreamPart` dict |
-| `invoke()` 返回类型 | 纯 dict（状态） | 带有 `.value` 和 `.interrupts` 的 `GraphOutput` |
-| 中断位置（流） | 状态 dict 中的 `__interrupt__` 键 | 值流部分的 `interrupts` 字段 |
-| 中断位置（invoke） | 结果 dict 中的 `__interrupt__` 键 | `GraphOutput` 上的 `.interrupts` 属性 |
-| Pydantic/dataclass 输出 | 返回纯 dict | 强制转换为 model/dataclass 实例 |
+| 单一流式模式 | 原始数据（dict） | `StreamPart` 带有 `type`, `ns`, `data` |
+| 多个流式模式 | `(mode, data)` 元组 | 相同 `StreamPart` dict，按 `chunk["type"]` |
+| 子图流式传输 | `(namespace, data)` 元组 | 相同 `StreamPart` dict，检查 `chunk["ns"]` |
+| 多模式 + 子图 | `(namespace, mode, data)` 三元组 | 相同 `StreamPart` 字典 |
+| `invoke()` 返回类型 | 普通字典（状态） | `GraphOutput` 使用 `.value` 和 `.interrupts` |
+| 中断位置（流） | `__interrupt__` 状态字典中的键 | `interrupts` 上的字段 `values` 流部分 |
+| 中断位置（调用） | `__interrupt__` 结果字典中的键 | `.interrupts` 上的属性 `GraphOutput` |
+| Pydantic/dataclass output | Returns plain dict | Coerces to model/dataclass instance |
 
-#### v2 invoke 格式
+#### v2 调用格式
 
-当你向 `invoke()` 或 `ainvoke()` 传递 `version="v2"` 时，它返回一个带有 `.value` 和 `.interrupts` 属性的 @[`GraphOutput`] 对象：
-
-:::
+当您传递 `version="v2"` to `invoke()` or `ainvoke()`时，它返回一个 @[`GraphOutput`] 对象，包含 `.value` 和 `.interrupts` attributes:
 
 ```python
 from langgraph.types import GraphOutput
@@ -1967,17 +1946,15 @@ result.value       # your output — dict, Pydantic model, or dataclass
 result.interrupts  # tuple[Interrupt, ...], empty if none occurred
 ```
 
-使用除默认 `"values"` 以外的任何流模式时，`invoke(..., stream_mode="updates", version="v2")` 返回 `list[StreamPart]` 而不是 `list[tuple]`。
+使用任何非默认的流模式 `"values"`, `invoke(..., stream_mode="updates", version="v2")` 返回 `list[StreamPart]` 而不是 `list[tuple]`.
 
 <Warning>
-`GraphOutput` 的字典式访问（`result["key"]`、`"key" in result`、`result["__interrupt__"]`）仍然可以正常工作以保持向后兼容性，但已**弃用**，将在未来版本中移除。请迁移到 `result.value` 和 `result.interrupts`。
+上的字典式访问 `GraphOutput` (`result["key"]`, `"key" in result`, `result["__interrupt__"]`）仍然可以工作以保持向后兼容性，但是是 **已弃用** ，将在未来版本中移除。请迁移到 `result.value` 和 `result.interrupts`.
 </Warning>
 
-这样可以将状态与中断元数据分离。在 v1 中，中断嵌入在返回字典的 `__interrupt__` 下：
+这将状态与中断元数据分离。在 v1 中，中断嵌入在返回的字典中的 `__interrupt__`:
 
 <CodeGroup>
-
-</CodeGroup>
 ```python v2 (new)
 config = {"configurable": {"thread_id": "thread-1"}}
 result = graph.invoke(inputs, config=config, version="v2")
@@ -1996,9 +1973,9 @@ if "__interrupt__" in result:
 ```
 </CodeGroup>
 
-#### Pydantic 和 dataclass 状态强制转换
+#### Pydantic 和数据类的状态强制转换
 
-当你的图状态是 Pydantic 模型或 dataclass 时，v2 `values` 模式会自动将输出强制转换为正确的类型：
+当您的图状态是 Pydantic 模型或数据类时，v2 `values` 模式自动将输出强制转换为正确的类型：
 
 ```python
 from pydantic import BaseModel
@@ -2017,15 +1994,15 @@ for chunk in graph.stream(
 ```
 
 <a id="async"></a>
-### Python < 3.11 中的 Async
+### Python < 3.11 的异步
 
-在 Python < 3.11 版本中，[asyncio tasks](https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task) 不支持 `context` 参数。
-这限制了 LangGraph 自动传播 context 的能力，并在两个关键方面影响了 LangGraph 的流式机制：
+在 Python 版本 < 3.11 中， [asyncio 任务](https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task) 不支持 `context` parameter.
+这限制了 LangGraph 自动传播上下文的能力，并从两个关键方面影响 LangGraph 的流式机制：
 
-1. 你**必须**将 [`RunnableConfig`](https://python.langchain.com/docs/concepts/runnables/#runnableconfig) 显式传入异步 LLM 调用（例如 `ainvoke()`），因为回调不会自动传播。
-2. 你**不能**在异步节点或工具中使用 @[`get_stream_writer`]——必须直接传递 `writer` 参数。
+1. 您 **必须** 显式传递 [`RunnableConfig`](https://python.langchain.com/docs/concepts/runnables/#runnableconfig) 到异步 LLM 调用中（例如， `ainvoke()`），因为回调不会自动传播。
+2. 您 **不能** 在异步节点或工具中使用 @[`get_stream_writer`]——您必须直接传递一个 `writer` 参数。
 
-<Accordion title="扩展示例：带有手动配置参数的异步 LLM 调用">
+<Accordion title="Extended example: async LLM call with manual config">
   ```python
   from typing import TypedDict
   from langgraph.graph import START, StateGraph
@@ -2068,9 +2045,7 @@ for chunk in graph.stream(
   ```
 </Accordion>
 
-<Accordion title="扩展示例：异步自定义流式传输与流写入器">
-
-</fragment>
+<Accordion title="Extended example: async custom streaming with stream writer">
   ```python
   from typing import TypedDict
   from langgraph.types import StreamWriter

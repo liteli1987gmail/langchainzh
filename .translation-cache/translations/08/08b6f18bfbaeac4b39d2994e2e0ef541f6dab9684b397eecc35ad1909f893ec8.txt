@@ -1,17 +1,17 @@
 ---
 title: LangGraph 思维
-description: 了解如何使用 LangGraph 构建智能体
+description: 了解如何使用 LangGraph 构建智能体的思维方法
 ---
 
 import LanggraphThinkingHitlV2Py from '/snippets/code-samples/langgraph-thinking-hitl-v2-py.mdx';
 
-当使用 LangGraph 构建智能体时，首先会将其拆分为离散的步骤，称为**节点**。然后，你需要描述每个节点的不同决策和转换。最后，通过共享的**状态**将节点连接在一起，每个节点都可以读取和写入该状态。
+使用 LangGraph 构建智能体时，首先需要将其分解为离散的步骤，称为 **节点**。然后，描述每个节点的不同决策和转换。最后，通过共享的 **状态** 将节点连接在一起，每个节点都可以从中读取和写入。
 
-在本指南中，我们将引导你了解使用 LangGraph 构建客户支持邮件智能体的思维过程。
+在本指南中，我们将引导您完成使用 LangGraph 构建客户支持邮件智能体的思维过程。
 
-## 从你想要自动化的流程开始
+## 从您想要自动化的流程开始
 
-假设你需要构建一个处理客户支持邮件的 AI 智能体。你的产品团队给出了以下要求：
+假设您需要构建一个处理客户支持邮件的 AI 智能体。您的产品团队给您提供了以下要求：
 
 ```txt
 The agent should:
@@ -32,11 +32,11 @@ Example scenarios to handle:
 5. Complex technical issue: "Our API integration fails intermittently with 504 errors"
 ```
 
-要在 LangGraph 中实现一个代理，通常需要遵循以下五个步骤。
+在 LangGraph 中实现智能体，通常需要遵循相同的五个步骤。
 
-## 第一步：将您的工作流程划分为离散的步骤
+## 步骤 1：将工作流程映射为离散步骤
 
-首先，识别您流程中的不同步骤。每个步骤都将变成一个 **node**（一个执行特定任务的函数）。然后，勾画出这些步骤如何相互连接。
+首先识别流程中的不同步骤。每个步骤将成为一个 **节点** （执行特定单一功能的函数）。然后，勾勒这些步骤如何相互连接。
 
 ```mermaid
 flowchart TD
@@ -61,147 +61,147 @@ flowchart TD
     class A,B,C,D,E,F,G,H,I,J process
 ```
 
-图中箭头表示可能的路径，但实际选择哪条路径取决于每个节点内部的决策。
+此图中的箭头显示了可能的路径，但实际选择哪条路径的决策发生在每个节点内部。
 
-现在我们已经识别了工作流程中的组件，让我们了解每个节点需要做什么：
+现在我们已经确定了工作流程中的各个组件，接下来了解每个节点需要做什么：
 
 - `Read Email`：提取并解析邮件内容
 - `Classify Intent`：使用 LLM 对紧急程度和主题进行分类，然后路由到适当的操作
-- `Doc Search`：查询您的知识库以获取相关信息
+- `Doc Search`：在知识库中查询相关信息
 - `Bug Track`：在跟踪系统中创建或更新问题
 - `Draft Reply`：生成适当的回复
 - `Human Review`：升级给人工代理进行审批或处理
 - `Send Reply`：发送邮件回复
 
 <Tip>
-请注意，某些节点会对下一步去哪里做出决策（`Classify Intent`、`Draft Reply`、`Human Review`），而其他节点总是进行相同的下一步（`Read Email` 总是转到 `Classify Intent`，`Doc Search` 总是转到 `Draft Reply`）。
+请注意，有些节点会决定下一步去哪里（`Classify Intent`, `Draft Reply`, `Human Review`），而其他节点总是进行到相同的下一步（`Read Email` 总是转到 `Classify Intent`, `Doc Search` 总是转到 `Draft Reply`).
 </Tip>
 
-## Step 2: Identify what each step needs to do
+## 步骤 2：确定每个步骤需要做什么
 
-对于图中的每个节点，确定它代表什么类型的操作，以及它正常工作需要什么上下文。
+对于图中的每个节点，确定它代表什么类型的操作，以及它需要什么上下文才能正常工作。
 
 <CardGroup cols={2}>
     <Card title="LLM steps" icon="brain" href="#llm-steps">
-        当您需要理解、分析、生成文本或做出推理决策时使用
+        当需要理解、分析、生成文本或进行推理决策时使用
     </Card>
     <Card title="Data steps" icon="database" href="#data-steps">
-        当您需要从外部源检索信息时使用
+        当需要从外部来源检索信息时使用
     </Card>
     <Card title="Action steps" icon="bolt" href="#action-steps">
-        当您需要执行外部操作时使用
+        当需要执行外部操作时使用
     </Card>
     <Card title="User input steps" icon="user" href="#user-input-steps">
-        当您需要人工干预时使用
+        当需要人工干预时使用
     </Card>
 </CardGroup>
 
-### LLM steps
+### LLM 步骤
 
-当步骤需要理解、分析、生成文本或做出推理决策时：
+当某个步骤需要理解、分析、生成文本或进行推理决策时：
 
 <AccordionGroup>
     <Accordion title="Classify intent">
-        - 静态上下文（提示词）：分类类别、紧急程度定义、响应格式
+        - 静态上下文（提示词）：分类类别、紧急程度定义、回复格式
         - 动态上下文（来自状态）：邮件内容、发件人信息
         - 期望结果：决定路由的结构化分类
     </Accordion>
 
     <Accordion title="Draft reply">
-        - 静态上下文（提示词）：语气指南、公司策略、回复模板
+        - 静态上下文（提示词）：语调指南、公司政策、回复模板
         - 动态上下文（来自状态）：分类结果、搜索结果、客户历史
-        - 期望结果：可供审核的专业邮件回复
+        - 期望结果：可供审阅的专业邮件回复
     </Accordion>
 </AccordionGroup>
 
-### Data steps
+### 数据步骤
 
-当步骤需要从外部源检索信息时：
+当某个步骤需要从外部来源检索信息时：
 
 <AccordionGroup>
     <Accordion title="Document search">
         - 参数：从意图和主题构建的查询
-        - 重试策略：是，针对临时故障使用指数退避
+        - 重试策略：是，对于暂时性故障使用指数退避
         - 缓存：可以缓存常见查询以减少 API 调用
     </Accordion>
 
     <Accordion title="Customer history lookup">
-        - 参数：来自状态的客户邮箱或 ID
-        - 重试策略：是，但如果不可用则回退到基本信息
+        - 参数：状态中的客户邮箱或 ID
+        - 重试策略：是，但如不可用则回退到基本信息
         - 缓存：是，使用生存时间在新鲜度和性能之间取得平衡
     </Accordion>
 </AccordionGroup>
 
-### Action steps
+### 操作步骤
 
-当步骤需要执行外部操作时：
+当某个步骤需要执行外部操作时：
 
 <AccordionGroup>
     <Accordion title="Send reply">
-        - 何时执行节点：审批后（人工或自动化）
-        - 重试策略：是，针对网络问题使用指数退避
+        - 何时执行节点：批准后（人工或自动）
+        - 重试策略：是，对于网络问题使用指数退避
         - 不应缓存：每次发送都是唯一操作
     </Accordion>
 
     <Accordion title="Bug track">
-        - 何时执行节点：当意图为"bug"时总是执行
-        - 重试策略：是，不能丢失 bug 报告至关重要
-        - 返回：工单 ID，用于包含在回复中
+        - 何时执行节点：当意图为"bug"时始终执行
+        - 重试策略：是，关键是不能丢失 bug 报告
+        - 返回：响应中包含工单 ID
     </Accordion>
 </AccordionGroup>
 
-### User input steps
+### 用户输入步骤
 
-当步骤需要人工干预时：
+当某个步骤需要人工干预时：
 
 <AccordionGroup>
     <Accordion title="Human review node">
         - 决策上下文：原始邮件、回复草稿、紧急程度、分类
-        - 期望输入格式：审批布尔值加可选的编辑回复
+        - 期望的输入格式：批准布尔值加上可选的编辑回复
         - 触发时机：高紧急程度、复杂问题或质量问题
     </Accordion>
 </AccordionGroup>
 
-## Step 3: Design your state
+## 步骤 3：设计您的状态
 
-状态是代理中所有节点可访问的共享[内存](/oss/concepts/memory)。可以将其想象为您的代理用于跟踪工作过程中学习和决策的所有内容的笔记本。
+状态是共享的 [内存](/oss/concepts/memory) 可被代理中的所有节点访问。将其视为代理用来跟踪在处理过程中学习和决定的所有内容的笔记本。
 
-### What belongs in state?
+### 什么应该放在状态中？
 
-关于每条数据，问自己以下问题：
+关于每条数据，问问自己以下问题：
 
 <CardGroup cols={2}>
     <Card title="Include in state" icon="check">
-        它需要在步骤之间持久化吗？如果是，则放入状态。
+        它需要在步骤之间持久化吗？如果是，则放入状态中。
     </Card>
 
     <Card title="Don't store" icon="code">
-        可以从其他数据推导出来吗？如果是，需要时计算，而不是存储在状态中。
+        你能从其他数据中推导出来吗？如果是，需要时再计算而不是存储在状态中。
     </Card>
 </CardGroup>
 
-对于我们的邮件代理，需要跟踪：
+对于我们的邮件代理，我们需要跟踪：
 
-- 原始邮件和发件人信息（之后无法重建）
-- 分类结果（多个后续节点需要）
+- 原始邮件和发送者信息（之后无法重建）
+- Classification results (needed by multiple later/downstream nodes)
 - 搜索结果和客户数据（重新获取成本高）
-- 回复草稿（需要通过审核流程持久化）
+- 回复草稿（需要通过审核持久化）
 - 执行元数据（用于调试和恢复）
 
-### Keep state raw, format prompts on-demand
+### 保持状态原始，按需格式化提示
 
 <Tip>
-    一个关键原则：您的状态应存储原始数据，而不是格式化文本。在需要时在节点内格式化提示词。
+    一个关键原则：你的状态应该存储原始数据，而不是格式化文本。需要时在节点内部格式化提示。
 </Tip>
 
 这种分离意味着：
 
-- 不同节点可以根据需要以不同方式格式化相同数据
-- 您可以更改提示词模板而无需修改状态架构
-- 调试更清晰——您可以准确看到每个节点收到了什么数据
-- 您的代理可以演进而不会破坏现有状态
+- 不同的节点可以根据自身需求以不同方式格式化相同数据
+- 你可以修改提示模板而不改变状态模式
+- 调试更清晰——你可以准确看到每个节点接收到的数据
+- 你的代理可以演进而不破坏现有状态
 
-让我们定义状态：
+让我们定义我们的状态：
 
 :::python
 
@@ -272,45 +272,41 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
 :::
 
 
-请注意，状态中只包含原始数据——没有提示词模板、没有格式化字符串、没有指令。分类输出以字典形式存储，直接来自 LLM。
+请注意，状态只包含原始数据——没有提示模板、格式化字符串或指令。分类输出作为来自 LLM 的单个字典存储。
 
-## Step 4: Build your nodes
+## 步骤 4：构建你的节点
 
 :::python
 
-现在我们将每个步骤实现为一个函数。LangGraph 中的节点就是一个 Python 函数，它接收当前状态并返回对状态的更新。
+现在我们将每个步骤实现为函数。LangGraph 中的节点只是一个 Python 函数，它接收当前状态并返回对状态的更新。
 
 :::
 
 :::js
 
-现在我们将每个步骤实现为一个函数。LangGraph 中的节点就是一个 JavaScript 函数，它接收当前状态并返回对状态的更新。
+现在我们将每个步骤实现为函数。LangGraph 中的节点只是一个 JavaScript 函数，它接收当前状态并返回对状态的更新。
 
 :::
 
-### Handle errors appropriately
+### 适当处理错误
 
-不同类型的错误需要不同的处理策略：
+不同的错误需要不同的处理策略：
 
-| Error Type | Who Fixes It | Strategy | When to Use |
+| 错误类型 | 由谁修复 | 策略 | 何时使用 |
 |------------|--------------|----------|-------------|
-| Transient errors (network issues, rate limits) | System (automatic) | Retry policy | Temporary failures that usually resolve on retry |
-| LLM-recoverable errors (tool failures, parsing issues) | LLM | Store error in state and loop back | LLM can see the error and adjust its approach |
-| User-fixable errors (missing information, unclear instructions) | Human | Pause with `interrupt()` | Need user input to proceed |
-| Recoverable failure after retries | Developer (declarative) | `error_handler` | Run a compensation/recovery branch after retry exhaustion |
-| Unexpected errors | Developer | Let them bubble up | Unknown issues that need debugging |
+| 临时性错误（网络问题、速率限制） | 系统（自动） | 重试策略 | 重试后通常会解决的临时性故障 |
+| LLM 可恢复的错误（工具失败、解析问题） | LLM | 将错误存储在状态中并循环回退 | LLM 可以看到错误并调整其方法 |
+| 用户可修复的错误（信息缺失、指令不清晰） | 人工 | 暂停并 `interrupt()` | 需要用户输入才能继续 |
+| 重试后仍可恢复的失败 | 开发者（声明式） | `error_handler` | Run a compensation/recovery branch after retry exhaustion |
+| 意外错误 | 开发者 | 让它们向上冒泡 | 需要调试的未知问题 |
 
 <Tabs>
     <Tab title="Transient errors" icon="rotate">
-        Add a retry policy to automatically retry network issues and rate limits.
+        添加重试策略以自动重试网络问题和速率限制。
 
     :::python
 
-    Combine with `timeout=` to cap each attempt. See [Fault tolerance](/oss/langgraph/fault-tolerance) for the full lifecycle.
-
-
-</Tab>
-</Tabs>
+    结合使用 `timeout=` 来限制每次尝试。参见 [容错](/oss/langgraph/fault-tolerance) 了解完整生命周期。
 
     ```python
     from langgraph.types import RetryPolicy
@@ -338,12 +334,12 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
     );
     ```
 
-:::
+    :::
 
     </Tab>
 
     <Tab title="LLM-recoverable" icon="brain">
-        将错误存储在状态中并循环回去，以便 LLM 可以看到发生了什么错误并重试：
+        将错误存储在状态中并循环回退，这样 LLM 可以看到出了什么问题并重试：
 
     :::python
 
@@ -387,16 +383,14 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
     }
     ```
 
-:::：
+    :::
 
-</Tab>
+    </Tab>
 
-<Tab title="用户可修复" icon="user">
-    在需要时暂停并收集用户信息（如账户 ID、订单号或澄清信息）：
+    <Tab title="User-fixable" icon="user">
+        在需要时暂停并收集用户信息（如账户 ID、订单号或澄清说明）：
 
-:::python
-
-</fragment>
+    :::python
 
     ```python
     from langgraph.types import Command
@@ -444,16 +438,14 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
     }
     ```
 
-::::
+    :::
 
-</Tab>
+    </Tab>
 
-<Tab title="意外情况" icon="alert-triangle">
-    让异常向上冒泡以便调试。不要捕获你无法处理的异常：
+    <Tab title="Unexpected" icon="alert-triangle">
+        让它们向上冒泡以便调试。不要捕获你无法处理的内容：
 
-:::python
-
-</Tab>
+    :::python
 
     ```python
     def send_reply(state: EmailAgentState):
@@ -479,16 +471,20 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
     }
     ```
 
-<Tab title="Saga / 补偿" icon="arrows-exchange">
-    重试耗尽后，运行一个恢复函数来更新状态并路由到补偿分支。
+    :::
 
-:::python
+    </Tab>
 
-有关完整模式，请参阅[容错](/oss/langgraph/fault-tolerance#error-handling)。
+    <Tab title="Saga / compensation" icon="arrows-exchange">
+        重试耗尽后，运行一个恢复函数来更新状态并将流程路由到补偿分支。
 
-<Note>
-`error_handler` 需要 `langgraph>=1.2`。
-</Note>
+    :::python
+
+    参见 [容错](/oss/langgraph/fault-tolerance#error-handling) 了解完整模式。
+
+    <Note>
+    `error_handler` 需要 `langgraph>=1.2`.
+    </Note>
 
     ```python
     from langgraph.errors import NodeError
@@ -508,21 +504,20 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
     )
     ```
 
-::::
-</Tab>
+    :::
+
+    </Tab>
 </Tabs>
 
 
-### 实现我们的邮件代理节点
+### 实现我们的电子邮件代理节点
 
-我们将每个节点实现为一个简单的函数。记住：节点接收状态，执行工作，然后返回更新。
+我们将把每个节点实现为一个简单的函数。记住：节点接收状态、执行工作并返回更新。
 
 <AccordionGroup>
-    <Accordion title="读取和分类节点" icon="brain">
+    <Accordion title="Read and classify nodes" icon="brain">
 
     :::python
-
-</fragment>
 
     ```python
     from typing import Literal
@@ -634,15 +629,13 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
     }
     ```
 
-:::
+    :::
 
     </Accordion>
 
     <Accordion title="Search and tracking nodes" icon="database">
 
     :::python
-
-</fragment>
 
     ```python
     def search_documentation(state: EmailAgentState) -> Command[Literal["draft_response"]]:
@@ -731,12 +724,12 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
       });
     }
     ```
-:::
-</Accordion>
+    :::
+    </Accordion>
 
-<Accordion title="响应节点" icon="edit">
+    <Accordion title="Response nodes" icon="edit">
 
-:::python
+    :::python
 
     ```python
     def draft_response(state: EmailAgentState) -> Command[Literal["human_review", "send_reply"]]:
@@ -914,22 +907,20 @@ type EmailClassificationType = z.infer<typeof EmailClassificationSchema>;
     }
     ```
 
-::::
+    :::
+
     </Accordion>
 </AccordionGroup>
 
-## 步骤 5: 连接在一起
+## 第 5 步：将它们连接在一起
 
-现在我们将节点连接成一个可工作的图。由于我们的节点处理自己的路由决策，我们只需要几条必要的边。
+现在我们将节点连接成一个可工作的图。由于我们的节点处理自己的路由决策，我们只需要几个必要的边。
 
-要使用 `interrupt()` 启用[人机交互](/oss/langgraph/interrupts)，我们需要使用 [checkpoint](/oss/langgraph/persistence) 编译以在运行之间保存状态：
+要启用 [human-in-the-loop](/oss/langgraph/interrupts) 配合 `interrupt()`使用，我们需要使用 [检查点器](/oss/langgraph/persistence) 编译以在运行之间保存状态：
 
-<Accordion title="图编译代码" icon="sitemap" defaultOpen={true}>
+<Accordion title="Graph compilation code" icon="sitemap" defaultOpen={true}>
 
 :::python
-
-
-</fragment>
 
 ```python
 from langgraph.checkpoint.memory import MemorySaver
@@ -999,18 +990,18 @@ const app = workflow.compile({ checkpointer: memory });
 </Accordion>
 
 :::python
-图结构是最小化的，因为路由发生在节点内部，通过 @[`Command`] 对象。每个节点使用类型提示（如 `Command[Literal["node1", "node2"]]`）声明它可以转到哪里，使流程变得明确和可追踪。
+图结构是最小化的，因为路由通过节点内的 @[`Command`] 对象发生。每个节点使用类型提示（如 `Command[Literal["node1", "node2"]]`）声明它可以去哪里，使流程明确且可追踪。
 :::
 
 :::js
-图结构是最小化的，因为路由发生在节点内部，通过 `Command` 对象。每个节点声明它可以转到哪里，使流程变得明确和可追踪。
+图结构是最小化的，因为路由通过节点内的 `Command` 对象发生。每个节点声明它可以去哪里，使流程明确且可追踪。
 :::
 
-### 测试你的智能体
+### 尝试你的代理
 
-让我们用一个需要人工审核的紧急计费问题来运行我们的智能体：
+让我们用一个需要人工审核的紧急计费问题来运行我们的代理：
 
-<Accordion title="测试智能体" icon="flask">
+<Accordion title="Testing the agent" icon="flask">
 
 :::python
 
@@ -1050,100 +1041,102 @@ const finalResult = await app.invoke(humanResponse, config);
 console.log("Email sent successfully!");
 ```
 
-<Accordion>
+:::
 
-当图执行到 `interrupt()` 时会暂停，将所有内容保存到检查点存储器中，然后等待。它可以在几天后恢复，从中断的确切位置继续执行。`thread_id` 确保该对话的所有状态被完整保留。
+</Accordion>
 
-## 总结与后续步骤
+图在遇到 `interrupt()`时会暂停，将所有内容保存到检查点器，然后等待。它可以在几天后恢复，从中断的地方精确地继续。 `thread_id` 确保此对话的所有状态都保存在一起。
+
+## 总结和后续步骤
 
 ### 关键洞察
 
-构建这个邮件代理让我们了解了 LangGraph 的思维方式：
+构建这个邮件代理向我们展示了 LangGraph 的思维方式：
 
 <CardGroup cols={2}>
-    <Card title="分解为离散步骤" icon="sitemap" href="#step-1-map-out-your-workflow-as-discrete-steps">
-        每个节点做好一件事。这种分解实现了流式进度更新、可暂停和恢复的持久执行，以及清晰的调试——因为你可以在步骤之间检查状态。
+    <Card title="Break into discrete steps" icon="sitemap" href="#step-1-map-out-your-workflow-as-discrete-steps">
+        每个节点做好一件事。这种分解实现了流式进度更新、可暂停和恢复的持久执行，以及清晰的调试，因为您可以在步骤之间检查状态。
     </Card>
 
-    <Card title="状态是共享内存" icon="database" href="#step-3-design-your-state">
-        存储原始数据，而非格式化文本。这样不同的节点可以用不同方式使用相同信息。
+    <Card title="State is shared memory" icon="database" href="#step-3-design-your-state">
+        存储原始数据，而不是格式化文本。这允许不同的节点以不同的方式使用相同的信息。
     </Card>
 
-    <Card title="节点是函数" icon="code" href="#step-4-build-your-nodes">
-        它们接收状态、执行工作并返回更新。当需要做出路由决策时，它们会同时指定状态更新和下一个目标。
+    <Card title="Nodes are functions" icon="code" href="#step-4-build-your-nodes">
+        它们接收状态、执行工作并返回更新。当需要做出路由决策时，它们会指定状态更新和下一个目标。
     </Card>
 
-    <Card title="错误是流的一部分" icon="alert-triangle" href="#handle-errors-appropriately">
-        瞬时故障会重试，LLM 可恢复的错误会带着上下文返回，用户可修复的问题会暂停等待输入，意外错误则向上冒泡供调试。
+    <Card title="Errors are part of the flow" icon="alert-triangle" href="#handle-errors-appropriately">
+        暂时性故障会重试，LLM 可恢复的错误会带着上下文返回，用户可修复的问题会暂停等待输入，而意外错误会向上冒泡以便调试。
     </Card>
 
-    <Card title="人工输入是一等的" icon="user" href="/oss/langgraph/interrupts">
-        `interrupt()` 函数会无限期暂停执行，保存所有状态，并在你提供输入时从中断位置精确恢复。当与其他操作组合在一个节点中时，它必须放在最前面。
+    <Card title="Human input is first-class" icon="user" href="/oss/langgraph/interrupts">
+        该 `interrupt()` 函数会无限期暂停执行，保存所有状态，并在您提供输入时从中断处准确恢复。当与其他操作结合在一个节点中时，必须放在最前面。
     </Card>
 
-    <Card title="图结构自然涌现" icon="sitemap" href="#step-5-wire-it-together">
-        你定义必要的连接，节点处理自己的路由逻辑。这使控制流保持明确和可追踪——你总是可以通过查看当前节点来理解代理下一步要做什么。
+    <Card title="Graph structure emerges naturally" icon="sitemap" href="#step-5-wire-it-together">
+        您定义必要的连接，您的节点处理它们自己的路由逻辑。这保持控制流清晰和可追踪——您始终可以通过查看当前节点来理解代理的下一步操作。
     </Card>
 </CardGroup>
 
-### 高级考虑
+### 高级注意事项
 
-<Accordion title="节点粒度权衡" icon="adjustments">
+<Accordion title="Node granularity trade-offs" icon="adjustments">
 <Info>
-本节探讨节点粒度设计中的权衡。大多数应用可以跳过此部分，使用上面展示的模式。
+本节探讨节点粒度设计中的权衡。大多数应用程序可以跳过此部分，使用上面显示的模式。
 </Info>
 
-你可能会想：为什么不把 `Read Email` 和 `Classify Intent` 合并成一个节点？
+您可能想知道：为什么不合并 `Read Email` 和 `Classify Intent` 到一个节点中？
 
-或者为什么要把 Doc Search 和 Draft Reply 分开？
+或者为什么要将文档搜索与草稿回复分开？
 
-答案涉及韧性和可观测性之间的权衡。
+答案涉及弹性和可观察性之间的权衡。
 
-**韧性考虑：** LangGraph 的[持久层](/oss/langgraph/persistence)在节点边界创建检查点。当工作流在中断或故障后恢复时，它从执行停止的节点开头开始。节点越小，检查点越频繁，这意味着出错时需要重复的工作越少。如果你将多个操作合并到一个大节点中，靠近末尾的故障意味着要重新执行该节点的所有内容。
+**弹性考虑：** LangGraph 的 [持久化层](/oss/langgraph/persistence) 在节点边界创建检查点。当工作流在中断或失败后恢复时，它会从执行停止的节点开始重新启动。较小的节点意味着更频繁的检查点，这意味着如果出现问题，需要重复的工作更少。如果您将多个操作组合到一个大节点中，靠近末尾的故障意味着从该节点的开头重新执行所有内容。
 
-为什么我们选择这样的邮件代理分解：
+为什么我们为邮件代理选择这种分解：
 
-- **外部服务隔离：** Doc Search 和 Bug Track 是单独的节点，因为它们调用外部 API。如果搜索服务缓慢或失败，我们希望将其与 LLM 调用隔离开来。我们可以为这些特定节点添加重试策略，而不影响其他节点。
+- **外部服务隔离：** 文档搜索和缺陷跟踪是独立的节点，因为它们调用外部 API。如果搜索服务缓慢或失败，我们希望将其与 LLM 调用隔离开来。我们可以向这些特定节点添加重试策略，而不影响其他节点。
 
-- **中间可见性：** 将 `Classify Intent` 作为独立的节点，让我们可以在采取行动之前检查 LLM 决定的内容。这对调试和监控很有价值——你可以准确看到代理何时以及为何路由到人工审核。
+- **中间可见性：** 将 `Classify Intent` 作为一个单独的节点，让我们能够在采取行动之前检查 LLM 的决定。这对于调试和监控很有价值——您可以准确看到代理何时以及为何路由到人工审核。
 
-- **不同的故障模式：** LLM 调用、数据库查询和邮件发送有不同的重试策略。单独的节点让你可以独立配置这些。
+- **不同的失败模式：** LLM 调用、数据库查询和电子邮件发送具有不同的重试策略。单独的节点让您能够独立配置这些。
 
-- **可重用性和测试：** 较小的节点更容易独立测试和在其他工作流中重用。
+- **可重用性和测试：** 较小的节点更容易独立测试，并在其他工作流中重用。
 
-另一种有效方法：你可以将 `Read Email` 和 `Classify Intent` 合并为一个节点。你会失去在分类前检查原始邮件的能力，并且该节点中的任何故障都会重复两个操作。对于大多数应用来说，单独节点的观测性和调试优势值得这个权衡。
+另一种有效的方法：您可以将 `Read Email` 和 `Classify Intent` 合并到单个节点中。您将失去在分类之前检查原始电子邮件的能力，并且在该节点中的任何故障时都会重复两个操作。对于大多数应用程序来说，单独节点的可见性和调试好处值得这个权衡。
 
-应用级问题：第 2 步中关于缓存的讨论（是否缓存搜索结果）是一个应用级决策，不是 LangGraph 框架功能。你根据具体需求在节点函数中实现缓存——LangGraph 不规定这一点。
+应用层关注点：第2步中的缓存讨论（是否缓存搜索结果）是一个应用层决策，而非 LangGraph 框架的功能。你根据具体需求在节点函数中实现缓存——LangGraph 不规定这一点。
 
-性能考虑：更多节点并不意味着更慢的执行。LangGraph 默认在后台写入检查点（[异步持久模式](/oss/langgraph/checkpointers#durability-modes)），因此你的图会继续运行而无需等待检查点完成。这意味着你可以获得频繁的检查点，同时对性能影响很小。如果需要，你可以调整此行为——使用 `"exit"` 模式仅在完成时检查点，或使用 `"sync"` 模式阻塞执行直到每个检查点写入完成。
+性能考虑：更多节点并不意味着更慢的执行。LangGraph 默认在后台写入检查点（[异步持久化模式](/oss/langgraph/checkpointers#durability-modes)），因此你的图会继续运行，无需等待检查点完成。这意味着你可以在最小性能影响下获得频繁的检查点。如有需要，你可以调整此行为——使用 `"exit"` 模式仅在完成时创建检查点，或使用 `"sync"` 模式阻塞执行直到每个检查点写入完成。
 </Accordion>
 
-### 下一步
+### 下一步去哪里
 
-这是关于使用 LangGraph 构建代理的思维方式的介绍。你可以以此为基础进行扩展：
+这是关于使用 LangGraph 构建智能体的思维方式的介绍。你可以在此基础上进行扩展：
 
 <CardGroup cols={2}>
-    <Card title="人机交互模式" icon="user-check" href="/oss/langgraph/interrupts">
-        学习如何在执行前添加工具审批、批量审批和其他模式
+    <Card title="Human-in-the-loop patterns" icon="user-check" href="/oss/langgraph/interrupts">
+        了解如何在执行前添加工具审批、批量审批及其他模式
     </Card>
 
-    <Card title="子图" icon="hierarchy" href="/oss/langgraph/use-subgraphs">
-        为复杂的多步操作创建子图
+    <Card title="Subgraphs" icon="hierarchy" href="/oss/langgraph/use-subgraphs">
+        创建子图用于复杂的多步骤操作
     </Card>
 
-    <Card title="流式输出" icon="broadcast" href="/oss/langgraph/streaming">
+    <Card title="Streaming" icon="broadcast" href="/oss/langgraph/streaming">
         添加流式输出以向用户显示实时进度
     </Card>
 
-    <Card title="可观测性" icon="chart-line" href="/oss/langgraph/observability">
-        使用 LangSmith 添加可观测性用于调试和监控
+    <Card title="Observability" icon="chart-line" href="/oss/langgraph/observability">
+        使用 LangSmith 添加可观测性以进行调试和监控
     </Card>
 
-    <Card title="工具集成" icon="tool" href="/oss/langchain/tools">
+    <Card title="Tool Integration" icon="tool" href="/oss/langchain/tools">
         集成更多工具用于网络搜索、数据库查询和 API 调用
     </Card>
 
-    <Card title="重试逻辑" icon="rotate" href="/oss/langgraph/use-graph-api#add-retry-policies">
-        为失败的操作实现指数退避重试逻辑
+    <Card title="Retry Logic" icon="rotate" href="/oss/langgraph/use-graph-api#add-retry-policies">
+        使用指数退避实现失败操作的自动重试逻辑
     </Card>
 </CardGroup>

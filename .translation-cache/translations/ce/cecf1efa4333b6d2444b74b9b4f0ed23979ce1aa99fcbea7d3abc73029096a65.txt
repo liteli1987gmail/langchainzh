@@ -1,6 +1,6 @@
 ---
 title: 存储
-description: LangGraph 存储提供跨线程长期记忆，补充每个线程的检查点持久化。
+description: LangGraph 存储提供跨线程的长期记忆，补充每个线程的检查点持久化功能。
 ---
 
 import StoreListNamespaceSearchPy from '/snippets/code-samples/store-list-namespace-search-py.mdx';
@@ -10,22 +10,22 @@ import StoreListNamespacePaginateJs from '/snippets/code-samples/store-list-name
 import StoreListNamespaceListPy from '/snippets/code-samples/store-list-namespace-list-py.mdx';
 import StoreListNamespaceListJs from '/snippets/code-samples/store-list-namespace-list-js.mdx';
 
-存储让智能体能够在线程之间持久化信息，包括用户偏好、累积的知识以及应该超越单次对话而保留的事实。与保存完整图状态（仅限于一个线程）的[检查点器](/oss/langgraph/checkpointers)不同，存储保存任意键值数据，可从任何线程访问。
+存储允许代理在线程之间持久化信息，包括用户偏好、积累的知识以及应该超越单个对话留存的事实。与 [检查点](/oss/langgraph/checkpointers)不同，检查点保存的是限定在单个线程范围内的完整图状态，而存储则保存可从任何线程访问的任意键值数据。
 
-![Model of shared state](/oss/images/shared_state.png)
+![共享状态模型](/oss/images/shared_state.png)
 
 <Info>
 **Agent Server 自动处理存储**
-使用 [Agent Server](/langsmith/agent-server) 时，无需手动实现或配置存储。API 在后台为你处理所有存储基础设施。
+使用 [Agent Server](/langsmith/agent-server)时，无需手动实现或配置存储。API 在幕后为你处理所有存储基础设施。
 </Info>
 
 <Note>
-@[InMemoryStore] 适用于开发和测试。对于生产环境，请使用持久化存储，如 `PostgresStore`、`MongoDBStore` 或 `RedisStore`。所有实现都扩展自 @[BaseStore]，这是节点函数签名中使用的类型注解。
+@[InMemoryStore] 适用于开发和测试。对于生产环境，请使用持久化存储，如 `PostgresStore`, `MongoDBStore`, or `RedisStore`。所有实现都继承 @[BaseStore]，这是在节点函数签名中使用的类型注解。
 </Note>
 
 ## 基本用法
 
-以下代码片段展示独立使用 @[InMemoryStore]，不使用 LangGraph：
+以下代码片段单独展示 @[InMemoryStore] 的用法，未使用 LangGraph：
 
 :::python
 ```python
@@ -40,7 +40,9 @@ import { MemoryStore } from "@langchain/langgraph";
 
 const memoryStore = new MemoryStore();
 ```
-Memories 使用 `tuple` 进行命名空间划分，在以下示例中为 `(<user_id>, "memories")`。命名空间可以是任意长度并表示任何内容，不一定是用户特定的。
+:::
+
+记忆按 `tuple`进行命名空间划分，在以下示例中为 `(<user_id>, "memories")` 。命名空间可以是任意长度，代表任意内容，不一定是用户特定的。
 
 :::python
 ```python
@@ -54,7 +56,11 @@ namespace_for_memory = (user_id, "memories")
 const userId = "1";
 const namespaceForMemory = [userId, "memories"];
 ```
-使用 `store.put` 方法将记忆保存到存储中的命名空间。指定命名空间（如上所定义）以及记忆的键值对：键是记忆的唯一标识符（`memory_id`），值（字典）本身就是记忆本身。
+:::
+
+使用 `store.put` 方法将记忆保存到存储中的命名空间。指定上述定义的命名空间，以及记忆的键值对：键是记忆的唯一标识符（`memory_id`），值（字典）本身就是记忆。
+
+:::python
 ```python
 memory_id = str(uuid.uuid4())
 memory = {"food_preference" : "I like pizza"}
@@ -70,7 +76,7 @@ await memoryStore.put(namespaceForMemory, memoryId, memory);
 ```
 :::
 
-使用 `store.search` 方法从命名空间中读取记忆，该方法以列表形式返回指定用户的记忆，最多返回 `limit` 参数指定的条目数（默认为 `10`）。使用 `InMemoryStore` 时，项目按插入顺序返回，因此最新的记忆位于列表末尾；其他后端可能会以不同方式排序记忆（参见[在命名空间中列出项目](#listing-items-in-a-namespace)）。
+使用 `store.search` 方法从命名空间读取记忆，对于给定用户返回记忆列表，最多 `limit` 条（默认 `10`）。使用 `InMemoryStore`时，项按插入顺序返回，因此最近的记忆位于列表末尾；其他后端可能以不同方式排序记忆（参见 [列出命名空间中的项](#listing-items-in-a-namespace)).
 
 :::python
 ```python
@@ -83,20 +89,20 @@ memories[-1].dict()
  'updated_at': '2024-10-02T17:22:31.590605+00:00'}
 ```
 
-每种内存类型都是一个 Python 类（[`Item`](https://langchain-ai.github.io/langgraph/reference/store/#langgraph.store.base.Item)），具有某些属性。我们可以通过使用 `.dict` 转换将其作为字典访问。
+每种记忆类型都是一个 Python 类（[`Item`](https://langchain-ai.github.io/langgraph/reference/store/#langgraph.store.base.Item)），具有特定属性。我们可以通过 `.dict`.
 
-它具有的属性如下：
+转换为字典来访问它。
 
-* `value`：此内存的值（本身也是一个字典）
-* `key`：此内存在此命名空间中的唯一键
-* `namespace`：一个字符串元组，表示此内存类型的命名空间
+* `value`：此记忆的值（本身也是一个字典）
+* `key`：此记忆在此命名空间中的唯一键
+* `namespace`：字符串元组，此记忆类型的命名空间
 
     <Note>
-    虽然类型是 `tuple[str, ...]`，但在转换为 JSON 时可能会被序列化为列表（例如 `['1', 'memories']`）。
+    虽然类型是 `tuple[str, ...]`，但在转换为 JSON 时可能序列化为列表（例如， `['1', 'memories']`).
     </Note>
 
-* `created_at`：此内存创建时的时间戳
-* `updated_at`：此内存更新时的时间戳
+* `created_at`：此记忆创建时的时间戳
+* `updated_at`：此记忆更新时的时间戳
 
 :::
 
@@ -114,29 +120,29 @@ memories[memories.length - 1];
 // }
 ```
 
-它具有的属性如下：
+它具有的属性有：
 
-- `value`：此内存的值
-- `key`：此命名空间中此内存的唯一键
-- `namespace`：一个字符串元组，表示此内存类型的命名空间
+* `value`：此记忆的值
+* `key`：此记忆在此命名空间中的唯一键
+* `namespace`：字符串元组，此记忆类型的命名空间
 
-  <Note>
-  虽然类型是 `tuple`，但在转换为 JSON 时可能会被序列化为列表（例如 `['1', 'memories']`）。
-  </Note>
+    <Note>
+    虽然类型是 `tuple`，但在转换为 JSON 时可能序列化为列表（例如， `['1', 'memories']`).
+    </Note>
 
-- `createdAt`：此内存的创建时间戳
-- `updatedAt`：此内存的更新时间戳
+* `createdAt`：此记忆创建时的时间戳
+* `updatedAt`：此记忆更新时的时间戳
 
 :::
 
 ## 列出命名空间中的项目
 
 :::python
-调用 [`store.search`](https://reference.langchain.com/python/langgraph/store/#langgraph.store.base.BaseStore.search)（或异步的 [`store.asearch`](https://reference.langchain.com/python/langgraph/store/#langgraph.store.base.BaseStore.asearch)）时，若不指定 `query` 且不指定 `filter`，将返回 `namespace_prefix` 下的所有项目，上限为 `limit`。当你不需要语义排名时，可使用此方法来枚举命名空间中的所有内容。
+调用 [`store.search`](https://reference.langchain.com/python/langgraph/store/#langgraph.store.base.BaseStore.search) （或异步 [`store.asearch`](https://reference.langchain.com/python/langgraph/store/#langgraph.store.base.BaseStore.asearch)），不指定 `query` 且不指定 `filter` 将返回存储在 `namespace_prefix`, up to `limit`下的项目。当您不需要语义排序时，使用此方法枚举命名空间中的所有内容。
 :::
 
 :::js
-调用 `store.search` 时，若不指定 `query` 且不指定 `filter`，将返回命名空间前缀下的所有项目，上限为 `limit`。当你不需要语义排名时，可使用此方法来枚举命名空间中的所有内容。
+调用 `store.search` ，不指定 `query` 且不指定 `filter` 将返回存储在命名空间前缀下、最多 `limit`个项目。当您不需要语义排序时，使用此方法枚举命名空间中的所有内容。
 :::
 
 :::python
@@ -151,11 +157,11 @@ memories[memories.length - 1];
 
 :::
 
-三个需要注意的行为：
+请牢记三个行为：
 
-- **`namespace_prefix` 按前缀匹配，而非精确匹配。** `("alice",)` 也会返回 `("alice", "memories")`、`("alice", "preferences")` 等下的项目。若要限制为单一层级，请传递完整的命名空间，或在客户端按 `item.namespace` 过滤返回的项目。
-- **超过 `limit` 的结果会被静默截断。** 没有溢出信号——请将 `limit` 设置为高于你的预期最大值，或使用 `offset` 进行分页。
-- **默认排序取决于存储后端。** `PostgresStore` 和 `AsyncPostgresStore` 按 `updated_at` 降序返回结果（最近更新的在前）。`InMemoryStore` 按插入顺序返回结果（最近插入的在后）。不要依赖不同实现之间的特定顺序；如果排序重要，请在客户端按 `item.updated_at` 排序。
+- **`namespace_prefix` 按前缀匹配，而非精确匹配。** `("alice",)` 也会返回 `("alice", "memories")`, `("alice", "preferences")`下的项目，依此类推。要限制为单个级别，请传递完整的命名空间或在客户端按 `item.namespace`.
+- **超出 `limit` 的结果将被静默截断。** 没有溢出信号——将 `limit` 设置为预期的上限，或使用 `offset`.
+- **默认排序取决于存储后端。** `PostgresStore` 和 `AsyncPostgresStore` 按 `updated_at` 降序返回结果（最近更新的排在最前面）。 `InMemoryStore` 按插入顺序返回结果（最近插入的排在最后）。请勿依赖不同实现之间的特定顺序；如需排序，请在客户端按 `item.updated_at` 进行排序（如果顺序重要）。
 
 :::python
 要分页浏览大型命名空间：
@@ -172,14 +178,14 @@ memories[memories.length - 1];
 :::
 
 :::python
-要发现存在的命名空间（例如，在列出用户记忆前遍历每个用户），请使用 [`store.list_namespaces`](https://reference.langchain.com/python/langgraph/store/#langgraph.store.base.BaseStore.list_namespaces) 或 [`store.alist_namespaces`](https://reference.langchain.com/python/langgraph/store/#langgraph.store.base.BaseStore.alist_namespaces)：
+要发现存在的命名空间（例如，在列出用户记忆前迭代每个用户），请使用 [`store.list_namespaces`](https://reference.langchain.com/python/langgraph/store/#langgraph.store.base.BaseStore.list_namespaces) or [`store.alist_namespaces`](https://reference.langchain.com/python/langgraph/store/#langgraph.store.base.BaseStore.alist_namespaces):
 
 <StoreListNamespaceListPy />
 
 :::
 
 :::js
-要发现存在的命名空间（例如，在列出用户记忆前遍历每个用户），请使用 `store.listNamespaces`：
+要发现存在的命名空间（例如，在列出用户记忆前迭代每个用户），请使用 `store.listNamespaces`:
 
 <StoreListNamespaceListJs />
 
@@ -187,7 +193,7 @@ memories[memories.length - 1];
 
 ## 语义搜索
 
-除了简单的检索，存储还支持语义搜索，允许你基于含义而非精确匹配来查找记忆。要启用此功能，请使用嵌入模型配置存储：
+除了简单的检索，存储还支持语义搜索，允许您根据含义而非精确匹配来查找记忆。要启用此功能，请使用嵌入模型配置存储：
 
 :::python
 ```python
@@ -217,7 +223,7 @@ const store = new InMemoryStore({
 ```
 :::
 
-现在搜索时，您可以使用自然语言查询来查找相关的记忆：
+现在搜索时，您可以使用自然语言查询来查找相关记忆：
 
 :::python
 ```python
@@ -242,7 +248,7 @@ const memories = await store.search(namespaceForMemory, {
 ```
 :::
 
-您可以通过配置 `fields` 参数或在存储记忆时指定 `index` 参数来控制哪些记忆内容被嵌入：
+您可以通过配置 `fields` 参数或通过在存储记忆时指定 `index` 参数来控制记忆的哪些部分被嵌入：
 
 :::python
 ```python
@@ -293,9 +299,7 @@ await store.put(
 ## 在 LangGraph 中使用
 
 :::python
-The store works hand-in-hand with the checkpointer: the checkpointer saves state to threads, as discussed above, and the store allows you to store arbitrary information for access _across_ threads. Compile the graph with both the checkpointer and the store as follows.
-
-:::
+存储与检查点配合使用：检查点将状态保存到线程（如上所述），而存储允许您存储任意信息以供访问 _跨_ 个线程访问。如下所示，将检查点和存储一起编译图。
 
 ```python
 from dataclasses import dataclass
@@ -316,10 +320,9 @@ builder = StateGraph(MessagesState, context_schema=Context)
 graph = builder.compile(checkpointer=checkpointer, store=store)
 ```
 :::
-:::js
-`memoryStore` 与检查点程序紧密协作：检查点程序将状态保存到线程中（如上所述），而 `memoryStore` 允许您存储任意信息，以便在多个线程之间访问。按照以下方式使用检查点程序和 `memoryStore` 编译图。
 
-:::
+:::js
+ `memoryStore` 与检查点配合使用：检查点将状态保存到线程（如上所述），而 `memoryStore` 允许您存储任意信息以供访问 _跨_ 个线程访问。将检查点和 `memoryStore` 一起编译图，如下所示。
 
 ```typescript
 import { MemorySaver } from "@langchain/langgraph";
@@ -334,7 +337,7 @@ const graph = workflow.compile({ checkpointer, store: memoryStore });
 ```
 :::
 
-然后，使用 `thread_id` 调用图谱，与之前一样，同时还要使用 `user_id`，它作为该特定用户记忆的命名空间，与之前一样。
+然后使用 `thread_id`，与之前相同，并且也带有 `user_id`，它作为该特定用户的记忆命名空间，与之前相同。
 
 :::python
 ```python
@@ -369,9 +372,7 @@ for await (const update of await graph.stream(
 :::
 
 :::python
-你可以通过使用 `Runtime` 对象从_任意节点_访问存储以及 `user_id`。当你将 `Runtime` 添加为节点函数的参数时，LangGraph 会自动注入它。你可以用它来保存记忆：
-
-:::
+您可以从任何节点访问 store 和 `user_id` 从 _任何节点_ 通过使用 `Runtime` 对象。 `Runtime` 在您将其作为参数添加到节点函数时，会由 LangGraph 自动注入。您可以使用它来保存记忆：
 
 ```python
 from langgraph.runtime import Runtime
@@ -400,10 +401,10 @@ async def update_memory(state: MessagesState, runtime: Runtime[Context]):
 ```
 
 
-:::：
-:::js
-您可以通过 `runtime` 参数从_任意节点_访问存储区和 `userId`。您可以使用它来保存记忆：
 :::
+
+:::js
+您可以从任何节点访问 store 和 `userId` 从 _任何节点_ 通过 `runtime` 参数。您可以使用它来保存记忆：
 
 ```typescript
 import { StateSchema, MessagesValue, Runtime } from "@langchain/langgraph";
@@ -432,7 +433,7 @@ const updateMemory: GraphNode<typeof MessagesState> = async (state, runtime) => 
 ```
 :::
 
-您也可以从任何节点访问存储，并使用 `store.search` 方法获取记忆。记忆以对象列表形式返回，可以转换为字典。
+您还可以从任何节点访问 store，并使用 `store.search` 方法获取记忆。记忆作为对象列表返回，可以转换为字典。
 
 :::python
 ```python
@@ -458,11 +459,9 @@ memories[memories.length - 1];
 ```
 :::
 
-您可以访问记忆并在模型调用中使用它们。
+您访问记忆并在模型调用中使用它们。
 
 :::python
-
-:::
 ```python
 from dataclasses import dataclass
 from langgraph.runtime import Runtime
@@ -511,7 +510,7 @@ const callModel: GraphNode<typeof MessagesState> = async (state, runtime) => {
 ```
 :::
 
-如果你创建了一个新线程，只要 `user_id` 相同，你仍然可以访问相同的记忆。
+如果您创建新线程，只要 `user_id` 相同，您仍然可以访问相同的记忆。
 
 :::python
 ```python
@@ -542,7 +541,9 @@ for await (const update of await graph.stream(
   console.log(update);
 }
 ```
-当您在本地使用 LangSmith（例如在 [Studio](/langsmith/studio)）或[托管版本](/langsmith/platform-setup)）时，基础存储默认可用，无需在图编译期间指定。但是，要启用语义搜索，您**确实**需要在 `langgraph.json` 文件中配置索引设置。例如：
+:::
+
+当您在本地使用 LangSmith 时（例如在 [Studio](/langsmith/studio)) or [托管](/langsmith/platform-setup)环境中），基础 store 可默认使用，在编译图时无需指定。但是，要启用语义搜索，您 **do** 需要在您的 `langgraph.json` 文件中配置索引设置。例如：
 
 ```json
 {
@@ -557,26 +558,27 @@ for await (const update of await graph.stream(
 }
 ```
 
-请查看部署指南了解更多信息和配置选项。
+请参阅 [部署指南](/langsmith/semantic-search) 了解更多详情和配置选项。
 
 :::python
-## 构建自定义存储
+## 构建自定义 store
 
-要使用内置实现以外的存储后端，请子类化 @[BaseStore] 并实现其必需的方法。内置的 @[InMemoryStore] 是最简单的参考实现。
+
+要使用内置实现以外的存储后端，请对 @[BaseStore] 进行子类化并实现其必需的方法。内置的 @[InMemoryStore] 是最简单的参考实现。
 
 ### 基础契约
 
-所有五个异步方法都是必需的。同步对应方法（`put`、`get`、`delete`、`search`、`list_namespaces`）是可选的，但建议实现以兼容同步图执行。
+所有五个异步方法都是必需的。同步对应方法（`put`, `get`, `delete`, `search`, `list_namespaces`）是可选的，但建议使用以兼容同步图执行。
 
 | 方法 | 描述 |
 |--------|-------------|
-| `aput(namespace, key, value, index=None)` | 存储或覆盖单个项 |
-| `aget(namespace, key)` | 通过键检索单个项；如果不存在则返回 `None` |
-| `adelete(namespace, key)` | 删除单个项 |
-| `asearch(namespace_prefix, *, query=None, filter=None, limit=10, offset=0)` | 在命名空间前缀下搜索项；可通过语义查询进行搜索 |
-| `alist_namespaces(*, prefix=None, suffix=None, max_depth=None, limit=100, offset=0)` | 列出与前缀/后缀模式匹配的命名空间 |
+| `aput(namespace, key, value, index=None)` | 存储或覆盖单个项目 |
+| `aget(namespace, key)` | 按键检索单个项目；如果缺失则返回 `None`  |
+| `adelete(namespace, key)` | 删除单个项目 |
+| `asearch(namespace_prefix, *, query=None, filter=None, limit=10, offset=0)` | 在命名空间前缀下搜索项目；可选按语义查询 |
+| `alist_namespaces(*, prefix=None, suffix=None, max_depth=None, limit=100, offset=0)` | List namespaces matching a prefix/suffix pattern |
 
-在实现之前请查看准确的方法签名：
+在实现之前请查看确切的签名：
 
 ```python
 import inspect
@@ -588,10 +590,10 @@ print(inspect.getsource(BaseStore))
 
 命名空间是字符串元组，例如 `("user_id", "memories")`。存储实现必须支持：
 
-- **前缀匹配**：`asearch(("alice",))` 返回 `("alice",)`、`("alice", "memories")` 以及任何其他子命名空间下的项。
-- **精确键查找**：`aget(("alice", "memories"), "some-key")` 必须为 O(1) 或接近 O(1)。
+- **前缀匹配**: `asearch(("alice",))` 返回 `("alice",)`, `("alice", "memories")`下的项目以及任何其他子命名空间。
+- **精确键查找**: `aget(("alice", "memories"), "some-key")` 必须是 O(1) 或接近 O(1)。
 
-对于 SQL 后端，常见的模式是：
+对于 SQL 后端，常见模式：
 
 ```sql
 CREATE TABLE store_items (
@@ -608,21 +610,21 @@ CREATE INDEX ON store_items USING gin(namespace);
 
 ### 序列化
 
-Store 值是普通的 Python 字典 — 无需特殊的序列化器。使用 `json.dumps` / `json.loads` 或直接使用 JSONB 列进行序列化。不要存储不能 JSON 序列化的原始 Python 对象。
+存储值是纯 Python 字典——无需特殊序列化器。使用 `json.dumps` / `json.loads` 或直接使用 JSONB 列。不要存储无法序列化为 JSON 的原始 Python 对象。
 
 ### 语义搜索支持
 
-如果你的后端支持向量搜索，请在 `asearch` 上实现 `query` 参数：
+如果你的后端支持向量搜索，请实现 `query` 参数于 `asearch`:
 
-- 接受 `query: str | None` 参数。
-- 当 `query` 不为 `None` 时，将其嵌入并按余弦相似度对结果排序。
-- 当提供 `query` 时，结果应在每个 `Item` 上包含一个 `score` 字段。
+- 接收 `query: str | None` argument.
+- 当 `query` 不是 `None`时，嵌入它并按余弦相似度对结果进行排序。
+- 结果应包含每个 `score` 上的 `Item` 字段，当提供 `query` 时。
 
-如果你的后端不支持向量搜索，请在传递 `query` 时抛出 `NotImplementedError`。
+如果你的后端不支持向量搜索，请在传入 `NotImplementedError` 时抛出 `query` 。
 
 ### 测试
 
-目前没有针对自定义存储的合规性测试套件。以 @[InMemoryStore] 作为参考进行测试：
+目前没有针对自定义存储的合规性套件。请以 @[InMemoryStore] 作为参考进行测试：
 
 ```python
 import pytest
@@ -663,5 +665,5 @@ async def test_search_prefix(store, reference):
 
 ### 后续步骤
 
-- [向 Agent Server 添加自定义存储](/langsmith/custom-store) — 部署您的实现
-- [检查点器](/oss/langgraph/checkpointers) — 线程作用域状态持久化
+- [将自定义存储添加到 Agent Server](/langsmith/custom-store) — 部署你的实现
+- [检查点器](/oss/langgraph/checkpointers) — 线程作用域的状态持久化

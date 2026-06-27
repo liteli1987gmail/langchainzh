@@ -1,6 +1,6 @@
 ---
-title: 流式传输
-description: 从代理运行中流式传输实时更新
+title: 流式处理
+description: 从 agent 运行中流式传输实时更新
 ---
 
 import StreamingAgentProgressJs from '/snippets/code-samples/streaming-agent-progress-js.mdx';
@@ -9,62 +9,62 @@ import StreamingReasoningTokensPy from '/snippets/code-samples/streaming-reasoni
 import StreamingReasoningTokensJs from '/snippets/code-samples/streaming-reasoning-tokens-js.mdx';
 
 <Tip>
-对于新应用，我们推荐使用[事件流](/oss/langchain/event-streaming)——这是 LangChain v1.3 引入的类型化投影 API。事件流为每个投影（消息、值、工具调用、子图）提供独立的迭代器，这样你可以独立消费它们，而不是基于 `stream_mode` 块进行分支。
+对于新应用程序，我们推荐 [事件流式处理](/oss/langchain/event-streaming)—LangChain v1.3 中引入的类型化投影 API。事件流式处理为你提供每个投影（消息、值、工具调用、子图）的独立迭代器，这样你就可以独立消费它们，而无需在 `stream_mode` chunks.
 </Tip>
 
-LangChain 实现了一个流式系统，用于展示实时更新。
+LangChain 实现了一个流式处理系统来展示实时更新。
 
-流式传输对于增强基于 LLM 构建的应用程序的响应能力至关重要。通过逐步显示输出，即使在完整响应准备好之前，流式传输显著改善了用户体验 (UX)，特别是处理 LLM 延迟时。
+流式处理对于增强基于 LLM 构建的应用程序的响应能力至关重要。通过逐步显示输出，即使在完整响应准备好之前也能显示，流式处理显著改善了用户体验 (UX)，尤其是在处理 LLM 延迟时。
 
-## 概览
+## 概述
 
-LangChain 的流式系统让你可以将智能体运行的实时反馈展示到你的应用程序中。
+LangChain 的流式处理系统让你能将 agent 运行的实时反馈展示到你的应用程序中。
 
-LangChain 流式传输可以实现以下功能：
+LangChain 流式处理可以实现的功能：
 
-* <Icon icon="brain" size={16} /> [**流式传输智能体进度**](#agent-progress)—在每个智能体步骤后获取状态更新。
-* <Icon icon="binary" size={16} /> [**流式传输 LLM token**](#llm-tokens)—在生成时流式传输语言模型 token。
-* <Icon icon="bulb" size={16} /> [**流式传输思考/推理 token**](#streaming-thinking-/-reasoning-tokens)—在生成时展示模型推理。
-* <Icon icon="table" size={16} /> [**流式传输自定义更新**](#custom-updates)—发出用户定义的信号（例如，"已获取 10/100 条记录"）。
-* <Icon icon="stack-push" size={16} /> [**流式传输多种模式**](#stream-multiple-modes)—从 `updates`（智能体进度）、`messages`（LLM token + 元数据）或 `custom`（任意用户数据）中选择。
+* <Icon icon="brain" size={16} /> [**流式传输 agent 进度**](#agent-progress)—在每个 agent 步骤后获取状态更新。
+* <Icon icon="binary" size={16} /> [**流式传输 LLM token**](#llm-tokens)—在语言模型生成 token 时进行流式传输。
+* <Icon icon="bulb" size={16} /> [**Stream thinking / reasoning tokens**](#streaming-thinking-/-reasoning-tokens)—在生成时展示模型推理过程。
+* <Icon icon="table" size={16} /> [**流式传输自定义更新**](#custom-updates)—发送用户定义的信号（例如， `"Fetched 10/100 records"`).
+* <Icon icon="stack-push" size={16} /> [**流式传输多种模式**](#stream-multiple-modes)—从以下选项中选择 `updates` （agent 进度）， `messages` （LLM token + 元数据），或 `custom` （任意用户数据）。
 
-请参阅下面的[常见模式](#common-patterns)部分，获取更多端到端示例。
+参见 [通用模式](#common-patterns) 章节，获取更多端到端示例。
 
-## 支持的流式模式
+## 支持的流式传输模式
 
 :::python
-将以下一个或多个流式模式作为列表传递给 @[`stream`][CompiledStateGraph.stream] 或 @[`astream`][CompiledStateGraph.astream] 方法：
+将以下一个或多个流式传输模式作为列表传递给 @[`stream`][CompiledStateGraph.stream] 或 @[`astream`][CompiledStateGraph.astream] 方法：
 :::
 
 :::js
-将以下一个或多个流式模式作为列表传递给 @[`stream`][CompiledStateGraph.stream] 方法：
+将以下一个或多个流式传输模式作为列表传递给 @[`stream`][CompiledStateGraph.stream] 方法：
 :::
 
-| 模式        | 描述                                                                                                               |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| `updates`  | 在每个智能体步骤后流式传输状态更新。如果在同一步骤中进行了多个更新（例如，运行了多个节点），这些更新会被单独流式传输。 |
-| `messages` | 从调用 LLM 的任何图形节点流式传输 `(token, metadata)` 元组。 |
-| `custom`   | 使用流式写入器从图形节点内部流式传输自定义数据。 |
+| 模式 | 描述 |
+| ---------- | ----------------------------------------------------------------------------------------------------------- |
+| `updates`  | 在每个 agent 步骤后流式传输状态更新。如果在同一步骤中进行了多个更新（例如，运行了多个节点），则这些更新会分别流式传输。 |
+| `messages` | 流式传输来自任何 LLM 被调用的图节点的 | 元组。 | `(token, metadata)` 元组。 |
+| `custom`   | 使用流写入器从图节点内部流式传输自定义数据。 |
 
-## 智能体进度
+## Agent 进度
 
 :::python
-要流式传输智能体进度，请使用 @[`stream`][CompiledStateGraph.stream] 或 @[`astream`][CompiledStateGraph.astream] 方法，并将 `stream_mode="updates"`。这会在每个智能体步骤后发出一个事件。
+要流式传输 agent 进度，请使用 @[`stream`][CompiledStateGraph.stream] 或 @[`astream`][CompiledStateGraph.astream] 方法配合 `stream_mode="updates"`使用。这会在每个 agent 步骤后发送一个事件。
 :::
 
 :::js
-要流式传输智能体进度，请使用 @[`stream`][CompiledStateGraph.stream] 方法，并将 `streamMode: "updates"`。这会在每个智能体步骤后发出一个事件。
+要流式传输 agent 进度，请使用 @[`stream`][CompiledStateGraph.stream] 方法配合 `streamMode: "updates"`使用。这会在每个 agent 步骤后发送一个事件。
 :::
 
-例如，如果你有一个调用一次工具的智能体，你应该会看到以下更新：
+例如，如果你有一个调用一次工具的 agent，你应该会看到以下更新：
 
-* **LLM 节点**：@[`AIMessage`] 包含工具调用请求
-* **工具节点**：@[`ToolMessage`] 包含执行结果
-* **LLM 节点**：最终 AI 响应
+* **LLM 节点**: @[`AIMessage`] 与工具调用请求
+* **工具节点**: @[`ToolMessage`] 与执行结果
+* **LLM 节点**: 最终 AI 响应
 
 :::python
 
-通过 `config` 传递 `thread_id`，以便对话会被检查点保存，后续轮次可以从相同历史恢复。`thread_id` 与 `stream_mode` 独立；你也可以同时传递 `context`，用于你的工具从 `runtime.context` 读取的每次运行数据。
+传递一个 `thread_id` 通过 `config` 以便对话被检查点化，后续轮次可以恢复相同的历史记录。 `thread_id` 独立于 `stream_mode`；你也可以传递 `context` 与它一起传递，供你的工具从中读取每次运行的数据 `runtime.context`.
 
 <StreamingAgentProgressPy />
 
@@ -78,27 +78,25 @@ content: [{'type': 'text', 'text': "San Francisco weather: It's always sunny in 
 ```
 
 <Note>
-使用 `thread_id` 持久化对话历史需要为代理配置一个 [检查点器](/oss/langchain/long-term-memory)。在 [LangSmith 部署](/langsmith/deployment) 上，检查点器会自动配置。本地运行时请显式传入，例如 `create_agent(..., checkpointer=InMemorySaver())`。为简洁起见，本页其余代码片段省略了 `thread_id`，但在实际生产环境中你应该传入它。
+使用 `thread_id` 需要代理配置 [检查点器](/oss/langchain/long-term-memory). On [LangSmith 部署](/langsmith/deployment) 会自动配置检查点器。在本地，请显式传递一个，例如 `create_agent(..., checkpointer=InMemorySaver())`。本页面其余的代码片段省略了 `thread_id` 为了简洁，但你应该在生产环境中传递它。
 </Note>
 :::
 
 :::js
 
-通过 `configurable` 传入 `thread_id`，使对话被检查点化，后续轮次可以恢复相同的历史记录。`thread_id` 与 `streamMode` 相互独立；你也可以同时传入 `context`，用于工具从 `runtime.context` 读取的每次运行数据。
+传递一个 `thread_id` 通过 `configurable` 以便对话被检查点化，后续轮次可以恢复相同的历史记录。 `thread_id` 独立于 `streamMode`；你也可以传递 `context` 与它一起传递，供你的工具从中读取每次运行的数据 `runtime.context`.
 
 <StreamingAgentProgressJs />
 
 <Note>
-使用 `thread_id` 持久化对话历史需要为代理配置一个 [检查点器](/oss/langchain/long-term-memory)。在 [LangSmith 部署](/langsmith/deployment) 上，检查点器会自动配置。本地运行时请显式传入，例如 `createAgent({ ..., checkpointer: new MemorySaver() })`。为简洁起见，本页其余代码片段省略了 `thread_id`，但在实际生产环境中你应该传入它。
+使用 `thread_id` 需要代理配置 [检查点器](/oss/langchain/long-term-memory). On [LangSmith 部署](/langsmith/deployment) 会自动配置检查点器。在本地，请显式传递一个，例如 `createAgent({ ..., checkpointer: new MemorySaver() })`。本页面其余的代码片段省略了 `thread_id` 为了简洁，但你应该在生产环境中传递它。
 </Note>
 :::
 
-## LLM tokens
+## LLM 令牌
 
 :::python
-要流式输出 LLM 生成的 token，请使用 `stream_mode="messages"`。下面你可以看到代理流式输出工具调用和最终回复的结果。
-
-</fragment>
+要流式传输 LLM 生成的令牌，请使用 `stream_mode="messages"`。下面你可以看到代理流式传输工具调用和最终响应的输出。
 
 ```python title="Streaming LLM tokens"
 from langchain.agents import create_agent
@@ -224,7 +222,7 @@ content: [{'type': 'text', 'text': '!"\n\n'}]
 :::
 
 :::js
-要流式传输 LLM 生成的令牌，请使用 `streamMode: "messages"`：
+要流式传输 LLM 生成的令牌，请使用 `streamMode: "messages"`:
 
 ```typescript
 import z from "zod";
@@ -261,9 +259,7 @@ for await (const [token, metadata] of await agent.stream(
 ## 自定义更新
 
 :::python
-要流式传输工具执行时的更新，可以使用 @[`get_stream_writer`]。
-
-::
+要流式传输工具执行过程中的更新，你可以使用 @[`get_stream_writer`].
 
 ```python title="Streaming custom updates"
 from langchain.agents import create_agent
@@ -298,14 +294,12 @@ Acquired data for city: San Francisco
 ```
 
 <Note>
-    如果你在你的工具中添加 @[`get_stream_writer`]，你将无法在 LangGraph 执行上下文之外调用该工具。
+    如果你在工具中添加 @[`get_stream_writer`]，你将无法在 LangGraph 执行上下文之外调用该工具。
 </Note>
 :::
 
 :::js
-要流式传输工具执行时的更新，你可以使用配置中的 `writer` 参数。
-
-</fragment>
+要流式传输工具执行过程中的更新，你可以使用 `writer` 配置中的
 
 ```typescript
 import z from "zod";
@@ -348,18 +342,16 @@ Acquired data for city: San Francisco
 ```
 
 <Note>
-    如果您向工具添加 `writer` 参数，则在提供 writer 函数之前，无法在 LangGraph 执行上下文之外调用该工具。
+    如果你给工具添加 `writer` 参数，你将无法在不提供写入函数的情况下在 LangGraph 执行上下文之外调用该工具。
 </Note>
 :::
 
 ## 流式传输多种模式
 
 :::python
-您可以通过将流模式作为列表传递来指定多种流式传输模式：`stream_mode=["updates", "custom"]`。
+你可以通过将流模式作为列表传递来指定多种流式传输模式： `stream_mode=["updates", "custom"]`.
 
-每个流式传输的块都是一个具有 `type`、`ns` 和 `data` 键的 `StreamPart` 字典。使用 `chunk["type"]` 来确定流模式，使用 `chunk["data"]` 来访问数据。
-
-</fragment>
+每个流式传输的块都是一个 `StreamPart` 字典，包含 `type`, `ns`、 `data` 和 `chunk["type"]` 键。使用 `chunk["data"]` 确定流式传输模式，并使用
 
 ```python title="Streaming multiple modes"
 from langchain.agents import create_agent
@@ -411,12 +403,9 @@ content: {'model': {'messages': [AIMessage(content='San Francisco weather: It's 
 :::
 
 :::js
-你可以通过传入 streamMode 数组来指定多个流模式：`streamMode: ["updates", "messages", "custom"]`。
+你可以通过将 streamMode 作为数组传递来指定多个流模式： `streamMode: ["updates", "messages", "custom"]`.
 
-流式输出将是 `[mode, chunk]` 元组，其中 `mode` 是流模式的名称，`chunk` 是该模式流出的数据。
-
-
-</fragment>
+流式输出将是元组形式 `[mode, chunk]` 其中 `mode` 是流模式的名称， `chunk` 是该模式流出的数据。
 
 ```typescript
 import z from "zod";
@@ -452,25 +441,27 @@ for await (const [streamMode, chunk] of await agent.stream(
     console.log(`${streamMode}: ${JSON.stringify(chunk, null, 2)}`);
 }
 ```
+:::
+
 ## 常见模式
 
-以下是流式处理常见用例的示例。
+以下是展示流式传输常见用例的示例。
 
-### 流式传输思考/推理令牌
+### Streaming thinking / reasoning tokens
 
-某些模型在生成最终答案之前会执行内部推理。您可以通过筛选[标准内容块](/oss/langchain/messages#standard-content-blocks)的 `type` 为 `"reasoning"` 来流式传输这些思考/推理令牌。
+Some models perform internal reasoning before producing a final answer. You can stream these thinking / reasoning tokens as they're generated by filtering [标准内容块](/oss/langchain/messages#standard-content-blocks) 用于 `type` `"reasoning"`.
 
 <Note>
     必须在模型上启用推理输出。
 
-    请参阅[推理部分](/oss/langchain/models#reasoning)和您的[提供商集成页面](/oss/integrations/providers/overview)了解配置详情。
+    请参阅 [推理部分](/oss/langchain/models#reasoning) 和你的 [提供商的集成页面](/oss/integrations/providers/overview) 了解配置详情。
 
-    要快速检查模型的推理支持情况，请参阅 [models.dev](https://models.dev)。
+    要快速检查模型的推理支持，请参阅 [models.dev](https://models.dev).
 </Note>
 
 :::python
 
-要从代理流式传输思考令牌，请使用 `stream_mode="messages"` 并筛选推理内容块：
+要从代理流式传输思维标记，请使用 `stream_mode="messages"` 并过滤推理内容块：
 
 <StreamingReasoningTokensPy />
 
@@ -484,12 +475,9 @@ The weather in San Francisco is: It's always sunny in San Francisco!
 :::
 
 :::js
-要从代理流式传输思考令牌，请使用 `streamMode: "messages"` 并过滤推理内容块。当模型支持时，使用支持扩展思考的模型实例（如 `ChatAnthropic`）：
+要从代理流式传输思维标记，请使用 `streamMode: "messages"` 并过滤推理内容块。使用支持扩展思维的模型实例（例如 `ChatAnthropic`），当模型支持扩展思维时：
 
 <StreamingReasoningTokensJs />
-
-
-</fragment>
 
 ```shell title="Output"
 [thinking] The user is asking about the weather in San Francisco. I have a tool
@@ -500,26 +488,25 @@ The weather in San Francisco is: It's always sunny in San Francisco!
 
 :::
 
-这在所有模型提供商中以相同方式工作——LangChain 将特定提供商的格式（Anthropic 的 `thinking` 块、OpenAI 的 `reasoning` 摘要等）标准化为标准的 `"reasoning"` 内容块类型，通过 [`content_blocks`](/oss/langchain/messages#standard-content-blocks) 属性实现。
+这在不同模型提供商中的工作方式相同——LangChain 将提供商特定的格式（Anthropic `thinking` 块、OpenAI `reasoning` 摘要等）标准化为统一的 `"reasoning"` 内容块类型，通过 [`content_blocks`](/oss/langchain/messages#standard-content-blocks) property.
 
-要直接从聊天模型流式传输推理 token（不使用代理），请参阅[使用聊天模型流式传输](/oss/langchain/models#reasoning)。
+要直接从聊天模型流式传输推理标记（不使用代理），请参阅 [聊天模型流式传输](/oss/langchain/models#reasoning).
 
 :::python
-
 ### 流式传输工具调用
 
-你可能希望同时流式传输：
+你可能想要同时流式传输：
 
-1. 在生成 [工具调用](/oss/langchain/models#tool-calling) 时流式传输部分 JSON
-2. 已完成并解析的工具调用
+1. 部分 JSON 作为 [工具调用](/oss/langchain/models#tool-calling) 生成时
+2. 已完成的、已解析的工具调用将被执行
 
-指定 [`stream_mode="messages"`](#llm-tokens) 将流式传输代理中所有 LLM 调用生成的增量 [消息块](/oss/langchain/messages#streaming-and-chunks)。要访问包含已解析工具调用的完成消息：
+指定 [`stream_mode="messages"`](#llm-tokens) 将流式传输增量 [消息块](/oss/langchain/messages#streaming-and-chunks) 由代理中的所有 LLM 调用生成。要访问包含已解析工具调用的完整消息：
 
-1. 如果这些消息在 [状态](/oss/langchain/short-term-memory) 中被跟踪（如 [`create_agent`](/oss/langchain/agents) 的模型节点中所示），使用 `stream_mode=["messages", "updates"]` 通过 [状态更新](#agent-progress) 访问完成的消息（如下所示）。
-2. 如果这些消息未在状态中跟踪，请使用[自定义更新](#custom-updates)或在流式传输循环中聚合块（[下一节](#accessing-completed-messages)）。
+1. 如果这些消息在 [状态](/oss/langchain/short-term-memory) 中被跟踪（如 [`create_agent`](/oss/langchain/agents)的模型节点中），使用 `stream_mode=["messages", "updates"]` 通过 [状态更新](#agent-progress) 访问完整消息（如下所示）。
+2. 如果这些消息未被状态跟踪，请使用 [自定义更新](#custom-updates) 或在流式循环中聚合块（[下一节](#accessing-completed-messages)).
 
 <Note>
-如果你的代理包含多个 LLM，请参阅下面关于[从子代理流式传输](#streaming-from-sub-agents)的部分。
+请参阅下面关于 [从子代理流式传输](#streaming-from-sub-agents) 的部分，如果你的代理包含多个 LLM。
 </Note>
 
 ```python
@@ -580,15 +567,15 @@ Tool response: [{'type': 'text', 'text': "It's always sunny in Boston!"}]
 The| weather| in| Boston| is| **|sun|ny|**|.|
 ```
 
-#### 访问已完成的消息
+#### 访问完整消息
 
 <Note>
-如果在 Agent 的[状态](/oss/langchain/short-term-memory)中追踪已完成的消息，你可以使用 `stream_mode=["messages", "updates"]`，如[流式传输工具调用](#streaming-tool-calls)部分所示，在流式传输期间访问已完成的消息。
+如果完整消息在代理的 [状态](/oss/langchain/short-term-memory)，您可以使用 `stream_mode=["messages", "updates"]` 如在 [流式工具调用](#streaming-tool-calls) 部分中演示的，在流式传输期间访问已完成的消息。
 </Note>
 
-在某些情况下，已完成的消息不会反映在[状态更新](#agent-progress)中。如果你有权限访问 Agent 内部，可以使用[自定义更新](#custom-updates)在流式传输期间访问这些消息。否则，你可以在流式传输循环中聚合消息块（见下文）。
+在某些情况下，已完成的消息不会反映在 [状态更新中](#agent-progress)。如果您可以访问代理内部，可以使用 [自定义更新](#custom-updates) 在流式传输期间访问这些消息。否则，您可以在流式循环中聚合消息块（见下文）。
 
-请考虑以下示例，我们将[流写入器](#custom-updates)整合到一个简化的[护栏中间件](/oss/langchain/guardrails#after-agent-guardrails)中。该中间件演示了使用工具调用来生成结构化的"安全 / 不安全"评估（你也可以使用[结构化输出](/oss/langchain/models#structured-output)来实现此功能）：
+请考虑以下示例，其中我们集成了一个 [流式写入器](#custom-updates) 到一个简化的 [护栏中间件中](/oss/langchain/guardrails#after-agent-guardrails). This middleware demonstrates tool calling to generate a structured "safe / unsafe" evaluation (one could also use [结构化输出](/oss/langchain/models#structured-output) 用于此）：
 ```python
 from typing import Any, Literal
 
@@ -641,7 +628,7 @@ def safety_guardrail(state: AgentState, runtime: Runtime) -> dict[str, Any] | No
 
     return None
 ```
-我们可以将此中间件整合到我们的代理中，并包含其自定义流事件：
+然后我们可以将此中间件集成到我们的代理中，并包含其自定义流事件：
 ```python
 from typing import Any
 
@@ -711,7 +698,7 @@ The| weather| in| **|Boston|**| is| **|sun|ny|**|.|[{'name': 'ResponseSafety', '
 Tool calls: [{'name': 'ResponseSafety', 'args': {'evaluation': 'safe'}, 'id': 'call_O8VJIbOG4Q9nQF0T8ltVi58O', 'type': 'tool_call'}]
 ```
 
-或者，如果你无法向流中添加自定义事件，你可以在流式循环中聚合消息块：
+或者，如果您无法向流添加自定义事件，则可以在流式循环中聚合消息块：
 ```python
 input_message = {"role": "user", "content": "What is the weather in Boston?"}
 full_message = None  # [!code highlight]
@@ -735,13 +722,13 @@ for chunk in agent.stream(
                 _render_completed_message(update["messages"][-1])
 ```
 
-### 使用人工介入的流式处理
+### 使用人工介入的流式传输
 
-要处理人工介入[中断](/oss/langchain/human-in-the-loop)，我们基于[上面的示例](#streaming-tool-calls)进行构建：
+要处理人工介入 [中断](/oss/langchain/human-in-the-loop)，我们基于 [上述示例](#streaming-tool-calls):
 
-1. 我们使用[人工介入中间件和检查点](/oss/langchain/human-in-the-loop#configuring-interrupts)配置代理
-2. 我们收集在 `"updates"` 流模式期间生成的中断
-3. 我们使用[命令](/oss/langchain/human-in-the-loop#responding-to-interrupts)响应这些中断
+1. 进行构建 [我们使用人工介入中间件和检查点器配置代理](/oss/langchain/human-in-the-loop#configuring-interrupts)
+2. 我们收集在 `"updates"` 流式模式
+3. 期间产生的中断 [我们使用](/oss/langchain/human-in-the-loop#responding-to-interrupts)
 
 ```python
 from typing import Any
@@ -841,9 +828,9 @@ Tool: get_weather
 Args: {'city': 'San Francisco'}
 ```
 
-接下来，我们为每个中断收集一个[决策](/oss/langchain/human-in-the-loop#interrupt-decision-types)。重要的是，决策的顺序必须与我们收集的动作顺序相匹配。
+命令 [我们接下来收集每个中断的](/oss/langchain/human-in-the-loop#interrupt-decision-types) 决策
 
-为了说明这一点，我们将编辑一个工具调用并接受另一个：
+。重要的是，决策的顺序必须与我们收集的操作顺序相匹配。
 ```python
 def _get_interrupt_decisions(interrupt: Interrupt) -> list[dict]:
     return [
@@ -884,7 +871,7 @@ decisions
 }
 ```
 
-然后我们可以通过传递一个[command](/oss/langchain/human-in-the-loop#responding-to-interrupts)到同一个流式循环中：
+为说明起见，我们将编辑一个工具调用并接受另一个： [然后我们可以通过在同一个流式循环中传递](/oss/langchain/human-in-the-loop#responding-to-interrupts) 命令
 ```python
 interrupts = []
 for chunk in agent.stream(
@@ -913,22 +900,23 @@ Tool response: [{'type': 'text', 'text': "It's always sunny in San Francisco!"}]
 |-| **|San| Francisco|**|:| It|'s| always| sunny| in| San| Francisco|!|
 ```
 
-### 从子代理流式传输
+### 来恢复：
 
-当代理中任何时候都有多个 LLM 时，在生成消息时通常需要区分消息来源。
+从子代理进行流式传输
 
-为此，在创建每个代理时传递一个 [`name`](https://reference.langchain.com/python/langchain/agents/#langchain.agents.create_agent(name))。然后，在以 `"messages"` 模式流式传输时，此名称可通过 `lc_agent_name` 键在元数据中使用。
+当代理中任何位置存在多个 LLM 时，通常需要区分消息来源。 [`name`](https://reference.langchain.com/python/langchain/agents/#langchain.agents.create_agent(name)) 为此，请在创建每个代理时传递 `lc_agent_name` 。此名称随后可通过 `"messages"` mode.
 
-下面，我们更新 [流式传输工具调用](#streaming-tool-calls) 示例：
+键在元数据中获取，用于 [以下，我们更新](#streaming-tool-calls) example:
 
-1. 我们用一个在内部调用代理的 `call_weather_agent` 工具替换我们的工具
-2. 我们为每个代理添加一个 `name`
-3. 我们在创建流时指定 [`subgraphs=True`](/oss/langgraph/use-subgraphs#stream-subgraph-outputs)
-4. 我们的流处理逻辑与之前相同，但我们添加了逻辑来使用 `create_agent` 的 `name` 参数追踪活动中的代理
+1. 流式工具调用 `call_weather_agent` 我们将工具替换为
+2. 在内部调用代理的工具 `name` 我们为每个代理添加
+3. 名称 [`subgraphs=True`](/oss/langgraph/use-subgraphs#stream-subgraph-outputs) 我们在创建流时指定
+4. 我们的流处理与之前相同，但我们添加逻辑使用 `create_agent`'s `name` 来跟踪活动代理
 
 <Tip>
-当你在代理上设置 `name` 时，该名称也会附加到该代理生成的任何 `AIMessage` 上。
+参数 `name` 在代理上，该名称也会附加到任何 `AIMessage`由该代理生成的
 </Tip>
+
 
 首先，我们构建代理：
 ```python
@@ -968,7 +956,7 @@ agent = create_agent(
     name="supervisor",  # [!code highlight]
 )
 ```
-接下来，我们向流式循环添加逻辑，以报告哪个代理正在发出令牌：
+接下来，我们在流式循环中添加逻辑来报告哪个代理正在发出token：
 ```python
 def _render_message_chunk(token: AIMessageChunk) -> None:
     if token.text:
@@ -1039,16 +1027,16 @@ Boston| weather| right| now|:| **|Sunny|**|.
 ```
 :::
 
-## 禁用流式输出
+## 禁用流式传输
 
-在某些应用中，您可能需要禁用特定模型的单个 token 流式输出。这在以下情况下很有用：
+在某些应用中，你可能需要禁用特定模型的单个token流式传输。这在以下情况下很有用：
 
-- 与 [multi-agent](/oss/langchain/multi-agent) 系统配合使用，以控制哪些代理流式输出其输出
-- 将支持流式输出的模型与不支持流式输出的模型混合使用
-- 部署到 [LangSmith](/langsmith/observability) 并希望阻止某些模型输出流式传输到客户端
+- 使用 [multi-agent](/oss/langchain/multi-agent) 系统来控制哪些代理流式传输其输出
+- 混合使用支持流式传输和不支持流式传输的模型
+- 部署到 [LangSmith](/langsmith/observability) 并希望阻止某些模型输出被流式传输到客户端
 
 :::python
-Set `streaming=False` when initializing the model.
+设置 `streaming=False` 在初始化模型时。
 
 ```python
 from langchain_openai import ChatOpenAI
@@ -1059,8 +1047,9 @@ model = ChatOpenAI(
 )
 ```
 :::
+
 :::js
-初始化模型时设置 `streaming: false`。
+设置 `streaming: false` 在初始化模型时。
 
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
@@ -1071,33 +1060,35 @@ const model = new ChatOpenAI({
 });
 ```
 :::
+
 <Tip>
-部署到 LangSmith 时，请对任何不希望将输出流式传输到客户端的模型设置 `streaming=False`。此配置在部署前的图形代码中完成。
+部署到LangSmith时，设置 `streaming=False` 在任何你不希望输出流式传输到客户端的模型上。这在你的图形代码中配置。
 </Tip>
-:::
+
 :::python
 <Note>
-并非所有聊天模型集成都支持 `streaming` 参数。如果你的模型不支持此参数，请改用 `disable_streaming=True`。此参数可通过基类在所有聊天模型上使用。
+并非所有聊天模型集成都支持 `streaming` 参数。如果你的模型不支持，请使用 `disable_streaming=True` 。此参数可通过基类在所有聊天模型上使用。
 </Note>
 :::
+
 :::js
 <Note>
-并非所有聊天模型集成都支持 `streaming` 参数。如果你的模型不支持此参数，请改用 `disableStreaming: true`。此参数可通过基类在所有聊天模型上使用。
+并非所有聊天模型集成都支持 `streaming` 参数。如果你的模型不支持，请使用 `disableStreaming: true` 。此参数可通过基类在所有聊天模型上使用。
 </Note>
 :::
-请参阅 [LangGraph 流式传输指南](/oss/langgraph/streaming#disable-streaming-for-specific-chat-models) 获取更多详情。
+
+请参阅 [LangGraph流式传输指南](/oss/langgraph/streaming#disable-streaming-for-specific-chat-models) 了解更多详情。
+
 :::python
-## v2 流式传输格式
+## v2流式传输格式
 
 <Note>
-需要 LangGraph >= 1.1。
+需要LangGraph >= 1.1。
 </Note>
 
-向 `stream()` 或 `astream()` 传递 `version="v2"` 以获取统一的输出格式。每个分块都是一个包含 `type`、`ns` 和 `data` 键的 `StreamPart` 字典——无论流模式或模式数量如何，格式都保持一致：
+传递 `version="v2"` to `stream()` or `astream()` 以获取统一的输出格式。每个块都是一个包含 `StreamPart` 、 `type`, `ns`和 `data` 键的字典——无论流模式或模式数量如何，形状都相同：
 
 <CodeGroup>
-
-</CodeGroup>
 ```python v2 (new)
 # Unified format — no more tuple unpacking
 for chunk in agent.stream(
@@ -1119,7 +1110,7 @@ for mode, chunk in agent.stream(
 ```
 </CodeGroup>
 
-v2 格式还改进了 `invoke()` —— 它返回一个具有 `.value` 和 `.interrupts` 属性的 `GraphOutput` 对象，将状态与中断元数据清晰分离：
+v2格式还改进了 `invoke()` ——它返回一个包含 `GraphOutput` 和 `.value` 属性的 `.interrupts` 对象，清晰地分离状态和中断元数据：
 
 ```python
 result = agent.invoke(
@@ -1130,14 +1121,14 @@ print(result.value)       # state (dict, Pydantic model, or dataclass)
 print(result.interrupts)  # tuple of Interrupt objects (empty if none)
 ```
 
-查看 [LangGraph 流式处理文档](/oss/langgraph/streaming#stream-output-format-v2) 了解更多关于 v2 格式的信息，包括类型收窄、Pydantic/dataclass 强制转换和子图流式处理。
+请参阅 [LangGraph流式传输文档](/oss/langgraph/streaming#stream-output-format-v2) for more details on the v2 format, including type narrowing, Pydantic/dataclass coercion, and subgraph streaming.
 :::
 
 ## 相关
 
-- [前端流式处理](/oss/langchain/frontend/overview)—使用 @[`useStream`] 构建 React UI，实现实时 Agent 交互
-- [使用聊天模型进行流式处理](/oss/langchain/models#stream)—直接从聊天模型流式传输 Token，无需使用 Agent 或图
-- [使用聊天模型进行推理](/oss/langchain/models#reasoning)—配置和访问聊天模型的推理输出
-- [标准内容块](/oss/langchain/messages#standard-content-blocks)—了解用于推理、文本和其他内容类型的标准化内容块格式
-- [人机协作流式处理](/oss/langchain/human-in-the-loop#streaming-with-human-in-the-loop)—在处理人工审核中断的同时流式传输 Agent 进度
-- [LangGraph 流式处理](/oss/langgraph/streaming)—高级流式处理选项，包括 `values`、`debug` 模式以及子图流式处理
+- [前端流式传输](/oss/langchain/frontend/overview)—使用 @[构建React UI，实现实时代理交互`useStream`] 进行实时代理交互
+- [使用聊天模型进行流式传输](/oss/langchain/models#stream)—直接从聊天模型流式传输token，无需使用代理或图形
+- [使用聊天模型进行推理](/oss/langchain/models#reasoning)—从聊天模型配置和访问推理输出
+- [标准内容块](/oss/langchain/messages#standard-content-blocks)—了解用于推理、文本和其他内容类型的规范化内容块格式
+- [人在环流式处理](/oss/langchain/human-in-the-loop#streaming-with-human-in-the-loop)—在处理人工审查中断的同时流式传输智能体进度
+- [LangGraph 流式处理](/oss/langgraph/streaming)—高级流式处理选项，包括 `values`, `debug` 模式和子图流式处理

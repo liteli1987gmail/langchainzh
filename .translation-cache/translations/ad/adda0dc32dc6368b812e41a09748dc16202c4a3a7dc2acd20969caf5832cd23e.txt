@@ -1,38 +1,38 @@
 ---
-title: 可扩展性与弹性
-sidebarTitle: 可扩展性与弹性
+title: 可扩展性和弹性
+sidebarTitle: 可扩展性和弹性
 ---
 
-LangSmith 的设计可以随工作负载进行水平扩展。服务的每个实例都是无状态的，不会将任何资源保存在内存中。该服务设计为可以优雅地处理新增或移除实例的情况，包括硬关闭的情况。
+LangSmith 旨在随您的工作负载进行水平扩展。每个服务实例都是无状态的，不会在内存中保留任何资源。该服务设计为可以优雅地处理新实例的添加或移除，包括硬关闭的情况。
 
 ## 服务器可扩展性
 
-当向服务添加更多实例时，只要在它们前面放置适当的负载均衡器机制，它们就会分担 HTTP 负载。在大多数部署模式中，我们会自动为服务配置负载均衡器。在"无控制平面的自托管"模式中，添加负载均衡器由您自行负责。由于实例是无状态的，任何负载均衡策略都可以使用，无需也不建议使用会话粘性。服务器的任意实例都可以与任意队列实例通信（通过 Redis PubSub），这意味着取消或流式传输正在进行的运行的请求可以由任意实例处理。
+当您向服务添加更多实例时，只要在它们前面放置适当的负载均衡器机制，它们就会分担 HTTP 负载。在大多数部署模式中，我们会自动为服务配置负载均衡器。在“无控制平面的自托管”模式中，您需要负责添加负载均衡器。由于实例是无状态的，任何负载均衡策略都可以工作，不需要也不推荐会话粘性。服务器的任何一个实例都可以与任何队列实例通信（通过 Redis PubSub），这意味着取消或流式传输正在进行的运行的请求可以由任意一个实例处理。
 
 ## 队列可扩展性
 
-当向服务添加更多实例时，它们会线性增加运行吞吐量，因为每个实例都被配置为处理一定数量的并发运行（默认情况下为 10）。每个运行的每次尝试将由单个实例处理，并通过 Postgres 的 MVCC 模型强制执行恰好一次语义（有关崩溃弹性详细信息，请参阅下面的部分）。由于临时数据库错误而失败的尝试最多重试 3 次。我们不使用长期事务或锁，这使我们能够更高效地利用 Postgres 资源。
+当您向服务添加更多实例时，它们将线性增加运行吞吐量，因为每个实例都被配置为处理一定数量的并发运行（默认为 10）。每个运行的每次尝试将由单个实例处理，通过 Postgres 的 MVCC 模型强制执行恰好一次语义（有关崩溃恢复能力的详细信息，请参阅下面的部分）。因临时数据库错误而失败的尝试最多会重试 3 次。我们不使用长期事务或锁，这使我们能够更有效地利用 Postgres 资源。
 
 ## 弹性
 
-当一个运行由队列实例处理时，该队列工作进程会定期在 Redis 中记录一个心跳时间戳。
+当一个运行由队列实例处理时，该队列工作进程会在 Redis 中定期记录心跳时间戳。
 
-当收到优雅关闭请求（SIGINT）时，实例进入关闭模式，该模式将
+当收到正常关闭请求（SIGINT）时，实例进入关闭模式，这将
 
 * 停止接受新的 HTTP 请求
-* 为任何正在进行的运行提供有限的秒数来完成（如果没有完成，它将被放回队列中）
+* 给任何正在进行的运行有限的时间来完成（如果没有完成，它将被放回队列中）
 * 阻止实例从队列中获取更多运行
 
-如果由于服务器崩溃或基础设施故障导致硬关闭，任何正在进行的运行都将被内部扫描任务拾取，该任务会查找超过其心跳窗口的正在进行的运行。扫描任务每 2 分钟运行一次，并将运行放回队列中供另一个实例拾取。
+如果由于服务器崩溃或基础设施故障而发生硬关闭，任何正在进行的运行都将被内部清理任务拾取，该任务会查找超出心跳窗口的正在进行的运行。清理任务每 2 分钟运行一次，会将运行放回队列中供另一个实例拾取。
 
 ## Postgres 弹性
 
-对于我们管理 Postgres 数据库的部署模式，我们有定期备份和持续复制的备用副本用于自动故障转移。此 Postgres 配置仅在[`Production`](/langsmith/cloud-platform-features#deployment-types) 部署类型的[云部署选项](/langsmith/cloud)中可用。
+对于我们管理 Postgres 数据库的部署模式，我们有定期备份和持续复制的备用副本以实现自动故障转移。此 Postgres 配置可在 [云部署选项](/langsmith/cloud) 用于 [`Production` 部署类型](/langsmith/cloud-platform-features#deployment-types) only.
 
-所有与 Postgres 的通信都会对可重试的错误实施重试。如果 Postgres 暂时不可用（例如在数据库重启期间），大部分/全部流量应该能够继续成功。Postgres 长期故障将导致 Agent Server 不可用。
+All communication with Postgres implements retries for retry-able errors. If Postgres is momentarily unavailable, such as during a database restart, most/all traffic should continue to succeed. Prolonged failure of Postgres will render the Agent Server unavailable.
 
 ## Redis 弹性
 
-所有需要持久存储的数据都存储在 Postgres 中，而不是 Redis。Redis 仅用于临时元数据和实例之间的通信。因此，我们对 Redis 没有任何持久性要求。
+所有需要持久存储的数据都存储在 Postgres 中，而不是 Redis 中。Redis 仅用于临时元数据和实例间的通信。因此我们对 Redis 没有持久性要求。
 
-所有与 Redis 的通信都会对可重试的错误实施重试。如果 Redis 暂时不可用（例如在数据库重启期间），大部分/全部流量应该能够继续成功。Redis 长期故障将导致 Agent Server 不可用。
+All communication with Redis implements retries for retry-able errors. If Redis is momentarily unavailable, such as during a database restart, most/all traffic should continue to succeed. Prolonged failure of Redis will render the Agent Server unavailable.

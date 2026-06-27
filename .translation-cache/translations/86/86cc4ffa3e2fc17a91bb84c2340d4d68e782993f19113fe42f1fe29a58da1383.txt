@@ -2,23 +2,23 @@
 title: 连接身份验证提供商
 sidebarTitle: 连接身份验证提供商
 ---
-在[上一个教程](/langsmith/resource-auth)中，您添加了资源授权来为用户提供私人对话。但是，您仍在使用硬编码的令牌进行身份验证，这并不安全。现在您将使用[OAuth2](/langsmith/deployment-quickstart)将这些令牌替换为真实用户账户。
+In [上一教程](/langsmith/resource-auth)，您为用户添加了资源授权以实现私人对话。但是，您仍在使用硬编码令牌进行身份验证，这并不安全。现在您将用真正的用户账户替换这些令牌，使用 [OAuth2](/langsmith/deployment-quickstart).
 
-您将保留相同的@[`Auth`][Auth]对象和[资源级访问控制](/langsmith/auth#single-owner-resources)，但将升级身份验证以使用Supabase作为您的身份提供商。虽然本教程使用的是Supabase，但这些概念适用于任何OAuth2提供商。您将学习如何：
+您将保留相同的 @[`Auth`][Auth] 对象和 [资源级访问控制](/langsmith/auth#single-owner-resources)，但将身份验证升级为使用 Supabase 作为您的身份提供商。虽然本教程使用 Supabase，但这些概念适用于任何 OAuth2 提供商。您将学习如何：
 
-1. 用真实的JWT令牌替换测试令牌
-2. 与OAuth2提供商集成以实现安全的用户身份验证
+1. 用真正的 JWT 令牌替换测试令牌
+2. 与 OAuth2 提供商集成以实现安全的用户身份验证
 3. 在保持现有授权逻辑的同时处理用户会话和元数据
 
 ## 背景
 
-OAuth2涉及三个主要角色：
+OAuth2 涉及三个主要角色：
 
-1. **授权服务器**: 处理用户身份验证和颁发令牌的身份提供商（例如Supabase、Auth0、Google）
-2. **应用后端**: 您的LangGraph应用程序。它验证令牌并提供受保护的资源（对话数据）
-3. **客户端应用**: 用户与您的服务交互的Web或移动应用
+1. **授权服务器**：处理用户身份验证并颁发令牌的身份提供商（例如 Supabase、Auth0、Google）
+2. **应用后端**：您的 LangGraph 应用程序。它验证令牌并提供受保护的资源（对话数据）
+3. **客户端应用程序**：用户与您的服务交互的 Web 或移动应用
 
-标准OAuth2流程大致如下：
+标准 OAuth2 流程大致如下：
 
 ```mermaid
 sequenceDiagram
@@ -38,18 +38,16 @@ sequenceDiagram
 
 ## 前提条件
 
-在开始本教程之前，请确保您已具备以下条件：
+在开始本教程之前，请确保您具备以下条件：
 
-* 第二篇教程中的[机器人](/langsmith/resource-auth)能够无错误运行。
-* [Supabase 项目](https://supabase.com/dashboard)用于其身份验证服务器。
+* 第二个教程中的 [机器人](/langsmith/resource-auth) 无错误运行。
+* A [一个 Supabase 项目](https://supabase.com/dashboard) 用于使用其身份验证服务器。
 
 ## 1. 安装依赖项
 
-安装所需的依赖项。在您的 `custom-auth` 目录中开始，并确保已安装 `langgraph-cli`：
+安装所需的依赖项。从您的 `custom-auth` 目录开始，确保您有 `langgraph-cli` installed:
 
 <CodeGroup>
-
-</CodeGroup>
 ```bash pip
 cd custom-auth
 pip install -U "langgraph-cli[inmem]"
@@ -62,20 +60,21 @@ uv add "langgraph-cli[inmem]"
 </CodeGroup>
 
 <a id="setup-auth-provider"></a>
-## 2. 设置身份验证提供程序
+## 2. 设置身份验证提供商
 
-接下来，获取身份验证服务器的 URL 和用于身份验证的私钥。由于您使用的是 Supabase，可以在 Supabase 仪表板中完成此操作：
+接下来，获取您的身份验证服务器的 URL 和用于身份验证的私钥。
+由于您使用 Supabase 执行此操作，因此可以在 Supabase 仪表板中执行此操作：
 
-1. 在左侧边栏中，点击 ️⚙ 项目设置，然后点击 API
+1. 在左侧边栏中，点击 ⚙️ 项目设置，然后点击 API
 2. 复制您的项目 URL 并将其添加到您的 `.env` 文件中
   ```shell
   echo "SUPABASE_URL=your-project-url" >> .env
   ```
-3. 复制您的服务角色密钥并将其添加到您的 `.env` 文件：
+3. 复制您的服务角色密钥并将其添加到您的 `.env` file:
   ```shell
   echo "SUPABASE_SERVICE_KEY=your-service-role-key" >> .env
   ```
-4. 复制你的 "anon public" 密钥并记下来。稍后在设置我们的客户端代码时会用到它。
+4. 复制您的“匿名公共”密钥并记下它。当您设置客户端代码时，稍后将使用它。
   ```bash
   SUPABASE_URL=your-project-url
   SUPABASE_SERVICE_KEY=your-service-role-key
@@ -83,15 +82,15 @@ uv add "langgraph-cli[inmem]"
 
 ## 3. 实现令牌验证
 
-在之前的教程中，您使用 @[`Auth`][Auth] 对象来[验证硬编码的令牌](/langsmith/set-up-custom-auth)并[添加资源所有权](/langsmith/resource-auth)。
+在前面的教程中，您使用 @[`Auth`][Auth] 对象来 [验证硬编码令牌](/langsmith/set-up-custom-auth) 和 [添加资源所有权](/langsmith/resource-auth).
 
-现在您将升级您的身份验证，以验证来自 Supabase 的真实 JWT 令牌。主要的更改将全部在 @[`@auth.authenticate`][Auth.authenticate] 装饰器函数中：
+现在您将升级身份验证以验证来自 Supabase 的真正 JWT 令牌。主要更改将在 @[`@auth.authenticate`][Auth.authenticate] 装饰函数中：
 
-* 代替检查硬编码的令牌列表，您将向 Supabase 发送 HTTP 请求来验证令牌。
-* 您将从已验证的令牌中提取真实的用户信息（ID、邮箱）。
+* 不要根据硬编码的令牌列表进行检查，而是向 Supabase 发出 HTTP 请求来验证令牌。
+* 你将从已验证的令牌中提取真实的用户信息（ID、邮箱）。
 * 现有的资源授权逻辑保持不变。
 
-更新 `src/security/auth.py` 以实现此功能：
+更新 `src/security/auth.py` 来实现此功能：
 
 ```python {highlight={8-9,20-30}} title="src/security/auth.py"
 import os
@@ -144,15 +143,15 @@ async def add_owner(ctx, value):
     return filters
 ```
 
-最重要的变化是，我们现在使用真实的身份验证服务器来验证令牌。我们的身份验证处理程序拥有 Supabase 项目的私钥，我们可以用它来验证用户的令牌并提取他们的信息。
+最重要的变化是我们现在使用真实的身份验证服务器来验证令牌。我们的身份验证处理程序拥有 Supabase 项目的私钥，我们可以用它来验证用户的令牌并提取其信息。
 
 ## 4. 测试身份验证流程
 
-让我们测试一下新的身份验证流程。你可以在文件或笔记本中运行以下代码。你需要提供：
+让我们测试新的身份验证流程。你可以在文件或笔记本中运行以下代码。你需要提供：
 
-* 一个有效的电子邮件地址
-* Supabase 项目 URL（来自[上文](#setup-auth-provider)）
-* Supabase anon **公钥**（也来自[上文](#setup-auth-provider)）
+* 一个有效的邮箱地址
+* 一个 Supabase 项目 URL（来自 [上文](#setup-auth-provider))
+* 一个 Supabase anon **公钥** （也来自 [上文](#setup-auth-provider))
 
 ```python
 import os
@@ -196,9 +195,9 @@ await sign_up(email1, password)
 await sign_up(email2, password)
 ```
 
-⚠️ 在继续之前：请检查您的电子邮件并点击两个确认链接。Supabase 将拒绝 `/login` 请求，直到您确认用户的电子邮件。
+⚠️ 继续之前：请检查你的邮箱并点击两个确认链接。在你确认用户的邮箱之前，Supabase 将拒绝 `/login` 请求。
 
-现在测试用户只能看到自己的数据。继续之前请确保服务器正在运行（运行 `langgraph dev`）。以下代码片段需要您之前在 [设置身份验证提供商](#setup-auth-provider) 时从 Supabase 仪表板复制的"anon public"密钥。
+现在测试用户只能查看自己的数据。继续之前请确保服务器正在运行（运行 `langgraph dev`）。以下代码片段需要你从 Supabase 仪表板复制的"anon public"密钥， [设置身份验证提供程序](#setup-auth-provider) previously.
 
 ```python
 async def login(email: str, password: str):
@@ -250,7 +249,7 @@ except Exception as e:
     print("✅ User 2 blocked from User 1's thread:", e)
 ```
 
-The fragment content is empty. Please provide the Markdown/MDX content you want translated.
+输出应该如下所示：
 
 ```shell
 ✅ User 1 created thread: d6af3754-95df-4176-aa10-dbd8dca40f1a
@@ -263,20 +262,20 @@ The fragment content is empty. Please provide the Markdown/MDX content you want 
 1. 用户必须登录才能访问机器人
 2. 每个用户只能查看自己的线程
 
-所有用户都由 Supabase 身份验证提供商管理，因此您无需实现任何其他用户管理逻辑。
+所有用户都由 Supabase 身份验证提供程序管理，因此您无需实现任何额外的用户管理逻辑。
 
-## 下一步
+## 后续步骤
 
-您已成功为 LangGraph 应用程序构建了一个可投入生产的身份验证系统！让我们回顾一下您所取得的成就：
+您已成功为 LangGraph 应用程序构建了一个可用于生产环境的身份验证系统！让我们回顾一下您所完成的：
 
-1. 设置身份验证提供商（在本例中为 Supabase）
-2. 添加了使用电子邮件/密码身份验证的真实用户账户
+1. 设置了身份验证提供程序（本例中为 Supabase）
+2. Added real user accounts with email/password authentication
 3. 将 JWT 令牌验证集成到您的 Agent Server 中
-4. 实施了适当的授权以确保用户只能访问自己的数据
-5. 创建了一个基础架构，为处理下一个身份验证挑战做好准备
+4. 实现了适当的授权以确保用户只能访问自己的数据
+5. 创建了一个可随时处理下一个身份验证挑战的基础架构
 
-既然您已拥有可投入生产的身份验证功能，请考虑以下事项：
+既然您已拥有生产级身份验证，请考虑：
 
-1. 使用您首选的框架构建 Web UI（请参阅 [Custom Auth](https://github.com/langchain-ai/custom-auth) 模板作为示例）
-2. 在 [身份验证概念指南](/langsmith/auth) 中了解更多关于身份验证和授权的其他方面
-3. 在阅读 @[参考文档][Auth] 后进一步自定义您的处理程序和设置。
+1. 使用您喜欢的框架构建 Web UI（请参阅 [自定义身份验证](https://github.com/langchain-ai/custom-auth) 模板以获取示例）
+2. 在 [身份验证概念指南](/langsmith/auth).
+3. 中了解更多关于身份验证和授权其他方面的信息。在阅读 @[参考文档][Auth] 后进一步自定义您的处理程序和设置。

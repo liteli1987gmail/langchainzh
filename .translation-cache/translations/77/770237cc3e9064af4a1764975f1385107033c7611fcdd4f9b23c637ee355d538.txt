@@ -1,5 +1,5 @@
 ---
-title: 构建多源知识库与路由
+title: 使用路由构建多源知识库
 sidebarTitle: "路由器：知识库"
 ---
 
@@ -8,15 +8,15 @@ import ChatModelTabsJs from '/snippets/chat-model-tabs-js.mdx';
 
 ## 概述
 
-**路由器模式**是一种[多智能体](/oss/langchain/multi-agent)架构，其中路由步骤对输入进行分类并将其定向到专门的智能体，然后将结果综合成组合响应。当组织的知识分布在不同的**垂直领域**（各自需要配备专门工具和提示的独立智能体的独立知识域）时，这种模式表现出色。
+这个 **路由器模式** is a [multi-agent](/oss/langchain/multi-agent) 架构，其中路由步骤对输入进行分类并将其定向到专门的智能体，结果被综合成组合响应。当您的组织知识分布在不同的 **垂直领域** （独立的知识领域，每个领域都需要自己的智能体，配备专门的工具和提示词）。
 
-在本教程中，您将构建一个多源知识库路由器，通过一个真实的企业场景展示这些优势。该系统将协调三个专业智能体：
+在本教程中，您将构建一个多源知识库路由器，通过真实的企业场景展示这些优势。该系统将协调三个专业智能体：
 
-- 一个 **GitHub 智能体**，用于搜索代码、议题和拉取请求。
-- 一个 **Notion 智能体**，用于搜索内部文档和知识库。
-- 一个 **Slack 智能体**，用于搜索相关话题和讨论。
+- A **GitHub 智能体** 用于搜索代码、议题和拉取请求。
+- A **Notion 智能体** 用于搜索内部文档和维基。
+- A **Slack 智能体** 用于搜索相关话题和讨论。
 
-当用户询问"如何对 API 请求进行身份验证？"时，路由器会将查询分解为针对各个来源的子问题，并行地将它们路由到相关智能体，然后将结果综合成连贯的答案。
+当用户询问"如何对 API 请求进行身份验证？"时，路由器将查询分解为针对特定来源的子问题，并行地将它们路由到相关的智能体，然后将结果综合成一个连贯的答案。
 
 ```mermaid
 graph LR
@@ -38,36 +38,34 @@ graph LR
 
 ### 为什么使用路由器？
 
-路由器模式提供了多项优势：
+路由器模式提供了几个优势：
 
-- **并行执行**：同时查询多个源，相比顺序方式降低延迟。
-- **专业化代理**：每个垂直领域都有针对其域优化的专用工具和提示词。
-- **选择性路由**：并非每个查询都需要访问所有源——路由器智能选择相关垂直领域。
-- **针对性子问题**：每个代理接收针对其领域量身定制的问题，提高结果质量。
-- **清晰整合**：将多个源的结果合并为单一、连贯的响应。
+- **并行执行**：同时查询多个数据源，与顺序方法相比减少延迟。
+- **专业智能体**：每个垂直领域都有专门针对其领域优化的工具和提示词。
+- **选择性路由**：并非每个查询都需要使用所有数据源——路由器智能地选择相关的垂直领域。
+- **有针对性的子问题**：每个智能体都会收到一个针对其领域量身定制的问题，从而提高结果质量。
+- **简洁综合**：来自多个数据源的结果被整合成一个单一、连贯的响应。
 
-### 核心概念
+### 概念
 
 我们将涵盖以下概念：
 
-- [多代理系统](/oss/langchain/multi-agent)
+- [多智能体系统](/oss/langchain/multi-agent)
 - [StateGraph](/oss/langgraph/graph-api) 用于工作流编排
 - [Send API](/oss/langgraph/graph-api#send) 用于并行执行
 
 <Tip>
-**路由器与子代理**： [子代理模式](/oss/langchain/multi-agent/subagents) 也可以路由到多个代理。当需要专门的预处理、自定义路由逻辑或希望明确控制并行执行时，使用路由器模式。当希望 LLM 动态决定调用哪些代理时，使用子代理模式。
+**路由器与子智能体**： [子智能体模式](/oss/langchain/multi-agent/subagents) 也可以路由到多个智能体。当需要专门的预处理、自定义路由逻辑，或希望对并行执行进行显式控制时，使用路由器模式。当希望让 LLM 动态决定调用哪些智能体时，使用子智能体模式。
 </Tip>
 
 ## 设置
 
 ### 安装
 
-本教程需要 `langchain` 和 `langgraph` 包：
+本教程需要 `langchain` 和 `langgraph` packages:
 
 :::python
 <CodeGroup>
-
-</fragment>
 ```bash pip
 pip install langchain langgraph
 ```
@@ -94,11 +92,11 @@ pnpm add langchain @langchain/langgraph
 </CodeGroup>
 :::
 
-更多详细信息，请参阅我们的[安装指南](/oss/langchain/install)。
+更多详情，请参阅我们的 [安装指南](/oss/langchain/install).
 
 ### LangSmith
 
-设置 [LangSmith](https://smith.langchain.com) 来检查代理内部发生了什么。然后设置以下环境变量：
+设置 [LangSmith](https://smith.langchain.com) 检查代理内部发生了什么。然后设置以下环境变量：
 
 :::python
 <CodeGroup>
@@ -126,7 +124,10 @@ export LANGSMITH_API_KEY="..."
 process.env.LANGSMITH_TRACING = "true";
 process.env.LANGSMITH_API_KEY = "...";
 ```
-### 选择 LLM
+</CodeGroup>
+:::
+
+### 选择一个 LLM
 
 从 LangChain 的集成套件中选择一个聊天模型：
 
@@ -142,9 +143,9 @@ process.env.LANGSMITH_API_KEY = "...";
 
 首先，定义状态模式。我们使用三种类型：
 
-- **`AgentInput`**：传递给每个子代理的简单状态（仅包含查询）
+- **`AgentInput`**：传递给每个子代理的简单状态（只是一个查询）
 - **`AgentOutput`**：每个子代理返回的结果（来源名称 + 结果）
-- **`RouterState`**：主工作流状态，用于跟踪查询、分类、结果和最终答案
+- **`RouterState`**：跟踪查询、分类、结果和最终答案的主工作流状态
 
 :::python
 ```python
@@ -204,11 +205,11 @@ const RouterState = new StateSchema({
 ```
 :::
 
-`results` 字段使用一个 **reducer**（Python 中的 `operator.add`，JS 中的 concat 函数）将并行 agent 执行的结果收集到一个列表中。
+该 `results` 字段使用一个 **reducer** (`operator.add` （在 Python 中是 reducer，在 JS 中是 concat 函数）将并行代理执行的结果收集到单个列表中。
 
 ## 2. 为每个垂直领域定义工具
 
-为每个知识领域创建工具。在生产系统中，这些工具会调用实际的 API。对于本教程，我们使用返回模拟数据的桩实现。我们定义了跨 3 个垂直领域的 7 个工具：GitHub（搜索代码、问题、PR）、Notion（搜索文档、获取页面）和 Slack（搜索消息、获取线程）。
+为每个知识领域创建工具。在生产系统中，这些工具会调用实际的 API。在本教程中，我们使用返回模拟数据的 stub 实现。我们定义了 3 个垂直领域的 7 个工具：GitHub（搜索代码、issues、PR）、Notion（搜索文档、获取页面）和 Slack（搜索消息、获取线程）。
 
 :::python
 ```python expandable
@@ -355,12 +356,13 @@ const getThread = tool(
   }
 );
 ```
-## 3. 创建专业化代理
+:::
 
-为每个垂直领域创建一个代理。每个代理拥有针对其知识来源优化的领域特定工具和提示。三者遵循相同的模式——仅工具和系统提示有所不同。
+## 3. 创建专业代理
+
+为每个垂直领域创建一个代理。每个代理都有特定领域的工具和针对其知识源优化的提示。所有三个代理遵循相同的模式——只是工具和系统提示不同。
 
 :::python
-:::
 ```python expandable
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
@@ -440,12 +442,12 @@ shared knowledge and solutions.
 
 ## 4. 构建路由器工作流
 
-现在使用 StateGraph 构建路由器工作流。该工作流有四个主要步骤：
+现在使用 StateGraph 构建路由器工作流。工作流有四个主要步骤：
 
-1. **分类**：分析查询并确定调用哪些代理以及对应的子问题
-2. **路由**：使用 `Send` 并行分发给选定的代理
-3. **查询代理**：每个代理接收简单的 `AgentInput` 并返回 `AgentOutput`
-4. **综合**：将收集的结果整合为连贯的回复
+1. **分类**：分析查询并确定调用哪些代理以及使用哪些子问题
+2. **路由**：使用 `Send`
+3. **查询代理**：每个代理接收一个简单的 `AgentInput` 并返回一个 `AgentOutput`
+4. **综合**：将收集到的结果合并成一个连贯的回复
 
 :::python
 ```python
@@ -656,9 +658,11 @@ async function synthesizeResults(state: typeof RouterState.State) {
   return { finalAnswer: synthesisResponse.content };
 }
 ```
+:::
+
 ## 5. 编译工作流
 
-现在通过连接节点和边来组装工作流。关键在于使用 `add_conditional_edges` 配合路由函数以实现并行执行：
+现在通过连接节点和边来组装工作流。关键是使用 `add_conditional_edges` 和路由函数来实现并行执行：
 
 :::python
 ```python
@@ -698,11 +702,11 @@ const workflow = new StateGraph(RouterState)
 ```
 :::
 
-`add_conditional_edges` 调用通过 `route_to_agents` 函数将 classify 节点连接到 agent 节点。当 `route_to_agents` 返回多个 `Send` 对象时，这些节点会并行执行。
+该 `add_conditional_edges` 调用通过 `route_to_agents` 函数连接分类节点到代理节点。当 `route_to_agents` 返回多个 `Send` 对象时，这些节点并行执行。
 
 ## 6. 使用路由器
 
-使用跨多个知识领域的查询来测试路由器：
+使用跨多个知识领域的查询测试您的路由器：
 
 :::python
 ```python
@@ -736,6 +740,8 @@ console.log("Final Answer:");
 console.log(result.finalAnswer);
 ```
 :::
+
+预期输出：
 ```
 Original query: How do I authenticate API requests?
 
@@ -761,25 +767,25 @@ For token refresh handling, see issue #203 and PR #178 for the latest
 OAuth scope updates.
 ```
 
-路由器分析了查询，对其进行分类以确定要调用哪些代理（GitHub 和 Notion，但针对这个技术问题没有调用 Slack），并行查询两个代理，并将结果合成为连贯的答案。
+路由器分析了查询，对其进行分类以确定调用哪些代理（对于这个技术问题，调用了 GitHub 和 Notion，但没有调用 Slack），并行查询了两个代理，并将结果综合成一个连贯的答案。
 
 ## 7. 理解架构
 
-路由器工作流程遵循一个清晰的模式：
+路由器工作流遵循一个清晰的模式：
 
 ### 分类阶段
 
-`classify_query` 函数使用**结构化输出**来分析用户查询并确定要调用哪些代理。路由智能就在这里：
+该 `classify_query` 函数使用 **结构化输出** 分析用户查询并确定调用哪些代理。路由智能就位于此处：
 
-- 使用 Pydantic 模型（Python）或 Zod schema（JS）来确保有效输出
-- 返回 `Classification` 对象列表，每个对象都有 `source` 和目标 `query`
-- 仅包含相关源——不相关的源被简单地省略
+- 使用 Pydantic 模型（Python）或 Zod 模式（JS）来确保有效输出
+- 返回一个 `Classification` 对象列表，每个对象包含 `source` 和目标 `query`
+- 只包含相关来源——不相关的会被直接省略
 
-这种结构化方法比自由格式 JSON 解析更可靠，使路由逻辑变得明确。
+这种结构化方法比自由格式的 JSON 解析更可靠，并使路由逻辑清晰明确。
 
-### 使用 Send 进行并行执行
+### 使用 send 进行并行执行
 
-`route_to_agents` 函数将分类映射到 `Send` 对象。每个 `Send` 指定目标节点和要传递的状态：
+函数将分类映射到 `route_to_agents` 函数将分类映射到 `Send` 对象。每个 `Send` 指定目标节点和要传递的状态：
 
 :::python
 ```python
@@ -799,11 +805,11 @@ OAuth scope updates.
 ```
 :::
 
-每个智能体节点接收一个简单的 `AgentInput`，仅包含 `query` 字段——而非完整的路由状态。这使接口保持简洁和明确。
+每个代理节点接收一个简单的 `AgentInput` ，只包含一个 `query` 字段——而不是完整的路由状态。这保持了接口的简洁和明确。
 
 ### 使用 reducer 收集结果
 
-智能体结果通过 **reducer** 流回主状态。每个智能体返回：
+代理结果通过 **reducer**流回主状态。每个代理返回：
 
 :::python
 ```python
@@ -817,29 +823,27 @@ OAuth scope updates.
 ```
 :::
 
-归约器（Python 中的 `operator.add`）将这些列表连接起来，将所有并行结果收集到 `state["results"]` 中。
+Reducer（`operator.add` 在 Python 中）连接这些列表，将所有并行结果收集到 `state["results"]`.
 
 ### 综合阶段
 
-所有代理完成后，`synthesize_results` 函数会遍历收集到的结果：
+所有代理完成后， `synthesize_results` 函数迭代收集到的结果：
 
-- 等待所有并行分支完成（LangGraph 自动处理）
-- 引用原始查询以确保答案针对用户的问题
-- 组合来自所有来源的信息，避免冗余
+- 等待所有并行分支完成（LangGraph 会自动处理）
+- 引用原始查询以确保答案针对用户提出的问题
+- 合并所有来源的信息而不冗余
 
 <Note>
-**部分结果**：在本教程中，所有选定的代理必须在综合之前完成。
+**部分结果**：在本教程中，所有选定的代理必须在综合前完成。
 </Note>
 
 ## 8. 完整的可运行示例
 
 以下是整合在一个可运行脚本中的全部内容：
 
-<Expandable title="查看完整代码" defaultOpen={false}>
+<Expandable title="View complete code" defaultOpen={false}>
 
 :::python
-
-</fragment>
 ```python
 """
 Multi-Source Knowledge Router Example
@@ -1382,13 +1386,13 @@ console.log(result.finalAnswer);
 
 </Expandable>
 
-## 9. 高级：状态化路由器
+## 9. 进阶：有状态路由
 
-到目前为止我们构建的路由器是**无状态的**（每个请求都是独立处理的，调用之间没有记忆）。对于多轮对话，你需要**状态化**的方法。
+我们目前构建的路由是 **无状态** 的（每个请求独立处理，调用之间无记忆）。对于多轮对话，您需要一个 **有状态** approach.
 
-### 工具包装器方法
+### 工具封装方法
 
-添加对话记忆最简单的方法是将无状态路由器包装成一个对话代理可以调用的工具：
+添加对话记忆最简单的方法是将无状态路由封装为一个工具，供对话代理调用：
 
 :::python
 ```python
@@ -1450,11 +1454,9 @@ documentation, and team discussions.
 ```
 :::
 
-这种方法保持路由器的无状态特性，而对话代理则负责处理记忆和上下文。用户可以进行多轮对话，代理会根据需要调用路由器工具。
+这种方法在保持路由无状态的同时，让对话代理处理记忆和上下文。用户可以进行多轮对话，代理会根据需要调用路由工具。
 
 :::python
-
-:::
 ```python
 config = {"configurable": {"thread_id": "user-123"}}
 
@@ -1501,38 +1503,38 @@ console.log(conversationalAgentResult.messages.at(-1)?.content);
 :::
 
 <Tip>
-工具包装器方法被推荐用于大多数使用场景。它提供了清晰的分离：路由器处理多源查询，而对话代理处理上下文和记忆。
+工具封装方法推荐用于大多数场景。它提供了清晰的分离：路由处理多源查询，对话代理处理上下文和记忆。
 </Tip>
 
-### 完全持久化方法
+### 完整持久化方法
 
-如果你需要路由器本身维护状态——例如，为了在路由决策中使用之前的搜索结果——请使用[持久化](/oss/langchain/short-term-memory)在路由器级别存储消息历史。
+如果您需要路由本身维护状态——例如，在路由决策中使用之前的搜索结果——请使用 [持久化](/oss/langchain/short-term-memory) 在路由级别存储消息历史。
 
 <Warning>
-**有状态的路由器增加了复杂性。** 当跨轮次路由到不同代理时，如果代理具有不同的语气或提示词，对话可能会显得不一致。请考虑使用[handoffs模式](/oss/langchain/multi-agent/handoffs)或[subagents模式](/oss/langchain/multi-agent/subagents)——两者都为与不同代理的多轮对话提供了更清晰的语义。
+**有状态路由会增加复杂性。** 在跨轮次路由到不同代理时，如果代理具有不同的语气或提示词，对话可能会显得不一致。请考虑使用 [交接模式](/oss/langchain/multi-agent/handoffs) or [子代理模式](/oss/langchain/multi-agent/subagents) ——两者都为与不同代理的多轮对话提供了更清晰的语义。
 </Warning>
 
 ## 10. 关键要点
 
-路由器模式在以下情况下表现出色：
+路由模式在以下情况下表现出色：
 
-- **不同的垂直领域**：各自需要专门工具和提示词的独立知识领域
-- **并行查询需求**：同时查询多个源会有益处的问题
-- **综合需求**：需要将多个来源的结果合并成一个连贯的响应
+- **不同的垂直领域**：每个领域都需要专门工具和提示词的知识领域
+- **并行查询需求**：可从同时查询多个来源中受益的问题
+- **综合需求**：需要将多个来源的结果合并成连贯的响应
 
-该模式包含三个阶段：**分解**（分析查询并生成有针对性的子问题）、**路由**（并行执行查询）和**综合**（合并结果）。
+该模式有三个阶段： **分解** （分析查询并生成有针对性的子问题）， **路由** （并行执行查询），以及 **综合** （合并结果）。
 
 <Tip>
-**何时使用路由器模式**
+**何时使用路由模式**
 
-当你有多个独立的知识源、需要低延迟的并行查询，并希望对路由逻辑进行显式控制时，请使用路由器模式。
+当您有多个独立知识源、需要低延迟的并行查询，并希望对路由逻辑进行显式控制时，请使用路由模式。
 
-对于更简单的动态工具选择场景，请考虑[subagents模式](/oss/langchain/multi-agent/subagents)。对于需要代理按顺序与用户对话的工作流，请考虑[handoffs](/oss/langchain/multi-agent/handoffs)。
+对于需要动态工具选择的更简单场景，请考虑使用 [子代理模式](/oss/langchain/multi-agent/subagents)。对于需要代理与用户顺序对话的工作流，请考虑 [交接](/oss/langchain/multi-agent/handoffs).
 </Tip>
 
-## 下一步
+## 后续步骤
 
-- 了解[handoffs](/oss/langchain/multi-agent/handoffs)以实现代理之间的对话
-- 探索[subagents模式](/oss/langchain/multi-agent/subagents-personal-assistant)以实现集中编排
-- 阅读[multi-agent概述](/oss/langchain/multi-agent)以比较不同的模式
-- 使用[LangSmith](https://smith.langchain.com)调试和监控你的路由器
+- 了解 [交接](/oss/langchain/multi-agent/handoffs) 以实现代理间的对话
+- 探索 [子代理模式](/oss/langchain/multi-agent/subagents-personal-assistant) 以实现集中式编排
+- 阅读 [多代理概述](/oss/langchain/multi-agent) 以比较不同的模式
+- 使用 [LangSmith](https://smith.langchain.com) 来调试和监控您的路由器

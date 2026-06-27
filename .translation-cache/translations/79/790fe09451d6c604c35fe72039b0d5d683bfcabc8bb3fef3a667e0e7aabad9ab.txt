@@ -3,16 +3,16 @@ title: 添加自定义身份验证
 sidebarTitle: 添加自定义身份验证
 ---
 
-本指南介绍如何向您的 LangSmith 应用程序添加自定义身份验证。本页面的步骤适用于云端部署和自托管部署。本页面不适用于在您自己的自定义服务器中单独使用 LangGraph 开源库。
+本指南向您展示如何向 LangSmith 应用程序添加自定义身份验证。本页的步骤适用于 [云](/langsmith/cloud) 和 [self-hosted](/langsmith/self-hosted) 部署。它不适用于在您自己的自定义服务器中独立使用 [LangGraph 开源库](/oss/langgraph/overview) 的情况。
 
 ## 向您的部署添加自定义身份验证
 
-要利用自定义身份验证并访问部署中的用户级元数据，请设置自定义身份验证以通过自定义身份验证处理程序自动填充 `config["configurable"]["langgraph_auth_user"]` 对象。然后您可以使用 `langgraph_auth_user` 键在图中访问此对象，以允许代理代表用户执行身份验证操作。
+要利用自定义身份验证并访问部署中的用户级元数据，请设置自定义身份验证以自动填充 `config["configurable"]["langgraph_auth_user"]` 对象通过自定义身份验证处理程序。然后您可以使用 `langgraph_auth_user` 密钥来 [允许代理代表用户执行已身份验证的操作](#enable-agent-authentication).
 
 1. 实现身份验证：
 
     <Note>
-    没有自定义 `@auth.authenticate` 处理程序，LangGraph 只能看到 API 密钥所有者（通常是开发者），因此请求不会按各个最终用户进行范围划分。要传播自定义令牌，您必须实现自己的处理程序。
+    如果没有自定义 `@auth.authenticate` 处理程序，LangGraph 只能看到 API 密钥所有者（通常是开发者），因此请求不会限定到各个最终用户。要传播自定义令牌，您必须实现自己的处理程序。
     </Note>
 
     ```python
@@ -41,10 +41,10 @@ sidebarTitle: 添加自定义身份验证
             # ... custom fields/secrets here
         }
     ```
-- 此处理程序接收请求（headers 等），验证用户，并返回一个至少包含 identity 字段的字典。
-- 您可以添加所需的任何自定义字段（例如 OAuth tokens、roles、org IDs 等）。
+  - 此处理程序接收请求（标头等），验证用户，并返回至少包含身份字段的字典。
+  - 您可以添加所需的任何自定义字段（例如 OAuth 令牌、角色、组织 ID 等）。
 
-2. 在您的 [`langgraph.json`](/langsmith/application-structure#configuration-file) 中，添加您的 auth 文件路径：
+2. 在您的 [`langgraph.json`](/langsmith/application-structure#configuration-file)中添加身份验证文件的路径：
 
     ```json highlight={7-9}
     {
@@ -58,10 +58,10 @@ sidebarTitle: 添加自定义身份验证
         }
     }
     ```
-3. 一旦你在服务器端设置好了身份验证，请求必须包含根据你所选方案所需的授权信息。假设你使用JWT令牌认证，你可以使用以下任意一种方法访问你的部署：
+3. 在服务器中设置身份验证后，请求必须根据您选择的方案包含所需的授权信息。假设您使用 JWT 令牌身份验证，您可以使用以下任一方法访问您的部署：
 
-<Tabs>
-<Tab title="Python Client">
+    <Tabs>
+        <Tab title="Python Client">
       ```python
       from langgraph_sdk import get_client
 
@@ -72,7 +72,7 @@ sidebarTitle: 添加自定义身份验证
       )
       threads = await client.threads.search()
       ```
-</Tab>
+        </Tab>
         <Tab title="Python RemoteGraph">
       ```python
       from langgraph.pregel.remote import RemoteGraph
@@ -85,7 +85,7 @@ sidebarTitle: 添加自定义身份验证
       )
       threads = await remote-graph.ainvoke(...)
       ```
-</Tab>
+        </Tab>
         <Tab title="JavaScript Client">
       ```javascript
       import { Client } from "@langchain/langgraph-sdk";
@@ -97,7 +97,7 @@ sidebarTitle: 添加自定义身份验证
       });
       const threads = await client.threads.search();
       ```
-</Tab>
+        </Tab>
         <Tab title="JavaScript RemoteGraph">
       ```javascript
       import { RemoteGraph } from "@langchain/langgraph/remote";
@@ -110,21 +110,21 @@ sidebarTitle: 添加自定义身份验证
       });
       const threads = await remoteGraph.invoke(...);
       ```
-</Tab>
+        </Tab>
         <Tab title="CURL">
       ```bash
       curl -H "Authorization: Bearer ${your-token}" http://localhost:2024/threads
       ```
-</Tab>
+        </Tab>
     </Tabs>
 
-    有关 RemoteGraph 的更多详细信息，请参阅[使用 RemoteGraph](/langsmith/use-remote-graph)指南。
+    有关 RemoteGraph 的更多详细信息，请参阅 [使用 RemoteGraph](/langsmith/use-remote-graph) guide.
 
 ## 启用代理身份验证
 
-完成[身份验证](#add-custom-authentication-to-your-deployment)后，平台会创建一个特殊的配置对象（`config`），该对象会被传递给 LangSmith 部署。此对象包含当前用户的信息，包括您从 `@auth.authenticate` 处理程序返回的所有自定义字段。
+在 [身份验证](#add-custom-authentication-to-your-deployment)之后，平台会创建一个特殊配置对象（`config`）传递给 LangSmith 部署。此对象包含当前用户的信息，包括您从 `@auth.authenticate` handler.
 
-要允许代理代表用户执行经过身份验证的操作，请在图中使用 `langgraph_auth_user` 键访问此对象：
+返回的任何自定义字段。为了允许代理代表用户执行已身份验证的操作，请在图形中使用 `langgraph_auth_user` key:
 
 ```python
 def my_node(state, config):
@@ -135,15 +135,15 @@ def my_node(state, config):
 ```
 
 <Note>
-从安全的密钥存储中获取用户凭证。不建议将密钥存储在图状态中。
+从安全密钥存储中获取用户凭据。不建议在图形状态中存储密钥。
 </Note>
 
 ### 为 Studio 授权用户
 
-默认情况下，如果在资源上添加了自定义授权，这也将适用于从 [Studio](/langsmith/studio) 进行的交互。如果需要，可以通过检查 [is_studio_user()](https://langchain-ai.github.io/langgraph/cloud/reference/sdk/python_sdk_ref/#langgraph_sdk.auth.types.StudioUser) 来不同地处理已登录的 Studio 用户。
+默认情况下，如果在资源上添加自定义授权，这也将适用于从 [Studio](/langsmith/studio)进行的交互。如果您希望不同处理已登录的 Studio 用户，可以检查 [is_studio_用户()。](https://langchain-ai.github.io/langgraph/cloud/reference/sdk/python_sdk_ref/#langgraph_sdk.auth.types.StudioUser).
 
 <Note>
-`is_studio_user` 是在 langgraph-sdk 0.1.73 版本中添加的。如果使用的是较旧版本，仍然可以检查 `isinstance(ctx.user, StudioUser)`。
+`is_studio_user` 在 langgraph-sdk 0.1.73 版本中添加了此功能。如果您使用的是旧版本，仍可以检查是否 `isinstance(ctx.user, StudioUser)`.
 </Note>
 
 ```python
@@ -166,9 +166,9 @@ async def add_owner(
     return filters
 ```
 
-仅在您想允许开发者访问部署在托管 LangSmith SaaS 上的图时使用此功能。
+仅在您希望允许开发者访问托管 LangSmith SaaS 上部署的图形时使用。
 
 ## 了解更多
 
-* [身份验证和访问控制](/langsmith/auth)
+* [身份验证与访问控制](/langsmith/auth)
 * [设置自定义身份验证教程](/langsmith/set-up-custom-auth)

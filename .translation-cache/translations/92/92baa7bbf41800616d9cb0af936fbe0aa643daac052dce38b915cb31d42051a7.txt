@@ -1,18 +1,18 @@
 ---
 title: 使用 Cloudflare Workers 部署
 sidebarTitle: Cloudflare Workers
-description: 在 Cloudflare Workers 上使用 Vite、React、Hono 和 Durable Objects 部署 LangChain 深度代理，并实现 SSE 重放。
+description: 使用 Vite、React、Hono 和 Durable Objects 在 Cloudflare Workers 上部署 LangChain 深度智能体，用于 SSE 回放。
 ---
 
-以下页面详细介绍了部署 LangChain **深度代理**的示例应用：[Cloudflare Workers](https://developers.cloudflare.com/workers/)：流式聊天 UI、子代理和线程历史记录，全部由实现为 Worker 路由（HTTP + SSE）的[代理流式协议](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)提供支持。React SPA 通过 [Workers Assets](https://developers.cloudflare.com/workers/static-assets/) 从同一 Worker 提供服务。无需单独的后端进程：一个 Worker 同时提供 SPA 和协议 API。
+以下页面详细说明了部署 LangChain **深度智能体** on [Cloudflare Workers](https://developers.cloudflare.com/workers/)的示例应用：流式聊天 UI、子智能体和线程历史记录，所有内容都由 [智能体流式协议](https://github.com/langchain-ai/agent-protocol/tree/main/streaming) 提供支持，该协议通过 Worker 路由（HTTP + SSE）实现。React SPA 通过 [Workers Assets](https://developers.cloudflare.com/workers/static-assets/)从同一个 Worker 提供服务。不需要单独的后端进程：一个 Worker 同时提供 SPA 和协议 API。
 
-来源：[部署 cookbook](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-cloudflare) 中的 [`js-cloudflare`](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-cloudflare)。
+Source: [`js-cloudflare`](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-cloudflare) 在部署指南中。
 
 ## 部署到 Cloudflare
 
 <Steps>
 
-<Step title="安装和构建">
+<Step title="Install and build">
 
 ```bash
 cd js-cloudflare
@@ -23,9 +23,7 @@ pnpm build
 
 </Step>
 
-<Step title="配置密钥">
-
-</Step>
+<Step title="Configure secrets">
 
 ```bash
 npx wrangler login
@@ -34,10 +32,7 @@ npx wrangler secret put OPENAI_API_KEY
 
 </Step>
 
-<Step title="部署">
-
-
-</Step>
+<Step title="Deploy">
 
 ```bash
 pnpm run deploy
@@ -47,25 +42,25 @@ pnpm run deploy
 
 </Steps>
 
-Wrangler 会一次性部署 Vite 构建产物（SPA）和 Worker 脚本。`nodejs_compat` 和 `nodejs_compat_populate_process_env` 已启用，以便 LangChain 可以从环境变量中读取 `OPENAI_API_KEY`。
+Wrangler 在一次部署中上传 Vite 构建产物（SPA）和 Worker 脚本。 `nodejs_compat` 和 `nodejs_compat_populate_process_env` 已启用，以便 LangChain 可以从 `OPENAI_API_KEY` 环境中读取。
 
-`wrangler.jsonc` 使用 `new_sqlite_classes` 注册了 `ThreadSession` [Durable Object](https://developers.cloudflare.com/durable-objects/)，这在 Workers **Free** 计划中是必需的。
+`wrangler.jsonc` 向 `ThreadSession` [Durable Object](https://developers.cloudflare.com/durable-objects/) 注册 `new_sqlite_classes`，这是在 Workers **Free** plan.
 
-## 必需的 API 端点
+## 上所必需的 API 端点
 
-该应用在 `/api/threads/...` 下暴露了 Agent Streaming Protocol。路由在 `worker/index.ts` 中使用 [Hono](https://hono.dev) 实现。
+该应用在 `/api/threads/...`下公开智能体流式协议。路由在 `worker/index.ts` 中使用 [Hono](https://hono.dev).
 
 ### 最小配置（流式聊天）
 
-| Method | Path | Purpose |
+| 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| `POST` | `/api/threads/:threadId/commands` | 接受协议命令（`run.start`、…）并启动 agent 运行 |
-| `POST` | `/api/threads/:threadId/stream` | 运行的协议事件 SSE 流 |
-| `GET` / `POST` | `/api/threads/:threadId/state` | 读取和引导检查点线程状态 |
+| `POST` | `/api/threads/:threadId/commands` | 接受协议命令（`run.start`，…）并启动智能体运行 |
+| `POST` | `/api/threads/:threadId/stream` | 运行协议事件的 SSE 流 |
+| `GET` / `POST` | `/api/threads/:threadId/state` | 读取并引导检查点线程状态 |
 
-### 可选配置（侧边栏）
+### 可选（侧边栏）
 
-| Method | Path | Purpose |
+| 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `GET` | `/api/threads` | 列出检查点已知的所有线程 |
 | `DELETE` | `/api/threads/:threadId` | 删除线程的会话和检查点 |
@@ -116,37 +111,37 @@ flowchart TB
   class agent output
 ```
 
-1. 引导线程状态（`GET`/`POST /state`）。
-2. 提交时，SDK 向 `/commands` 发送 `run.start` 并接收 `run_id`。
-3. Worker 启动图运行并将每个协议事件分散到线程的 **Durable Object** 中。
-4. SDK 订阅 `/stream`（SSE）。DO 重放缓冲事件并在实时帧期间保持连接，即使 Worker 隔离重启也不会中断。
-5. 子代理（`task`）运行发出命名空间事件，显示为 `stream.subagents`。
+1. 引导线程状态（`GET`/`POST /state`).
+2. 提交时，SDK 发送 `run.start` to `/commands` 并接收 `run_id`.
+3. Worker 启动图运行并将每个协议事件扇出到线程的 **Durable Object**.
+4. SDK 订阅 `/stream` （SSE）。DO 回放缓冲的事件并在实时帧期间保持连接，即使跨 Worker 隔离重启。
+5. 子智能体（`task`）运行发出的命名空间事件作为 `stream.subagents`.
 
 ## Cloudflare 后端设计
 
 | 关注点 | 实现 |
 | --- | --- |
-| 前端 | Vite + React SPA（`src/`） |
-| API 层 | `worker/index.ts` 中的 Hono 路由 |
-| 运行时 | Workers V8 + `nodejs_compat` |
-| SSE 重放 | 每线程 **Durable Object**（`ThreadSession`） |
+| 前端 | Vite + React SPA（`src/`) |
+| API 层 | `worker/index.ts` |
+中的 Hono 路由 | 运行时 | Workers V8 + `nodejs_compat` |
+| SSE 回放 | 每线程 **Durable Object** (`ThreadSession`) |
 | Agent 运行 | Worker 隔离；协议事件 POST 到 DO |
-| 静态资源 | Workers Assets（`wrangler.jsonc` → `assets`） |
+| 静态资源 | Workers Assets (`wrangler.jsonc` → `assets`) |
 | 密钥 | `wrangler secret` / `.dev.vars` |
-| 本地开发 | `vite`（Cloudflare Vite 插件运行 Worker 运行时） |
+| 本地开发 | `vite` （Cloudflare Vite 插件运行 Worker 运行时）|
 
-**Worker**（agent + 检查点器）和 **Durable Object**（SSE 事件日志）之间的分离是 Cloudflare 上的主要设计选择。Worker 隔离是临时的，因此重放缓冲区存在于 Durable Objects 中而不是进程内存中。
+之间的划分 **Worker** （agent + checkpointer）和 **Durable Object** （SSE 事件日志）是 Cloudflare 的主要设计选择。Worker 隔离是临时的，因此重放缓冲区存储在 Durable Objects 中，而不是进程内存中。
 
 ## 生产环境持久化
 
-开箱即用，agent 使用内存中的 `MemorySaver` 检查点器（`worker/agent/index.ts`）。这适用于本地开发和演示，但在 Cloudflare 上（多个隔离、冷启动）对话状态在部署或隔离之间**不是持久化的**。
+开箱即用，agent 使用内存 `MemorySaver` checkpointer（`worker/agent/index.ts`）。这适用于本地开发和演示，但在 Cloudflare（多个隔离、冷启动）对话状态 **不是持久化的** 跨部署或隔离。
 
 对于生产环境：
 
-1. 换用[持久化检查点器](/oss/langgraph/checkpointers#checkpointer-libraries)（例如通过 Hyperdrive 的 Postgres，或自定义 DO 支持的存储）。
-2. 保持每线程 Durable Objects 用于 SSE 重放（或将事件日志持久化到 DO 存储 / KV 以实现长期重连）。
+1. 换入 [持久化 checkpointer](/oss/langgraph/checkpointers#checkpointer-libraries) （例如通过 Hyperdrive 的 Postgres，或自定义 DO 支持的存储）。
+2. Keep per-thread Durable Objects for SSE replay (or persist the event log to DO storage / KV for long-lived reconnects).
 
-更多信息请参见[检查点器库](/oss/langgraph/checkpointers#checkpointer-libraries)和[添加内存 / 持久化](/oss/langgraph/add-memory)。
+更多信息，请参阅 [checkpointer 库](/oss/langgraph/checkpointers#checkpointer-libraries) 和 [add memory / persistence](/oss/langgraph/add-memory).
 
 ## 本地开发
 
@@ -156,7 +151,7 @@ pnpm install
 pnpm dev
 ```
 
-打开 [http://localhost:5173](http://localhost:5173)。Cloudflare Vite 插件在开发期间会在 Workers 运行时中运行你的 Worker，因此 `/api/*` 路由表现得像生产环境一样。
+打开 [http://localhost:5173](http://localhost:5173)。Cloudflare Vite 插件在开发期间在 Workers 运行时运行你的 Worker，因此 `/api/*` 路由行为与生产环境相同。
 
 ```bash
 pnpm build    # production build (client + worker)
@@ -166,17 +161,17 @@ pnpm typecheck
 
 ## 项目布局
 
-- `src/components/` — 聊天 UI（`ChatApp`、`Chat`、`MessageThread`、`Subagents`、`ThreadHistory`、…）。
-- `src/lib/chat/threads-client.ts` — 浏览器线程引导和侧边栏辅助函数。
-- `worker/agent/` — 深度代理（`createDeepAgent`），包含 `researcher` 和 `math-whiz` 子代理以及模拟工具。
-- `worker/server/` — 协议辅助函数：`runs.ts`（在 Worker 上启动运行）、`threads.ts`（检查点状态）、`serialize.ts`、`registry.ts`。
-- `worker/durable-objects/thread-session.ts` — 每个线程的 SSE 事件日志（`StreamChannel` + `matchesSubscription`）。
+- `src/components/` — 聊天 UI（`ChatApp`, `Chat`, `MessageThread`, `Subagents`, `ThreadHistory`, …).
+- `src/lib/chat/threads-client.ts` — 浏览器线程引导和侧边栏助手。
+- `worker/agent/` — 深度 agent（`createDeepAgent`）包含 `researcher` 和 `math-whiz` subagent 和模拟工具。
+- `worker/server/` — 协议助手： `runs.ts` （start 在 Worker 上运行）， `threads.ts` （基于 checkpointer 的状态）， `serialize.ts`, `registry.ts`.
+- `worker/durable-objects/thread-session.ts` — 每线程 SSE 事件日志（`StreamChannel` + `matchesSubscription`).
 - `worker/index.ts` — Hono 应用：协议路由 + Worker 导出。
-- `wrangler.jsonc` — Worker 配置：`nodejs_compat`、Durable Object 绑定、SPA 资源路由（`run_worker_first: ["/api/*"]`）。
+- `wrangler.jsonc` — Worker 配置： `nodejs_compat`、Durable Object 绑定、SPA 资产路由（`run_worker_first: ["/api/*"]`).
 
-## 另请参见
+## 另请参阅
 
 - [框架和平台概述](/langsmith/deploy-frameworks-and-platforms)
-- [Agent Streaming Protocol](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)
+- [Agent 流式传输协议](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)
 - [Cloudflare Workers](https://developers.cloudflare.com/workers/)
 - [Durable Objects](https://developers.cloudflare.com/durable-objects/)

@@ -1,32 +1,32 @@
 ---
 title: Agent Server 中的 A2A 端点
 sidebarTitle: Agent Server 中的 A2A 端点
-description: 使用 A2A 协议在 LangSmith 中实现代理间通信和分布式追踪。
+description: 使用 A2A 协议实现智能体间通信，并在 LangSmith 中进行分布式追踪。
 ---
 
-[Agent2Agent (A2A)](https://a2a-protocol.org/latest/) 是 Google 制定的用于实现对话式 AI 代理之间通信的协议。[LangSmith 实现了 A2A 支持](https://docs.langchain.com/langsmith/server-api-ref#tag/a2a/post/a2a/{assistant_id})，允许您的代理通过标准化协议与其他 A2A 兼容代理进行通信。
+[智能体间通信 (A2A)](https://a2a-protocol.org/latest/) 是 Google 推出的用于实现对话式 AI 智能体之间通信的协议。 [LangSmith 实现了 A2A 支持](https://docs.langchain.com/langsmith/server-api-ref#tag/a2a/post/a2a/{assistant_id})，允许您的智能体通过标准化协议与其他 A2A 兼容的智能体进行通信。
 
-A2A 端点在 [Agent Server](/langsmith/agent-server) 中位于 `/a2a/{assistant_id}`。
+A2A 端点在以下位置可用 [Agent Server](/langsmith/agent-server) at `/a2a/{assistant_id}`.
 
 ## 支持的方法
 
 Agent Server 支持以下 A2A RPC 方法：
 
 - **message/send**：向助手发送消息并接收完整响应
-- **message/stream**：发送消息并使用服务器发送事件 (SSE) 实时流式传输响应
-- **tasks/get**：检索先前创建的任务的状态和结果
+- **message/stream**：使用服务器发送事件 (SSE) 发送消息并实时流式传输响应
+- **tasks/get**：获取之前创建任务的状态和结果
 
-## 代理卡片发现
+## 智能体卡片发现
 
-每个助手都会自动公开一个 A2A 代理卡片，其中描述了其功能并提供了其他代理连接所需的信息。您可以使用以下方式检索任何助手的代理卡片：
+每个助手自动暴露一个 A2A 智能体卡片，用于描述其功能并提供其他智能体连接所需的信息。您可以使用以下方式获取任何助手的智能体卡片：
 
 ```
 GET /.well-known/agent-card.json?assistant_id={assistant_id}
 ```
 
-Agent card 包含助手的名称、描述、可用技能、支持的消息输入/输出模式以及用于通信的 A2A 端点 URL。
+The agent card includes the assistant's name, description, available skills, supported input/output modes, and the A2A endpoint URL for communication.
 
-## 要求
+## 需求
 
 要使用 A2A，请确保已安装以下依赖项：
 
@@ -38,27 +38,27 @@ Agent card 包含助手的名称、描述、可用技能、支持的消息输入
 pip install "langgraph-api>=0.4.21"
 ```
 
-## 使用概述
+## 用法概述
 
-要启用 A2A：
+启用 A2A：
 
-* 升级至 langgraph-api>=0.4.21。
-* 使用基于消息的状态结构部署您的代理。
-* 使用该端点与其他兼容 A2A 的代理建立连接。
+* 升级到使用 langgraph-api>=0.4.21。
+* 使用基于消息的状态结构部署您的智能体。
+* 使用该端点与其他 A2A 兼容的智能体建立连接。
 
-## 创建兼容 A2A 的代理
+## 创建 A2A 兼容的智能体
 
-本示例创建了一个兼容 A2A 的代理，该代理使用 OpenAI API 处理传入消息并维护对话状态。代理定义了基于消息的状态结构并处理 A2A 协议的消息格式。
+此示例创建一个 A2A 兼容的智能体，使用 OpenAI 的 API 处理传入消息并维护对话状态。智能体定义了基于消息的状态结构并处理 A2A 协议的消息格式。
 
-要兼容 [A2A "text" parts](https://a2a-protocol.org/dev/specification/#651-textpart-object)，代理必须在状态中包含 `messages` 键。
+要兼容 [A2A "文本"部分](https://a2a-protocol.org/dev/specification/#651-textpart-object)，智能体必须在状态中包含 `messages` 键。
 
-A2A 协议使用两个标识符来维护对话连续性：
-* `contextId`：将消息分组为一个对话线程（类似于会话 ID）
+A2A 协议使用两个标识符来维持对话连续性：
+* `contextId`：将消息分组到对话线程中（类似于会话 ID）
 * `taskId`：标识该对话中的每个单独请求
 
-首次消息时省略 `contextId` 和 `taskId`——代理将生成并返回它们。对于对话中的所有后续消息，请包含前一次响应中的 `contextId` 和 `taskId` 以保持线程连续性。
+在第一条消息中，省略 `contextId` 和 `taskId`  - 智能体会生成并返回它们。对于对话中的所有后续消息，请包含 `contextId` 和 `taskId` 从之前的响应中获取以维持线程连续性。
 
-**LangSmith 追踪：** Langsmith 部署的 A2A 端点会自动将 A2A `contextId` 转换为 `thread_id` 用于 LangSmith 追踪，将对话中的所有消息归入单个线程。
+**LangSmith 追踪：** LangSmith 部署的 A2A 端点自动转换 A2A `contextId` to `thread_id` 用于 LangSmith 追踪，将对话中的所有消息分组到单个线程下。
 
 例如：
 
@@ -148,11 +148,11 @@ graph = (
 )
 ```
 
-## Agent 间通信
+## 智能体间通信
 
-一旦您的 agents 通过 `langgraph dev` 在本地运行或[部署到生产环境](/langsmith/deployment)，您就可以使用 A2A 协议来实现它们之间的通信。
+一旦您的智能体通过 `langgraph dev` or [在本地运行或部署到生产环境](/langsmith/deployment)，您可以使用 A2A 协议促进它们之间的通信。
 
-本示例演示了两个 agents 如何通过向彼此的 A2A 端点发送 JSON-RPC 消息来进行通信。该脚本模拟了一个多轮对话，其中每个 agent 处理对方的响应并继续对话。
+此示例演示了两个代理如何通过向彼此的 A2A 端点发送 JSON-RPC 消息进行通信。该脚本模拟了一个多轮对话，其中每个代理处理对方的响应并继续对话。
 
 ```python
 #!/usr/bin/env python3
@@ -249,33 +249,29 @@ if __name__ == "__main__":
     asyncio.run(simulate_conversation())
 ```
 
-<fragment>
-
-完整的工作示例，请参见：
-- [两个 LangGraph 代理进行通信](https://github.com/langchain-samples/A2A-langgraph) - 使用 A2A 协议的两个 LangGraph 代理示例
-- [Google ADK 代理与 LangChain 代理](https://github.com/langchain-samples/A2A-google-adk) - Google ADK 代理使用 A2A 协议与 LangChain 代理交互的示例
+完整的工作示例请参见：
+- [两个 LangGraph 代理通信](https://github.com/langchain-samples/A2A-langgraph) - 两个使用 A2A 协议的 LangGraph 代理示例
+- [Google ADK 代理与 LangChain 代理](https://github.com/langchain-samples/A2A-google-adk) - Google ADK 代理与使用 A2A 协议的 LangChain 代理交互示例
 
 ## 分布式追踪
 
-当多个代理通过 A2A 进行通信时，LangSmith 可以将它们的所有[追踪](/langsmith/observability-concepts#traces)分组到单个[线程](/langsmith/observability-concepts#threads)中，从而为您提供整个多代理对话的统一视图。
+当多个代理通过 A2A 通信时，LangSmith 可以将它们的 [追踪记录](/langsmith/observability-concepts#traces) 分组到单个 [线程](/langsmith/observability-concepts#threads)中，这使您可以统一查看整个多代理对话。
 
-### contextId 如何映射到 thread_id
+### contextId 如何映射到线程_id
 
-Agent Server A2A 端点会自动将 A2A `contextId` 转换为 LangSmith 追踪的 `thread_id`。这意味着对话中的每条消息（跨所有参与代理）都会在 LangSmith 中分组到同一个线程下，无需您进行任何额外配置。
+代理服务器 A2A 端点自动将 A2A `contextId` to `thread_id` 用于 LangSmith 追踪。这意味着对话中的每条消息（跨所有参与的代理）都被分组到 LangSmith 的同一线程中，无需您进行任何额外配置。
 
-工作流程如下：
+流程如下：
 
-1. 在第一条消息中，客户端省略 `contextId`。服务器生成一个并在响应中返回。
-2. 客户端在所有后续消息中传递 `contextId` 以保持对话连续性。
-3. Agent Server 将 `contextId` 映射到 LangSmith [元数据](/langsmith/add-metadata-tags)中的 `thread_id`，因此所有轮次都显示在同一线程中。
+1. 在第一条消息时，客户端省略 `contextId`。服务器生成一个并在响应中返回。
+1. 客户端在所有后续消息中传递 `contextId` 以维持对话连续性。
+1. 代理服务器将 `contextId` to `thread_id` 映射到 LangSmith [元数据](/langsmith/add-metadata-tags)中，因此所有轮次都出现在同一线程中。
 
 ### 跨多个代理的追踪
 
-当来自不同框架的代理通过 A2A 进行通信时，您可以通过在所有代理之间共享相同的 `thread_id` 来统一 LangSmith 中的追踪。将第一个代理返回的 `contextId` 用作所有后续请求的 `thread_id`。
+当来自不同框架的代理通过 A2A 通信时，您可以通过在所有代理之间共享相同的 `thread_id` 来统一它们在 LangSmith 中的追踪。使用 `contextId` 第一个代理返回的 `thread_id` 作为所有后续请求的
 
-以下代码片段演示了关键概念。有关两个代理的完整可运行实现，请参阅 [Google ADK + LangChain 示例](https://github.com/langchain-samples/A2A-google-adk/blob/main/test_agent_conversation.py)。
-
-</fragment>
+以下代码片段演示了关键概念。对于两个代理的完整可运行实现，请参阅 [Google ADK + LangChain 示例](https://github.com/langchain-samples/A2A-google-adk/blob/main/test_agent_conversation.py).
 
 ```python
 import asyncio
@@ -363,15 +359,15 @@ asyncio.run(run_conversation(
 ))
 ```
 
-**1. 构建消息**：在后续请求中，在 `message` 对象中包含 `contextId` 和 `taskId`，以便服务器可以将它们与正在进行的会话关联。在第一条消息中省略它们，因为服务器会生成 `contextId` 并在响应中返回。
+**1. 构建消息**：在后续轮次的消息中包含 `contextId` 和 `taskId` 在 `message` 对象中，以便服务器可以将它们与正在进行的对话关联起来。在第一条消息时省略它们，因为服务器会生成一个 `contextId` 并在响应中返回。
 
-**2. 在 metadata 中设置 thread_id**：在 JSON-RPC payload 的顶层 `metadata` 字段中传递 `thread_id`，而不是在 `params` 内部。
+**2. 在元数据中设置线程_id**：在 JSON-RPC 负载的顶层 `thread_id` 字段中传递 `metadata` ，而不是放在 `params`.
 
-**3. 在多个 agent 之间共享 thread_id**：在第一条消息之前生成一个随机的 `thread_id`。一旦服务器返回 `contextId`，将其用作所有后续请求的 `thread_id`，以保持 A2A 会话上下文和 LangSmith 线程同步。向每个 agent 传递相同的 `thread_id`，以便所有追踪都被分组到同一个线程中。
+**3. 在代理之间共享线程_id**：在第一条消息之前生成一个随机 `thread_id` 。一旦服务器返回一个 `contextId`，就使用它作为 `thread_id` 用于所有后续请求，使 A2A 对话上下文和 LangSmith 线程保持同步。传递相同的 `thread_id` 给每个代理，以便所有追踪被分组到一个线程中。
 
-### 在非 LangGraph agent 中接收 thread_id
+### 在非 LangGraph 代理中接收线程_ID
 
-[上一节](#tracing-across-multiple-agents) 涵盖了客户端——发送消息时传播 `thread_id`。如果你的某个 agent 不是基于 LangGraph 构建的，它也需要在接收端提取并附加 `thread_id`，以便其追踪落入同一个 LangSmith 线程中。使用 `langsmith.integrations.otel.configure()` 设置自动追踪，并从传入的 A2A 请求元数据中提取 `thread_id`，将追踪分组到同一线程中。
+前 [上一节](#tracing-across-multiple-agents) 涵盖了客户端——发送消息时传播 `thread_id` 。如果您的一个代理不是基于 LangGraph 构建的，它还需要在接收端提取并附加 `thread_id` ，以便其追踪落在同一个 LangSmith 线程中。使用 `langsmith.integrations.otel.configure()` 设置自动追踪，并从 `thread_id` 中提取传入的 A2A 请求元数据，以将追踪分组到同一线程中。
 
 ```python
 from fastapi import FastAPI, Request
@@ -411,19 +407,19 @@ async def set_thread_id_middleware(request: Request, call_next):
         return await call_next(request)
 ```
 
-在此中间件之后，在 `app` 上注册您的代理路由。
+在此中间件之后注册您的代理路由 `app` 。
 
 <Note>
-在您的环境中设置 `LANGSMITH_API_KEY`（以及可选的 `LANGSMITH_PROJECT`）以启用追踪。对话中的所有代理应使用相同的项目，以便其追踪可以一起查看。
+在您的环境中设置 `LANGSMITH_API_KEY` 和可选的 `LANGSMITH_PROJECT` 以启用追踪。对话中的所有代理应使用相同的项目，以便其追踪可见。
 </Note>
 
 ### 在 LangSmith 中查看追踪
 
-运行多代理对话后，打开 [LangSmith UI](https://smith.langchain.com) 并导航至 **Threads**。所有参与代理的所有轮次将显示在单个线程下，由共享的 `thread_id` 标识。
+运行多代理对话后，打开 [LangSmith UI](https://smith.langchain.com) 并导航到 **线程**。所有参与代理的所有轮次将显示在单个线程下，由共享的 `thread_id`.
 
 ## 禁用 A2A
 
-要禁用 A2A 端点，请在您的 `langgraph.json` 配置文件中将 `disable_a2a` 设置为 `true`：
+要禁用 A2A 端点，请在 `disable_a2a` to `true` 中设置 `langgraph.json` ：
 
 ```json
 {

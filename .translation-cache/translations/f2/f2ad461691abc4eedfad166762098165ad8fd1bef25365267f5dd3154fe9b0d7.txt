@@ -1,38 +1,35 @@
 ---
-title: 追踪 LLM 应用教程
+title: 追踪 LLM 应用程序教程
 sidebarTitle: 教程
-description: 在原型设计、Beta 测试和生产阶段为 LLM 应用添加 LangSmith 可观测性。
+description: 在原型设计、beta 测试和生产阶段为 LLM 应用程序添加 LangSmith 可观测性。
 icon: "school"
 ---
 
 import project from '/snippets/langsmith/trace-ingestion-project.mdx';
 
-在本教程中，您将构建一个使用检索增强生成（RAG）的客户支持聊天机器人，并在开发的每个阶段添加 LangSmith 可观测性，从早期原型设计到生产环境。
+在本教程中，您将使用检索增强生成（RAG）构建一个客户支持聊天机器人，并在开发的每个阶段添加 LangSmith 可观测性，从早期原型设计到生产环境。
 
-学完本教程后，您将了解如何：
+完成本教程后，您将学会：
 
-- 跟踪单个 LLM 调用和完整的应用程序管道。
+- 追踪单个 LLM 调用和完整应用程序管道。
 - 收集和查询用户反馈。
-- 记录元数据并将其用于过滤和 A/B 测试。
-- 使用监控仪表板跟踪生产环境性能。
+- Log metadata and use it for filtering and A/B testing.
+- 使用监控仪表板追踪生产环境性能。
 
-该应用程序将检索相关的文档片段，并用它们来回答用户问题。本教程中的检索器是模拟的；在实际应用中，您可以用向量搜索或类似技术替换它。
+该应用程序将检索相关文档片段并使用它们来回答用户问题。本教程中的检索器是模拟的；在实际应用程序中，您会用向量搜索或类似方法替换它。
 
 ## 前提条件
 
-在开始之前，确保您已具备：
+在开始之前，请确保您拥有：
 
-- **LangSmith 账户**：在 [smith.langchain.com](https://smith.langchain.com) 注册或登录。
-- **LangSmith API 密钥**：按照[创建 API 密钥](/langsmith/create-account-api-key)指南操作。
-- **OpenAI API 密钥**：从 [OpenAI 仪表板](https://platform.openai.com/account/api-keys)生成。
-- **LangSmith CLI**（可选）：安装后可在终端检查追踪记录。具体说明请参考 [LangSmith CLI](/langsmith/langsmith-cli)。
+- **一个 LangSmith 账户**：在注册或登录 [smith.langchain.com](https://smith.langchain.com).
+- **一个 LangSmith API 密钥**：请按照 [创建 API 密钥](/langsmith/create-account-api-key) guide.
+- **一个 OpenAI API 密钥**：从 [OpenAI 仪表板](https://platform.openai.com/account/api-keys).
+- **LangSmith CLI** （可选）：安装后可从终端检查追踪记录。有关说明，请参阅 [LangSmith CLI](/langsmith/langsmith-cli).
 
-安装所需的软件包：
+安装所需的包：
 
 <CodeGroup>
-
-
-</fragment>
 
 ```bash Python
 pip install langsmith openai
@@ -47,11 +44,11 @@ npm install -D typescript tsx
 
 ## 原型设计
 
-从一开始设置可观测性可以让你更快地迭代。你可以看到发送到模型的内容、返回的内容以及时间花费在哪里，而无需添加打印语句或运行调试器。
+从一开始就设置好可观测性可以让您更快地进行迭代。您可以准确看到发送给模型的内容、返回的内容以及时间花费在哪里，而无需添加打印语句或运行调试器。
 
-### 设置环境
+### 设置您的环境
 
-在 shell 中设置以下环境变量：
+在您的 shell 中设置以下环境变量：
 
 ```bash
 export LANGSMITH_TRACING=true
@@ -62,18 +59,16 @@ export OPENAI_API_KEY="<your-openai-api-key>"
 <project />
 
 <Note>
-你可能会在其他地方看到这些变量被引用为 `LANGCHAIN_*`。两种方式都可以使用，但 `LANGSMITH_TRACING` 和 `LANGSMITH_API_KEY` 是推荐的名称。
+您可能会在其他地方看到这些变量被引用为 `LANGCHAIN_*` ，两者都可以使用，但 `LANGSMITH_TRACING` 和 `LANGSMITH_API_KEY` 是推荐的名称。
 </Note>
 
 ### 追踪 LLM 调用
 
-首先追踪你的 OpenAI 调用，也就是模型实际被调用的地方。这样可以立即了解你的应用发送的提示词和模型返回的响应。
+首先追踪您的 OpenAI 调用，这是模型实际被调用的地方。这让您能够立即了解应用程序发送的提示词和模型返回的响应。
 
-使用 @[`wrap_openai`] (Python) 或 [`wrapOpenAI`](https://reference.langchain.com/javascript/langsmith/wrappers/wrapOpenAI) (TypeScript) 包装 OpenAI 客户端。创建一个名为 `app.py`（或 `app.ts`）的文件，包含以下代码：
+使用 @[`wrap_openai`](Python) 或 [`wrapOpenAI`](https://reference.langchain.com/javascript/langsmith/wrappers/wrapOpenAI) (TypeScript) 包装 OpenAI 客户端。创建一个名为 `app.py` (or `app.ts`的文件，包含以下代码：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from openai import OpenAI
@@ -147,11 +142,15 @@ async function supportBot(question: string): Promise<string> {
 })();
 ```
 
+</CodeGroup>
+
 调用 `support_bot("How many users can I have on the Starter plan?")` 会生成 OpenAI 调用的追踪记录。
 
 ### 追踪整个管道
 
-追踪 LLM 调用很有用，但是追踪完整管道（包括检索）可以让你完整了解应用程序的行为。将 @[`@traceable`]（Python）或 [`traceable`](https://reference.langchain.com/javascript/langsmith/traceable)（TypeScript）添加到主函数：
+追踪 LLM 调用很有用，但追踪完整管道（包括检索）可以让您全面了解应用程序的行为。在主函数中添加 @[`@traceable`](Python) 或 [`traceable`](https://reference.langchain.com/javascript/langsmith/traceable) (TypeScript)：
+
+<CodeGroup>
 
 ```python Python
 from openai import OpenAI
@@ -230,29 +229,29 @@ const supportBot = traceable(async function supportBot(question: string): Promis
 
 </CodeGroup>
 
-调用 `support_bot("How many users can I have on the Starter plan?")` 现在会生成完整 RAG 管道的跟踪记录。
+调用 `support_bot("How many users can I have on the Starter plan?")` 现在会生成完整 RAG 管道的追踪记录。
 
 <img
     className="block dark:hidden"
     src="/langsmith/images/trace-whole-pipeline.png"
-    alt="LangSmith UI 显示一个包含外部应用程序跨度和一个嵌套 LLM 调用跨度的跟踪记录。"
+    alt="LangSmith UI 显示一个追踪，包含一个外部应用程序跨度和一个嵌套的 LLM 调用跨度。"
 />
 
 <img
     className="hidden dark:block"
     src="/langsmith/images/trace-whole-pipeline-dark.png"
-    alt="LangSmith UI 显示一个包含外部应用程序跨度和一个嵌套 LLM 调用跨度的跟踪记录。"
+    alt="LangSmith UI 显示一个追踪，包含一个外部应用程序跨度和一个嵌套的 LLM 调用跨度。"
 />
 
-### 从终端检查跟踪记录
+### 从终端检查您的追踪
 
-如果您已安装 [LangSmith CLI](/langsmith/langsmith-cli)，无需打开 UI 即可列出项目的最近跟踪记录：
+如果您安装了 [LangSmith CLI](/langsmith/langsmith-cli)，无需打开 UI 即可列出您项目的最近追踪：
 
 ```bash
 langsmith trace list --project <your-project> --limit 5
 ```
 
-要查看特定追踪的完整运行层级结构及输入/输出：
+To view the full run hierarchy and inputs/outputs for a specific trace:
 
 ```bash
 langsmith trace get <trace-id> --full
@@ -260,15 +259,13 @@ langsmith trace get <trace-id> --full
 
 ## Beta 测试
 
-一旦您的应用在原型设计阶段运行良好，您就可以将其发布给一小部分真实用户。在此阶段，您通常无法确切知道用户将如何与应用交互，因此您需要更丰富的可观测性。您不仅想了解应用做了什么，还想了解用户的反应。
+一旦您的应用在原型设计阶段运行良好，您就可以将其发布给一小部分真实用户。在这个阶段，您通常无法准确了解用户将如何与您的应用互动，因此您需要更丰富的可观测性。您不仅想了解应用做了什么，还想了解用户对它的反馈。
 
 ### 收集反馈
 
-将[用户反馈](/langsmith/attach-user-feedback)链接到特定追踪，让您能够识别哪些回复有帮助或无帮助。从上一步更新 `app.py`（或 `app.ts`），为每次调用添加运行 ID，并在之后附加评分：
+链接 [用户反馈](/langsmith/attach-user-feedback) 到特定追踪，让您能够识别哪些响应有帮助或无帮助。更新 `app.py` (or `app.ts`从上一个步骤添加一个 run ID 到每次调用，并在之后附加分数：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from openai import OpenAI
@@ -361,20 +358,18 @@ const supportBot = traceable(async function supportBot(question: string): Promis
 </CodeGroup>
 
 <Note>
-在生产环境中，这两个部分会位于不同的位置：`support_bot` 调用和 `run_id` 保留在您的应用中，而 `create_feedback` 移至接收用户反馈的端点（例如 `/feedback` API 路由）。`run_id` 在两者之间传递，以便将反馈链接到正确的追踪。
+在生产环境中，这两个部分将位于不同的位置： `support_bot` 调用与 `run_id` 保留在您的应用中，而 `create_feedback` 移动到接收用户反馈的任何端点（例如，一个 `/feedback` API 路由）。 `run_id` 从一个传递到另一个，以便反馈可以链接到正确的追踪。
 </Note>
 
-反馈会显示在 UI 中检查运行时 **Feedback** 标签页中。然后您可以使用 **Runs** 表中的过滤控件按反馈分数筛选运行。
+反馈显示在 **反馈** 当您在 UI 中检查运行时可以使用过滤控件通过反馈分数过滤运行 **运行** table.
 
 ### 记录元数据
 
-[元数据](/langsmith/add-metadata-tags) 允许您使用有助于筛选和比较的属性标记运行。例如，使用的模型版本或发出请求的用户。
+[元数据](/langsmith/add-metadata-tags) 允许您使用对过滤和比较有用的属性标记运行。例如，使用的模型版本或发出请求的用户。
 
-以下示例追踪检索器（使用 `run_type="retriever"`）和主函数（带有模型名称的 `metadata` 属性）：
+以下示例追踪检索器（使用 `run_type="retriever"`）和主函数（使用 `metadata` 模型名称属性）：
 
 <CodeGroup>
-
-</fragment>
 
 ```python Python
 from openai import OpenAI
@@ -460,57 +455,58 @@ const supportBot = traceable(
 
 </CodeGroup>
 
-两个元数据值都会显示在跟踪中。您可以使用 **Runs** 表中的筛选控件按元数据筛选运行。
+两个元数据值都显示在追踪上。您可以使用 **运行** table.
 
-## 生产环境
+## 生产
 
-有了强大的可观测性保障，您可以自信地将应用发布到生产环境。在生产环境中，流量会大幅增加，无法逐一检查每条跟踪。LangSmith 提供监控工具，帮助您了解整体行为，并在出现异常时深入分析。
+有了强大的可观测性，您可以自信地发布到生产环境。在生产环境中，流量显著增加，无法逐一检查每个追踪。LangSmith 提供监控工具来帮助您了解聚合行为，并在出现问题时进行深入分析。
 
 ### 监控
 
-在 UI 侧边栏中选择 **Monitoring**，然后从左上角的下拉菜单中选择一个跟踪项目。图表显示项目随时间变化的关键指标，包括跟踪数量、延迟、错误率、反馈分数和成本。有关可用指标和图表配置的更多信息，请参阅 [Dashboards](/langsmith/dashboards)。
+在 UI 侧边栏中，选择 **监控**，然后从左上角的下拉菜单中选择一个追踪项目。图表显示项目随时间变化的关键指标，包括追踪数量、延迟、错误率、反馈分数和成本。有关可用指标和图表配置的更多信息，请参阅 [仪表板](/langsmith/dashboards).
 
 <img
     className="block dark:hidden"
     src="/langsmith/images/monitoring-page-light.png"
-    alt="LangSmith UI 显示监控页面，包含跟踪数量图表和可用标签页。"
+    alt="LangSmith UI 显示监控页面，包含追踪数量图表和可用标签页。"
 />
 
 <img
     className="hidden dark:block"
     src="/langsmith/images/monitoring-page-dark.png"
-    alt="LangSmith UI 显示监控页面，包含跟踪数量图表和可用标签页。"
+    alt="LangSmith UI 显示监控页面，包含追踪计数图表和可用标签页。"
 />
 
-### A/B 测试
+### A/B testing
 
 <Note>
-分组功能需要在给定的元数据键下至少有两个不同的值。</Note>
+分组功能要求给定元数据键至少有兩個不同的值。
+</Note>
 
-由于您已经记录了 `llm` 元数据属性，因此可以按该属性对监控图表进行分组，以比较模型随时间的性能表现。从 UI 侧边栏的 **Monitoring** 中，点击左上角的 **Group by**，从下拉菜单中选择 **Metadata**，然后选择 `llm`。图表将更新为按该属性分组显示结果。有关分组和自定义图表的更多信息，请参阅 [Dashboards](/langsmith/dashboards)。
+因为您一直在记录 `llm` 元数据属性，您可以通过该属性对监控图表进行分组，以比较模型性能随时间的变化。从 **监控** 在 UI 侧边栏中，点击 **分组依据** 在左上角，选择 **元数据** 从下拉菜单中，然后选择 `llm`。图表将更新为显示按该属性分组的结果。有关分组和自定义图表的更多信息，请参阅 [仪表板](/langsmith/dashboards).
 
-### 深入分析
+### 深入查看
 
-当监控图表显示异常情况时，点击数据点可以冻结工具提示，然后点击指标名称（例如 **Input**）可跳转到该时间窗口的筛选后运行表。有关搜索和筛选运行的更多信息，请参阅 [Filter traces](/langsmith/filter-traces-in-application)。
+当监控图表显示意外内容时，点击数据点以冻结工具提示，然后点击指标名称（例如， **输入**）跳转到该时间窗口的筛选运行表。有关搜索和筛选运行的更多信息，请参阅 [筛选追踪](/langsmith/filter-traces-in-application).
 
 <img
     className="block dark:hidden"
     src="/langsmith/images/drilldown-monitoring-light.png"
-    alt="LangSmith UI 显示监控页面，Input Tokens 图表上的特定数据点已高亮显示。"
+    alt="LangSmith UI 显示监控页面，其中 Input Tokens 图表上的特定点已突出显示。"
 />
 
 <img
     className="hidden dark:block"
     src="/langsmith/images/drilldown-monitoring-dark.png"
-    alt="LangSmith UI 显示监控页面，Input Tokens 图表上的特定数据点已高亮显示。"
+    alt="LangSmith UI 显示监控页面，其中 Input Tokens 图表上的特定点已突出显示。"
 />
 
 ## 总结
 
-在本教程中，您在整个开发生命周期中为应用添加了 LangSmith 可观测性。同样的跟踪设置不仅能帮助您在原型设计阶段快速迭代，在生产环境中也将继续发挥价值。您将能够洞察单条跟踪和整体性能趋势。
+在本教程中，您在整个应用开发生命周期中添加了 LangSmith 可观测性。在原型设计期间帮助您快速迭代的相同追踪设置将在生产环境中继续提供价值。您将能够看到单个追踪和聚合性能趋势。
 
-更多信息请参阅：
+更多信息，请参阅：
 
 - [可观测性概念](/langsmith/observability-concepts)：术语和核心概念。
-- [跟踪集成](/langsmith/integrations)：LangChain、LangGraph、Anthropic 等提供商。
-- [自动化](/langsmith/rules)：在跟踪上自动运行的规则和在线评估。
+- [追踪集成](/langsmith/integrations)：LangChain、LangGraph、Anthropic 等提供商。
+- [自动化](/langsmith/rules)：在追踪上自动运行的规则和在线评估。

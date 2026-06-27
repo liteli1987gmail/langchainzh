@@ -1,6 +1,6 @@
 ---
-title: 使用子代理构建个人助手
-sidebarTitle: "子代理：个人助手"
+title: 使用子代理构建个人助理
+sidebarTitle: "子代理：个人助理"
 ---
 
 import ChatModelTabsPy from '/snippets/chat-model-tabs.mdx';
@@ -8,18 +8,18 @@ import ChatModelTabsJs from '/snippets/chat-model-tabs-js.mdx';
 
 ## 概述
 
-**主管模式**是一种[多代理](/oss/langchain/multi-agent)架构，其中中央主管代理协调专门的 worker 代理。这种方法在任务需要不同类型的专业知识时表现出色。与其构建一个跨领域管理工具选择的代理，不如创建由了解整体工作流程的主管协调的专注专家。
+一种 **监督者模式** is a [multi-agent](/oss/langchain/multi-agent) 架构，由一个中央监督者代理协调专门的 worker 代理。这种方法在任务需要不同类型的专业知识时表现出色。与其构建一个跨领域管理工具选择的代理，不如创建由了解整体工作流程的监督者协调的专注专家。
 
-在本教程中，您将构建一个通过现实工作流程展示这些优势的个人助手系统。该系统将协调两个职责根本不同的专家：
+在本教程中，你将构建一个通过真实工作流程展示这些优势的个人助理系统。该系统将协调两个具有根本不同职责的专家：
 
-- 一个**日历代理**，负责日程安排、可用性检查和事件管理。
-- 一个**邮件代理**，负责管理通信、起草消息和发送通知。
+- A **日历代理** 负责处理日程安排、可用性检查和事件管理。
+- An **邮件代理** 负责管理通信、起草消息和发送通知。
 
-我们还将集成[人工介入审查](/oss/langchain/human-in-the-loop)，让用户可以根据需要批准、编辑和拒绝操作（如外发邮件）。
+我们还将加入 [人工介入审查](/oss/langchain/human-in-the-loop) 以允许用户根据需要批准、编辑和拒绝操作（如外发邮件）。
 
-### 为什么要使用主管？
+### 为什么要使用监督者？
 
-多代理架构允许您将[工具](/oss/langchain/tools)分区到各个 worker 中，每个 worker 都有自己独立的 prompt 或指令。考虑一个能直接访问所有日历和邮件 API 的代理：它必须从许多相似的工具中进行选择，理解每个 API 的精确格式，并同时处理多个领域。如果性能下降，将相关工具和关联的提示词分离到逻辑组可能会很有帮助（部分是为了管理迭代改进）。
+多代理架构允许你将 [工具](/oss/langchain/tools) 分配到各个 worker，每个 worker 都有各自的提示词或指令。试想一个直接访问所有日历和邮件 API 的代理：它必须从许多相似的工具中进行选择，理解每个 API 的精确格式，并同时处理多个领域。如果性能下降，将相关工具和相关提示词分离到逻辑分组可能会很有帮助（部分原因是为了管理迭代改进）。
 
 ### 概念
 
@@ -32,13 +32,10 @@ import ChatModelTabsJs from '/snippets/chat-model-tabs-js.mdx';
 
 ### 安装
 
-本教程需要 `langchain` 包：
+本教程需要 `langchain` package:
 
 :::python
 <CodeGroup>
-
-</CodeGroup>
-:::
 ```bash pip
 pip install langchain
 ```
@@ -62,11 +59,11 @@ pnpm add langchain
 </CodeGroup>
 :::
 
-更多详情，请参阅我们的[安装指南](/oss/langchain/install)。
+更多详情，请参阅我们的 [安装指南](/oss/langchain/install).
 
 ### LangSmith
 
-设置 [LangSmith](https://smith.langchain.com) 来检查代理内部发生了什么。然后设置以下环境变量：
+设置 [LangSmith](https://smith.langchain.com) 来检查代理内部发生的事情。然后设置以下环境变量：
 
 :::python
 <CodeGroup>
@@ -81,7 +78,7 @@ import os
 os.environ["LANGSMITH_TRACING"] = "true"
 os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
 ```
-<CodeGroup>
+</CodeGroup>
 :::
 
 :::js
@@ -94,6 +91,9 @@ export LANGSMITH_API_KEY="..."
 process.env.LANGSMITH_TRACING = "true";
 process.env.LANGSMITH_API_KEY = "...";
 ```
+</CodeGroup>
+:::
+
 ### 组件
 
 我们需要从 LangChain 的集成套件中选择一个聊天模型：
@@ -108,7 +108,7 @@ process.env.LANGSMITH_API_KEY = "...";
 
 ## 1. 定义工具
 
-首先定义需要结构化输入的工具。在实际应用中，这些工具会调用真实的 API（Google Calendar、SendGrid 等）。在本教程中，您将使用桩代码来演示这一模式。
+首先定义需要结构化输入的工具。在实际应用中，这些会调用真实 API（如 Google Calendar、SendGrid 等）。对于本教程，你将使用桩（stub）来演示这种模式。
 
 :::python
 ```python
@@ -209,13 +209,13 @@ const getAvailableTimeSlots = tool(
 ```
 :::
 
-## 2. 创建专用子代理
+## 2. 创建专门的子代理
 
-接下来，我们将创建处理各个领域的专用子代理。
+接下来，我们将创建专门处理每个领域的子代理。
 
 ### 创建日历代理
 
-日历代理能够理解自然语言日程请求，并将其转换为精确的 API 调用。它负责日期解析、可用性检查和事件创建。
+日历代理理解自然语言日程请求，并将其转换为精确的 API 调用。它处理日期解析、可用性检查和事件创建。
 
 :::python
 ```python
@@ -262,7 +262,7 @@ const calendarAgent = createAgent({
 ```
 :::
 
-测试日历代理，查看它如何处理自然语言日程安排：
+测试日历代理，看看它如何处理自然语言日程安排：
 
 :::python
 ```python
@@ -339,11 +339,11 @@ Event created: Team Meeting from 2024-06-18T14:00:00 to 2024-06-18T15:00:00 with
 The team meeting has been scheduled for next Tuesday, June 18th, at 2:00 PM and will last for 1 hour. If you need to add attendees or a location, please let me know!
 ```
 
-代理将"下周二下午2点"解析为ISO格式（"2024-01-16T14:00:00"），计算结束时间，调用 `create_calendar_event`，并返回自然语言确认信息。
+代理将"下周二下午2点"解析为 ISO 格式（"2024-01-16T14:00:00"），计算结束时间，调用 `create_calendar_event`，并返回自然语言确认。
 
 ### 创建邮件代理
 
-邮件代理负责邮件的撰写和发送。它专注于提取收件人信息、拟定适当的主题行和正文内容，以及管理邮件通信。
+邮件代理负责处理邮件撰写和发送。它专注于提取收件人信息、编写适当的主题行和正文，以及管理邮件通信。
 
 :::python
 ```python
@@ -451,15 +451,13 @@ Email sent to design-team@example.com - Subject: Reminder: Please Review the New
 I've sent a reminder to the design team asking them to review the new mockups. If you need any further communication on this topic, just let me know!
 ```
 
-代理从非正式请求中推断出收件人，撰写专业的主题行和正文，调用 `send_email`，并返回确认信息。每个子代理都有狭窄的关注范围和特定领域的工具与提示，使其能够出色地完成其特定任务。
+代理从非正式请求中推断收件人，撰写专业的主题行和正文，调用 `send_email`，并返回确认信息。每个子代理都有狭窄的专注范围，配有特定领域的工具和提示，使其能够在特定任务上表现出色。
 
-## 3. 将子代理封装为工具
+## 3. 将子代理包装为工具
 
-现在将每个子代理封装为监督者可以调用的工具。这是创建分层系统的关键架构步骤。监督者将看到像 "schedule_event" 这样的高级工具，而不是像 "create_calendar_event" 这样的低级工具。
+现在将每个子代理包装为监督者可以调用的工具。这是创建分层系统的关键架构步骤。监督者将看到高级工具，如"schedule_事件"，而不是低级工具如"create_日历_事件"。
 
 :::python
-
-:::
 ```python
 @tool
 def schedule_event(request: str) -> str:
@@ -545,11 +543,13 @@ Input: Natural language email request (e.g., 'send them a reminder about the mee
   }
 );
 ```
-工具描述帮助监督者决定何时使用每个工具，因此请确保描述清晰且具体。我们只返回子代理的最终响应，因为监督者不需要看到中间推理过程或工具调用。
+:::
+
+工具描述帮助监督者决定何时使用每个工具，因此要使它们清晰具体。我们只返回子代理的最终响应，因为监督者不需要看到中间推理或工具调用。
 
 ## 4. 创建监督者代理
 
-现在创建协调子代理的监督者。监督者只能看到高级工具，并在领域层面（而非单个 API 层面）做出路由决策。
+现在创建协调子代理的监督者。监督者只看到高级工具，并在领域级别而非单个API级别做出路由决策。
 
 :::python
 ```python
@@ -585,11 +585,11 @@ const supervisorAgent = createAgent({
 ```
 :::
 
-## 5. 使用主管
+## 5. 使用监督者
 
-现在用需要跨多个域协调的复杂请求测试您的完整系统：
+现在用需要跨多个领域协调的复杂请求测试您的完整系统：
 
-### 示例 1：简单的单域请求
+### 示例1：简单的单一领域请求
 
 :::python
 ```python
@@ -651,13 +651,13 @@ The team standup has been scheduled for tomorrow at 9:00 AM with Alice and Bob. 
 The team standup with Alice and Bob is scheduled for tomorrow at 9:00 AM. If you need any further arrangements or adjustments, please let me know!
 ```
 
-主管将此识别为日历任务，调用 `schedule_event`，然后日历代理处理日期解析和事件创建。
+监督者识别这是日历任务，调用 `schedule_event`，日历代理处理日期解析和事件创建。
 
 <Tip>
-如需完整了解信息流透明度，包括每个聊天模型调用的提示和响应，请查看上述运行的 [LangSmith trace](https://smith.langchain.com/public/91a9a95f-fba9-4e84-aff0-371861ad2f4a/r)。
+要完整透明地了解信息流，包括每次聊天模型调用的提示和响应，请查看 [LangSmith追踪](https://smith.langchain.com/public/91a9a95f-fba9-4e84-aff0-371861ad2f4a/r) 以了解上述运行的详细信息。
 </Tip>
 
-### 示例 2：复杂多域请求
+### 示例2：复杂的多个领域请求
 
 :::python
 ```python
@@ -736,17 +736,17 @@ I've also sent an email reminder to the design team, asking them to review the n
 Let me know if you'd like to add more details to the meeting or include additional information in the email!
 ```
 
-监督者认识到这需要日历和电子邮件操作，调用 `schedule_event` 来安排会议，然后调用 `manage_email` 来处理提醒。每个子代理完成其任务，监督者将两个结果合成为一个连贯的响应。
+监督者识别这需要日历和邮件操作，先调用 `schedule_event` 安排会议，然后调用 `manage_email` 发送提醒。每个子代理完成其任务，监督者将两个结果合成为连贯的响应。
 
 <Tip>
-参阅 [LangSmith trace](https://smith.langchain.com/public/95cd00a3-d1f9-4dba-9731-7bf733fb6a3c/r) 查看上述运行的详细信息流，包括各个聊天模型的提示和响应。
+请参阅 [LangSmith追踪](https://smith.langchain.com/public/95cd00a3-d1f9-4dba-9731-7bf733fb6a3c/r) 以查看上述运行的详细信息流，包括各个聊天模型的提示和响应。
 </Tip>
 
-### 完整工作示例
+### 完整的可运行示例
 
-以下是一个完整的可运行脚本：
+以下是整合在一起的可运行脚本：
 
-<Expandable title="查看完整代码" defaultOpen={false}>
+<Expandable title="View complete code" defaultOpen={false}>
 
 :::python
 ```python
@@ -1120,19 +1120,19 @@ await Promise.all([
 
 </Expandable>
 
-### 了解架构
+### 理解架构
 
-您的系统有三个层级。底层包含需要精确格式的严格 API 工具。中间层包含接受自然语言的子代理，将其转换为结构化 API 调用，并返回自然语言确认。顶层包含监督器，将请求路由到高级功能并综合结果。
+您的系统有三层。底层包含需要精确格式的刚性API工具。中间层包含接受自然语言、将其转换为结构化API调用并返回自然语言确认的子代理。顶层包含在高级能力级别路由并综合结果的监督者。
 
-这种关注点分离提供了几个好处：每个层都有明确的职责，您可以添加新领域而不影响现有领域，并且可以独立测试和迭代每个层。
+这种关注点分离提供了几个好处：每一层都有专注的职责，您可以添加新领域而不影响现有领域，并且可以独立测试和迭代每一层。
 
-## 6. 添加人机协同审查
+## 6. 添加人在环审查
 
-对敏感操作添加人机协同审查可能是明智的。LangChain 包含内置中间件来审查工具调用（本例中为子代理调用的工具）。
+将 [人在环审查](/oss/langchain/human-in-the-loop) 敏感操作纳入审查可能是明智的。LangChain包含 [内置中间件](/oss/langchain/human-in-the-loop#configuring-interrupts) 查看工具调用，在本例中是子代理调用的工具。
 
-让我们为两个子代理添加人机协同审查：
-- 我们将 `create_calendar_event` 和 `send_email` 工具配置为中断，允许所有[响应类型](/oss/langchain/human-in-the-loop)（`approve`、`edit`、`reject`）
-- 我们仅向顶层代理添加一个[检查点器](/oss/langchain/short-term-memory)。这对于暂停和恢复执行是必需的。
+让我们为两个子代理添加人工介入审查：
+- 我们配置 `create_calendar_event` 和 `send_email` 工具以中断，允许所有 [响应类型](/oss/langchain/human-in-the-loop) (`approve`, `edit`, `reject`)
+- 我们添加一个 [检查点](/oss/langchain/short-term-memory) **仅添加到顶层代理**。这对于暂停和恢复执行是必需的。
 
 :::python
 ```python
@@ -1210,7 +1210,9 @@ const supervisorAgent = createAgent({
   checkpointer: new MemorySaver(), // [!code highlight]
 });
 ```
-让我们重复这个查询。请注意，我们将中断事件收集到一个列表中以便在下游访问：
+:::
+
+让我们重复查询。注意，我们将中断事件收集到一个列表中以便后续访问：
 
 :::python
 ```python
@@ -1327,7 +1329,7 @@ Tool: send_email
 Args: {'to': ['designteam@example.com'], 'subject': 'Reminder: Review New Mockups Before Meeting Next Tuesday at 2pm', 'body': "Hello Team,\n\nThis is a reminder to review the new mockups ahead of our meeting scheduled for next Tuesday at 2pm. Your feedback and insights will be valuable for our discussion and next steps.\n\nPlease ensure you've gone through the designs and are ready to share your thoughts during the meeting.\n\nThank you!\n\nBest regards,\n[Your Name]"}
 ```
 
-我们可以通过使用 @[`Command`] 引用其 ID 来为每个中断指定决策。请参阅[人在循环指南](/oss/langchain/human-in-the-loop)了解更多详细信息。为演示目的，这里我们将接受日历事件，但编辑出站电子邮件的主题：
+我们可以使用 @[`Command`] 来指定每个中断的决策。请参阅 [人工介入指南](/oss/langchain/human-in-the-loop) 了解更多详情。出于演示目的，这里我们将接受日历事件，但编辑出站电子邮件的主题：
 
 :::python
 ```python
@@ -1426,11 +1428,11 @@ Let me know if you need any further assistance!
 
 Let me know if you need any further assistance!
 ```
-运行将使用我们的输入继续进行。
+运行将使用我们的输入继续。
 
 ## 7. 高级：控制信息流
 
-默认情况下，子代理仅从主管接收请求字符串。您可能希望传递其他上下文，例如对话历史或用户偏好。
+默认情况下，子代理只从主管接收请求字符串。您可能希望传递额外的上下文，例如对话历史或用户偏好。
 
 ### 向子代理传递额外的对话上下文
 
@@ -1500,15 +1502,15 @@ ${request}
 ```
 :::
 
-这允许子代理查看完整的对话上下文，这对于解决歧义非常有用，例如"安排在明天同一时间"（引用之前的对话）。
+这允许子代理查看完整的对话上下文，对于解析歧义（例如"安排在明天同一时间"，引用之前的对话）很有用。
 
 <Tip>
-您可以在聊天模型调用的 [LangSmith trace](https://smith.langchain.com/public/c7d54882-afb8-4039-9c5a-4112d0f458b0/r/6803571e-af78-4c68-904a-ecf55771084d) 中查看子代理接收的完整上下文。
+您可以在 [聊天模型调用](https://smith.langchain.com/public/c7d54882-afb8-4039-9c5a-4112d0f458b0/r/6803571e-af78-4c68-904a-ecf55771084d) 中查看子代理接收的完整上下文。
 </Tip>
 
 ### 控制主管接收的内容
 
-您还可以自定义流回主管的信息：
+您还可以自定义流向主管的信息：
 
 :::python
 ```python
@@ -1564,26 +1566,26 @@ const scheduleEvent = tool(
 ```
 :::
 
-**重要：**确保子代理提示强调其最终消息应包含所有相关信息。一个常见的失败模式是子代理执行了工具调用但未将结果包含在最终响应中。
+**Important:** 确保子代理的提示强调其最终消息应包含所有相关信息。一个常见的失败模式是执行工具调用但不将结果包含在最终响应中的子代理。
 
 :::js
 <Tip>
-有关完整的工作示例，演示了带有"人在环"审查和高级信息流控制的完整监督模式，请查看 LangChain.js 示例中的 [`supervisor_complete.ts`](https://github.com/langchain-ai/langchainjs/blob/main/examples/src/createAgent/supervisor.ts)。
+要查看完整的可运行示例，演示具有人工介入审查和高级信息流控制的完整主管模式，请查看 [`supervisor_complete.ts`](https://github.com/langchain-ai/langchainjs/blob/main/examples/src/createAgent/supervisor.ts) 中的 LangChain.js 示例。
 </Tip>
 :::
 
 ## 8. 关键要点
 
-监督模式创建了抽象层，每一层都有明确的职责。在设计监督系统时，从明确的领域边界开始，为每个子代理提供专注的工具和提示。为监督者编写清晰的工具描述，在集成前独立测试每一层，并根据您的特定需求控制信息流。
+主管模式创建了抽象层，其中每一层都有明确的职责。在设计主管系统时，从清晰的领域边界开始，为每个子代理提供集中的工具和提示。为主管编写清晰的工具描述，在集成前独立测试每一层，并根据您的特定需求控制信息流。
 
 <Tip>
-**何时使用监督模式**
+**何时使用主管模式**
 
-当您有多个不同的领域（日历、电子邮件、CRM、数据库），每个领域有多个工具或复杂逻辑时，使用监督模式。当您需要集中的工作流控制，且子代理不需要与用户直接对话时，也适合使用监督模式。
+当您有多个不同的领域（日历、电子邮件、CRM、数据库），每个领域有多个工具或复杂逻辑，需要集中式工作流控制，且子代理不需要直接与用户对话时，使用主管模式。
 
-对于只有几个工具的更简单情况，请使用单个代理。当代理需要与用户对话时，请改用[交接](/oss/langchain/multi-agent/handoffs)。对于代理之间的点对点协作，请考虑其他多代理模式。
+对于只有几个工具的更简单用例，使用单一代理。当代理需要与用户对话时，使用 [交接](/oss/langchain/multi-agent/handoffs) 。对于代理之间的对等协作，考虑其他多代理模式。
 </Tip>
 
-## 下一步
+## 后续步骤
 
-了解用于代理间对话的[交接](/oss/langchain/multi-agent/handoffs)，探索[上下文工程](/oss/langchain/context-engineering)以微调信息流，阅读[多代理概述](/oss/langchain/multi-agent)以比较不同模式，并使用 [LangSmith](https://smith.langchain.com) 来调试和监控您的多代理系统。
+了解 [交接](/oss/langchain/multi-agent/handoffs) 对于智能体之间的对话，请探索 [上下文工程](/oss/langchain/context-engineering) 要微调信息流，请阅读 [多智能体概述](/oss/langchain/multi-agent) 要比较不同的模式，请使用 [LangSmith](https://smith.langchain.com) 来调试和监控您的多智能体系统。

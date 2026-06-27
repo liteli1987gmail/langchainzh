@@ -4,33 +4,33 @@ sidebarTitle: 使用 API 进行追踪
 description: 了解如何直接使用 LangSmith REST API 追踪 LLM 应用程序。
 ---
 
-本指南涵盖两种使用 [REST API](/langsmith/smith-api-ref) 进行追踪的方法：使用 `POST /runs` 和 `PATCH /runs` 端点的基础追踪，以及使用 `POST /runs/multipart` 的批量摄取，以获得更高的吞吐量。
+本指南介绍使用 [REST API](/langsmith/smith-api-ref)进行追踪的两种方法：使用 `POST /runs` 和 `PATCH /runs` 端点的基础追踪，以及使用 `POST /runs/multipart` 实现更高吞吐量的批量导入。
 
-有关端点和请求/响应模式的完整列表，请参阅 [API 参考](/langsmith/smith-api-ref)。
+For a full list of endpoints and request/response schemas, refer to the [API 参考](/langsmith/smith-api-ref).
 
 <Warning>
-我们强烈建议使用 [Python](/langsmith/smith-python-sdk) 或 [TypeScript](/langsmith/smith-js-ts-sdk) SDK 向 LangSmith 发送追踪，而不是直接使用 REST API。SDK 包含批处理和后台发送优化，可防止追踪影响应用程序的性能。
+我们强烈建议使用 [Python](/langsmith/smith-python-sdk) or [TypeScript](/langsmith/smith-js-ts-sdk) SDK 向 LangSmith 发送追踪，而不是直接使用 REST API。SDK 包含批量处理和后台发送优化，可防止追踪影响应用程序性能。
 
-如果无法使用 SDK，请注意同步发送追踪可能会影响应用程序性能。
+如果您无法使用 SDK，请注意同步发送追踪可能会影响应用程序性能。
 </Warning>
 
 <Note>
-我们建议对运行 ID 使用 **UUID v7**。UUIDv7 嵌入了时间戳，可保留追踪中运行的正确时间顺序。使用 LangSmith SDK 中的 `uuid7()` 生成它们，或参阅 [指定自定义运行 ID](/langsmith/annotate-code#specify-a-custom-run-id) 了解更多详情。
+我们建议使用 **UUID v7** 作为运行 ID。UUIDv7 嵌入时间戳，可保持追踪中运行的正确时间顺序。使用 `uuid7()` 从 LangSmith SDK 生成它们，或参阅 [指定自定义运行 ID](/langsmith/annotate-code#specify-a-custom-run-id) 了解更多详情。
 </Note>
 
 ## 基础追踪
 
-记录运行最简单的方法是通过 `POST /runs` 和 `PATCH /runs` 端点。此方法需要最少的信息来建立追踪层级。
+记录运行最简单的方式是通过 `POST /runs` 和 `PATCH /runs` 端点。这种方法只需最少的信息即可建立追踪层级。
 
 <Note>
-使用 LangSmith REST API 时，请在请求头中提供您的 [API 密钥](/langsmith/create-account-api-key)，作为 `"x-api-key"`。
+使用 LangSmith REST API 时，请在请求头中提供您的 [API 密钥](/langsmith/create-account-api-key) ，格式为 `"x-api-key"`.
 
-如果您的 API 密钥关联了多个工作区，请在头中用 `"x-tenant-id"` 指定工作区。
+如果您的 API 密钥关联了多个工作空间，请在头中使用 `"x-tenant-id"`.
 
-在此方法中，您无需设置 `dotted_order` 或 `trace_id` 字段——系统会自动生成它们。虽然更简单，但比批量摄取慢，且受到更低的速率限制。
+在此方法中，您无需设置 `dotted_order` or `trace_id` 字段——系统会自动生成。虽然更简单，但比批量导入更慢且受到更低的速率限制。
 </Note>
 
-以下示例追踪一个聊天补全，包含一个父链运行和一个子 LLM 运行。在子运行上设置 [`parent_run_id`](/langsmith/run-data-format) 以将其附加到其父运行：
+以下示例追踪一个聊天补全，包含一个父链运行和一个子 LLM 运行。设置 [`parent_run_id`](/langsmith/run-data-format) 将子运行附加到其父运行：
 
 ```python expandable wrap
 import openai
@@ -107,15 +107,15 @@ patch_run(child_run_id, chat_completion.dict())
 patch_run(parent_run_id, {"answer": chat_completion.choices[0].message.content})
 ```
 
-更多信息，请参阅 [Run (span) 数据格式](/langsmith/run-data-format)。
+更多信息，请参阅 [运行（跨度）数据格式](/langsmith/run-data-format).
 
-## 批量摄取
+## 批量导入
 
-如需更快的摄取速度和更高的速率限制，请使用 [`POST /runs/multipart`](/langsmith/smith-api/runs/ingest-runs-multipart) 端点。这需要使用 [`requests-toolbelt`](https://pypi.org/project/requests-toolbelt/) 和 [`uuid-utils`](https://pypi.org/project/uuid-utils/) 包。
+为实现更快的导入和更高的速率限制，请使用 [`POST /runs/multipart`](/langsmith/smith-api/runs/ingest-runs-multipart) 端点。这需要 [`requests-toolbelt`](https://pypi.org/project/requests-toolbelt/) 和 [`uuid-utils`](https://pypi.org/project/uuid-utils/) packages.
 
-与基本追踪不同，此端点需要您自己计算并设置 [`dotted_order`](/langsmith/run-data-format#what-is-dotted_order) 和 [`trace_id`](/langsmith/run-data-format)。`dotted_order` 使用点号连接编码每个运行的时间戳和 UUID 以及父子条目（例如 `20240101T000000Z<parent-uuid>.20240101T000001Z<child-uuid>`），告诉 LangSmith 各运行之间的关系以及发生的顺序。`trace_id` 是根运行的 UUID。
+与基础追踪不同，此端点需要您计算并设置 [`dotted_order`](/langsmith/run-data-format#what-is-dotted_order) 和 [`trace_id`](/langsmith/run-data-format) yourself. `dotted_order` 使用点和父与子条目编码每个运行的时间戳和 UUID（例如， `20240101T000000Z<parent-uuid>.20240101T000001Z<child-uuid>`），告诉 LangSmith 运行之间的关系以及它们发生的顺序。 `trace_id` 是根运行的 UUID。
 
-以下示例创建一个父运行和一个子运行，在单个批量请求中发送它们，然后为两者修补输出：
+以下示例创建一个父运行和一个子运行，在单个批量请求中发送它们，然后使用输出修补两者：
 
 ```python expandable
 import json
@@ -312,6 +312,6 @@ batch_ingest_runs(api_url, api_key, patches=patches)
 
 ## 相关
 
-- [运行 (span) 数据格式](/langsmith/run-data-format)
+- [运行（跨度）数据格式](/langsmith/run-data-format)
 - [指定自定义运行 ID](/langsmith/annotate-code#specify-a-custom-run-id)
 - [自定义插桩](/langsmith/annotate-code)

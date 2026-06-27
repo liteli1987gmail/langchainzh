@@ -1,49 +1,58 @@
 ---
 title: 无头工具
-description: 使用无头工具实现方式在客户端运行浏览器和设备 API
+description: 使用无头工具实现在客户端运行浏览器和设备 API
 ---
 
-无头工具让你的智能体可以调用那些实际执行必须在用户应用而非服务器端完成的工具。智能体仍然看到的是正常的工具模式，但实现位于前端，在那里可以访问浏览器 API，如 IndexedDB、地理位置、剪贴板、画布或文件选择器。
+无头工具让你的 agent 调用那些实际执行必须在
+用户应用中而非服务器上执行的工具。Agent 仍然看到一个正常的工具 schema，
+但实现位于前端，这样它可以访问浏览器 API
+如 IndexedDB、地理位置、剪贴板、画布或文件选择器。
 
-这种模式在数据应该保留在本地设备上时特别有用。此页面上的 playground 示例使用了一个由 IndexedDB 支持的小型浏览器内存工具包，外加一个完全在客户端运行的地理位置工具。
+当数据应该保留在本地设备时，这种模式特别有用。
+此页面上的 playground 示例使用了一个基于浏览器内存的小型工具包，由
+IndexedDB 支持，外加一个完全在客户端运行的地理位置工具。
 
 import { PatternEmbed } from "/snippets/pattern-embed.jsx"
 
 <PatternEmbed pattern="headless-tools" />
 
-## headless 工具的工作原理
+## 无头工具的工作原理
 
-从高层次来看，headless 工具将工具模式与浏览器专用实现分离。
+从高层次来看，无头工具将工具 schema 与仅限浏览器的实现分离。
 
 :::python
 1. 在 agent 上注册一个工具，该工具立即调用 `interrupt()` 以将执行推迟到前端。
 2. 在前端定义中镜像相同的工具名称和参数字段。
-3. 在前端中使用 `.implement(...)` 实现匹配的 tools，并通过 `useStream({ tools: [...] })` 传递它们。
-4. 当 agent 调用匹配的 tool 时，客户端处理该操作，并使用工具结果恢复中断的运行。
+3. 在前端使用 `.implement(...)` 实现匹配的工具并传递
+   它们给 `useStream({ tools: [...] })`.
+4. 当 agent 调用匹配的工具时，客户端处理该操作并
+   使用工具结果恢复中断的运行。
 :::
 
 :::js
-1. 在 agent 上注册一个仅模式的工具定义。
-2. 在前端中使用 `.implement(...)` 实现匹配的 tool。
-3. 将这些实现传递给 `useStream({ tools: [...] })`。
-4. 当 agent 发出匹配的 tool 调用时，客户端运行它，并使用工具结果恢复中断的运行。
+1. 在 agent 上注册一个仅 schema 的工具定义。
+2. 使用 `.implement(...)`.
+3. 在前端实现匹配的工具并将这些实现传递给 `useStream({ tools: [...] })`.
+4. 当 agent 发出匹配的工具调用时，客户端运行它并使用工具结果恢复
+   中断的运行。
 
 <Tip>
-将工具定义和实现保持在独立的模块中。在 agent 和前端之间共享定义，
-以保持工具名称和模式的一致性，然后将仅限浏览器的代码保留在仅客户端的 `impl` 模块中。
+将工具定义和实现保持在单独的模块中。共享
+agent 和前端之间的定义，使工具名称和 schema
+保持一致，然后将仅限浏览器的代码放在仅限客户端的 `impl` module.
 </Tip>
 :::
 
 ## 在 agent 上注册工具
 
-playground 定义了一组遵循相同模式的小型客户端工具：agent 暴露工具模式，
-而前端处理实际执行。
+playground 定义了一组遵循相同模式的小型客户端工具：
+agent 暴露一个工具 schema，前端处理实际的
+execution.
 
 :::python
-在服务器上定义普通工具，这些工具立即调用 `interrupt()`，然后在
-前端的 `tools.ts` 文件中镜像相同的工具名称和参数字段。
-
-</:::python>
+在服务器上定义正常工具，立即调用 `interrupt()`，然后在
+前端中镜像相同的工具名称和参数字段到一个
+前端 `tools.ts` file.
 
 ```python agent.py
 from typing import Any
@@ -124,7 +133,9 @@ agent = create_agent(
 )
 ```
 
-每个工具都会以一个前端可以处理的结构化负载进行中断，然后在运行恢复时返回提供的值。在客户端上镜像相同的工具名称和 schema，以便前端附加实现。
+每个工具使用前端可以处理的结构化有效载荷中断，然后
+返回运行恢复时提供的值。在客户端镜像相同的工具名称和
+schema，以便前端可以附加实现。
 
 ```ts tools.ts
 import * as z from "zod";
@@ -160,7 +171,8 @@ export const geolocationGet = tool({
 :::
 
 :::js
-在一个共享的 `tools.ts` 文件中定义工具，并在代理和前端中使用该文件。
+在共享的 `tools.ts` 文件中定义工具一次，并在两边都使用该文件
+agent 和前端。
 
 <CodeGroup>
 ```ts tools.ts
@@ -210,7 +222,10 @@ export const agent = createAgent({
 
 ## 实现浏览器行为
 
-将仅客户端行为放在单独的模块中，并通过 `.implement(...)` 附加。实际的 playground 包含一个更完整的 IndexedDB 存储，具有搜索、列表、过期和删除操作。以下示例展示更高层次的相同结构：
+将仅限客户端的行为放在单独的模块中，并使用
+`.implement(...)`附加它。真正的 playground 包含一个更完整的 IndexedDB 存储，具有
+搜索、列表、过期和删除操作。以下示例展示了
+相同形状但更高层级：
 
 ```ts impl.ts
 import {
@@ -259,13 +274,15 @@ export const geolocationGet = geolocationGetDefinition.implement(
 );
 ```
 
-## 将实现接入 `useStream`
+## 将实现连接到 `useStream`
 
-将已实现的工具传递给 `useStream`。当 agent 发出匹配的工具调用时，hook 会运行客户端实现并为你恢复运行。
+将实现的工具传递给 `useStream`。当代理发出匹配的工具
+调用时，钩子运行客户端实现并为你恢复运行。
 
 :::python
 
-定义一个与你的 agent 状态 schema 匹配的 TypeScript 接口，并将其作为类型参数传递给 `useStream`，以获得对状态值的类型安全访问：
+定义一个与你的代理状态模式匹配的 TypeScript 接口，并将其作为
+类型参数传递给 `useStream` 以获得对状态值的类型安全访问：
 
 ```ts types.ts
 export interface AgentState {
@@ -273,10 +290,9 @@ export interface AgentState {
 }
 ```
 :::
-:::js
-代理状态可以从代理定义中推断：
 
-:::
+:::js
+可以从代理定义中推断出代理状态：
 
 ```ts
 import type { myAgent } from "./agent";
@@ -375,9 +391,13 @@ export class ChatComponent {
 }
 ```
 
-## 渲染工具活动内联
+</CodeGroup>
 
-Playground 会将每个内存或地理位置操作渲染为独立的卡片，并在输入框附近保留一个小的内存统计面板。关键步骤是将 `stream.toolCalls` 中的每个条目与其触发的 AI 消息进行匹配：
+## 内联渲染工具活动
+
+操场将每个记忆或地理位置操作渲染为独立的卡片，并
+在输入附近保留一个小型记忆统计面板。关键步骤是将每个
+条目与 `stream.toolCalls` 触发它的 AI 消息对应起来：
 
 ```tsx
 import type { ToolCallWithResult, DefaultToolCall } from "@langchain/react";
@@ -401,22 +421,30 @@ function Message({ message, toolCalls }: {
 }
 ```
 
-这在与 [Tool calling](/oss/langchain/frontend/tool-calling) 中更丰富的 UI 模式配合使用时效果特别好，每个工具结果可以渲染为专用卡片，而不是原始 JSON。
+这在与
+[工具调用](/oss/langchain/frontend/tool-calling)的更丰富的 UI 模式结合时效果特别好，其中每个工具结果可以
+作为专门的卡片而不是原始 JSON 进行渲染。
 
-## 使用场景
+## 使用案例
 
-在以下情况下，使用无头工具效果最佳：
+当工作依赖于仅在以下环境中存在的 API 或数据时使用无头工具
+client:
 
-- IndexedDB 或 `localStorage` 中的本地内存
+- IndexedDB 或本地内存中的 `localStorage`
 - 设备 API，如地理位置、剪贴板、摄像头或文件选择器
-- Canvas、audio 或其他仅限浏览器的渲染原语
+- Canvas、音频或其他仅限浏览器的渲染原语
 - 应保留在用户设备上的隐私敏感数据
 - 需要直接访问内存中前端状态的 UI 操作
 
 ## 最佳实践
 
-- 保持工具小而类型化。优先选择多个窄工具而非一个通用的"运行任意浏览器代码"工具。
-- 返回 JSON 可序列化的结果。不要尝试返回 DOM 节点、文件句柄或其他不可序列化的浏览器对象。
-- 共享定义，分离实现。代理和客户端应就工具名称和模式达成一致，但只有客户端应加载浏览器 API。
-- 在 UI 中显示工具状态。使用 `stream.toolCalls` 和 `onTool` 来显示待处理、成功和错误状态。
-- 根据需要添加审核。对于敏感的客户端操作，请将此模式与 [Human-in-the-loop](/oss/langchain/frontend/human-in-the-loop) 结合使用。
+- 保持工具小型化和类型化。优先使用多个窄工具而非一个通用工具
+  “运行任意浏览器代码”工具。
+- 返回 JSON 可序列化的结果。不要尝试返回 DOM 节点、文件
+  句柄或其他不可序列化的浏览器对象。
+- 共享定义，分离实现。代理和客户端应就
+  工具名称和架构达成一致，但只有客户端应加载浏览器 API。
+- 在 UI 中显示工具状态。使用 `stream.toolCalls` 和 `onTool` 来显示
+  待处理、成功和错误状态。
+- 在需要时添加审查。对于敏感的客户端操作，将此模式与
+  结合使用 [Human-in-the-loop](/oss/langchain/frontend/human-in-the-loop).

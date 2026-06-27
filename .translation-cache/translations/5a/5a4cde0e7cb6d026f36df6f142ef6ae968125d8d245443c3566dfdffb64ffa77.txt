@@ -5,45 +5,45 @@ description: "使用 LangChain Python 与 Memgraph 集成。"
 
 import LangchainExperimentalUnmaintained from '/snippets/oss/langchain-experimental-unmaintained.mdx';
 
-Memgraph 是一个开源图数据库，针对动态分析环境进行了优化，并与 Neo4j 兼容。要查询数据库，Memgraph 使用 Cypher——属性图数据库中采用最广泛、最完整规范的开源查询语言。
+Memgraph 是一个开源图数据库，针对动态分析环境进行了优化，并与 Neo4j 兼容。要查询数据库，Memgraph 使用 Cypher——属性图数据库中采用最广泛、完全规范化的开源查询语言。
 
-本笔记本将向您展示如何[使用自然语言查询 Memgraph](#natural-language-querying)以及如何从非结构化数据中[构建知识图谱](#constructing-knowledge-graph)。
+本笔记本将向您展示如何 [使用自然语言查询 Memgraph](#natural-language-querying) 以及如何 [从您的非结构化数据构建知识图谱。](#constructing-knowledge-graph) 首先，请确保
 
-首先，确保[完成所有设置](#setting-up)。
+完成所有设置 [设置](#setting-up).
 
-## 设置
+## 要学习本指南，您需要
 
-要学习本指南，您需要安装 [Docker](https://www.docker.com/get-started/) 和 [Python 3.x](https://www.python.org/)。
+Docker [和](https://www.docker.com/get-started/) Python 3.x [要快速运行](https://www.python.org/) installed.
 
-要快速首次运行 **Memgraph Platform**（Memgraph 数据库 + MAGE 库 + Memgraph Lab），请执行以下操作：
+Memgraph 平台 **（Memgraph 数据库 + MAGE 库 + Memgraph Lab）首次运行，请执行以下操作：** 在 Windows 上：
 
-在 Linux/MacOS 上：
+On Linux/MacOS:
 
 ```
 curl https://install.memgraph.com | sh
 ```
 
-在 Windows 上：
+两个命令都会运行一个脚本，下载 Docker Compose 文件到您的系统，构建并启动
 
 ```
 iwr https://windows.memgraph.com | iex
 ```
 
-两条命令都会运行一个脚本，该脚本将 Docker Compose 文件下载到您的系统，构建并启动 `memgraph-mage` 和 `memgraph-lab` Docker 服务，分别位于两个独立的容器中。现在您已经启动并运行了 Memgraph！了解更多关于安装过程的信息，请参阅 [Memgraph 文档](https://memgraph.com/docs/getting-started/install-memgraph)。
+和 `memgraph-mage` Docker 服务分别在两个容器中运行。现在 Memgraph 已启动并运行！了解更多关于安装过程的信息，请访问 `memgraph-lab` Memgraph 文档 [要使用 LangChain，请安装并导入所有必要的包。我们将使用包管理器](https://memgraph.com/docs/getting-started/install-memgraph).
 
-要使用 LangChain，请安装并导入所有必要的包。我们将使用包管理器 [pip](https://pip.pypa.io/en/stable/installation/) 以及 `--user` 标志来确保正确的权限。如果您已安装 Python 3.4 或更高版本，`pip` 默认包含在内。您可以使用以下命令安装所有必需的包：
+pip [以及](https://pip.pypa.io/en/stable/installation/)标志以确保正确的权限。如果您已安装 Python 3.4 或更高版本， `--user` 默认已包含。您可以使用以下命令安装所有必需的包： `pip` 您可以在本笔记本中运行提供的代码块，也可以使用单独的 Python 文件来尝试 Memgraph 和 LangChain。
 
 ```
 pip install langchain langchain-openai langchain-memgraph --user
 ```
 
-可以运行本笔记本中提供的代码块，也可以使用单独的 Python 文件来实验 Memgraph 和 LangChain。
+自然语言查询
 
-## 自然语言查询
+## Memgraph 与 LangChain 的集成包括自然语言查询功能。要使用它，首先进行所有必要的导入。我们将在代码中出现时讨论它们。
 
-Memgraph 与 LangChain 的集成包括自然语言查询功能。要使用该功能，首先完成所有必要的导入。我们将在代码中逐一讨论它们。
+首先，实例化
 
-首先，实例化 `MemgraphGraph`。该对象保存与正在运行的 Memgraph 实例的连接。请确保正确设置所有环境变量。
+。此对象保持与运行中的 Memgraph 实例的连接。请确保正确设置所有环境变量。 `MemgraphGraph`的
 
 ```python
 import os
@@ -62,13 +62,13 @@ graph = MemgraphLangChain(
 )
 ```
 
-`refresh_schema` 最初设置为 `False`，因为数据库中尚无数据，我们希望避免不必要的数据库调用。
+最初设置为 `refresh_schema` 因为数据库中仍然没有数据，我们希望避免不必要的数据库调用。 `False` 填充数据库
 
-### 填充数据库
+### 要填充数据库，首先确保它为空。最有效的方法是切换到内存分析存储模式，删除图，然后返回内存事务模式。了解更多关于 Memgraph 的
 
-要填充数据库，首先确保其为空。最有效的方法是切换到内存分析存储模式，删除图，然后返回内存事务模式。了解更多关于 Memgraph 的[存储模式](https://memgraph.com/docs/fundamentals/storage-memory-usage#storage-modes)。
+存储模式 [我们将添加到数据库的数据是关于不同类型的视频游戏，这些游戏可在各种平台上使用，与发行商相关。](https://memgraph.com/docs/fundamentals/storage-memory-usage#storage-modes).
 
-我们将添加到数据库的数据是关于不同类型的视频游戏，这些游戏可在各种平台上使用，并与发行商相关。
+请注意
 
 ```python
 # Drop graph
@@ -100,17 +100,17 @@ graph.query(query)
 []
 ```
 
-注意看 `graph` 对象如何持有 `query` 方法。该方法在 Memgraph 中执行查询，同时也被 `MemgraphQAChain` 用于查询数据库。
+对象包含 `graph` 方法。该方法在 Memgraph 中执行查询，也被 `query` 用于查询数据库。 `MemgraphQAChain` 刷新图谱模式
 
-### 刷新图谱结构
+### Memgraph 集成
 
-由于新数据在 Memgraph 中被创建，有必要刷新结构。生成的结构将被 `MemgraphQAChain` 用于指导 LLM 更好地生成 Cypher 查询。
+由于新数据是在 Memgraph 中创建的，因此需要刷新模式。生成的模式将被用于 `MemgraphQAChain` 来指导 LLM 更好地生成 Cypher 查询。
 
 ```python
 graph.refresh_schema()
 ```
 
-要熟悉数据并验证更新后的图谱结构，可以使用以下语句打印：
+为了熟悉数据并验证更新后的图谱模式，您可以使用以下语句打印它：
 
 ```python
 print(graph.get_schema)
@@ -139,15 +139,15 @@ Nodes are connected with the following relationships:
 
 ### 查询数据库
 
-要与 OpenAI API 进行交互，必须将您的 API 密钥配置为环境变量。这确保了您的请求能够正确获得授权。您可以在 [OpenAI 帮助中心](https://help.openai.com/en/articles/4936850-where-do-i-find-my-secret-api-key) 找到有关获取 API 密钥的更多信息。要配置 API 密钥，您可以使用 Python [os](https://docs.python.org/3/library/os.html) 包：
+要与 OpenAI API 交互，您必须将 API 密钥配置为环境变量。这确保了您的请求获得适当的授权。您可以在 [OpenAI 帮助中心](https://help.openai.com/en/articles/4936850-where-do-i-find-my-secret-api-key)中找到有关获取 API 密钥的更多信息。要配置 API 密钥，您可以使用 Python [os](https://docs.python.org/3/library/os.html) package:
 
 ```
 os.environ["OPENAI_API_KEY"] = "your-key-here"
 ```
 
-在 Jupyter notebook 中运行代码时，请运行上面的代码片段。
+如果您在 Jupyter notebook 中运行代码，请运行上面的代码片段。
 
-接下来，创建 `MemgraphQAChain`，它将用于基于图数据的问题回答过程。`temperature 参数`设置为零，以确保获得可预测且一致的答案。您可以将 `verbose` 参数设置为 `True`，以接收有关查询生成的更详细消息。
+接下来，创建 `MemgraphQAChain`，它将在基于图谱数据的问答过程中被使用。该 `temperature parameter` 设置为零以确保可预测且一致的答案。您可以将 `verbose` 参数设置为 `True` 以接收关于查询生成的更详细消息。
 
 ```python
 chain = MemgraphQAChain.from_llm(
@@ -158,7 +158,7 @@ chain = MemgraphQAChain.from_llm(
 )
 ```
 
-现在你可以开始提问了！
+现在您可以开始提问了！
 
 ```python
 response = chain.invoke("Which platforms is Baldur's Gate 3 available on?")
@@ -188,7 +188,7 @@ Yes, Baldur's Gate 3 is available on Windows.
 
 #### 返回直接查询结果
 
-`return_direct` 修饰符指定是返回执行的 Cypher 查询的直接结果，还是返回处理后的自然语言响应。
+该 `return_direct` 修饰符指定是否返回执行的 Cypher 查询的直接结果，还是处理后的自然语言响应。
 
 ```python
 # Return the result of querying the graph directly
@@ -212,7 +212,7 @@ RETURN p.name
 
 #### 返回查询中间步骤
 
-`return_intermediate_steps` 链修改器通过在初始查询结果之外包含查询的中间步骤来增强返回的响应。
+该 `return_intermediate_steps` 链修饰符通过在初始查询结果之外包含查询的中间步骤来增强返回的响应。
 
 ```python
 # Return all the intermediate steps of query execution
@@ -238,7 +238,7 @@ Final response: Yes.
 
 #### 限制查询结果数量
 
-`top_k` 修饰符可用于限制查询结果的最大数量。
+该 `top_k` 修饰符可用于当您想要限制查询结果的最大数量时。
 
 ```python
 # Limit the maximum number of results returned by query
@@ -262,9 +262,9 @@ Adventure, Role-Playing Game
 
 ### 高级查询
 
-随着解决方案的复杂度增长，您可能会遇到需要谨慎处理的各种用例。确保应用程序的可扩展性对于维持流畅的用户体验至关重要，不容任何纰漏。
+随着解决方案的复杂性增加，您可能会遇到需要谨慎处理的不同用例。确保应用程序的可扩展性对于维护流畅的用户体验至关重要，不能有任何纰漏。
 
-让我们再次实例化链，并尝试提出一些用户可能会问的问题。
+让我们再次实例化链，并尝试提出用户可能潜在会问的一些问题。
 
 ```python
 chain = MemgraphQAChain.from_llm(
@@ -284,11 +284,11 @@ RETURN "Yes"
 I don't know the answer.
 ```
 
-生成的 Cypher 查询看起来没有问题，但我们没有收到任何响应信息。这说明在使用 LLM 时的一个常见挑战——用户提问方式与数据存储方式之间的不对齐。在这种情况下，用户感知与实际数据存储之间的差异可能导致不匹配。提示词优化（prompt refinement），即打磨模型提示词以更好地理解这些差异的过程，是一种有效解决此问题的方法。通过提示词优化，模型在生成精确且相关查询方面的能力得到了提升，从而成功检索到所需的数据。
+生成的 Cypher 查询看起来没问题，但我们没有收到任何信息作为响应。这说明了一个与 LLM 合作时的常见挑战——用户提问方式与数据存储方式之间的不对齐。在这种情况下，用户感知与实际数据存储之间的差异可能导致不匹配。提示词优化是解决此问题的有效方法，它是完善模型提示词以更好地理解这些差异的过程。通过提示词优化，模型在生成精确且相关的查询方面变得更加熟练，从而成功检索到所需的数据。
 
 #### 提示词优化
 
-为了解决这个问题，我们可以调整 QA 链的初始 Cypher 提示词。这涉及向 LLM 添加关于用户如何引用特定平台（例如本例中的 PS5）的指导。我们使用 LangChain 的 PromptTemplate 来实现这一点，创建一个修改后的初始提示词。然后将这个修改后的提示词作为参数提供给优化后的 `MemgraphQAChain` 实例。
+为了解决这个问题，我们可以调整 QA 链的初始 Cypher 提示词。这涉及向 LLM 添加关于用户如何引用特定平台（如我们的案例中的 PS5）的指导。我们使用 LangChain PromptTemplate 来实现这一点，创建一个修改后的初始提示词。然后将这个修改后的提示词作为参数提供给我们优化后的 `MemgraphQAChain` instance.
 
 ```python
 MEMGRAPH_GENERATION_TEMPLATE = """Your task is to directly translate natural language inquiry into precise and executable Cypher query for Memgraph database.
@@ -340,22 +340,22 @@ RETURN "Yes"
 Yes, Baldur's Gate 3 is available on PS5.
 ```
 
-现在，通过包含平台命名指导的修订初始 Cypher 提示，我们获得了更准确、更符合用户查询的相关结果。
+现在，凭借包含平台命名指导的修订后的初始 Cypher 提示词，我们获得了与用户查询更加一致的准确且相关的结果。
 
-这种方法允许进一步改进您的问答链。您可以轻松地将额外的提示优化数据集成到您的链中，从而增强应用的整体用户体验。
+这种方法允许进一步改进您的 QA 链。您可以轻松地将额外的提示词优化数据集成到您的链中，从而增强应用程序的整体用户体验。
 
 ## 构建知识图谱
 
-将非结构化数据转换为结构化数据并非易事或直接的任务。本指南将展示如何利用 LLM 来帮助我们完成这一任务，以及如何在 Memgraph 中构建知识图谱。创建知识图谱后，您可以将其用于您的 GraphRAG 应用。
+将非结构化数据转换为结构化数据并非易事或简单任务。本指南将展示如何利用LLM来帮助我们完成这项工作，以及如何在Memgraph中构建知识图谱。创建知识图谱后，您可以将它用于GraphRAG应用。
 
-从文本构建知识图谱的步骤包括：
+从文本构建知识图谱的步骤如下：
 
-- [从文本中提取结构化信息](#extracting-structured-information-from-text)：使用 LLM 以节点和关系的形式从文本中提取结构化图信息。
-- [存储到 Memgraph](#storing-into-memgraph)：将提取的结构化图信息存储到 Memgraph。
+- [从文本中提取结构化信息](#extracting-structured-information-from-text)：LLM用于从文本中提取结构化的图信息，形式为节点和关系。
+- [存储到Memgraph](#storing-into-memgraph)：将提取的结构化图信息存储到Memgraph中。
 
 ### 从文本中提取结构化信息
 
-除了[设置部分](#setting-up)中的所有导入外，还需要导入 `LLMGraphTransformer` 和 @[`Document`]，它们将用于从文本中提取结构化信息。
+除了设置部分中的所有导入外 [设置部分](#setting-up)，导入 `LLMGraphTransformer` 和@[`Document`]，这些将用于从文本中提取结构化信息。
 
 <LangchainExperimentalUnmaintained />
 
@@ -381,7 +381,7 @@ text = """
 """
 ```
 
-下一步是从所需的 LLM 初始化 `LLMGraphTransformer`，并将文档转换为图结构。
+下一步是初始化 `LLMGraphTransformer` 从所需的LLM并将文档转换为图结构。
 
 ```python
 llm = ChatOpenAI(temperature=0, model_name="gpt-4-turbo")
@@ -390,7 +390,7 @@ documents = [Document(page_content=text)]
 graph_documents = llm_transformer.convert_to_graph_documents(documents)
 ```
 
-在底层，LLM 会从文本中提取重要实体，并将其作为节点和关系列表返回。效果如下：
+在底层，LLM从文本中提取重要实体，并以节点和关系的列表形式返回。如下所示：
 
 ```python
 print(graph_documents)
@@ -400,9 +400,9 @@ print(graph_documents)
 [GraphDocument(nodes=[Node(id='Charles Robert Darwin', type='Person', properties={}), Node(id='English', type='Nationality', properties={}), Node(id='Naturalist', type='Profession', properties={}), Node(id='Geologist', type='Profession', properties={}), Node(id='Biologist', type='Profession', properties={}), Node(id='Evolutionary Biology', type='Field', properties={}), Node(id='Common Ancestor', type='Concept', properties={}), Node(id='Scientific Concept', type='Concept', properties={}), Node(id='Alfred Russel Wallace', type='Person', properties={}), Node(id='Natural Selection', type='Concept', properties={}), Node(id='Selective Breeding', type='Concept', properties={}), Node(id='Westminster Abbey', type='Location', properties={})], relationships=[Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='English', type='Nationality', properties={}), type='NATIONALITY', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Naturalist', type='Profession', properties={}), type='PROFESSION', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Geologist', type='Profession', properties={}), type='PROFESSION', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Biologist', type='Profession', properties={}), type='PROFESSION', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Evolutionary Biology', type='Field', properties={}), type='CONTRIBUTION', properties={}), Relationship(source=Node(id='Common Ancestor', type='Concept', properties={}), target=Node(id='Scientific Concept', type='Concept', properties={}), type='BASIS', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Alfred Russel Wallace', type='Person', properties={}), type='COLLABORATION', properties={}), Relationship(source=Node(id='Natural Selection', type='Concept', properties={}), target=Node(id='Selective Breeding', type='Concept', properties={}), type='COMPARISON', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Westminster Abbey', type='Location', properties={}), type='BURIAL', properties={})], source=Document(metadata={}, page_content='\n    Charles Robert Darwin was an English naturalist, geologist, and biologist,\n    widely known for his contributions to evolutionary biology. His proposition that\n    all species of life have descended from a common ancestor is now generally\n    accepted and considered a fundamental scientific concept. In a joint\n    publication with Alfred Russel Wallace, he introduced his scientific theory that\n    this branching pattern of evolution resulted from a process he called natural\n    selection, in which the struggle for existence has a similar effect to the\n    artificial selection involved in selective breeding. Darwin has been\n    described as one of the most influential figures in human history and was\n    honoured by burial in Westminster Abbey.\n'))]
 ```
 
-### 存储到 Memgraph
+### 存储到Memgraph
 
-一旦您准备好了格式为 `GraphDocument` 的数据（即节点和关系），您可以使用 `add_graph_documents` 方法将其导入到 Memgraph。该方法会将 `graph_documents` 列表转换为适当的 Cypher 查询，这些查询需要在 Memgraph 中执行。完成后，知识图谱将存储在 Memgraph 中。
+一旦您准备好格式为 `GraphDocument`的数据，即节点和关系，您可以使用 `add_graph_documents` 方法将其导入Memgraph。该方法将 `graph_documents` 列表转换为适当的Cypher查询，这些查询需要在Memgraph中执行。完成后，知识图谱就存储在Memgraph中了。
 
 ```python
 # Empty the database
@@ -415,12 +415,12 @@ graph.add_graph_documents(graph_documents)
 ```
 
 <Note>
-图构建过程是非确定性的，因为用于从非结构化数据生成节点和关系的 LLM 是非确定性的。
+图构建过程是非确定性的，因为用于从非结构化数据生成节点和关系的LLM也是非确定性的。
 </Note>
 
-### 附加选项
+### 其他选项
 
-此外，您还可以灵活地根据需求定义特定类型的节点和关系进行提取。
+此外，您还可以灵活地根据需求定义特定类型的节点和关系以供提取。
 
 ```python
 llm_transformer_filtered = LLMGraphTransformer(
@@ -441,7 +441,7 @@ Nodes:[Node(id='Charles Robert Darwin', type='Person', properties={}), Node(id='
 Relationships:[Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='English', type='Nationality', properties={}), type='NATIONALITY', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Evolutionary Biology', type='Concept', properties={}), type='INVOLVED_IN', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Natural Selection', type='Concept', properties={}), type='INVOLVED_IN', properties={}), Relationship(source=Node(id='Charles Robert Darwin', type='Person', properties={}), target=Node(id='Alfred Russel Wallace', type='Person', properties={}), type='COLLABORATES_WITH', properties={})]
 ```
 
-你的图也可以有 `__Entity__` 标签在所有节点上，这些标签会被索引以便更快地检索。
+您的图谱也可以在所有节点上具有 `__Entity__` 标签，这些标签将被索引以便更快检索。
 
 ```python
 # Drop graph
@@ -453,7 +453,7 @@ graph.query("STORAGE MODE IN_MEMORY_TRANSACTIONAL")
 graph.add_graph_documents(graph_documents, baseEntityLabel=True)
 ```
 
-还有一个选项可以包含在图中获取的信息的来源。为此，将 `include_source` 设置为 `True`，然后源文档会被存储，并且它会通过 `MENTIONS` 关系与图中的节点关联。
+还有一种选项可以包含在图中获取的信息来源。为此，请设置 `include_source` to `True` ，然后源文档被存储并使用 `MENTIONS` relationship.
 
 ```python
 # Drop graph
@@ -465,10 +465,10 @@ graph.query("STORAGE MODE IN_MEMORY_TRANSACTIONAL")
 graph.add_graph_documents(graph_documents, include_source=True)
 ```
 
-请注意源内容是如何存储的，以及 `id` 属性是如何生成的（因为文档原本没有任何 `id`）。
-你可以同时拥有 `__Entity__` 标签和文档源。但请注意，两者都会占用内存，特别是包含源内容时，由于内容是长字符串。
+将其链接到图中的节点。请注意源的内容如何被存储的 `id` 属性是如何生成的，因为文档没有任何 `id`.
+您可以同时拥有 `__Entity__` 标签和文档源。但请注意，两者都会占用内存，特别是包含源的情况下，因为内容可能很长。
 
-最后，你可以查询知识图谱，如前一节所述。
+最后，您可以查询知识图谱，如前一节所述：
 
 ```python
 chain = MemgraphQAChain.from_llm(

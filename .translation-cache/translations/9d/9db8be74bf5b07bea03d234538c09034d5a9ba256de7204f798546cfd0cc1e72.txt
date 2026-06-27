@@ -5,50 +5,50 @@ sidebarTitle: 运行时
 
 
 :::python
-@[`Pregel`] 实现 LangGraph 的运行时，管理 LangGraph 应用程序的执行。
+@[`Pregel`] 实现了 LangGraph 的运行时，管理 LangGraph 应用程序的执行。
 
-编译 @[StateGraph][StateGraph] 或创建 @[`@entrypoint`] 会生成一个可以接受输入调用的 @[`Pregel`] 实例。
+编译 @[StateGraph][StateGraph] 或创建 @[`@entrypoint`] 会生成一个 @[`Pregel`] 实例，可以接受输入进行调用。
 :::
 
 :::js
-@[`Pregel`] 实现 LangGraph 的运行时，管理 LangGraph 应用程序的执行。
+@[`Pregel`] 实现了 LangGraph 的运行时，管理 LangGraph 应用程序的执行。
 
-编译 @[StateGraph][StateGraph] 或创建 @[entrypoint][entrypoint] 会生成一个可以接受输入调用的 @[`Pregel`] 实例。
+编译 @[StateGraph][StateGraph] 或创建 @[entrypoint][entrypoint] 会生成一个 @[`Pregel`] 实例，可以接受输入进行调用。
 :::
 
-本指南从高层解释运行时，并提供直接使用 Pregel 实现应用程序的说明。
+本指南从高层介绍运行时，并提供直接使用 Pregel 实现应用程序的说明。
 
 :::python
-> **注意：** @[`Pregel`] 运行时以 [Google 的 Pregel 算法](https://research.google/pubs/pub37252/) 命名，该算法描述了一种使用图进行大规模并行计算的高效方法。
+> **Note:** @[`Pregel`] 运行时的命名源自 [Google 的 Pregel 算法](https://research.google/pubs/pub37252/)，该算法描述了一种使用图进行大规模并行计算的高效方法。
 :::
 
 :::js
-> **注意：** @[`Pregel`] 运行时以 [Google 的 Pregel 算法](https://research.google/pubs/pub37252/) 命名，该算法描述了一种使用图进行大规模并行计算的高效方法。
+> **Note:** @[`Pregel`] 运行时的命名源自 [Google 的 Pregel 算法](https://research.google/pubs/pub37252/)，该算法描述了一种使用图进行大规模并行计算的高效方法。
 :::
 
 ## 概述
 
-在 LangGraph 中，Pregel 将[**参与者（actors）**](https://en.wikipedia.org/wiki/Actor_model) 和**通道（channels）**组合成一个应用程序。**参与者**从通道读取数据并向通道写入数据。Pregel 按照 **Pregel 算法**/**批量同步并行**模型组织应用程序的执行，将其分为多个步骤。
+在 LangGraph 中，Pregel 将 [**参与者**](https://en.wikipedia.org/wiki/Actor_model) 和 **通道** 组合成单个应用程序。 **参与者** 从通道读取数据并向通道写入数据。Pregel 按照 **Pregel 算法**/**批量同步并行** model.
 
-每个步骤包含三个阶段：
+模型组织应用程序的执行，每个步骤包含三个阶段：
 
-* **计划**：确定在此步骤中要执行哪些**参与者**。例如，在第一步中，选择订阅特殊**输入**通道的**参与者**；在后续步骤中，选择订阅上一步中更新的通道的**参与者**。
-* **执行**：并行执行所有选定的**参与者**，直到全部完成，或其中一个失败，或达到超时。在此阶段，通道更新对参与者不可见，直到下一步。
-* **更新**：用此步骤中**参与者**写入的值更新通道。
+* **计划**：确定在此步骤中要执行的 **参与者** 。例如，在第一步中，选择订阅特殊 **输入** 通道的 **参与者** ；在后续步骤中，选择订阅上一步更新的通道的 **参与者** 。
+* **执行**：并行执行所有选中的 **参与者** ，直到全部完成，或其中一个失败，或达到超时。在此阶段，通道更新对参与者不可见，直到下一步。
+* **更新**：使用该步骤中 **参与者** 写入的值更新通道。
 
-重复此过程，直到没有**参与者**被选中执行，或达到最大步数。
+重复直到没有 **参与者** 被选中执行，或达到最大步骤数。
 
 ## 参与者
 
-**参与者**是一个 `PregelNode`。它订阅通道，从通道读取数据，并向通道写入数据。它可以被认为是 Pregel 算法中的**参与者**。`PregelNodes` 实现了 LangChain 的 Runnable 接口。
+An **参与者** is a `PregelNode`它订阅通道，从通道中读取数据，并向通道写入数据。可以将其视为一个 **参与者（actor）** 在 Pregel 算法中。 `PregelNodes` 实现 LangChain 的 Runnable 接口。
 
-## 通道
+## 通道（Channels）
 
-通道用于参与者（PregelNodes）之间的通信。每个通道都有一个值类型、一个更新类型和一个更新函数——更新函数接收一系列更新并修改存储的值。通道可用于将数据从一个链发送到另一个链，或将数据从链发送到未来步骤中。
+通道用于在参与者（PregelNodes）之间通信。每个通道都有一个值类型、一个更新类型和一个更新函数——更新函数接收一系列更新并修改存储的值。通道可用于将数据从一个链发送到另一个链，或将数据从链发送到自身的后续步骤中。
 
-### LastValue
+### LastValue（最新值）
 
-@[`LastValue`] 是默认的通道类型。它存储最后写入的值，覆盖之前的任何值。将其用于输入和输出值，或用于在步骤之间传递数据。
+@[`LastValue`] 是默认的通道类型。它存储写入的最新值，覆盖任何先前的值。将其用于输入和输出值，或用于在步骤之间传递数据。
 
 :::python
 ```python
@@ -64,9 +64,11 @@ import { LastValue } from "@langchain/langgraph/channels";
 
 const channel = new LastValue<number>();
 ```
-### Topic
+:::
 
-@[`Topic`] 是一个可配置的 PubSub 通道，用于在多个执行单元之间发送多个值或在多个步骤中累积输出。它可以配置为去重值，或累积运行期间写入的所有值。
+### Topic（主题）
+
+@[`Topic`] 是一个可配置的 PubSub 通道，用于在参与者之间发送多个值或在步骤之间累积输出。它可以配置为对值进行去重，或累积在运行期间写入的所有值。
 
 :::python
 ```python
@@ -86,9 +88,9 @@ const channel = new Topic<string>({ accumulate: true });
 ```
 :::
 
-### BinaryOperatorAggregate
+### BinaryOperatorAggregate（二元运算符聚合）
 
-@[`BinaryOperatorAggregate`] 存储一个持久值，该值通过将二元运算符应用于当前值和每个新更新来进行更新。用于跨步骤计算运行聚合。
+@[`BinaryOperatorAggregate`] 存储一个持久值，该值通过将二元运算符应用于当前值和每个新更新来进行更新。将其用于计算跨步骤的持续聚合。
 
 :::python
 ```python
@@ -110,19 +112,19 @@ const total = new BinaryOperatorAggregate<number>({ operator: (a, b) => a + b })
 :::
 
 :::python
-### DeltaChannel
+### DeltaChannel（增量通道）
 
 <Warning>
-`DeltaChannel` 需要 `langgraph>=1.2`，目前处于 **beta** 阶段。API 可能在未来版本中发生变化。
+`DeltaChannel` 需要 `langgraph>=1.2` 且当前处于 **测试版（beta）**。API 可能在未来版本中发生变化。
 </Warning>
 
-@[`DeltaChannel`] 仅存储每个步骤的增量变化，而不是完整的累积值。这对于频繁写入且值随时间大幅增长的通道最为有用——例如，长运行线程中的对话消息列表。如果没有增量存储，完整列表会在每个检查点被重新序列化；而使用 `DeltaChannel` 时，只存储每个步骤写入的新消息。
+@[`DeltaChannel`] 仅存储每个步骤中的增量，而不是完整的累积值。这对于频繁写入且随时间累积大量值的通道最有用——例如，长时间运行线程中的对话消息列表。如果没有增量存储，完整列表会在每个检查点重新序列化；而使用 `DeltaChannel`，则仅存储每个步骤中写入的新消息。
 
 <Tip>
-当通道既被频繁写入又随时间大幅增长时，请考虑使用 `DeltaChannel`。一个好的信号：如果您注意到某个特定通道的检查点大小随线程长度线性增长，那么 `DeltaChannel` 可能非常适合。
+请考虑（Consider） `DeltaChannel` 当一个通道既被频繁写入又随时间增长时。一个好信号：如果您注意到特定通道的检查点大小随线程长度线性增长， `DeltaChannel` 可能是一个很好的选择。
 </Tip>
 
-在 `Annotated` 类型注解中以与普通 reducer 相同的方式使用 `DeltaChannel`：
+使用 `DeltaChannel` in an `Annotated` 类型注解的方式与使用普通 reducer 相同：
 
 ```python
 from typing import Annotated, Sequence
@@ -141,30 +143,28 @@ class State(TypedDict):
     messages: Annotated[list[str], DeltaChannel(my_reducer)]
 ```
 
-#### 批量归约器要求
+#### 批量 reducer 要求
 
-传递给 `DeltaChannel` 的 `reducer` 是一个 **批量归约器**：它在单次调用中接收当前状态和当前步骤中的所有写入的*序列*——而不是像标准归约器那样逐对处理。这与 `StateGraph` 中 `Annotated` 使用的每键归约器不同，后者对每次更新调用一次归约器。
+传递给 `reducer` 的 `DeltaChannel` is a **批量 reducer**：它接收当前状态和一个 *序列* 的所有写入（在单次调用中——不像标准 reducer 那样成对处理）。这与使用 `Annotated` in a `StateGraph`时使用的每键 reducer 不同，后者每次更新调用一次 reducer。
 
 <Warning>
-批量归约器 **必须是可结合的**（批处理不变性）：
-
-
-</Warning>
+批量 reducer **必须是可结合的** （批量不变性）：
 
 ```
 reducer(reducer(state, [xs]), [ys]) == reducer(state, [xs, ys])
 ```
 
-如果你的 reducer 不是结合律的，重构的状态可能会因 LangGraph 批量写入步骤的方式不同而不同，从而产生不一致的行为。
+如果您的 reducer 不是可结合的，重构的状态可能会因 LangGraph 批量处理跨步骤写入的方式不同而产生差异，从而导致不一致的行为。
+</Warning>
 
 <Warning>
-**reducer 在重建时运行，而不是在写入时。** 与 @[`BinaryOperatorAggregate`] 不同，其 reducer 在写入时被调用，因此组合值被序列化到检查点，而 `DeltaChannel` reducer 在通道值从其持久化写入中*重建*时被调用。原始的逐步骤写入被序列化；reducer 仅在值被具体化时才被调用——在下次读取时、在下一步的执行器上，或在回放历史时。
+**Reducer 在重构时运行，而非写入时。** 与 @[`BinaryOperatorAggregate`不同，后者其 reducer 在写入时被调用，以便组合值被序列化到检查点中，而 `DeltaChannel` reducer 在通道值被 *重构* 来自其持久化的写入。原始的每步写入会被序列化；reducer 仅在值被物化时调用——在下一次读取时、在下一步的 actor 上，或在重放历史时。
 
 设计 reducer 时的实际后果：
 
-- **让它成为 `(state, writes)` 的纯函数。** 任何副作用、随机性或实时时钟读取（例如 `uuid.uuid4()`、`datetime.now()`）每次重建值时都会执行，并在每次回放时产生不同结果。它们*不会*被 baked 到持久化写入中。
-- **不要依赖对传入写入的修改会被持久化。** 如果你的 reducer 改变了写入对象（例如，为没有 ID 的项分配一个稳定的 ID），该修改仅存在于重构值中。存储的写入仍然保持原始形状，因此下一次重建会再次看到未修改的输入。
-- **在上游附加身份和其他稳定元数据。** 如果下游代码需要跨轮次引用项的 ID（例如，稍后更新或删除它），在值写入通道之前分配该 ID——而不是在 reducer 内部。
+- **使其成为一个纯函数 `(state, writes)`.** 任何副作用、随机性或实时时钟读取（例如， `uuid.uuid4()`, `datetime.now()`）每次重构值时都会执行，并在每次重放时产生不同的结果。它们是 *不会* 被固化到持久化的写入中。
+- **不要依赖对输入写入的修改会被持久化。** 如果你的 reducer 修改了一个写入对象（例如，为一个没有 ID 的项分配一个稳定的 ID），该修改仅存在于重构的值中。存储的写入仍然保持原始形状，因此下一次重构将再次看到未修改的输入。
+- **在上游附加标识和其他稳定的元数据。** 如果下游代码需要跨轮次通过 ID 引用某个项（例如，稍后更新或删除它），请在值写入 channel 之前分配该 ID——而不是在 reducer 内部。
 </Warning>
 
 以下是两种最常见情况的批量 reducer：
@@ -191,11 +191,11 @@ def dict_reducer(
     return result
 ```
 
-两者都是可结合的：一次应用一个批次与一次性应用所有批次的结果相同。
+两者都是可结合的：逐个应用批量与一次性应用批量会产生相同的结果。
 
-#### 使用 snapshot_frequency 限制读取延迟
+#### 使用快照_频率来限制读取延迟
 
-如果没有快照，读取 `DeltaChannel` 值需要重放完整的写入历史——对于具有 N 步的线程，时间复杂度为 O(N)。设置 `snapshot_frequency=K` 会每 K 个 pregel 步骤写入一个完整快照，将读取深度限制在最多 K 步：
+没有快照的情况下，读取一个 `DeltaChannel` 值需要重放完整的写入历史——对于具有 N 步的线程为 O(N)。设置 `snapshot_frequency=K` 每 K 个 pregel 步写入一个完整的快照，将读取深度限制在最多 K 步：
 
 ```python
 class State(TypedDict):
@@ -205,12 +205,12 @@ class State(TypedDict):
     ]
 ```
 
-`snapshot_frequency` 的值越高，存储开销越低，但读取延迟越高。值越低，延迟边界越紧，但检查点越大。`None`（默认值）完全跳过快照——适用于读取罕见或线程很短的情况。
+更高的 `snapshot_frequency` 值会减少存储开销但增加读取延迟。更低的值以更大的检查点为代价更严格地限制延迟。 `None` （默认值）完全跳过快照——适用于读取稀少或线程较短的情况。
 
 #### 版本兼容性和回滚
 
 <Warning>
-**不支持回滚到不支持 `DeltaChannel` 的版本。** `langgraph>=1.2` 以新格式写入增量通道检查点，早期版本无法读取。一旦线程使用了 `DeltaChannel`，降级 LangGraph 会导致这些检查点无法读取，因为旧版本运行时无法理解增量格式，也无法重建通道状态。如果需要回滚，请在降级前使用 [delta-channel-dump 恢复脚本](https://github.com/langchain-ai/langgraph/tree/main/examples/delta-channel-dump) 迁移受影响的线程，或将其丢弃。
+**回滚到没有 `DeltaChannel` 支持的版本不受支持。** `langgraph>=1.2` 以早期版本无法读取的新格式写入增量 channel 检查点。一旦线程使用了 `DeltaChannel`，降级 LangGraph 会使这些检查点无法读取，因为旧版运行时无法理解增量格式，也无法重构 channel 状态。如果需要回滚，请使用 [delta-channel-dump 恢复脚本](https://github.com/langchain-ai/langgraph/tree/main/examples/delta-channel-dump) 来迁移受影响的线程，或在降级前丢弃它们。
 </Warning>
 :::
 
@@ -224,10 +224,10 @@ class State(TypedDict):
 虽然大多数用户会通过 @[StateGraph] API 或 @[entrypoint] 装饰器与 Pregel 交互，但也可以直接与 Pregel 交互。
 :::
 
-以下是一些不同的示例，帮助您了解 Pregel API。
+以下是几个不同的示例，让你了解 Pregel API 的用法。
 
 <Tabs>
-    <Tab title="单个节点">
+    <Tab title="Single node">
     :::python
     ```python
     from langgraph.channels import EphemeralValue
@@ -283,9 +283,9 @@ class State(TypedDict):
     ```console
     { b: 'foofoo' }
     ```
-:::
+    :::
     </Tab>
-    <Tab title="多个节点">
+    <Tab title="Multiple nodes">
     :::python
     ```python
     from langgraph.channels import LastValue, EphemeralValue
@@ -355,13 +355,10 @@ class State(TypedDict):
     ```console
     { b: 'foofoo', c: 'foofoofoofoo' }
     ```
-<fragment>
     :::
     </Tab>
     <Tab title="Topic">
     :::python
-
-</fragment>
     ```python
     from langgraph.channels import EphemeralValue, Topic
     from langgraph.pregel import Pregel, NodeBuilder
@@ -429,10 +426,10 @@ class State(TypedDict):
     ```console
     { c: ['foofoo', 'foofoofoofoo'] }
     ```
-:::
+    :::
     </Tab>
     <Tab title="BinaryOperatorAggregate">
-    此示例演示了如何使用 @[`BinaryOperatorAggregate`] 通道来实现归约器。
+    此示例演示如何使用 @[`BinaryOperatorAggregate`] channel 实现一个 reducer。
 
     :::python
     ```python
@@ -513,13 +510,13 @@ class State(TypedDict):
 
     await app.invoke({ a: "foo" });
     ```
-:::
+    :::
     </Tab>
     <Tab title="Cycle">
     :::python
-    本示例演示了如何在图中引入循环，让链写入其订阅的通道。执行将继续进行，直到向通道写入 `None` 值。
-
-</fragment>
+    此示例演示如何通过以下方式在图中引入循环
+    一条链写入其订阅的 channel。执行将继续进行
+    直到 `None` 值被写入 channel。
 
     ```python
     from langgraph.channels import EphemeralValue
@@ -546,12 +543,12 @@ class State(TypedDict):
     ```pycon
     {'value': 'aaaaaaaaaaaaaaaa'}
     ```
-:::
+    :::
 
-:::js
-此示例演示如何通过让一条链向其订阅的通道写入数据来在图中引入循环。执行将继续进行，直到向通道写入一个 `null` 值。
-
-:::
+    :::js
+    本示例演示了如何通过以下方式在图中引入循环
+    一条链向其订阅的通道写入数据。执行将继续进行
+    直到 `null` 值被写入通道为止。
 
     ```typescript
     import { EphemeralValue } from "@langchain/langgraph/channels";
@@ -577,18 +574,18 @@ class State(TypedDict):
     ```console
     { value: 'aaaaaaaaaaaaaaaa' }
     ```
-:::
+    :::
     </Tab>
 </Tabs>
 
 ## 高级 API
 
-LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateGraph (Graph API)][StateGraph] 和 [Functional API][Functional API]。
+LangGraph 提供了两个用于创建 Pregel 应用的高级 API： [StateGraph（图 API）](/oss/langgraph/graph-api) 和 [函数式 API](/oss/langgraph/functional-api).
 
 <Tabs>
     <Tab title="StateGraph (Graph API)">
     :::python
-    @[StateGraph (Graph API)][StateGraph] 是一个更高级的抽象，简化了 Pregel 应用程序的创建。它允许你定义一个由节点和边组成的图。编译图时，StateGraph API 会自动为你创建 Pregel 应用程序。
+    @[StateGraph（图 API）][StateGraph] 是一个更高级的抽象，简化了 Pregel 应用的创建。它允许你定义节点和边的图。当编译图时，StateGraph API 会自动为你创建 Pregel 应用。
 
     ```python
     from typing import TypedDict
@@ -621,9 +618,10 @@ LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateG
     # This will return a Pregel instance.
     graph = builder.compile()
     ```
-:::
-:::js
-@[StateGraph (Graph API)][StateGraph] 是一个更高级别的抽象，简化了 Pregel 应用程序的创建。它允许你定义节点和边的图。当编译图时，StateGraph API 会自动为你创建 Pregel 应用程序。
+    :::
+
+    :::js
+    @[StateGraph（图 API）][StateGraph] 是一个更高级的抽象，简化了 Pregel 应用的创建。它允许你定义节点和边的图。当编译图时，StateGraph API 会自动为你创建 Pregel 应用。
 
     ```typescript
     import { START, StateGraph } from "@langchain/langgraph";
@@ -662,16 +660,16 @@ LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateG
     // This will return a Pregel instance.
     const graph = builder.compile();
     ```
-:::
+    :::
 
-编译后的 Pregel 实例将与节点和通道列表关联。您可以通过打印来检查节点和通道。
+    编译后的 Pregel 实例将与节点和通道列表关联。你可以通过打印来检查节点和通道。
 
-:::python
+    :::python
     ```python
     print(graph.nodes)
     ```
 
-您会看到类似的内容：
+    你将看到类似以下内容：
 
     ```pycon
     {'__start__': <langgraph.pregel.read.PregelNode at 0x7d05e3ba1810>,
@@ -683,7 +681,7 @@ LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateG
     print(graph.channels)
     ```
 
-你应该会看到类似这样的内容
+    你应该看到类似以下内容
 
     ```pycon
     {'topic': <langgraph.channels.last_value.LastValue at 0x7d05e3294d80>,
@@ -707,7 +705,7 @@ LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateG
     console.log(graph.nodes);
     ```
 
-您会看到类似这样的内容：
+    你将看到类似以下内容：
 
     ```console
     {
@@ -721,7 +719,7 @@ LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateG
     console.log(graph.channels);
     ```
 
-您应该会看到类似的内容
+    你应该看到类似以下内容
 
     ```console
     {
@@ -740,13 +738,11 @@ LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateG
       'start:writeEssay': EphemeralValue { ... }
     }
     ```
-:::
+    :::
     </Tab>
     <Tab title="Functional API">
     :::python
-    在[函数式 API](/oss/langgraph/functional-api)中，您可以使用 @[`@entrypoint`] 来创建 Pregel 应用程序。`entrypoint` 装饰器允许您定义一个接收输入并返回输出的函数。
-
-</fragment>
+    在 [函数式 API](/oss/langgraph/functional-api)中，你可以使用 @[`@entrypoint`] 来创建 Pregel 应用。 `entrypoint` 装饰器允许你定义一个接受输入并返回输出的函数。
 
     ```python
     from typing import TypedDict
@@ -780,10 +776,10 @@ LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateG
     Channels:
     {'__start__': <langgraph.channels.ephemeral_value.EphemeralValue object at 0x7d05e2c906c0>, '__end__': <langgraph.channels.last_value.LastValue object at 0x7d05e2c90c40>, '__previous__': <langgraph.channels.last_value.LastValue object at 0x7d05e1007280>}
     ```
-:::：
-:::js
-在[函数式 API](/oss/langgraph/functional-api)中，你可以使用 @[`entrypoint`][entrypoint] 来创建 Pregel 应用程序。该 `entrypoint` 装饰器允许你定义一个接收输入并返回输出的函数。
-:::
+    :::
+
+    :::js
+    在 [函数式 API](/oss/langgraph/functional-api)中，你可以使用 @[`entrypoint`][entrypoint] 来创建 Pregel 应用。 `entrypoint` 装饰器允许你定义一个接受输入并返回输出的函数。
 
     ```typescript
     import { MemorySaver } from "@langchain/langgraph";
@@ -822,9 +818,6 @@ LangGraph 提供了两个用于创建 Pregel 应用程序的高级 API：[StateG
       __previous__: LastValue { ... }
     }
     ```
-<fragment>
     :::
     </Tab>
 </Tabs>
-
-</fragment>

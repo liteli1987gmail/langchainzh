@@ -3,33 +3,33 @@ title: 编程式子代理
 description: 使用解释器从代码中调度和编排 Deep Agents 子代理
 ---
 
-编程式子代理允许代理从解释器代码中调度[子代理](/oss/deepagents/subagents)。代理可以使用 JavaScript 循环、分支和并行批次在工作流中路由任务到已配置的子代理并综合结果，而不是让模型一次选择一个子代理调用。
+编程式子代理允许代理调度 [子代理](/oss/deepagents/subagents) 从解释器代码。与其让模型一次选择一个子代理调用，代理可以使用 JavaScript 循环、分支和并行批次来路由工作到配置的子代理并综合结果。
 
-当工作涉及多个独立单元、需要多角度分析或受益于递归分析时，使用此模式。有关通用解释器设置，请参阅[解释器](/oss/deepagents/interpreters)。
+当工作跨越多个独立单元、需要多种视角或受益于递归分析时使用此模式。一般解释器设置请参见 [解释器](/oss/deepagents/interpreters).
 
 <Warning>
-    编程式子代理使用解释器运行时，处于[**beta**](/oss/versioning)阶段。API 和生命周期行为可能在不同版本之间发生变化。
+    编程式子代理使用解释器运行时，该运行时处于 [**测试版**](/oss/versioning)。API 和生命周期行为可能在不同版本之间发生变化。
 </Warning>
 
 :::python
 <Note>
-    解释器需要 `langchain-quickjs>=0.1.0` 和 Python `>=3.11`。
+    解释器需要 `langchain-quickjs>=0.1.0` 和 Python `>=3.11`.
 </Note>
 :::
 
 ## 工作原理
 
-当代理同时配置了[子代理](/oss/deepagents/subagents)和解释器中间件时，解释器会暴露一个内置的 `task()` 全局函数用于从代码中调度子代理。对于涉及多个独立单元的任务（如审查目录中的每个文件或分批处理工单），可以将其实现为循环结构，将工作分散并行执行，从而以确定性的方式完成，而非依赖模型逐次选择工具调用。
+当代理具有 [子代理](/oss/deepagents/subagents) 和解释器中间件时，解释器会公开一个内置 `task()` 全局变量，用于从代码中调度子代理。跨越多个独立单元的任务（如审阅目录中的每个文件、分批处理工单）变成一个循环，将工作分散出去，从而确定性地运行，而不是每次由模型选择一个工具调用。
 
-子代理编排还支持递归语言模型 (RLM) 工作流，即 [Recursive Language Models 论文](https://arxiv.org/abs/2512.24601) 中描述的方法：将工作集保持在解释器变量中，选择切片，通过 `task()` 调用子代理，然后综合结果。
+子代理编排还支持递归语言模型 (RLM) 工作流，这是 [递归语言模型论文](https://arxiv.org/abs/2512.24601)中描述的方法：将工作集保存在解释器变量中，选择切片，使用 `task()`调用子代理，并综合结果。
 
-`task()` 接受以下参数：
+`task()` 接受以下输入：
 
-- `description`：子代理的提示词
-- `subagentType`：要运行的已配置子代理
-- `responseSchema`（可选）：结构化输出
+- `description`: 子代理的提示词
+- `subagentType`: 指定运行哪个已配置的子代理
+- `responseSchema` （可选）：结构化输出
 
-`task()` 运行一个完整的代理循环并解析为子代理的结果：
+A `task()` 运行一个完整的代理循环并返回子代理的结果：
 
 ```javascript
 const review = await task({
@@ -50,25 +50,25 @@ const review = await task({
 const critical = review.issues.filter((issue) => issue.severity === "high");
 ```
 
-当你传递 `responseSchema` 时，已解析的值已经是一个类型化的 JavaScript 对象；只有当子代理故意返回 JSON 字符串时才调用 `JSON.parse`。
+当您传递 `responseSchema`时，已解析的值已经是类型化的 JavaScript 对象；仅在 `JSON.parse` 子代理故意返回 JSON 字符串时才调用。
 
-## 指南编排
+## 编排指南
 
-解释器中间件在系统提示词中附带编排指导，因此代理已经知道如何以有限批次展开、在轮次之间过滤并综合结果。你不需要手动编写该逻辑或逐轮提示。
+解释器中间件在系统提示词中提供编排指导，因此代理已经知道如何以有限批次进行扩散、在轮次之间过滤以及综合结果。您无需手动编写该逻辑或逐轮编写提示。
 
-要塑造代理的编排行为，请通过它已有的输入进行调整：
+要塑造代理的编排行为，请通过它已响应的输入来进行工作：
 
-- **你配置的子代理。** 它们的 `name` 和 `description` 定义了可用的角色。`reviewer` 配合 `verifier` 适合两轮检查；单个 `analyzer` 则适合直接展开。
-- **任务消息。** 类似"我只需要确认的问题，不要可能"或"要全面"这样的措辞会引导代理倾向于验证或全面搜索。
-- **系统提示词。** 当你需要跨运行保持一致的策略时，使用 `systemPrompt`（或代理的指令）添加持续的指导。
+- **您配置的子代理。** 它们的 `name` 和 `description` 定义了可用的角色。 `reviewer` 与 `verifier` 配对可邀请两轮检查；单个 `analyzer` 可邀请直接扩散。
+- **任务消息。** 类似“我只想要确认的问题，不是可能的”或“全面覆盖”的措辞会引导代理进行验证或开放式扫描。
+- **系统提示词。** 使用 `systemPrompt` （或代理的指令）来添加持久性指导，当您希望在多次运行中保持一致的策略时。
 
 ## 模式
 
-代理从任务形态中选择策略；这些策略源自其编写解释器代码的方式，而非配置，你提供的子代理决定了它的能力范围。每个模式都遵循同一模型：将工作保存在 JS 变量中，使用 `task()` 分派子代理，并通过代码合并结果。下方的图表展示了常见形态，每个都配有可运行的示例。
+代理根据任务的形态选择策略；这些策略源自它编写解释器代码的方式，而非配置，而你可用的子代理决定了它能做什么。每种模式都共享一个模型：将工作保存在 JS 变量中，使用 `task()`来调度子代理，并在代码中合并结果。下面的图表展示了常见的形态，每种都有可运行的示例。
 
-### 分类并行动
+### 分类与行动
 
-项目首先被分类，然后根据其分类由专门的子代理处理。这样可以处理混合输入，其中不同项目需要不同的专业能力。
+项目首先被分类，然后根据其分类由专门的子代理处理。这让你能够处理混合输入，其中不同项目需要不同的专业知识。
 
 ```mermaid
 graph LR
@@ -78,11 +78,11 @@ graph LR
     Classify --> |question| C[Agent C]
 ```
 
-**使用场景：** 对支持工单、错误日志、用户反馈或任何需要根据类型进行不同处理的批量项目进行分类。
+**用例：** 对支持工单、错误日志、用户反馈或任何需要根据类型进行不同处理的批量项目进行分类。
 
-<Accordion title="示例：分类并采取行动">
+<Accordion title="Example: classify and act">
 
-**配置项**
+**你配置的内容**
 
 :::python
 ```python
@@ -144,9 +144,7 @@ const result = await agent.invoke({
 ```
 :::
 
-**代理写入的内容**
-
-:::
+**代理编写的内容**
 
 ```javascript
 // The agent has already classified each ticket; this routes every item to
@@ -166,9 +164,9 @@ handled;
 ```
 </Accordion>
 
-### Fan-out and synthesize
+### 扇出与综合
 
-智能体并行地向多个项目分派相同类型的工作，然后将结果合并。
+代理并行地向多个项目分派相同类型的工作，然后合并结果。
 
 ```mermaid
 graph LR
@@ -181,11 +179,11 @@ graph LR
     Collect --> Synth[Synthesize]
 ```
 
-**使用场景：** 跨目录进行代码审查、分析批量文档、处理日志文件、对多个服务运行相同的检查。
+**用例：** 对目录进行代码审查、分析批量文档、处理日志文件、对多个服务运行相同的检查。
 
-<Accordion title="示例：扇出与综合">
+<Accordion title="Example: fan-out and synthesize">
 
-**配置内容**
+**你配置的内容**
 
 :::python
 ```python
@@ -229,10 +227,7 @@ const result = await agent.invoke({
 ```
 :::
 
-**智能体写入的内容**
-
-
-</fragment>
+**代理编写的内容**
 
 ```javascript
 // One reviewer per file, dispatched in parallel, then findings merged.
@@ -258,7 +253,7 @@ issues;
 
 ### 对抗性验证
 
-一种两轮模式。第一轮生成结果。第二轮将每个结果发送给独立的验证器，只有通过验证的结果才会被保留。当置信度比速度更重要时，这可以减少误报。
+一种两轮模式。第一轮产生发现。第二轮将每个发现发送给独立的验证者，只有通过验证的发现才会被保留。当置信度比速度更重要时，这能减少误报。
 
 ```mermaid
 graph LR
@@ -273,11 +268,11 @@ graph LR
     Vote --> Confirmed[Confirmed]
 ```
 
-**使用场景：**安全审计（误报代价高昂）、合规检查、需要对发现结果高度信任的任何审查。
+**用例：** 误报代价高昂的安全审计、合规性检查、任何需要高置信度发现的审查。
 
-<Accordion title="示例：对抗性验证">
+<Accordion title="Example: adversarial verification">
 
-**配置项**
+**你配置的内容**
 
 :::python
 ```python
@@ -327,14 +322,9 @@ const result = await agent.invoke({
   messages: [{ role: "user", content: "Do a thorough security audit of the payments module. I only want confirmed vulnerabilities, not maybes." }],
 });
 ```
-```markdown
 :::
 
 **代理编写的内容**
-
-
-:::
-```
 
 ```javascript
 // Pass 1: audit. Pass 2: verify each finding independently; keep only confirmed.
@@ -360,9 +350,9 @@ confirmed;
 ```
 </Accordion>
 
-### 生成与筛选
+### 生成与过滤
 
-多个子代理独立生成同一问题的解决方案。代理在代码中对结果进行比较、评分和筛选，仅保留最佳方案。
+多个子代理独立生成同一问题的解决方案。代理在代码中比较、评分和过滤结果，只保留最佳结果。
 
 ```mermaid
 graph LR
@@ -375,11 +365,11 @@ graph LR
     Filter --> Best[Best result]
 ```
 
-**使用场景：** 架构提案、重构策略、内容变体、任何在确定最终方案前探索多种选项以获得更好结果的任务。
+**用例：** 架构提案、重构策略、内容变体、任何在确定前探索多个选项会产生更好结果的任务。
 
-<Accordion title="示例：生成和筛选">
+<Accordion title="Example: generate and filter">
 
-**配置项**
+**你配置的内容**
 
 :::python
 ```python
@@ -416,8 +406,8 @@ const result = await agent.invoke({
 });
 ```
 :::
-**智能体写入的内容**
-:::
+
+**代理编写的内容**
 
 ```javascript
 // Generate independent proposals in parallel, then score and keep the best.
@@ -437,9 +427,9 @@ best;
 ```
 </Accordion>
 
-### 锦标赛
+### 竞赛
 
-变体由评判子智能体进行一对一对决比较，获胜者通过淘汰轮晋级。
+变体由评判子代理进行一对一比较，获胜者通过淘汰轮次晋级。
 
 ```mermaid
 graph LR
@@ -452,11 +442,11 @@ graph LR
     JF --> Winner[Winner]
 ```
 
-**使用场景：** 主观标准下的优化、风格选择、在竞争性实现之间进行选择。
+**用例：** 基于主观标准的优化、样式选择、在竞争实现之间进行选择。
 
-<Accordion title="示例：锦标赛">
+<Accordion title="Example: tournament">
 
-**您配置的内容**
+**你配置的内容**
 
 :::python
 ```python
@@ -508,9 +498,7 @@ const result = await agent.invoke({
 ```
 :::
 
-**代理写入的内容**
-
-:::
+**代理编写的内容**
 
 ```javascript
 // Generate variants, then judge pairwise until a single winner remains.
@@ -537,9 +525,9 @@ bracket[0]; // the winning rewrite
 ```
 </Accordion>
 
-### 循环直到完成
+### 循环直至完成
 
-代理运行一个发现循环，与已找到的结果进行去重，直到没有新的结果出现。当工作的范围无法提前确定时，这非常有用。
+代理运行发现循环，对已有结果进行去重，直到没有新结果出现。当工作的范围事先未知时，这很有用。
 
 ```mermaid
 graph LR
@@ -548,11 +536,11 @@ graph LR
     Check --> |no| Done[Done]
 ```
 
-**使用场景：** 穷尽式搜索、死代码检测、依赖审计、任何需要完整覆盖而非固定数量结果的全量扫描。
+**用例：** 穷举搜索、死代码检测、依赖审计、任何需要完整性而非固定数量结果的全面检查。
 
 <Accordion title="Example: loop until done">
 
-**配置项**
+**你配置的内容**
 
 :::python
 ```python
@@ -590,7 +578,7 @@ const result = await agent.invoke({
 ```
 :::
 
-**代理写入的内容**
+**代理编写的内容**
 
 ```javascript
 // Keep dispatching rounds, deduping against what's found, until a round adds nothing.
@@ -613,18 +601,18 @@ found;
 
 :::python
 <Warning>
-    `task()` 从已在运行的 `eval` 调用内部进行调度。它不会经过正常的工具调用路径，因此父代理上的 `interrupt_on` 审批工作流不会在每次调度时被强制执行。如果需要在子代理编排运行前获得审批，请对 `eval` 工具本身进行门控。
+    `task()` 从已在运行的 `eval` 调用内部调度。它不经过正常的工具调用路径，因此 `interrupt_on` 父代理上的审批工作流不会在每次调度时强制执行。如果需要，请在子代理编排运行之前添加门控 `eval` 如果需要在子代理编排运行之前获得批准，请对该工具本身进行门控。
 </Warning>
 :::
 :::js
 <Warning>
-    `task()` 从已在运行的 `eval` 调用内部进行调度。它不会经过正常的工具调用路径，因此父代理上的 `interruptOn` 审批工作流不会在每次调度时被强制执行。如果需要在子代理编排运行前获得审批，请对 `eval` 工具本身进行门控。
+    `task()` 从已在运行的 `eval` 调用内部进行的调度。它不会经过正常的工具调用路径，因此 `interruptOn` 父代理上的审批工作流不会在每次调度时强制执行。如果需要，请在子代理编排运行之前添加门控 `eval` 如果需要在子代理编排运行之前获得批准，请对该工具本身进行门控。
 </Warning>
 :::
 
 ## 禁用编程式子代理
 
-只要代理拥有子代理，子代理调度就会默认开启。如果希望子代理只能通过正常的 `task` 工具路径使用，请将其禁用。
+每当代理有子代理时，子代理调度默认处于开启状态。如果您希望子代理仅通过正常的 `task` 工具路径获取，请将其禁用。
 
 :::python
 ```python

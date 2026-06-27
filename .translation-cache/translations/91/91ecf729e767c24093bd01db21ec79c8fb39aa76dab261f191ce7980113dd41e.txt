@@ -1,9 +1,13 @@
 ---
 title: 分支对话
-description: 通过从检查点分叉来编辑消息并重新生成响应
+description: 通过从检查点分支来编辑消息并重新生成回复
 ---
 
-与 AI 智能体的对话很少是线性的。您可能希望重新措辞问题、重新生成不满意的回复，或在不丢失检查点历史的情况下探索不同的对话路径。分支对话使用 LangGraph 检查点作为分叉点：每次编辑或重新生成都会从所选消息的父检查点提交新的运行。
+与 AI 智能体的对话很少是线性的。您可能想要改写一个
+问题，重新生成您不喜欢的回复，或探索不同的
+对话路径而不丢失检查点历史。分支对话使用
+LangGraph 检查点作为分支点：每次编辑或重新生成都会提交一个新的
+运行，从所选消息的父检查点开始。
 
 import { PatternEmbed } from "/snippets/pattern-embed.jsx"
 
@@ -14,25 +18,28 @@ import UseStreamTypeInference from '/snippets/oss/use-stream-type-inference.mdx'
 
 <RequiresLanggraphServer />
 
-## 什么是分支聊天？
+## 什么是分支对话？
 
-分支聊天将对话视为带检查点的时间线，而不是扁平列表。每条消息都包含指向该消息创建前检查点的元数据。编辑消息或重新生成回复会从该检查点提交新的运行。
+分支对话将对话视为带检查点的时间线，而不是
+扁平列表。每条消息都有元数据，指向该消息创建之前的
+检查点。编辑消息或重新生成回复会从该检查点提交一个新的
+运行。
 
 主要功能：
 
-- **编辑任意用户消息：**重写之前的提示词并从该点重新运行智能体
-- **重新生成任意 AI 回复：**请求智能体为相同的输入生成不同的答案
-- **查看历史记录：**需要分支时间线时，使用 LangGraph 客户端加载检查点
+- **编辑任意用户消息：** 重写之前的提示词并从该点重新运行智能体
+- **重新生成任意 AI 回复：** 让智能体针对相同的输入产生不同的答案
+- **查看历史记录：** 需要分支时间线时，使用 LangGraph 客户端加载检查点
 
 ## 设置流元数据
 
-使用根流发送消息，然后在渲染每条消息的组件中读取每条消息的检查点元数据。该元数据包含要从中分叉的父检查点 ID。
+使用根流获取消息，然后在渲染每条消息的组件中读取每条消息的检查点元数据
+元数据包含要分支的父
+检查点 ID。
 
 <UseStreamTypeInference />
 
 <CodeGroup>
-
-</CodeGroup>
 ```tsx React
 import { useStream } from "@langchain/react";
 
@@ -126,9 +133,11 @@ export class ChatComponent {
 ```
 </CodeGroup>
 
-## 了解消息元数据
+## 理解消息元数据
 
-`useMessageMetadata(stream, messageId)` 助手返回 @[MessageMetadata]，用于一条消息。在渲染每条消息的组件中使用它，这样元数据就会限定在该消息 ID 的范围内：
+该 `useMessageMetadata(stream, messageId)` 辅助函数返回一条消息的 @[MessageMetadata]
+在渲染每条消息的组件中使用它，这样
+元数据就被限制在该消息 ID 的范围内：
 
 ```tsx
 import type { BaseMessage } from "langchain";
@@ -185,15 +194,16 @@ function MessageWithForkControls({
 }
 ```
 
-`parentCheckpointId` 是消息之前的检查点。用它作为编辑和重新生成的分支点。
+`parentCheckpointId` 是消息之前的检查点。将其用作
+编辑和重新生成的分叉点。
 
 ## 编辑消息
 
 要编辑用户消息并分支对话：
 
-1. 从消息的元数据中获取 `parentCheckpointId`
-2. 使用 `forkFrom: { checkpointId }` 提交编辑后的消息
-3. 代理从该点重新运行
+1. 从消息的元数据中获取 `parentCheckpointId` 提交带有
+2. 的已编辑消息 `forkFrom: { checkpointId }`
+3. 智能体从该点重新运行
 
 ```ts
 function handleEdit(
@@ -215,16 +225,16 @@ function handleEdit(
 
 编辑后：
 
-- 代理从分支点重新运行，使用更新后的消息
-- 原始路径在线程历史中保持可用
+- 智能体从分叉点使用更新的消息重新运行
+- 原始路径在线程历史中仍然可用
 
 ## 重新生成回复
 
-在不更改输入的情况下重新生成 AI 回复：
+要在不更改输入的情况下重新生成 AI 回复：
 
-1. 从 AI 消息的元数据中获取 `parent_checkpoint`
-2. 使用空输入提交，并设置 `forkFrom: { checkpointId }`
-3. 代理从该点生成新的回复
+1. 获取 `parent_checkpoint` 从 AI 消息的元数据中
+2. 使用空输入和 `forkFrom: { checkpointId }`
+3. 提交
 
 ```ts
 function handleRegenerate(
@@ -239,15 +249,19 @@ function handleRegenerate(
 }
 ```
 
-每次重新生成都会在该位置为 AI 消息创建一条新路径。
+每次重新生成都会为该位置的 AI 消息创建新路径。
 
 <Tip>
-重新生成对于非确定性代理很有用。由于 LLM 输出会随温度变化而变化，重新生成相同的提示词通常会产生有意义的差异响应。
+重新生成对于非确定性智能体很有用。由于 LLM 输出会有所不同
+使用 temperature，重新生成相同的提示词通常会产生有意义的
+不同响应。
 </Tip>
 
 ## 分支在底层是如何工作的
 
-LangGraph 将每个状态转换持久化为一个 **检查点**。当你使用 `forkFrom` 提交时，后端会从该点开始一条新的执行路径，而不是追加到当前对话。结果是一个树状结构：
+LangGraph 将每个状态转换持久化为 **检查点**。当您提交
+配合 `forkFrom`，后端会从该点开始一条新的执行路径，而不是
+追加到当前对话。结果是一个树状结构：
 
 ```
 User: "What is React?"
@@ -261,14 +275,22 @@ User: "Tell me about JSX" (edited from branch A)
   └─ AI: "JSX is a syntax extension..."
 ```
 
-每条路径都持久化存储在检查点存储中。当您想要构建跨检查点的独立时间线视图时，请使用
-`stream.client.threads.getHistory(threadId)`。
+每条路径都保存在检查点存储中。使用
+`stream.client.threads.getHistory(threadId)` 当您想构建一个独立的
+跨检查点的时间线视图。
 
 ## 最佳实践
 
-- **在消息附近读取元数据**：在渲染消息控件的组件中调用 `useMessageMetadata`。
-- **悬停时显示分叉控件**：编辑和重新生成按钮应在悬停时显示，以保持 UI 整洁。
-- **按需刷新历史记录**：仅在渲染时间线或分叉合并后调用 `client.threads.getHistory()`。
-- **流式传输时禁用控件**：在代理主动流式传输响应时不允许编辑或重新生成。启用这些操作前检查 `stream.isLoading`。
-- **取消时保留编辑文本**：如果用户开始编辑后取消，请将文本区域重置为原始消息内容。
-- **使用深层检查点树进行测试**：频繁编辑和重新生成的用户可能会创建许多路径。确保时间线渲染保持高性能。
+- **在消息附近读取元数据**：在组件中调用 `useMessageMetadata` 中调用
+  渲染消息控件的组件中调用。
+- **悬停时显示分支控件**：编辑和重新生成按钮应该
+  悬停时出现，以保持 UI 整洁。
+- **按需刷新历史记录**：仅在 `client.threads.getHistory()` 仅在
+  渲染时间线或分支合并后调用。
+- **流式传输时禁用控件**：不要允许编辑或重新生成
+  当智能体正在流式传输响应时。检查 `stream.isLoading`
+  后再启用这些操作。
+- **取消时保留编辑文本**：如果用户开始编辑，然后取消，
+  将文本框重置为原始消息内容。
+- **使用深层检查点树进行测试**：频繁编辑和重新生成的用户
+  可以创建许多路径。确保时间线渲染保持高性能。

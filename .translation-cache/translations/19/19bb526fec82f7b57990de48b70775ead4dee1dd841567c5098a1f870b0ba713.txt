@@ -1,114 +1,114 @@
 ---
-title: Agent 中的上下文工程
+title: 代理中的上下文工程
 sidebarTitle: 上下文工程
 ---
 
 ## 概述
 
-构建 Agent（或任何 LLM 应用）的难点在于使其足够可靠。虽然它们可能在原型阶段工作正常，但在实际使用场景中往往会失败。
+构建代理（或任何 LLM 应用）最难的部分是使其足够可靠。虽然它们可能在原型阶段工作正常，但在实际使用场景中往往会失败。
 
-### Agent 为何会失败？
+### 为什么代理会失败？
 
-当 Agent 失败时，通常是因为 Agent 内部的 LLM 调用采取了错误的操作/没有做出我们期望的行为。LLM 失败的原因有以下两个：
+When agents fail, it's usually because the LLM call inside the agent took the wrong action / didn't do what we expected. LLMs fail for one of two reasons:
 
 1. 底层 LLM 能力不足
-2. 没有向 LLM 传递"正确"的上下文
+2. "正确"的上下文没有被传递给 LLM
 
-大多数情况下——实际上第二个原因才是导致 Agent 不可靠的根本所在。
+更多时候——实际上第二个原因才是导致代理不可靠的原因。
 
-**上下文工程** 是以正确的格式提供正确的信息和工具，以便 LLM 能够完成任务。这是 AI 工程师的首要工作。这种"正确"上下文的缺失是实现更可靠 Agent 的最大障碍，而 LangChain 的 Agent 抽象层专门设计用于促进上下文工程。
+**上下文工程** 是以正确的格式提供正确的信息和工具，以便 LLM 能够完成任务。这是 AI 工程师的首要工作。这种"正确"上下文的缺失是构建更可靠代理的首要障碍，而 LangChain 的代理抽象被专门设计用于促进上下文工程。
 
 <Tip>
-上下文工程新手？先阅读[概念概述](/oss/concepts/context)来了解不同类型的上下文及其使用场景。
+不熟悉上下文工程？从 [概念概述](/oss/concepts/context) 开始，了解不同类型的上下文及其使用场景。
 </Tip>
 
-### Agent 循环
+### 代理循环
 
-一个典型的 Agent 循环包含两个主要步骤：
+典型的代理循环包含两个主要步骤：
 
-1. **模型调用** - 使用提示词和可用工具调用 LLM，返回响应或执行工具的请求
+1. **模型调用** - 使用提示词和可用工具调用 LLM，返回响应或工具执行请求
 2. **工具执行** - 执行 LLM 请求的工具，返回工具结果
 
 <div style={{ display: "flex", justifyContent: "center" }}>
   <img
     src="/oss/images/core_agent_loop.png"
-    alt="核心 Agent 循环图"
+    alt="核心代理循环图"
     className="rounded-lg"
   />
 </div>
 
-此循环会持续执行，直到 LLM 决定结束。
+这个循环会持续，直到 LLM 决定完成。
 
 ### 你可以控制的内容
 
-要构建可靠的 Agent，你需要控制 Agent 循环中每个步骤发生的事情，以及步骤之间发生的事情。
+要构建可靠的代理，你需要控制代理循环中每个步骤以及步骤之间发生的事情。
 
-| 上下文类型 | 你控制的内容 | 瞬态还是持久态 |
+| 上下文类型 | 你能控制的 | 瞬态还是持久 |
 |--------------|------------------|-------------------------|
-| **[模型上下文](#model-context)** | 模型调用的输入内容（指令、消息历史、工具、响应格式） | 瞬态 |
-| **[工具上下文](#tool-context)** | 工具可以访问和产生的内容（对状态、存储、运行时上下文的读写） | 持久态 |
-| **[生命周期上下文](#life-cycle-context)** | 模型调用和工具调用之间发生的事情（摘要、护栏、日志记录等） | 持久态 |
+| **[模型上下文](#model-context)** | 模型调用的内容（指令、消息历史、工具、响应格式）| 瞬态 |
+| **[工具上下文](#tool-context)** | What tools can access and produce (reads/writes to state, store, runtime context) | Persistent |
+| **[生命周期上下文](#life-cycle-context)** | 模型调用和工具调用之间发生的事情（摘要、护栏、日志记录等）| 持久 |
 
 <CardGroup>
-  <Card title="瞬态上下文" icon="bolt" iconType="duotone">
-    LLM 在单次调用中看到的内容。你可以修改消息、工具或提示词，而不会更改状态中保存的内容。
+  <Card title="Transient context" icon="bolt" iconType="duotone">
+    LLM 在单次调用中看到的内容。你可以修改消息、工具或提示词，而不会改变状态中保存的内容。
   </Card>
-  <Card title="持久态上下文" icon="database" iconType="duotone">
-    跨轮次保存到状态中的内容。生命周期钩子和工具写入会永久修改此上下文。
+  <Card title="Persistent context" icon="database" iconType="duotone">
+    跨轮次保存在状态中的内容。生命周期钩子和工具写入会永久修改这些内容。
   </Card>
 </CardGroup>
 
 ### 数据源
 
-在整个过程中，你的 Agent 会访问（读取/写入）不同的数据源：
+Throughout this process, your agent accesses (reads / writes) different sources of data:
 
 | 数据源 | 也称为 | 范围 | 示例 |
 |-------------|---------------|-------|----------|
-| **运行时上下文** | 静态配置 | 对话级别 | 用户 ID、API 密钥、数据库连接、权限、环境设置 |
-| **状态** | 短期记忆 | 对话级别 | 当前消息、上传的文件、认证状态、工具结果 |
-| **存储** | 长期记忆 | 跨对话 | 用户偏好、提取的洞察、记忆、历史数据 |
+| **运行时上下文** | 静态配置 | 对话作用域 | 用户 ID、API 密钥、数据库连接、权限、环境设置 |
+| **状态** | 短期记忆 | 对话作用域 | 当前消息、上传的文件、认证状态、工具结果 |
+| **存储** | 长期记忆 | 跨对话 | 用户偏好、提取的见解、记忆、历史数据 |
 
 ### 工作原理
 
-LangChain [中间件](/oss/langchain/middleware) 是在底层使开发者使用 LangChain 进行上下文工程变得实用的机制。
+LangChain [中间件](/oss/langchain/middleware) 是在底层使上下文工程对使用 LangChain 的开发者变得实用的机制。
 
-中间件允许你钩入 Agent 生命周期的任何步骤并：
+中间件允许你钩入代理生命周期中的任何步骤并：
 
 * 更新上下文
-* 跳转到 Agent 生命周期中的不同步骤
+* 跳转到代理生命周期中的不同步骤
 
-在本指南中，你将频繁看到中间件 API 作为上下文工程手段的使用。
+在本指南中，你将频繁看到中间件 API 的使用作为上下文工程的一种手段。
 
 ## 模型上下文
 
-控制每个模型调用的输入内容——指令、可用的工具、使用的模型以及输出格式。这些决策直接影响可靠性和成本。
+控制每个模型调用中包含的内容——指令、可用的工具、使用哪个模型以及输出格式。这些决策直接影响可靠性和成本。
 
 <CardGroup cols={2}>
-    <Card title="系统提示词" icon="message-2" href="#system-prompt">
-        开发者向 LLM 提供的基础指令。
+    <Card title="System Prompt" icon="message-2" href="#system-prompt">
+        开发者给 LLM 的基础指令。
     </Card>
-    <Card title="消息" icon="messages" href="#messages">
+    <Card title="Messages" icon="messages" href="#messages">
         发送给 LLM 的完整消息列表（对话历史）。
     </Card>
-    <Card title="工具" icon="tool" href="#tools">
-        Agent 可用于执行操作的实用工具。
+    <Card title="Tools" icon="tool" href="#tools">
+        代理可用于执行操作的工具。
     </Card>
-    <Card title="模型" icon="cpu" href="#model">
-        实际要调用的模型（包括配置）。
+    <Card title="Model" icon="cpu" href="#model">
+        要调用的实际模型（包括配置）。
     </Card>
-    <Card title="响应格式" icon="braces" href="#response-format">
+    <Card title="Response Format" icon="braces" href="#response-format">
         模型最终响应的模式规范。
     </Card>
 </CardGroup>
 
-所有这些类型的模型上下文都可以从**状态**（短期记忆）、**存储**（长期记忆）或**运行时上下文**（静态配置）中获取。
+所有这些类型的模型上下文都可以从以下来源获取 **状态** （短期记忆）， **存储** （长期记忆），或 **运行时上下文** （静态配置）。
 
 ### 系统提示词
 
-系统提示词设定了 LLM 的行为和能力。不同的用户、上下文或对话阶段需要不同的指令。成功的 Agent 会利用记忆、偏好和配置来为当前对话状态提供正确的指令。
+系统提示词设置 LLM 的行为和能力。不同的用户、上下文或对话阶段需要不同的指令。成功的代理利用记忆、偏好和配置来为当前对话状态提供正确的指令。
 
 <Tabs>
-  <Tab title="状态">
+  <Tab title="State">
     从状态中访问消息计数或对话上下文：
 
     :::python
@@ -160,17 +160,13 @@ LangChain [中间件](/oss/langchain/middleware) 是在底层使开发者使用 
       ],
     });
     ```
-<fragment>
     :::
   </Tab>
 
   <Tab title="Store">
-    从长期记忆中访问用户偏好设置：
+    从长期记忆中访问用户偏好：
 
     :::python
-
-
-</fragment>
 
     ```python
     from dataclasses import dataclass
@@ -243,16 +239,13 @@ LangChain [中间件](/oss/langchain/middleware) 是在底层使开发者使用 
       ],
     });
     ```
-```
-:::
+    :::
   </Tab>
 
   <Tab title="Runtime Context">
-    从运行时上下文获取用户 ID 或配置：
+    从运行时上下文中访问用户 ID 或配置：
 
     :::python
-
-```
 
     ```python
     from dataclasses import dataclass
@@ -330,7 +323,6 @@ LangChain [中间件](/oss/langchain/middleware) 是在底层使开发者使用 
       ],
     });
     ```
-<fragment>
     :::
   </Tab>
 
@@ -339,16 +331,13 @@ LangChain [中间件](/oss/langchain/middleware) 是在底层使开发者使用 
 ### 消息
 
 消息构成了发送给 LLM 的提示词。
-管理消息的内容至关重要，这能确保 LLM 拥有正确的信息来做出良好的响应。
+管理消息内容至关重要，以确保 LLM 拥有正确的信息来良好地回应。
 
 <Tabs>
   <Tab title="State">
-    在相关当前查询时，从 State 注入上传的文件上下文：
+    当与当前查询相关时，从状态中注入上传文件的上下文：
 
     :::python
-
-
-</fragment>
 
     ```python
     from langchain.agents import create_agent
@@ -433,15 +422,13 @@ Reference these files when answering questions.`;
       middleware: [injectFileContext],
     });
     ```
-:::
+    :::
   </Tab>
 
   <Tab title="Store">
-    从 Store 注入用户的邮件写作风格以指导起草：
+    从存储中注入用户的电子邮件写作风格以指导起草：
 
     :::python
-
-</fragment>
 
     ```python
     from dataclasses import dataclass
@@ -536,17 +523,13 @@ ${style.exampleEmail || ''}`;
       },
     });
     ```
-<fragment>
     :::
   </Tab>
 
   <Tab title="Runtime Context">
-    根据用户管辖区域从运行时上下文注入合规规则：
+    根据用户辖区从运行时上下文中注入合规规则：
 
     :::python
-
-
-</fragment>
 
     ```python
     from dataclasses import dataclass
@@ -654,42 +637,40 @@ ${rules.join("\n")}`;
       },
     });
     ```
-:::
+    :::
   </Tab>
 
 </Tabs>
 
 <Note>
-**瞬时更新与持久更新：**
+**临时更新与持久消息更新：**
 
-上面的示例使用 `wrap_model_call` 进行**瞬时**更新 - 修改发送给模型的单次调用消息，但不会更改状态中保存的内容。
+上面的例子使用 `wrap_model_call` 来进行 **临时** 更新——修改发送给模型的消息内容，用于单个调用，不改变存储在状态中的内容。
 
-要进行修改状态的**持久**更新，你可以：
+对于 **持久** 更新（会修改状态），你可以：
 
 :::python
-- 从 `wrap_model_call` 返回带有 @[`Command`] 的 @[`ExtendedModelResponse`]，以从模型调用层注入状态更新。
-- 使用生命周期钩子（如 `before_model`、`after_model` 或 `wrap_tool_call`（用于工具返回））来更新对话历史。有关更多详细信息，请参阅[中间件文档](/oss/langchain/middleware)。
+- 从`ExtendedModelResponse`返回一个带有`Command`的 @[ `wrap_model_call` ] 来从模型调用层注入状态更新。
+- 使用生命周期钩子，如 `before_model`, `after_model`, or `wrap_tool_call` （用于工具返回）来更新对话历史。请参阅 [中间件文档](/oss/langchain/middleware) 获取更多详情。
 :::
 
 :::js
-- 直接从 `wrapModelCall` 返回 @[`Command`]，以从模型调用层注入状态更新。
-- 使用生命周期钩子（如 `beforeModel`、`afterModel` 或 `wrapToolCall`（用于工具返回））来更新对话历史。有关更多详细信息，请参阅[中间件文档](/oss/langchain/middleware)。
+- 返回 @[`Command`] 直接返回 `wrapModelCall` 从模型调用层注入状态更新。
+- 使用生命周期钩子如 `beforeModel`, `afterModel`, or `wrapToolCall` （用于工具返回）来更新对话历史。请参阅 [中间件文档](/oss/langchain/middleware) 了解更多详情。
 :::
 
-有关更多信息，请参阅[状态更新](/oss/langchain/middleware/custom#state-updates)。
+请参阅 [状态更新](/oss/langchain/middleware/custom#state-updates) 了解更多。
 </Note>
 
 ### 工具
 
-工具允许模型与数据库、API 和外部系统进行交互。定义和选择工具的方式直接影响模型是否能有效完成任务。
+工具使模型能够与数据库、API 和外部系统交互。如何定义和选择工具直接影响模型能否有效完成任务。
 
 #### 定义工具
 
-每个工具都需要清晰的名称、描述、参数名称和参数描述。这些不仅仅是元数据——它们指导模型推理何时以及如何使用该工具。
+每个工具需要一个清晰的名称、描述、参数名称和参数描述。这些不仅仅是元数据——它们引导模型推理何时以及如何使用该工具。
 
 :::python
-
-</fragment>
 ```python
 from langchain.tools import tool
 
@@ -741,16 +722,13 @@ const searchOrders = tool(
 
 #### 选择工具
 
-并非每种工具都适用于每种情况。工具过多可能会让模型不堪重负（上下文过载）并增加错误；工具过少则会限制功能。动态工具选择根据身份验证状态、用户权限、功能标志或对话阶段来调整可用的工具集。
+并非每个工具都适合每种情况。工具过多可能会让模型不堪重负（上下文过载）并增加错误；工具过少则会限制能力。动态工具选择根据认证状态、用户权限、功能开关或对话阶段来调整可用工具集。
 
 <Tabs>
-  <Tab title="状态">
-    仅在达到特定对话里程碑后启用高级工具：
+  <Tab title="State">
+    在某些对话里程碑之后启用高级工具：
 
     :::python
-
-</Tab>
-</Tabs>
 
     ```python
     from langchain.agents import create_agent
@@ -812,11 +790,11 @@ const searchOrders = tool(
       },
     });
     ```
-:::
+    :::
   </Tab>
 
   <Tab title="Store">
-    根据用户偏好或功能标志在 Store 中过滤工具：
+    根据 Store 中的用户偏好或功能开关过滤工具：
 
     :::python
 
@@ -891,17 +869,13 @@ const searchOrders = tool(
       },
     });
     ```
-```
-:::
+    :::
   </Tab>
 
-  <Tab title="运行时上下文">
-    基于运行时上下文中的用户权限过滤工具：
+  <Tab title="Runtime Context">
+    根据 Runtime Context 中的用户权限过滤工具：
 
     :::python
-
-
-```
 
     ```python
     from dataclasses import dataclass
@@ -975,25 +949,22 @@ const searchOrders = tool(
       },
     });
     ```
-<fragment>
     :::
   </Tab>
 </Tabs>
 
-有关过滤预注册工具和在运行时注册工具（例如来自 MCP 服务器）的信息，请参阅[动态工具](/oss/langchain/tools#dynamic-tool-selection)。
+请参阅 [动态工具](/oss/langchain/tools#dynamic-tool-selection) 了解如何过滤预注册工具以及在运行时注册工具（例如从 MCP 服务器）。
 
 ### 模型
 
-不同的模型有不同的优势、成本和上下文窗口。选择适合当前任务的模型，这可能会在代理运行期间发生变化。
+不同的模型具有不同的优势、成本和上下文窗口。为手头任务选择正确的模型，
+在智能体运行期间可能会发生变化。
 
 <Tabs>
   <Tab title="State">
-    根据状态中的对话长度使用不同的模型：
+    根据 State 中的对话长度使用不同的模型：
 
     :::python
-
-
-</fragment>
 
     ```python
     from langchain.agents import create_agent
@@ -1066,11 +1037,11 @@ const searchOrders = tool(
       },
     });
     ```
-:::
+    :::
   </Tab>
 
   <Tab title="Store">
-    使用用户 Store 中首选的模型：
+    使用 Store 中用户偏好的模型：
 
     :::python
 
@@ -1162,16 +1133,13 @@ const searchOrders = tool(
       },
     });
     ```
-::::
+    :::
   </Tab>
 
-  <Tab title="运行时上下文">
-    根据成本限制或环境从运行时上下文中选择模型：
+  <Tab title="Runtime Context">
+    根据 Runtime Context 中的成本限制或环境选择模型：
 
     :::python
-
-
-</fragment>
 
     ```python
     from dataclasses import dataclass
@@ -1261,25 +1229,23 @@ const searchOrders = tool(
       },
     });
     ```
-::::
-</Tab>
+    :::
+  </Tab>
 </Tabs>
 
-请参阅 [Dynamic model](/oss/langchain/models#dynamic-model-selection) 获取更多示例。
+请参阅 [动态模型](/oss/langchain/models#dynamic-model-selection) 了解更多示例。
 
 ### 响应格式
 
-结构化输出将非结构化文本转换为经过验证的结构化数据。在提取特定字段或返回供下游系统使用的数据时，自由格式的文本是不够的。
+结构化输出将非结构化文本转换为经过验证的结构化数据。在提取特定字段或为下游系统返回数据时，自由格式文本是不够的。
 
-**工作原理：** 当您提供 schema 作为响应格式时，模型的最终响应将保证符合该 schema。代理运行模型 / 工具调用循环，直到模型完成工具调用，然后将最终响应强制转换为提供的格式。
+**工作原理：** When you provide a schema as the response format, the model's final response is guaranteed to conform to that schema. The agent runs the model / tool calling loop until the model is done calling tools, then the final response is coerced into the provided format.
 
 #### 定义格式
 
-Schema 定义指导模型。字段名称、类型和描述明确指定输出应遵循的确切格式。
+架构定义指导模型。字段名称、类型和描述精确指定输出应遵循的格式。
 
 :::python
-
-</fragment>
 ```python
 from pydantic import BaseModel, Field
 
@@ -1324,35 +1290,13 @@ const customerSupportTicket = z.object({
 
 #### 选择格式
 
-动态响应格式选择根据用户偏好、对话阶段或角色调整模式——在早期返回简单格式，随着复杂性增加返回详细格式。
+动态响应格式选择根据用户偏好、对话阶段或角色来调整架构——在早期返回简单格式，随着复杂度增加返回详细格式。
 
 <Tabs>
-  <Tab title="状态">
+  <Tab title="State">
     根据对话状态配置结构化输出：
 
     :::python
-    @agent.state_provider
-    def get_conversation_state() -> ConversationState:
-        """Determine appropriate output format based on conversation progression."""
-        if self.turn_count <= 2:
-            return ConversationState.INITIAL
-        elif self.turn_count <= 5:
-            return ConversationState.EXPLORING
-        else:
-            return ConversationState.COMPLEX
-
-    @agent.output_formatter
-    def format_for_state(state: ConversationState, data: dict) -> str:
-        """Apply format complexity matching conversation state."""
-        schemas = {
-            ConversationState.INITIAL: minimal_schema,
-            ConversationState.EXPLORING: standard_schema,
-            ConversationState.COMPLEX: comprehensive_schema,
-        }
-        return render_with_schema(data, schemas[state])</Tab>
-</Tabs>
-
-The `state_provider` returns the conversation's current complexity level, while `output_formatter` maps that state to an appropriate schema.
 
     ```python
     from langchain.agents import create_agent
@@ -1431,11 +1375,11 @@ The `state_provider` returns the conversation's current complexity level, while 
       },
     });
     ```
-:::
+    :::
   </Tab>
 
-  <Tab title="商店">
-    根据商店中的用户偏好配置输出格式：
+  <Tab title="Store">
+    根据 Store 中的用户偏好配置输出格式：
 
     :::python
 
@@ -1530,11 +1474,11 @@ The `state_provider` returns the conversation's current complexity level, while 
       },
     });
     ```
-:::
+    :::
   </Tab>
 
-  <Tab title="运行时上下文">
-    根据运行时上下文（如用户角色或环境）配置输出格式：
+  <Tab title="Runtime Context">
+    根据 Runtime Context（如用户角色或环境）配置输出格式：
 
     :::python
 
@@ -1627,29 +1571,27 @@ The `state_provider` returns the conversation's current complexity level, while 
       },
     });
     ```
-:::
+    :::
   </Tab>
 </Tabs>
 
 ## 工具上下文
 
-工具的特殊之处在于它们既读取也写入上下文。
+工具的特殊之处在于它们既能读取也能写入上下文。
 
-在最基本的情况下，当工具执行时，它接收 LLM 的请求参数并返回工具消息。工具完成其工作并产生结果。
+在最基本的情况下，当工具执行时，它接收 LLM 的请求参数并返回一条工具消息。工具完成其工作并产生结果。
 
 工具还可以为模型获取重要信息，使其能够执行和完成任务。
 
 ### 读取
 
-大多数实际工具需要的不仅仅是 LLM 的参数。它们需要用于数据库查询的用户 ID、用于外部服务的 API 密钥，或当前的会话状态来做出决策。工具从状态、存储和运行时上下文读取以访问此信息。
+大多数实际工具不仅需要 LLM 的参数。它们需要用户 ID 来执行数据库查询、需要 API 密钥来调用外部服务，或需要当前会话状态来做出决策。工具从 state、store 和运行时上下文读取这些信息。
 
 <Tabs>
-  <Tab title="状态">
-    从状态读取以检查当前会话信息：
+  <Tab title="State">
+    从 State 读取以检查当前会话信息：
 
     :::python
-
-</fragment>
 
     ```python
     from langchain.tools import tool, ToolRuntime
@@ -1701,15 +1643,13 @@ The `state_provider` returns the conversation's current complexity level, while 
       }
     );
     ```
-:::
+    :::
   </Tab>
 
   <Tab title="Store">
-    从 Store 读取数据以访问持久化的用户偏好设置：
+    从 Store 读取以访问持久化的用户偏好设置：
 
     :::python
-
-</fragment>
 
     ```python
     from dataclasses import dataclass
@@ -1782,15 +1722,13 @@ The `state_provider` returns the conversation's current complexity level, while 
       }
     );
     ```
-:::
+    :::
   </Tab>
 
   <Tab title="Runtime Context">
-    从 Runtime Context 读取配置，如 API keys 和 user IDs：
+    从运行时上下文读取配置信息，如 API 密钥和用户 ID：
 
     :::python
-
-</Tab>
 
     ```python
     from dataclasses import dataclass
@@ -1875,22 +1813,20 @@ The `state_provider` returns the conversation's current complexity level, while 
       contextSchema,
     });
     ```
-<fragment>
     :::
   </Tab>
 </Tabs>
 
 ### 写入
 
-工具结果可用于帮助代理完成给定任务。工具既可以将结果直接返回给模型，也可以更新代理的记忆，使重要上下文对未来步骤可用。
+工具结果可用于帮助代理完成给定任务。工具可以直接将结果返回给模型
+并更新代理的记忆，使重要上下文可用于后续步骤。
 
 <Tabs>
   <Tab title="State">
     写入 State 以使用 Command 跟踪会话特定信息：
 
     :::python
-
-</fragment>
 
     ```python
     from langchain.tools import tool, ToolRuntime
@@ -1948,7 +1884,7 @@ The `state_provider` returns the conversation's current complexity level, while 
       }
     );
     ```
-:::
+    :::
   </Tab>
 
   <Tab title="Store">
@@ -2030,32 +1966,32 @@ The `state_provider` returns the conversation's current complexity level, while 
       }
     );
     ```
-:::
+    :::
   </Tab>
 </Tabs>
 
-有关在工具中访问状态、存储和运行时上下文的完整示例，请参阅[工具](/oss/langchain/tools)。
+参见 [工具](/oss/langchain/tools) 获取访问工具中 state、store 和运行时上下文的综合示例。
 
 ## 生命周期上下文
 
-控制核心代理步骤**之间**发生的事情——拦截数据流以实现跨领域关注点，如摘要生成、护栏和日志记录。
+控制发生什么 **之间** 核心代理步骤 - 拦截数据流以实现横切关注点，如摘要、护栏和日志记录。
 
-正如您在[模型上下文](#model-context)和[工具上下文](#tool-context)中所见，[中间件](/oss/langchain/middleware)是使上下文工程变得实用的机制。中间件允许您挂钩到代理生命周期的任何步骤，并可以：
+正如您在 [模型上下文](#model-context) 和 [工具上下文](#tool-context), [中间件](/oss/langchain/middleware) 是使上下文工程成为可能的关键机制。中间件让你能够接入代理生命周期中的任何步骤，并执行以下操作之一：
 
-1. **更新上下文** - 修改状态和存储以保留更改、更新对话历史或保存洞察
-2. **跳入生命周期** - 根据上下文移动到代理循环中的不同步骤（例如，如果满足条件则跳过工具执行，使用修改后的上下文重复模型调用）
+1. **更新上下文** 修改 state 和 store 以持久化变更、更新对话历史或保存洞察
+2. **在生命周期中跳转** 根据上下文跳转到代理循环中的不同步骤（例如，如果满足条件则跳过工具执行，使用修改后的上下文重复模型调用）
 
 <div style={{ display: "flex", justifyContent: "center" }}>
   <img
     src="/oss/images/middleware_final.png"
-    alt="代理循环中的中间件钩子"
+    alt="中间件在代理循环中的钩子"
     className="rounded-lg"
   />
 </div>
 
-### 示例：摘要生成
+### 示例：摘要
 
-最常见的生命周期模式之一是当对话历史过长时自动压缩对话历史。与[模型上下文](#messages)中所示的临时消息修剪不同，摘要生成**持久更新状态**——用摘要永久替换旧消息，该摘要会被保存以供所有未来轮次使用。
+最常见的生命周期模式之一是当对话历史过长时自动压缩。不同于中所示的临时消息修剪 [模型上下文](#messages)，摘要 **会持久化更新 state** 用摘要永久替换旧消息，该摘要会被保存以供所有后续轮次使用。
 
 LangChain 为此提供了内置中间件：
 
@@ -2094,31 +2030,32 @@ const agent = createAgent({
   ],
 });
 ```
-当对话超出 token 限制时，`SummarizationMiddleware` 会自动：
+:::
 
-1. 使用单独的 LLM 调用来总结较早的消息
-2. 用摘要消息替换它们（在 State 中永久替换）
-3. 保持最近的消息完整以保留上下文
+当对话超过 token 限制时， `SummarizationMiddleware` automatically:
+1. 使用单独的 LLM 调用对旧消息进行摘要
+2. 在 State 中用摘要消息替换它们（永久地）
+3. 保留最近的对话保持完整以维持上下文
 
-总结后的对话历史会被永久更新——后续轮次将看到摘要而非原始消息。
+摘要后的对话历史将被永久更新——未来的对话轮次将看到摘要而不是原始消息。
 
 <Note>
-有关内置中间件的完整列表、可用的钩子以及如何创建自定义中间件，请参阅[中间件文档](/oss/langchain/middleware)。
+有关内置中间件的完整列表、可用钩子以及如何创建自定义中间件，请参阅 [中间件文档](/oss/langchain/middleware).
 </Note>
 
 ## 最佳实践
 
 1. **从简单开始** - 从静态提示词和工具开始，仅在需要时才添加动态内容
-2. **增量测试** - 每次添加一个上下文工程功能
-3. **监控性能** - 跟踪模型调用、token 使用量和延迟
-4. **使用内置中间件** - 利用 [`SummarizationMiddleware`](/oss/langchain/middleware#summarization)、[`LLMToolSelectorMiddleware`](/oss/langchain/middleware#llm-tool-selector) 等
-5. **记录你的上下文策略** - 明确说明传递了哪些上下文以及原因
-6. **理解瞬态与持久化的区别**：模型上下文变更是瞬态的（每次调用），而生命周期上下文变更会持久化到 state
+2. **增量测试** - 一次添加一个上下文工程特性
+3. **监控性能** - 跟踪模型调用、令牌使用量和延迟
+4. **使用内置中间件** - 利用 [`SummarizationMiddleware`](/oss/langchain/middleware#summarization), [`LLMToolSelectorMiddleware`](/oss/langchain/middleware#llm-tool-selector)等。
+5. **记录您的上下文策略** - 明确说明传递了哪些上下文以及原因
+6. **理解临时上下文与持久上下文**：模型上下文变更是临时的（每次调用），而生命周期上下文变更会持久化到状态
 
 ## 相关资源
 
-- [上下文概念概述](/oss/concepts/context) - 了解上下文类型及适用场景
-- [中间件](/oss/langchain/middleware) - 完整中间件指南
-- [工具](/oss/langchain/tools) - 工具创建和上下文访问
+- [上下文概念概述](/oss/concepts/context) - 了解上下文类型及其使用场景
+- [中间件](/oss/langchain/middleware) - 完整的中间件指南
+- [工具](/oss/langchain/tools) - 工具创建与上下文访问
 - [内存](/oss/concepts/memory) - 短期和长期内存模式
 - [代理](/oss/langchain/agents) - 核心代理概念

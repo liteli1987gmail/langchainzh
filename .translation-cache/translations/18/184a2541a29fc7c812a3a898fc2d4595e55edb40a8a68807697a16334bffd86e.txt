@@ -1,43 +1,40 @@
 ---
-title: 沙箱挂载
+title: 沙盒挂载
 sidebarTitle: 挂载
-description: 将 S3 存储桶、GCS 存储桶和公共 Git 仓库挂载到 LangSmith 沙箱中。
+description: 将 S3 存储桶、GCS 存储桶和公共 Git 仓库挂载到 LangSmith 沙盒中。
 ---
 
-沙箱挂载在创建沙箱时将外部数据源附加到沙箱文件系统。当沙箱代码需要直接访问对象存储桶或公共 Git 仓库（无需将数据复制到沙箱镜像中）时，请使用挂载。
+沙盒挂载在创建沙盒时将外部数据源附加到沙盒文件系统。当沙盒代码需要直接访问对象存储桶或公共 Git 仓库而不将数据复制到沙盒镜像中时，请使用挂载。
 
-挂载通过 Python 中的 `mount_config` 或 TypeScript 中的 `mountConfig` 进行配置。SDK 将挂载规范发送到 LangSmith，并组合所需的身份验证代理规则以获取提供商凭证。
+挂载通过以下方式配置 `mount_config` 在 Python 中或 `mountConfig` 在 TypeScript 中。SDK 将挂载规范发送到 LangSmith 并组合所需的 [认证代理](/langsmith/sandbox-auth-proxy) 提供程序凭证的规则。
 
 <Note>
-沙箱挂载需要 Python 的 `langsmith[sandbox]>=0.8.16` 或 TypeScript 的 `langsmith>=0.7.10`。
+沙盒挂载需要 `langsmith[sandbox]>=0.8.16` 对于 Python 或 `langsmith>=0.7.10` 对于 TypeScript。
 </Note>
 
 <Warning>
-在创建挂载 S3 或 GCS 的沙箱之前，请先将云凭证存储为 LangSmith 工作区密钥。绝对不要将真实的云凭证作为沙箱环境变量、命令参数或文件传递。
+在创建挂载 S3 或 GCS 的沙盒之前，将云凭证存储为 LangSmith 工作区密钥。不要将真实的云凭证作为沙盒环境变量、命令参数或文件传递。
 </Warning>
 
 ## 配置挂载路径
 
-每个挂载都有一个 `id`、`type` 和 `mount_path` / `mountPath`。挂载路径必须是以 `/mnt/mounts` 开头的绝对路径。
+每个挂载都有一个 `id`, a `type`，和一个 `mount_path` / `mountPath`。挂载路径必须是 `/mnt/mounts`.
 
-使用描述挂载源的稳定路径：
+下的绝对路径使用描述挂载源的稳定路径：
 
-| 源 | 示例路径 |
+| 来源 | 示例路径 |
 |--------|--------------|
 | S3 存储桶前缀 | `/mnt/mounts/customer-data` |
 | GCS 存储桶前缀 | `/mnt/mounts/eval-datasets` |
 | Git 仓库 | `/mnt/mounts/repo` |
 
-挂载 ID 可以包含 ASCII 字母、数字、下划线和连字符。请勿在同一沙箱中重复使用 ID 或挂载路径。
+挂载 ID 可以包含 ASCII 字母、数字、下划线和连字符。请勿在同一沙盒中重复使用 ID 或挂载路径。
 
 ## 挂载 S3 存储桶
 
-S3 挂载需要 AWS 身份验证。SDK 从 `aws_auth` / `awsAuth` 创建 AWS 身份验证代理规则，使沙箱能够访问存储桶而无需查看真实的访问密钥。
+S3 挂载需要 AWS 认证。SDK 从 `aws_auth` / `awsAuth`创建 AWS 认证代理规则，以便沙盒可以访问存储桶而无需看到真实的访问密钥。
 
 <CodeGroup>
-
-
-</fragment>
 
 ```python Python
 from langsmith.sandbox import (
@@ -123,7 +120,7 @@ try {
 
 ## 挂载 GCS 存储桶
 
-GCS 挂载需要 GCP 身份验证。读写挂载需要 `https://www.googleapis.com/auth/devstorage.read_write` 或 `https://www.googleapis.com/auth/cloud-platform` OAuth 作用域。只读挂载可以使用 `https://www.googleapis.com/auth/devstorage.read_only`。
+GCS mounts require GCP auth. Read/write mounts require the `https://www.googleapis.com/auth/devstorage.read_write` or `https://www.googleapis.com/auth/cloud-platform` OAuth 范围。只读挂载可以使用 `https://www.googleapis.com/auth/devstorage.read_only`.
 
 <CodeGroup>
 
@@ -267,15 +264,13 @@ try {
 
 </CodeGroup>
 
-私有 Git 仓库在远程需要代理管理的身份验证时，可以使用低级别的 `proxy_config` / `proxyConfig` 规则。目前还没有高级别的私有 Git 身份验证帮助程序。
+私有 Git 仓库可以使用低级 `proxy_config` / `proxyConfig` 规则（当远程需要代理管理的认证时）。目前还没有高级的私有 Git 认证帮助程序。
 
 ## 组合挂载
 
-沙箱可以挂载多个源。使用所有挂载规格构建一个 `mount_config` / `mountConfig`，并为这些规格使用的每个存储桶提供程序包含提供程序身份验证。
+沙盒可以挂载多个源。构建一个 `mount_config` / `mountConfig` 包含所有挂载规范，并包括这些规范使用的每个存储桶提供程序的提供者认证。
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from langsmith.sandbox import (
@@ -363,16 +358,24 @@ const mountCfg = mountConfig({
 });
 ```
 
+</CodeGroup>
+
 ## 缓存存储桶挂载
 
-S3 和 GCS 挂载支持可选的缓存设置。缓存设置用于调整存储桶挂载使用的本地 VFS 缓存；存储桶仍是数据源。请使用缓存设置来控制本地磁盘使用率和回写时间，而非将其作为单独的数据持久化层。缓存设置不适用于 Git 挂载。
+S3 和 GCS 挂载支持可选的缓存设置。缓存设置调整本地
+存储桶挂载使用的 VFS 缓存；存储桶仍是真实来源。使用
+缓存设置来控制本地磁盘使用和写回时间，而不是作为
+独立的持久层。缓存设置不适用于 Git 挂载。
 
 | 字段 | 描述 |
 |-------|-------------|
-| `max_size_bytes` | 本地挂载缓存的可选最大大小（以字节为单位）。设置正值以添加显式上限；省略则使用运行时默认值。 |
-| `writeback_seconds` | 缓存写入回写到存储桶前的可选延迟（以秒为单位）。默认值为 `0`。较低的值使写入更快对存储桶可见；对于重写相同文件的工作负载，较高的值可减少写入流量。 |
+| `max_size_bytes` | 本地挂载缓存的可选最大大小（以字节为单位）。设置正值以添加显式上限；省略以保留运行时默认值。|
+| `writeback_seconds` | 缓存写入写回存储桶之前的可选延迟（以秒为单位）。默认值为 `0`。较低的值使写入更快对 bucket 可见；较高的值可以减少重写相同文件的工作负载的写入流量。 |
 
-对于只读数据集挂载，仅在需要特定本地缓存上限时才配置 `max_size_bytes`。对于可写挂载，当另一个进程需要在沙箱写入后很快从 S3 或 GCS 读取对象时，请保持 `writeback_seconds` 较低。
+对于只读数据集挂载，请配置 `max_size_bytes` 仅在需要
+特定的本地缓存上限时。对于可写挂载，请保持 `writeback_seconds` 较低当
+另一个进程需要在沙箱后不久从 S3 或 GCS 读取对象
+写入它们。
 
 <CodeGroup>
 
@@ -402,7 +405,7 @@ s3Mount({
 
 </CodeGroup>
 
-相同的缓存设置可以用于 GCS 挂载：
+相同的缓存设置可用于 GCS 挂载：
 
 <CodeGroup>
 
@@ -434,7 +437,7 @@ gcsMount({
 
 ## 限制
 
-- 挂载在沙箱创建时附加。如需更改挂载，请创建新的沙箱。
-- 在每个沙箱的一个身份验证界面中配置各云提供商的凭据。如果挂载身份验证提供了 AWS 或 GCP 凭据，请勿为同一提供商添加身份验证代理规则。
+- 挂载在创建沙箱时附加。创建新的沙箱来更改挂载。
+- 在每个沙箱的一个身份验证面中配置每个云提供商的凭证。如果挂载身份验证提供 AWS 或 GCP 凭证，请不要为同一提供商添加身份验证代理规则。
 - Git 引用可以省略或设置为分支或标签。不支持提交引用。
 - Git 挂载不支持 `read_only` / `readOnly` 或缓存设置。

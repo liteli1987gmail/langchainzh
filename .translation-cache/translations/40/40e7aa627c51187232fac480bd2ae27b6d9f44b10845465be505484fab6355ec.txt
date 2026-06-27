@@ -22,39 +22,37 @@ import EvaluateRagRunEvaluationJs from '/snippets/code-samples/evaluate-rag-run-
 import EvaluateRagReferencePy from '/snippets/code-samples/evaluate-rag-reference-py.mdx';
 import EvaluateRagReferenceJs from '/snippets/code-samples/evaluate-rag-reference-js.mdx';
 
-检索增强生成 (RAG) 是一种通过向大型语言模型 (LLM) 提供相关外部知识来增强其能力的技er。它已成为构建 LLM 应用最广泛使用的方法之一。
+检索增强生成 (RAG) 是一种通过为大型语言模型 (LLM) 提供相关外部知识来增强其能力的技术。它已成为构建 LLM 应用最广泛使用的方法之一。
 
-本教程将向您展示如何使用 LangSmith 评估您的 RAG 应用。您将学习到：
+本教程将向您展示如何使用 LangSmith 评估您的 RAG 应用。您将学习：
 
 1. 如何创建测试数据集
-2. 如何在这些数据集上运行您的 RAG 应用
-3. 如何使用不同的评估指标来衡量您应用的性能
+2. 如何在该数据集上运行您的 RAG 应用
+3. 如何使用不同的评估指标来衡量应用的性能
 
 ## 概述
 
-典型的 RAG 评估工作流程包括三个主要步骤：
+典型的 RAG 评估工作流程包含三个主要步骤：
 
 1. 创建包含问题及其预期答案的数据集
 
 2. 在这些问题上运行您的 RAG 应用
 
-3. 使用评估器来衡量您应用的性能表现，考虑以下因素：
+3. 使用评估器来衡量应用的表现，考虑以下因素：
 
    * 答案相关性
    * 答案准确性
    * 检索质量
 
-在本教程中，我们将创建并评估一个用于回答 [Lilian Weng](https://lilianweng.github.io/) 一些精彩博客文章相关问题的机器人。
+在本教程中，我们将创建并评估一个用于回答 [Lilian Weng 的](https://lilianweng.github.io/) 有见地的博客文章的问答机器人。
 
 ## 设置
 
 ### 环境
 
-首先，让我们设置环境变量：
+首先，设置环境变量：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 import os
@@ -71,11 +69,9 @@ process.env.OPENAI_API_KEY = "YOUR OPENAI API KEY";
 
 </CodeGroup>
 
-然后安装我们需要的依赖项：
+安装所需的依赖项：
 
 <CodeGroup>
-
-</fragment>
 
 ```bash Python
 pip install -U langsmith langchain[openai] langchain-text-splitters bs4 requests
@@ -95,23 +91,23 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 </CodeGroup>
 
-### 应用程序
+### 应用
 
 <Info>
-虽然本教程使用 LangChain，但此处演示的评估技术和 LangSmith 功能适用于任何框架。您可以自由使用您偏好的工具和库。
+虽然本教程使用 LangChain，但此处展示的评估技术和 LangSmith 功能适用于任何框架。请随意使用您喜欢的工具和库。
 </Info>
 
-在本节中，我们将构建一个基本的检索增强生成（RAG）应用程序。
+在本节中，我们将构建一个基本的检索增强生成 (RAG) 应用。
 
-我们将采用一个简单的实现，包括：
+我们采用一个简单的实现方式：
 
-* 索引：对 Lilian Weng 的博客进行分块并在向量存储中建立索引
-* 检索：根据用户问题检索这些分块
-* 生成：将问题和建议的文档传递给 LLM。
+* 索引：将 Lilian Weng 的部分博客分块并存储在向量数据库中
+* 检索：根据用户问题检索相关块
+* 生成：将问题和检索到的文档传递给 LLM。
 
 #### 索引和检索
 
-首先，让我们加载要为其构建聊天机器人的博客文章并进行索引。
+首先，加载我们想要构建聊天机器人的博客文章并对它们进行索引。
 
 <CodeGroup>
 
@@ -123,7 +119,7 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 #### 生成
 
-现在我们可以定义生成管道。
+现在我们可以定义生成流程。
 
 <CodeGroup>
 
@@ -135,7 +131,7 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 ## 数据集
 
-现在我们已经构建了应用程序，让我们构建一个数据集来对其进行评估。在本例中，我们的数据集将非常简单：包含示例问题和参考答案。
+现在我们已经完成了应用构建，让我们创建一个数据集来评估它。在这个例子中，我们的数据集非常简单：包含示例问题和参考答案。
 
 <CodeGroup>
 
@@ -147,35 +143,35 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 ## 评估器
 
-思考不同类型 RAG 评估器的一种方式是将其视为一个元组：被评估的内容 X 相对于什么进行评估：
+思考不同类型 RAG 评估器的一种方式是将其视为一个元组：被评估的内容 X 评估依据：
 
-1. **正确性**：响应与参考答案对比
+1. **正确性**：回答与参考答案对比
 
-   * `目标`：衡量"*RAG 链答案相对于标准答案的相似度/正确程度*"
-   * `模式`：需要通过数据集提供标准（参考）答案
-   * `评估器`：使用 LLM 即评判者来评估答案的正确性。
+   * `Goal`：衡量 "*how similar/correct is the RAG chain answer, relative to a ground-truth answer*"
+   * `Mode`：需要通过数据集提供真实（参考）答案
+   * `Evaluator`：使用 LLM 作为评判者来评估答案正确性。
 
-2. **相关性**：响应与输入对比
+2. **相关性**：回答与输入对比
 
-   * `目标`：衡量"*生成的响应对初始用户输入的处理程度*"
-   * `模式`：不需要参考答案，因为它会将答案与输入问题进行比较
-   * `评估器`：使用 LLM 即评判者来评估答案的相关性、有用性等。
+   * `Goal`：衡量 "*生成的回复在多大程度上解决了用户的初始输入*"
+   * `Mode`：无需参考答案，因为它会将答案与输入问题进行比较
+   * `Evaluator`：使用 LLM 作为评判者来评估答案的相关性、实用性等
 
-3. **有据性**：响应与检索到的文档对比
+3. **基础性**：回复与检索文档的对比
 
-   * `目标`：衡量"*生成的响应与检索到的上下文的一致程度*"
-   * `模式`：不需要参考答案，因为它会将答案与检索到的上下文进行比较
-   * `评估器`：使用 LLM 即评判者来评估忠实度、幻觉等。
+   * `Goal`：衡量 "*生成的回复在多大程度上与检索到的上下文一致*"
+   * `Mode`：无需参考答案，因为它会将答案与检索到的上下文进行比较
+   * `Evaluator`：使用 LLM 作为评判者来评估忠实度、幻觉等
 
-4. **检索相关性**：检索到的文档与输入对比
+4. **检索相关性**：检索文档与输入的对比
 
-   * `目标`：衡量"*检索结果对该查询的相关程度*"
-   * `模式`：不需要参考答案，因为它会将问题与检索到的上下文进行比较
-   * `评估器`：使用 LLM 即评判者来评估相关性
+   * `Goal`：衡量 "*我的检索结果对这个查询的相关性如何*"
+   * `Mode`：无需参考答案，因为它会将问题与检索到的上下文进行比较
+   * `Evaluator`：使用 LLM 作为评判者来评估相关性
 
-![Rag eval overview](/langsmith/images/rag-eval-overview.png)
+![RAG 评估概述](/langsmith/images/rag-eval-overview.png)
 
-### 正确性：响应与参考答案对比
+### 正确性：回复与参考答案的对比
 
 <CodeGroup>
 
@@ -185,9 +181,9 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 </CodeGroup>
 
-### 相关性：响应与输入对比
+### 相关性：回复与输入的对比
 
-流程与上述类似，但我们只需查看 `inputs` 和 `outputs`，无需 `reference_outputs`。没有参考答案我们无法评估准确性，但仍然可以评估相关性——即模型是否回答了用户的问题。
+流程与上述类似，但我们只需查看 `inputs` 和 `outputs` 而无需 `reference_outputs`。没有参考答案我们无法评分准确性，但仍然可以评分相关性——即模型是否回答了用户的问题。
 
 <CodeGroup>
 
@@ -197,9 +193,9 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 </CodeGroup>
 
-### 有据性：响应与检索到的文档对比
+### 基础性：回复与检索文档的对比
 
-另一种无需参考答案即可评估响应的有用方法是检查响应是否由检索到的文档支持（即"有据"）。
+另一种无需参考答案即可评估回复的有效方法是检查回复是否由检索文档支撑（或"基于"检索文档）。
 
 <CodeGroup>
 
@@ -209,7 +205,7 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 </CodeGroup>
 
-### 检索相关性：检索到的文档与输入对比
+### 检索相关性：检索文档与输入的对比
 
 <CodeGroup>
 
@@ -221,7 +217,7 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 ## 运行评估
 
-现在我们可以使用所有不同的评估器启动评估任务。
+我们现在可以使用所有不同的评估器启动评估任务。
 
 <CodeGroup>
 
@@ -231,11 +227,11 @@ pnpm add langsmith langchain @langchain/classic @langchain/openai @langchain/tex
 
 </CodeGroup>
 
-您可以在此处查看这些结果示例：[LangSmith 链接](https://smith.langchain.com/public/302573e2-20bf-4f8c-bdad-e97c20f33f1b/d)
+您可以在此处查看这些结果的示例： [LangSmith 链接](https://smith.langchain.com/public/302573e2-20bf-4f8c-bdad-e97c20f33f1b/d)
 
 ## 参考代码
 
-<Accordion title="以下是包含上述所有代码的整合脚本：">
+<Accordion title="Here's a consolidated script with all the above code:">
     <CodeGroup>
 
 <EvaluateRagReferencePy />

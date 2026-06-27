@@ -1,29 +1,29 @@
 ---
-title: 构建数据分析智能体
+title: 构建数据分析代理
 sidebarTitle: 数据分析
-description: 构建一个分析数据文件、生成可视化并分享结果的智能体
+description: 构建一个能够分析数据文件、生成可视化并分享结果的代理
 ---
 
 ## 概述
 
-本指南演示如何使用[深度智能体](/oss/deepagents)构建数据分析智能体。数据分析任务通常需要规划、代码执行以及处理脚本、报告和图表等产物——这些是深度智能体设计用来处理的能力。
+本指南演示了如何使用 [deep agent](/oss/deepagents)构建数据分析代理。数据分析任务通常需要规划、代码执行以及处理脚本、报告和图表等产物——这些正是深度代理所擅长处理的能力。
 
-我们将构建的智能体将：
+我们将构建的代理将：
 
-1. 接受 CSV 文件进行分析
+1. 接收 CSV 文件进行分析
 2. 执行探索性数据分析并生成可视化
 3. 将结果分享到 Slack 频道
 
 <Tip>
-Slack 集成是可选的。可以修改智能体以在本地保存产物或通过其他渠道分享结果。
+Slack 集成是可选的。代理可以修改为在本地保存产物或通过其他渠道分享结果。
 </Tip>
 
-### 关键概念
+### 核心概念
 
 本教程涵盖：
 
-- 用于沙箱代码执行的[后端](/oss/deepagents/backends)
-- 用于外部集成的自定义[工具](/oss/langchain/tools)
+- [后端](/oss/deepagents/backends) 用于沙箱代码执行
+- 自定义 [工具](/oss/langchain/tools) 用于外部集成
 
 ## 设置
 
@@ -37,11 +37,11 @@ pip install deepagents
 ```
 :::
 
-### 可选依赖项
+### 可选依赖
 
-在本教程中，我们将使用：
-- [Slack Python SDK](https://docs.slack.dev/tools/python-slack-sdk/) 用于共享结果（[令牌设置](https://docs.slack.dev/authentication/tokens/)）
-- 一个 [LangSmith 沙箱](/langsmith/sandboxes) 用于代码执行
+对于本教程，我们将使用：
+- [Slack Python SDK](https://docs.slack.dev/tools/python-slack-sdk/) 用于分享结果（[令牌设置](https://docs.slack.dev/authentication/tokens/))
+- A [LangSmith sandbox](/langsmith/sandboxes) 用于代码执行
 
 :::python
 ```bash pip
@@ -50,14 +50,14 @@ pip install "langsmith[sandbox]" slack-sdk
 :::
 
 <Note>
-这些服务是可选的，但对于任何生产环境使用，都强烈推荐使用沙盒环境。您也可以选择使用本地 shell 后端（需注意重要的[安全注意事项](/oss/deepagents/backends#localshellbackend-local-shell)），或直接从后端下载产物。
+这些服务是可选的，尽管强烈建议在任何生产环境中使用沙箱环境。您也可以选择使用本地 shell 后端（需注意重要的 [安全注意事项](/oss/deepagents/backends#localshellbackend-local-shell)），或直接从后端下载产物。
 </Note>
 
 ### LangSmith
 
-使用 LangChain 构建的许多应用程序都包含多个步骤和多次 LLM 调用。随着这些应用程序变得越来越复杂，能够检查链或代理内部发生的事情变得至关重要。实现这一目的的最佳方式是使用 [LangSmith](https://smith.langchain.com)。
+您使用 LangChain 构建的许多应用程序会包含多个步骤和多次 LLM 调用。随着这些应用程序变得越来越复杂，能够检查链或代理内部发生了什么变得至关重要。最佳方式是使用 [LangSmith](https://smith.langchain.com).
 
-在上述链接注册后，请确保设置您的环境变量以开始记录追踪：
+注册后，请设置环境变量以开始记录追踪：
 
 ```shell
 export LANGSMITH_TRACING="true"
@@ -65,7 +65,7 @@ export LANGSMITH_API_KEY="..."
 ```
 
 :::python
-或者，在 Python 中设置它们：
+或在 Python 中设置：
 
 ```python
 import getpass
@@ -74,23 +74,25 @@ import os
 os.environ["LANGSMITH_TRACING"] = "true"
 os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
 ```
+:::
+
 ## 设置后端
 
-深度代理使用[后端](/oss/deepagents/backends)在隔离环境中执行代码。
+深度代理使用 [后端](/oss/deepagents/backends) 在沙箱环境中执行代码。
 
-以下示例使用 [LangSmith 沙箱](/langsmith/sandboxes)。如需其他提供商，请参阅[可用提供商](/oss/deepagents/sandboxes#available-providers)。
+以下示例使用 [LangSmith sandbox](/langsmith/sandboxes)。如需其他提供商，请参阅 [可用提供商](/oss/deepagents/sandboxes#available-providers).
 
 <Tabs>
 <Tab title="LangSmith">
 
-<CodeGroup>
+    <CodeGroup>
     ```bash pip
     pip install "langsmith[sandbox]"
     ```
     ```bash uv
     uv add "langsmith[sandbox]"
     ```
-</CodeGroup>
+    </CodeGroup>
 
     ```python
     from deepagents.backends.langsmith import LangSmithSandbox
@@ -101,13 +103,11 @@ os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
     backend = LangSmithSandbox(sandbox=ls_sandbox)
     ```
 
-</Tab>
-<Tab title="本地 Shell">
+  </Tab>
+<Tab title="Local shell">
 <Warning>
-此后端提供不受限制的文件系统和 shell 访问权限。仅在受控环境中用于开发和测试。请参阅[安全注意事项](/oss/deepagents/backends#localshellbackend-local-shell)了解更多详情。
+此后端提供无限制的文件系统和 shell 访问权限。仅在受控环境中用于开发和测试。请参阅 [安全注意事项](/oss/deepagents/backends#localshellbackend-local-shell) 了解更多详情。
 </Warning>
-
-</Tab>
 
 ```python
 from deepagents.backends import LocalShellBackend
@@ -124,11 +124,7 @@ backend = LocalShellBackend(root_dir=".", env={"PATH": "/usr/bin:/bin"})
     ```bash uv
     uv add langchain-agentcore-codeinterpreter
     ```
-<fragment>
     </CodeGroup>
-
-
-</fragment>
 
     ```python
     from bedrock_agentcore.tools.code_interpreter_client import CodeInterpreter
@@ -139,12 +135,10 @@ backend = LocalShellBackend(root_dir=".", env={"PATH": "/usr/bin:/bin"})
     backend = AgentCoreSandbox(interpreter=interpreter)
     ```
 
-</Tab>
-<Tab title="Daytona">
+  </Tab>
+  <Tab title="Daytona">
 
 <CodeGroup>
-
-</CodeGroup>
 ```bash pip
 pip install langchain-daytona
 ```
@@ -152,9 +146,6 @@ pip install langchain-daytona
 ```bash uv
 uv add langchain-daytona
 ```
-<CodeGroup>
-
-
 </CodeGroup>
 
 ```python
@@ -165,14 +156,14 @@ from langchain_daytona import DaytonaSandbox
 sandbox = Daytona().create()
 backend = DaytonaSandbox(sandbox=sandbox)
 ```
-验证沙箱已就绪：
+验证沙箱是否就绪：
 ```python
 result = backend.execute("echo ready")
 print(result)
 # ExecuteResponse(output='ready', exit_code=0, ...)
 ```
 
-</Tab>
+  </Tab>
   <Tab title="E2B">
 
 <CodeGroup>
@@ -183,7 +174,6 @@ pip install langchain-e2b
 ```bash uv
 uv add langchain-e2b
 ```
-<CodeGroup>
 </CodeGroup>
 
 ```python
@@ -194,11 +184,8 @@ e2b_sandbox = Sandbox.create()
 backend = E2BSandbox(sandbox=e2b_sandbox)
 ```
 
-</Tab>
+  </Tab>
   <Tab title="Modal">
-
-
-</Tab>
 
 ```python
 import modal
@@ -210,7 +197,7 @@ modal_sandbox = modal.Sandbox.create(app=app)
 backend = ModalSandbox(sandbox=modal_sandbox)
 ```
 
-</Tab>
+  </Tab>
   <Tab title="Runloop">
 
 <CodeGroup>
@@ -235,7 +222,7 @@ devbox = client.devbox.create()
 backend = RunloopSandbox(devbox=devbox)
 ```
 
-</Tab>
+  </Tab>
 </Tabs>
 
 ### 上传示例数据
@@ -268,9 +255,9 @@ backend.upload_files([("/root/data/sales_data.csv", csv_bytes)])
 
 ## 实现自定义工具
 
-数据分析任务可能会产生工件，例如报告或图表。
-以下简单的[工具](/oss/langchain/tools)使用 `backend.download_files` 下载它们，然后使用 Slack SDK 上传它们。
-我们也可以让代理列出相关的文件路径而不是上传它们，这样相关方可以根据需要单独获取它们。
+数据分析任务可能会产生制品，如报告或图表。
+以下简单的 [工具](/oss/langchain/tools) 使用以下方式下载它们 `backend.download_files` 然后使用 Slack SDK 上传它们。
+我们也可以让代理列出相关文件路径，而不是上传它们，这样相关方可以根据需要单独获取。
 
 ```python
 from langchain.tools import tool
@@ -302,7 +289,7 @@ def slack_send_message(text: str, file_path: str | None = None) -> str:
     return "Message sent."
 ```
 <Note>
-通常来说，最好避免将凭证和其他密钥添加到沙箱中。在这里，我们在沙箱外部的工具中管理 Slack 令牌。
+通常最好避免将凭据和其他密钥添加到沙盒中。这里我们在沙盒外的工具中管理 Slack 令牌。
 </Note>
 
 ## 运行代理
@@ -330,13 +317,12 @@ config={"configurable": {"thread_id": thread_id}}
 ```
 
 我们包括：
+- 选择 [模型](/oss/deepagents/customization#model)
+- 我们的自定义 [工具](/oss/deepagents/customization#tools)
+-  [后端](/oss/deepagents/backends)
+- A [检查点器](/oss/langchain/short-term-memory) 以支持多轮对话
 
-- 可以选择[模型](/oss/deepagents/customization#model)
-- 我们的自定义[工具](/oss/deepagents/customization#tools)
-- [后端](/oss/deepagents/backends)
-- [检查点程序](/oss/langchain/short-term-memory)以支持多轮对话
-
-现在让我们调用智能体。
+现在让我们调用我们的代理。
 ```python
 input_message = {
     "role": "user",
@@ -704,34 +690,34 @@ A beautiful 6-panel dashboard featuring:
 The analysis reveals that Widget A is the top performer, while Widget C shows room for improvement. All results have been sent to your Slack workspace!
 ```
 
-查看此执行的完整 [LangSmith trace](https://smith.langchain.com/public/ac2443a8-16ad-4e00-8f02-afde6a737534/r)。
+查看完整的 [LangSmith 追踪](https://smith.langchain.com/public/ac2443a8-16ad-4e00-8f02-afde6a737534/r) 了解此执行流程。
 
 ## 结果
 
-代理成功分析数据并通过可视化向 Slack 分享综合报告：
+代理成功分析了数据，并通过 Slack 与用户分享了包含可视化内容的综合报告：
 
 <Frame caption="Agent-generated analysis report and visualization dashboard delivered to Slack">
-  ![Sales analysis results in Slack](/images/data_analysis_slack_response.png)
+  ![Slack 中的销售分析结果](/images/data_analysis_slack_response.png)
 </Frame>
 
 <Tip>
-You can download artifacts directly from the backend without using external tools:
+您可以直接从后端下载制品，而无需使用外部工具：
 ```python
 backend.download_files(list_of_filepaths)
 ```
 </Tip>
 
 <Note>
-请参阅[提供商指南](/oss/deepagents/sandboxes#available-providers)了解如何在完成后清理沙箱。
+查看 [提供商指南](/oss/deepagents/sandboxes#available-providers) 了解如何在使用完毕后清理沙盒。
 </Note>
 
-## 下一步
+## 后续步骤
 
-现在您已经构建了一个数据分析代理，请探索以下资源来扩展其功能：
+既然您已经构建了一个数据分析代理，请探索这些资源以扩展其功能：
 
 - [后端](/oss/deepagents/backends)：了解 Deep Agents 后端系统
-- [沙箱](/oss/deepagents/sandboxes)：查看用于沙箱代码执行的后端，包括安全注意事项和高级配置
+- [沙盒](/oss/deepagents/sandboxes)：查看用于沙盒代码执行的后端，包括安全注意事项和高级配置
 - [自定义](/oss/deepagents/customization)：了解如何使用不同的模型、工具、提示和规划策略自定义您的代理
-- [代码](/oss/deepagents/code/overview)：试用 Deep Agents Code 作为终端编码代理，在本地协助完成数据分析和其他代理任务
-- [技能](/oss/deepagents/skills)：为您的代理配备用于常见工作流程的可重用技能
-- [人工介入](/oss/deepagents/human-in-the-loop)：在数据分析工作流程的关键操作中添加交互式审批步骤
+- [代码](/oss/deepagents/code/overview)：将 Deep Agents 代码作为终端编码代理，帮助您完成数据分析和其他本地代理任务
+- [技能](/oss/deepagents/skills)：为您的代理配备可重复使用的技能，以便完成常见工作流程
+- [Human-in-the-loop](/oss/deepagents/human-in-the-loop)：在数据分析工作流程中添加交互式批准步骤，以便对关键操作进行人工审核

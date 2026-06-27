@@ -1,9 +1,9 @@
 ---
-title: 连接和重新连接流
-description: 断开并重新连接正在运行的代理流
+title: 加入和重新加入流
+description: 断开并重新连接正在运行的智能体流
 ---
 
-连接和重新连接功能允许您断开与正在运行的代理流的连接而无需停止代理，之后可以重新连接。代理在客户端断开期间继续在服务器端执行，您可以精确地从上次离开的位置继续接收流。
+加入和重新加入允许您断开与正在运行的智能体流的连接而不会停止智能体，之后再重新连接。智能体在客户端离开时继续在服务器端执行，您可以完全从离开的位置继续接收流。
 
 import { PatternEmbed } from "/snippets/pattern-embed.jsx"
 
@@ -12,45 +12,44 @@ import { PatternEmbed } from "/snippets/pattern-embed.jsx"
 import RequiresLanggraphServer from '/snippets/oss/requires-langgraph-server.mdx';
 import UseStreamTypeInference from '/snippets/oss/use-stream-type-inference.mdx';
 
-<RequiresLangbookServer />
+<RequiresLanggraphServer />
 
-## 为什么要加入和重新加入？
+## 为什么需要加入和重新加入？
 
 传统的流式 API 将客户端和服务器紧密耦合：如果客户端断开连接，流就会丢失。加入和重新加入打破了这种耦合，实现了几个重要的模式：
 
-- **网络中断**：在基站或 Wi-Fi 网络之间移动的移动用户可以无缝恢复
-- **页面导航**：用户从聊天页面导航离开后再返回，不会丢失进度
-- **移动端后台运行**：被操作系统挂起的应用可以在恢复前台时重新加入流
-- **长时间运行的任务**：执行数分钟操作的代理（研究、代码生成、数据分析），用户无需保持页面打开
-- **多设备切换**：在手机上开始对话，在桌面上重新加入
+- **网络中断**：移动用户在基站或 Wi-Fi 网络之间移动时可以无缝恢复
+- **页面导航**：用户从聊天页面离开后稍后返回不会丢失进度
+- **移动后台运行**：被操作系统挂起的应用可以在切换到前台时重新加入流
+- **长时间运行的任务**：智能体执行耗时数分钟的操作（研究、代码生成、数据分析），用户无需保持页面打开
+- **多设备切换**：在手机上开始对话，在桌面设备上重新加入
 
 ## 核心概念
 
-加入/重新加入模式涉及三个关键机制：
+The join/rejoin pattern involves three key mechanisms:
 
-| 方法 / 选项 | 用途 |
+| Method / Option | Purpose |
 |---|---|
-| `threadId` | 将流绑定到你想要观察的 LangGraph 线程 |
-| `onThreadId` | 持久化新创建的线程 ID，以便重新挂载时能够重新连接 |
-| `stream.disconnect()` | 在客户端离开流，同时代理在服务端继续运行 |
-| 使用相同的 `threadId` 重新挂载 | 重新附加到该线程的进行中工作 |
+| `threadId` | 将流绑定到您要观察的 LangGraph 线程
+| `onThreadId` | 持久化新创建的线程 ID，以便重新挂载时可以重新连接
+| `stream.disconnect()` | 客户端离开流，而智能体在服务器端继续运行
+| 使用相同的 `threadId` | 重新附加到该线程的进行中工作
 
 <Note>
-**加入/重新加入使用 `stream.disconnect()`，而不是 `stream.stop()`。** 默认情况下，`stream.stop()` **会取消正在运行的任务**：它断开客户端连接 *并且* 取消服务端的运行。对于加入/重新加入，请调用 `stream.disconnect()`（这是 `stop({ cancel: false })` 的别名），以便在你离开期间代理继续处理。
+**Join/rejoin uses `stream.disconnect()`，而不是 `stream.stop()`.** 默认情况下， `stream.stop()` **会取消活动运行**：它断开客户端 *和* cancels the run on the server. For join/rejoin, call `stream.disconnect()` （别名 `stop({ cancel: false })`）以便智能体在您离开时继续处理。
 
-要从应用代码中明确取消执行，请使用 `stream.stop()` 或 @[`client.runs.cancel`]。
+要显式取消执行，请在应用代码中使用 `stream.stop()` or @[`client.runs.cancel`].
 </Note>
 
 ## 设置 `useStream`
 
-关键设置步骤是持久化 `threadId`。当组件使用相同的线程 ID 重新挂载时，流会附加到线程的当前状态和任何进行中的运行。
+关键设置步骤是持久化 `threadId`。当组件使用相同的线程 ID 重新挂载时，
+流会附加到线程的当前状态和任何
+进行中的运行。
 
 <UseStreamTypeInference />
 
 <CodeGroup>
-
-
-</CodeGroup>
 
 ```tsx React
 import { useStream } from "@langchain/react";
@@ -234,7 +233,8 @@ export class ChatComponent {
 
 ## 提交消息
 
-正常提交消息。线程 ID 绑定允许后续重新挂载时重新连接到同一对话：
+正常提交消息。线程 ID 绑定允许后续重新挂载
+重新连接到同一对话：
 
 ```ts
 stream.submit({ messages: [{ type: "human", content: text }] });
@@ -242,25 +242,27 @@ stream.submit({ messages: [{ type: "human", content: text }] });
 
 ## 断开流连接
 
-调用 `stream.disconnect()` 可以离开流而不取消运行。代理将继续在服务器端处理。
+调用 `stream.disconnect()` 在不取消运行的情况下离开流。智能体继续在服务器端处理。
 
 ```ts
 await stream.disconnect();
 // equivalent to: await stream.stop({ cancel: false })
 ```
 
-请**勿**在此处使用 `stream.stop()` — 默认情况下它会取消服务器上的运行。
+Do **不要** 在此处使用 `stream.stop()` ——默认情况下它会取消服务器上的运行。
 
-调用 `disconnect()` 后：
+调用后 `disconnect()`:
 - `stream.isLoading` 变为 `false`
-- 你自己的 `connected` 标志也应变为 `false`
-- 消息列表会保留断开连接前接收到的所有消息
-- 代理会继续在服务器上运行
-- 在重新加入之前不会收到新消息
+- 您自己的 `connected` 标志也应变为 `false`
+- 消息列表保留断开点之前接收到的所有消息
+- 代理在服务器上继续运行
+- 重新加入前不会收到新消息
 
 ## 重新加入流
 
-使用保存的线程 ID 重新挂载流消费者以重新连接。在 React 中，demo 会递增一个 `mountKey`；在其他框架中，请使用等效的重新挂载或条件渲染模式：
+使用保存的线程ID重新挂载流消费者以重新连接。在React中，
+演示触发一个 `mountKey`; 在其他框架中，使用等效的重新挂载或
+条件渲染模式：
 
 ```ts
 setMountKey((key) => key + 1);
@@ -268,17 +270,17 @@ setConnected(true);
 ```
 
 重新加入后：
-
 - `connected` 变为 `true`
-- 断连期间产生的任何消息都会被传递
-- 新的流式消息将恢复实时传输
-- 如果代理仍在运行，`stream.isLoading` 变为 `true`；如果已完成，则立即接收最终状态
+- 断开连接期间生成的任何消息都会被传递
+- 新的流消息实时恢复
+- 如果代理仍在运行， `stream.isLoading` 变为 `true`; 如果它已
+  经完成，您会立即收到最终状态
 
 ## 最佳实践
 
-- **使用 `disconnect()` 进行加入/重新加入，使用 `stop()` 取消**：离开页面或切换到后台时应调用 `stream.disconnect()`。面向用户的"停止"或"取消"按钮应调用 `stream.stop()`（或 @[`client.runs.cancel`]）。
-- **始终保存线程 ID**：没有它，重新加入将不可能。同时使用组件状态和持久化存储以提高容错性。
+- **使用 `disconnect()` for join/rejoin, `stop()` 来取消**：离开或后台运行应用时应调用 `stream.disconnect()`。面向用户的"停止"或"取消"按钮应调用 `stream.stop()` (or @[`client.runs.cancel`]).
+- **始终保存线程ID**：没有它就无法重新加入。使用组件状态和持久存储来提高弹性。
 - **显示清晰的连接状态**：用户应始终知道他们是在接收实时更新还是查看快照。
-- **可见性变化时自动重新加入**：使用 Page Visibility API 在用户返回标签页时自动重新加入。
-- **设置合理的超时时间**：如果重新加入尝试花费时间过长，则回退到获取线程历史记录。
-- **清理过期的线程**：当用户重新开始或后端报告线程不可用时，删除已保存的线程 ID。
+- **可见性变化时自动重新加入**：使用页面可见性API在用户返回标签页时自动重新加入。
+- **设置合理的超时时间**：如果重新加入尝试花费时间过长，请回退到获取线程历史记录。
+- **清理过期的线程**：当用户重新开始或后端报告线程不可用时，删除持久化的线程ID。

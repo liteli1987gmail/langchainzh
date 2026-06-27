@@ -2,62 +2,62 @@
 title: 数据存储与隐私
 sidebarTitle: 数据存储与隐私
 ---
-本文档描述了数据在 LangGraph CLI 和 Agent Server 中如何被处理，包括内存服务器（`langgraph dev`）和本地 Docker 服务器（`langgraph up`）。它还描述了与托管的 Studio 前端交互时跟踪哪些数据。
+本文档描述了数据在 LangGraph CLI 和代理服务器中如何被处理，包括内存服务器（`langgraph dev`）和本地 Docker 服务器（`langgraph up`）。它还描述了与托管的 Studio 前端交互时会跟踪哪些数据。
 
 ## CLI
 
 LangGraph **CLI** 是用于构建和运行 LangGraph 应用程序的命令行界面；请参阅 [CLI 指南](/langsmith/cli) 了解更多。
 
-默认情况下，对大多数 CLI 命令的调用会在执行时记录一个分析事件。这有助于我们更好地优先改进 CLI 体验。每个遥测事件包含调用进程的操作系统、操作系统版本、Python 版本、CLI 版本、命令名称（`dev`、`up`、`run` 等），以及表示是否向命令传递了标志的布尔值。有关更多信息，请参阅[完整的分析逻辑](https://github.com/langchain-ai/langgraph/blob/main/libs/cli/langgraph-cli/analytics.py)。
+默认情况下，对大多数 CLI 命令的调用会在执行时记录一个分析事件。这有助于我们更好地优先改进 CLI 体验。每个遥测事件包含调用进程的操作系统、操作系统版本、Python 版本、CLI 版本、命令名称（`dev`, `up`, `run`等），以及表示是否向命令传递了标志的布尔值。更多信息，请参阅 [完整分析逻辑](https://github.com/langchain-ai/langgraph/blob/main/libs/cli/langgraph-cli/analytics.py).
 
-您可以通过设置 `LANGGRAPH_CLI_NO_ANALYTICS=1` 来禁用所有 CLI 遥测。
+您可以通过设置来禁用所有 CLI 遥测 `LANGGRAPH_CLI_NO_ANALYTICS=1`.
 
 <a id="in-memory-docker"></a>
-## Agent Server
+## 代理服务器
 
-[Agent Server](/langsmith/agent-server) 提供了一个持久化执行运行时，依赖于将应用程序状态的检查点、长期记忆、线程元数据、助手以及类似资源持久化到本地文件系统或数据库。除非您已故意自定义存储位置，否则这些信息要么写入本地磁盘（对于 `langgraph dev`），要么写入 PostgreSQL 数据库（对于 `langgraph up` 和所有部署）。
+ [代理服务器](/langsmith/agent-server) 提供了一种持久的执行运行时，它依赖于将应用状态的检查点、长期记忆、线程元数据、助手和类似资源持久化到本地文件系统或数据库。除非您特意自定义了存储位置，否则这些信息会被写入本地磁盘（对于 `langgraph dev`）或 PostgreSQL 数据库（对于 `langgraph up` 以及所有部署）。
 
 ### LangSmith 追踪
 
-运行 Agent server（内存或 Docker）时，可以启用 LangSmith 追踪以加快调试速度，并在生产环境中提供图形状态和 LLM 提示的可观察性。您始终可以通过在服务器运行时环境中设置 `LANGSMITH_TRACING=false` 来禁用追踪。
+运行代理服务器（内存模式或 Docker 模式）时，可以启用 LangSmith 追踪以加快调试速度并提供生产环境中图状态和 LLM 提示的可观察性。您可以通过设置来禁用追踪 `LANGSMITH_TRACING=false` 在服务器运行时环境中。
 
 <Note>
-如需更细粒度的控制，您可以使用[条件追踪](/langsmith/conditional-tracing)根据运行时条件（如客户端需求或数据敏感性）选择性地启用或禁用追踪。
+要进行更精细的控制，您可以使用 [条件追踪](/langsmith/conditional-tracing) 根据运行时条件（如客户端要求或数据敏感性）选择性地启用或禁用追踪。
 </Note>
 
 <a id="langgraph-dev"></a>
 ### 内存开发服务器
 
-`langgraph dev` 将一个[内存开发服务器](/langsmith/local-dev-testing)作为单个 Python 进程运行，专为快速开发和测试而设计。它将所有检查点和记忆数据保存到当前工作目录中的 `.langgraph_api` 目录中。除 [CLI](#cli) 部分中描述的遥测数据外，除非您已启用追踪或您的图形代码明确联系外部服务，否则不会有数据离开您的计算机。
+`langgraph dev` 运行一个 [内存开发服务器](/langsmith/local-dev-testing) 作为单个 Python 进程运行，专为快速开发和测试而设计。它将所有检查点和内存数据保存到当前工作目录下的 `.langgraph_api` 目录中。除非您启用了追踪或您的图代码明确联系外部服务，否则除 [CLI](#cli) 部分中描述的遥测数据外，没有任何数据会离开计算机。
 
 <a id="langgraph-up"></a>
 ### 独立服务器
 
-`langgraph up` 将您的本地包构建成 Docker 镜像，并将服务器作为[数据平面](/langsmith/self-hosted)运行，该数据平面由三个容器组成：API 服务器、PostgreSQL 容器和 Redis 容器。所有持久化数据（检查点、助手等）都存储在 PostgreSQL 数据库中。Redis 用作 pubsub 连接，用于实时流式传输事件。您可以通过设置有效的 `LANGGRAPH_AES_KEY` 环境变量来加密保存到数据库之前的所有检查点。您还可以在 `langgraph.json` 中指定检查点和跨线程记忆的 [TTL](/langsmith/configure-ttl)，以控制数据存储的时间。所有持久化的线程、记忆和其他数据都可以通过相关的 API 端点删除。
+`langgraph up` 将本地包构建为 Docker 镜像并将服务器作为 [数据平面](/langsmith/self-hosted) 运行，该平面由三个容器组成：API 服务器、PostgreSQL 容器和 Redis 容器。所有持久数据（检查点、助手等）都存储在 PostgreSQL 数据库中。Redis 用作 pubsub 连接以进行事件的实时流式传输。您可以通过设置有效的 `LANGGRAPH_AES_KEY` 环境变量来在保存到数据库之前加密所有检查点。您还可以指定 [TTL](/langsmith/configure-ttl) 用于检查点和跨线程内存的 `langgraph.json` 以控制数据存储的时间长度。所有持久化的线程、记忆和其他数据都可以通过相关的 API 端点删除。
 
-额外的 API 调用用于确认服务器具有有效许可证，并跟踪执行的运行数和任务数。API 服务器会定期验证提供的许可证密钥（或 API 密钥）。
+会进行额外的 API 调用以确认服务器具有有效许可证，并跟踪已执行的运行和任务数量。API 服务器会定期验证提供的许可证密钥（或 API 密钥）。
 
-如果您已禁用[追踪](#langsmith-tracing)，则除非您的图形代码明确联系外部服务，否则不会将任何用户数据持久化到外部。
+如果您已禁用 [追踪](#langsmith-tracing)，则不会在外部持久化任何用户数据，除非您的图代码明确联系外部服务。
 
 ## Studio
 
-[Studio](/langsmith/studio) 是一个用于与 Agent Server 交互的图形界面。它不会持久化任何私人数据（您发送到服务器的数据不会发送到 LangSmith）。虽然 Studio 界面在 [smith.langchain.com](https://smith.langchain.com) 上提供服务，但它是在您的浏览器中运行的，并直接连接到您的本地 Agent Server，因此无需将任何数据发送到 LangSmith。
+[Studio](/langsmith/studio) 是一个用于与 Agent Server 交互的图形界面。它不会持久化任何私人数据（您发送到服务器的数据不会发送到 LangSmith）。虽然 Studio 界面在 [smith.langchain.com](https://smith.langchain.com)上提供，但它在您的浏览器中运行并直接连接到您的本地 Agent Server，因此无需向 LangSmith 发送任何数据。
 
-如果您已登录，LangSmith 确实会收集一些使用分析数据，以帮助改进调试用户体验。这包括：
+如果您已登录，LangSmith 确实会收集一些使用分析数据以帮助改善调试用户体验。这包括：
 
 * 页面访问和导航模式
 * 用户操作（按钮点击）
 * 浏览器类型和版本
 * 屏幕分辨率和视口大小
 
-重要的是，不会收集任何应用程序数据或代码（或其他敏感配置详细信息）。所有这些都存储在您的 Agent Server 的持久化层中。当匿名使用 Studio 时，无需创建账户，也不会收集使用分析数据。
+重要的是，不会收集任何应用程序数据或代码（或其他敏感配置详细信息）。所有这些都存储在 Agent Server 的持久层中。使用 Studio 匿名模式时，不需要创建账户，也不会收集使用分析数据。
 
 ## 快速参考
 
-总结一下，您可以通过关闭 CLI 分析和禁用追踪来选择退出服务端遥测。
+总之，您可以通过关闭 CLI 分析和禁用追踪来选择退出服务器端遥测。
 
-| 变量                           | 用途                     | 默认值                            |
-| ------------------------------ | ---------------------- | -------------------------------- |
-| `LANGGRAPH_CLI_NO_ANALYTICS=1` | 禁用 CLI 分析           | 分析已启用                        |
-| `LANGSMITH_API_KEY`            | 启用 LangSmith 追踪    | 追踪已禁用                        |
-| `LANGSMITH_TRACING=false`      | 禁用 LangSmith 追踪    | 取决于环境                        |
+| 变量 | 用途 | 默认值 |
+| ------------------------------ | ------------------------- | -------------------------------- |
+| `LANGGRAPH_CLI_NO_ANALYTICS=1` | 禁用 CLI 分析 | 分析已启用 |
+| `LANGSMITH_API_KEY`            | 启用 LangSmith 追踪 | 追踪已禁用 |
+| `LANGSMITH_TRACING=false`      | 禁用 LangSmith 追踪 | 取决于环境 |

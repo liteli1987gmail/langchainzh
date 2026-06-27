@@ -2,15 +2,15 @@
 title: 设置自定义身份验证
 sidebarTitle: 设置自定义身份验证
 ---
-在本教程中，我们将构建一个只允许特定用户访问的聊天机器人。我们将从 LangGraph 模板开始，逐步添加基于令牌的安全机制。到最后，你将拥有一个可以检查有效令牌后才允许访问的聊天机器人。
+在本教程中，我们将构建一个仅允许特定用户访问的聊天机器人。我们将从 LangGraph 模板开始，逐步添加基于令牌的安全性。到最后，您将拥有一个可正常工作的聊天机器人，它会在允许访问前检查有效令牌。
 
-这是身份验证系列的第一部分：
+这是我们身份验证系列的第一部分：
 
-1. 设置自定义身份验证（你在这里）- 控制谁可以访问你的机器人
-2. [使对话私密](/langsmith/resource-auth) - 让用户拥有私密对话
-3. [连接身份验证提供商](/langsmith/add-auth-server) - 添加真实用户账户并使用 OAuth2 进行生产环境验证
+1. 设置自定义身份验证（您在此处）- 控制谁可以访问您的机器人
+2. [使对话私密化](/langsmith/resource-auth) - 让用户进行私密对话
+3. [连接身份验证提供者](/langsmith/add-auth-server) - 添加真实用户账户并使用 OAuth2 进行生产环境验证
 
-本指南假设你熟悉以下概念：
+本指南假定您熟悉以下概念：
 
 * [**身份验证与访问控制**](/langsmith/auth)
 * [**LangSmith**](/langsmith/observability)
@@ -19,13 +19,11 @@ sidebarTitle: 设置自定义身份验证
 自定义身份验证仅适用于 LangSmith SaaS 部署或企业自托管部署。
 </Note>
 
-## 1. 创建你的应用
+## 1. 创建您的应用
 
-使用 LangGraph 入门模板创建新的聊天机器人：
+使用 LangGraph 入门模板创建一个新的聊天机器人：
 
 <CodeGroup>
-
-</CodeGroup>
 ```bash pip
 pip install -U "langgraph-cli[inmem]"
 langgraph new --template=new-langgraph-project-python custom-auth
@@ -39,7 +37,7 @@ cd custom-auth
 ```
 </CodeGroup>
 
-该模板为我们提供了一个占位符 LangGraph 应用。请通过安装本地依赖并运行开发服务器来试用：
+该模板为我们提供了一个占位符 LangGraph 应用。通过安装本地依赖项并运行开发服务器来试用它：
 
 <CodeGroup>
 ```bash pip
@@ -57,7 +55,7 @@ npx @langchain/langgraph-cli dev
 ```
 </CodeGroup>
 
-服务器将启动并在浏览器中打开 [Studio](/langsmith/studio)：
+服务器将启动并在 [Studio](/langsmith/studio) 中打开您的浏览器：
 
 ```
 > - 🚀 API: http://127.0.0.1:2024
@@ -68,21 +66,21 @@ npx @langchain/langgraph-cli dev
 > For production use, please use LangSmith.
 ```
 
-如果您在公共互联网上自行托管，任何人都可以访问它。
+如果您将其自托管在公共互联网上，任何人都可以访问它。
 
-![无身份验证：开发服务器可以被公开访问，如果暴露在互联网上，任何人都可以访问该机器人。](/langsmith/images/no-auth.png)
+![无身份验证：开发服务器可公开访问，如果暴露在互联网上，任何人都可以访问机器人。](/langsmith/images/no-auth.png)
 
 ## 2. 添加身份验证
 
-现在您已经拥有了一个基础的 LangGraph 应用，为其添加身份验证。
+现在你已有了一个基础的 LangGraph 应用，向其中添加身份验证。
 
 <Note>
-在本教程中，您将从硬编码的令牌开始，作为示例。之后在第三个教程中，您将实现"生产就绪"的身份验证方案。
+在本教程中，你将从一个硬编码的令牌开始作为示例。在第三个教程中，你将实现一个"生产就绪"的身份验证方案。
 </Note>
 
-@[Auth] 对象允许您注册一个身份验证函数，LangSmith 部署会在每个请求上运行该函数。该函数接收每个请求并决定是接受还是拒绝。
+@[Auth] 对象允许你注册一个身份验证函数，LangSmith 部署会在每个请求上运行此函数。该函数接收每个请求并决定是接受还是拒绝。
 
-创建一个新文件 `src/security/auth.py`。这将是您的代码所在的位置，用于检查用户是否被允许访问您的机器人：
+创建一个新文件 `src/security/auth.py`。你的代码将放在这里，用于检查用户是否被允许访问你的机器人：
 
 ```python {highlight={10,15-16}} title="src/security/auth.py"
 from langgraph_sdk import Auth
@@ -116,12 +114,12 @@ async def get_current_user(authorization: str | None) -> Auth.types.MinimalUserD
     }
 ```
 
-请注意，你的 @[Auth.authenticate] 处理器做了两件重要的事情：
+注意，你的 @[Auth.authenticate] 处理器执行两个重要操作：
 
-1. 检查请求的 [Authorization 头部](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization) 中是否提供了有效令牌
+1. 检查请求的 [Authorization 标头中是否提供了有效的令牌](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Authorization)
 2. 返回用户的 @[MinimalUserDict]
 
-现在，通过在 @[langgraph.json] 配置中添加以下内容，告诉 LangGraph 使用身份验证：
+现在告诉 LangGraph 使用身份验证，方法是将以下内容添加到 @[langgraph.json] 配置中：
 
 ```json {highlight={7-9}} title="langgraph.json"
 {
@@ -136,15 +134,15 @@ async def get_current_user(authorization: str | None) -> Auth.types.MinimalUserD
 }
 ```
 
-## 3. 测试你的机器人
+## 3. 测试您的机器人
 
-再次启动服务器来测试所有功能：
+再次启动服务器以测试所有功能：
 
 ```bash
 langgraph dev --no-browser
 ```
 
-如果你没有添加 `--no-browser`，Studio UI 将在浏览器中打开。默认情况下，我们也允许从 Studio 访问，即使使用自定义身份验证。这样可以更轻松地在 Studio 中开发和测试您的机器人。您可以通过在身份验证配置中设置 `disable_studio_auth: true` 来删除此替代身份验证选项：
+如果您没有添加 `--no-browser`，Studio UI 将在浏览器中打开。默认情况下，我们也允许从 Studio 访问，即使使用自定义身份验证。这样可以更轻松地在 Studio 中开发和测试您的机器人。您可以通过设置来移除此替代身份验证选项 `disable_studio_auth: true` 在您的身份验证配置中：
 
 ```json
 {
@@ -155,11 +153,11 @@ langgraph dev --no-browser
 }
 ```
 
-## 4. 与你的机器人聊天
+## 4. 与您的机器人聊天
 
-现在你只能通过在请求头中提供有效的令牌来访问机器人。但是，在教程的下一节中添加[资源授权处理器](/langsmith/auth#resource-specific-handlers)之前，用户仍然可以访问彼此的资源。
+现在您应该只能通过在请求头中提供有效令牌来访问机器人。但是，在添加 [资源授权处理器](/langsmith/auth#resource-specific-handlers) 之前，用户仍然可以访问彼此的资源，请参阅教程的下一节。
 
-![认证门通过带有有效令牌的请求，但尚未应用每个资源的过滤器——因此在下一步添加授权处理器之前，用户之间仍然共享资源可见性。](/langsmith/images/authentication.png)
+![Auth 门禁会让持有有效令牌的请求通过，但尚未应用每个资源的过滤器——因此用户会共享可见性，直到在下一步中添加授权处理器。](/langsmith/images/authentication.png)
 
 在文件或笔记本中运行以下代码：
 
@@ -200,17 +198,17 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-您应该看到：
+您应该会看到：
 
-1. 没有有效的 token，我们就无法访问机器人
-2. 有了有效的 token，我们就可以创建线程并进行聊天
+1. 没有有效令牌，我们无法访问机器人
+2. 拥有有效令牌后，我们可以创建线程和聊天
 
-恭喜您！您已经构建了一个只允许"已认证"用户访问的聊天机器人。虽然这个系统还没有实现生产就绪的安全方案，但我们已经学习了如何控制机器人访问权限的基本机制。在下一个教程中，我们将学习如何为每个用户提供自己私密的对话空间。
+恭喜！您已经构建了一个只允许“已认证”用户访问的聊天机器人。虽然该系统（目前）尚未实现生产级别的安全方案，但我们已经学习了如何控制机器人访问权限的基本机制。在下一个教程中，我们将学习如何为每个用户提供私密的对话空间。
 
-## 下一步
+## 后续步骤
 
-既然您已经可以控制谁可以访问您的机器人，您可能想要：
+既然您已经能够控制谁可以访问您的机器人，您可能想要：
 
-1. 继续学习教程，访问[使对话私密化](/langsmith/resource-auth)来了解资源授权。
-2. 阅读更多关于[身份验证概念](/langsmith/auth)。
-3. 查看 @[Auth]、@[Auth.authenticate] 和 @[MinimalUserDict] 的 API 参考以获取更多身份验证详情。
+1. 继续学习教程，请前往 [让对话变得私密](/langsmith/resource-auth) 来学习资源授权相关内容。
+2. 了解更多关于 [认证概念](/langsmith/auth).
+3. 查阅 @[Auth]、@[Auth.authenticate] 和 @[MinimalUserDict] 的 API 参考，了解更多认证详情。

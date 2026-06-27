@@ -4,23 +4,22 @@ sidebarTitle: 使用 Vercel AI SDK 进行追踪（旧版）
 ---
 
 <Warning>
-此页面记录了一种较旧的追踪 AI SDK 运行的方法。如需更简单且更通用的方法（无需 OTEL 设置），请参阅[新指南](/langsmith/trace-with-vercel-ai-sdk)。
+本页记录了一种较旧的追踪 AI SDK 运行的方法。对于更简单且更通用的方法（无需 OTEL 设置），请参阅 [新指南](/langsmith/trace-with-vercel-ai-sdk).
 </Warning>
 
-您可以使用 LangSmith 通过 OpenTelemetry (OTEL) 追踪 Vercel AI SDK 的运行。本指南将通过一个示例进行讲解。
+您可以使用 LangSmith 通过 OpenTelemetry (OTEL) 追踪 Vercel AI SDK 的运行。本指南将通过示例进行讲解。
 
 <Note>
-JavaScript 中许多流行的 [OpenTelemetry 实现](https://www.npmjs.com/package/@opentelemetry/sdk-node) 目前仍处于实验阶段，
-在生产环境中可能表现不稳定，尤其是在同时对 LangSmith 和其他提供商进行插桩时。如果您使用的是 AI SDK 5，
-我们强烈建议使用[我们推荐的追踪 AI SDK 运行的方法](/langsmith/trace-with-vercel-ai-sdk)。
+许多流行的 [OpenTelemetry 实现](https://www.npmjs.com/package/@opentelemetry/sdk-node) 在 JavaScript 中目前处于实验阶段，
+在生产环境中可能会出现异常行为，尤其是在同时使用 LangSmith 和其他提供商进行检测时。如果您使用的是 AI SDK 5，
+我们强烈建议使用 [我们推荐的追踪 AI SDK 运行的方法](/langsmith/trace-with-vercel-ai-sdk).
 </Note>
 
 ## 0. 安装
 
-安装 Vercel AI SDK 和所需的 OTEL 包。我们在下面的代码示例中使用他们的 OpenAI 集成，但您也可以使用他们的其他选项。
+安装 Vercel AI SDK 和所需的 OTEL 包。我们在下面的代码示例中使用了他们的 OpenAI 集成，但您也可以使用他们的其他选项。
 
 <CodeGroup>
-</CodeGroup>
 
 ```bash npm
 npm install ai @ai-sdk/openai zod
@@ -35,9 +34,9 @@ yarn add ai @ai-sdk/openai zod
 pnpm add ai @ai-sdk/openai zod
 ```
 
-<CodeGroup>
-
 </CodeGroup>
+
+<CodeGroup>
 
 ```bash npm
 npm install @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-proto @opentelemetry/context-async-hooks
@@ -78,7 +77,7 @@ const { DEFAULT_LANGSMITH_SPAN_PROCESSOR } = initializeOTEL();
 之后，将 `experimental_telemetry` 参数添加到您想要追踪的 AI SDK 调用中。
 
 <Info>
-请不要忘记在应用程序关闭之前调用 `await DEFAULT_LANGSMITH_SPAN_PROCESSOR.shutdown();`，以将所有剩余的追踪数据刷新到 LangSmith。
+在应用程序关闭之前不要忘记调用 `await DEFAULT_LANGSMITH_SPAN_PROCESSOR.shutdown();` 以将所有剩余的追踪记录刷新到 LangSmith。
 </Info>
 
 ```typescript
@@ -99,9 +98,9 @@ try {
 }
 ```
 
-您应该会在 LangSmith 仪表板中看到一个跟踪记录[像这样](https://smith.langchain.com/public/21d33490-d522-4928-a944-a09e988d539c/r)。
+您应该可以在 LangSmith 仪表板中看到追踪记录 [如下所示](https://smith.langchain.com/public/21d33490-d522-4928-a944-a09e988d539c/r).
 
-您还可以跟踪带有工具调用的运行：
+您也可以追踪带有工具调用的运行：
 
 ```typescript
 import { generateText, tool } from "ai";
@@ -137,11 +136,11 @@ await generateText({
 });
 ```
 
-这将生成一个类似[this one](https://smith.langchain.com/public/e6122734-2762-4ae0-986b-0cbe4d68692f/r)的追踪。
+这将产生如下所示的追踪记录 [这个](https://smith.langchain.com/public/e6122734-2762-4ae0-986b-0cbe4d68692f/r).
 
 ### 使用 `traceable`
 
-您可以在 AI SDK 工具调用的周围或内部包装 `traceable` 调用。如果这样做，我们建议您初始化一个 LangSmith `client` 实例，并将其传递给每个 `traceable`，然后调用 `client.awaitPendingTraceBatches();` 以确保所有追踪都被刷新。如果这样做，您就不需要手动在 `DEFAULT_LANGSMITH_SPAN_PROCESSOR` 上调用 `shutdown()` 或 `forceFlush()`。以下是示例：
+您可以包装 `traceable` 调用在 AI SDK 工具调用的周围或内部。如果您这样做，我们建议您初始化一个 LangSmith `client` 实例并将其传递到每个 `traceable`中，然后调用 `client.awaitPendingTraceBatches();` 以确保所有追踪记录被刷新。如果您这样做，则无需手动在 `shutdown()` or `forceFlush()` 上调用 `DEFAULT_LANGSMITH_SPAN_PROCESSOR`。以下是示例：
 
 ```typescript
 import { initializeOTEL } from "langsmith/experimental/otel/setup";
@@ -195,15 +194,13 @@ try {
 }
 ```
 
-生成的追踪将看起来[像这样](https://smith.langchain.com/public/296a0134-f3d4-4e54-afc7-b18f2c190911/r)。
+生成的追踪记录将显示 [如下](https://smith.langchain.com/public/296a0134-f3d4-4e54-afc7-b18f2c190911/r).
 
 ### Next.js
 
-首先，安装 [`@vercel/otel`](https://www.npmjs.com/package/@vercel/otel) 包：
+首先，安装 [`@vercel/otel`](https://www.npmjs.com/package/@vercel/otel) package:
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```bash npm
 npm install @vercel/otel
@@ -219,9 +216,9 @@ pnpm add @vercel/otel
 
 </CodeGroup>
 
-然后，在根目录中设置一个 [`instrumentation.ts`](https://nextjs.org/docs/app/guides/instrumentation) 文件。
-调用 `initializeOTEL` 并将返回的 `DEFAULT_LANGSMITH_SPAN_PROCESSOR` 传入到你的 `registerOTEL(...)` 调用的 `spanProcessors` 字段中。
-它应该看起来像这样：
+然后，在您的根目录中设置一个 [`instrumentation.ts`](https://nextjs.org/docs/app/guides/instrumentation) 文件。
+调用 `initializeOTEL` 并将生成的 `DEFAULT_LANGSMITH_SPAN_PROCESSOR` 传递到 `spanProcessors` 字段到您的 `registerOTEL(...)` call.
+它应该类似于这样：
 
 ```typescript
 import { registerOTel } from "@vercel/otel";
@@ -237,7 +234,7 @@ export function register() {
 }
 ```
 
-最后，在你的 API 路由中同样调用 `initializeOTEL`，并添加一个 `experimental_telemetry` 字段到你的 AI SDK 调用中：
+最后，在您的 API 路由中调用 `initializeOTEL` 并添加一个 `experimental_telemetry` 字段到您的 AI SDK 调用中：
 
 ```typescript
 import { generateText } from "ai";
@@ -260,14 +257,14 @@ export async function GET() {
 }
 ```
 
-您也可以将代码的某些部分包装在 `traceables` 中以获得更细粒度的控制。
+您也可以将部分代码包装在 `traceables` 中以获得更细粒度的追踪。
 
 ### Sentry
 
-如果您正在使用 Sentry，可以将 LangSmith 追踪导出器附加到 Sentry 的默认 OpenTelemetry 插桩中，如下例所示。
+如果您使用的是 Sentry，可以按照以下示例将 LangSmith 跟踪导出器附加到 Sentry 的默认 OpenTelemetry 检测中。
 
 <Warning>
-在撰写本文时，Sentry 仅支持 OTEL v1 包。LangSmith 同时支持 v1 和 v2，但您**必须**确保安装 OTEL v1 包才能使插桩正常工作。
+在撰写本文时，Sentry 仅支持 OTEL v1 包。LangSmith 同时支持 v1 和 v2，但您 **必须** 确保安装 OTEL v1 包以使检测正常工作。
 
 <CodeGroup>
 
@@ -336,7 +333,7 @@ try {
 
 ## 添加其他元数据
 
-您可以向追踪添加其他元数据，以帮助在 LangSmith UI 中组织和筛选它们：
+您可以向跟踪添加其他元数据，以帮助在 LangSmith UI 中组织和筛选它们：
 
 ```typescript {highlight={9}}
 import { generateText } from "ai";
@@ -352,12 +349,12 @@ await generateText({
 });
 ```
 
-元数据将在您的 LangSmith 仪表板中可见，并可用于筛选和搜索特定的追踪记录。
+元数据将在您的 LangSmith 仪表板中可见，可用于筛选和搜索特定跟踪。
 请注意，AI SDK 也会在内部子跨度上传播元数据。
 
 ## 自定义运行名称
 
-您可以通过传递名为 `ls_run_name` 的元数据键到 `experimental_telemetry` 来自定义运行名称。
+您可以通过传递名为 `ls_run_name` 的元数据键来自定义运行名称 `experimental_telemetry`.
 
 ```typescript
 import { generateText } from "ai";

@@ -1,7 +1,7 @@
 ---
 title: 构建深度研究智能体
 sidebarTitle: 深度研究
-description: 构建具有子智能体委托功能的多步骤网络研究智能体
+description: 构建支持子智能体委托的多步骤网页研究智能体
 ---
 
 import DeepResearchToolsPy from '/snippets/code-samples/deep-research-tools-py.mdx';
@@ -15,41 +15,38 @@ import DeepResearchRunStreamJs from '/snippets/code-samples/deep-research-run-st
 
 ## 概述
 
-本指南演示如何使用 [Deep Agents](/oss/deepagents) 从头构建多步网络研究代理。该代理将研究问题分解为聚焦的任务，委托给专门的子代理，并将发现综合成一份全面的报告。
+本指南演示如何使用 [深度智能体](/oss/deepagents)从零开始构建多步骤网页研究智能体。智能体会将研究问题分解为专注的任务，委托给专门的子智能体，并将发现综合成一份全面的报告。
 
-你将构建的代理会：
+你构建的智能体将：
 
 1. 使用待办列表规划研究
-1. 将聚焦的研究任务委托给具有隔离上下文的子代理
-1. 在收集信息时评估搜索结果并规划下一步
-1. 将发现综合成带有适当引用的最终报告
+1. 委托专注的研究任务给具有隔离上下文的子智能体
+1. 评估搜索结果并在收集信息时规划下一步
+1. 将发现综合成带有正确引用的最终报告
 
-生成的子代理将使用 Tavily 进行网络搜索，获取完整的网页内容进行分析。
+生成的子智能体将使用 Tavily 进行网页搜索，获取完整网页内容以供分析。
 
-### 关键概念
+### 核心概念
 
 本教程涵盖：
 
-- 用于并行、上下文隔离研究的[子代理](/oss/deepagents/subagents)
-- 用于网络搜索的自定义[工具](/oss/langchain/tools)
-- 使用[内置规划工具](/oss/deepagents/harness#task-planning)进行多步规划
+- [子智能体](/oss/deepagents/subagents) 用于并行、上下文隔离的研究
+- 自定义 [工具](/oss/langchain/tools) 用于网页搜索
+- 使用 [内置规划工具进行多步骤规划](/oss/deepagents/harness#task-planning)
 
-## 先决条件
+## 前提条件
 
 API 密钥：
 
 - Anthropic (Claude) 或 Google (Gemini)
-- 用于网络搜索的 [Tavily](https://www.tavily.com/)（可选 - 免费版足够）
-- 用于追踪的 [LangSmith](https://smith.langchain.com)（可选）
+- [Tavily](https://www.tavily.com/) 用于网页搜索（可选 - 免费版足够）
+- [LangSmith](https://smith.langchain.com) 用于追踪（可选）
 
 ## 设置
 
 :::python
 <Steps>
-<Step title="创建项目目录">
-
-
-</fragment>
+<Step title="Create project directory">
 
 ```bash
 mkdir deep-research-agent
@@ -57,7 +54,7 @@ cd deep-research-agent
 ```
 
 </Step>
-<Step title="安装依赖项">
+<Step title="Install dependencies">
 
 <Tabs>
 <Tab title="Claude">
@@ -71,11 +68,10 @@ uv init
 uv add deepagents tavily-python httpx markdownify langchain-anthropic langchain-core
 uv sync
 ```
-<CodeGroup>
+</CodeGroup>
 </Tab>
 <Tab title="Gemini">
 <CodeGroup>
-</Tab>
 ```bash pip wrap
 pip install deepagents tavily-python httpx markdownify langchain-google-genai langchain-core
 ```
@@ -90,7 +86,7 @@ uv sync
 </Tabs>
 
 </Step>
-<Step title="设置 API 密钥">
+<Step title="Set API keys">
 
 <Tabs>
 <Tab title="Claude">
@@ -99,6 +95,7 @@ export ANTHROPIC_API_KEY="your_anthropic_api_key"
 export TAVILY_API_KEY="your_tavily_api_key"
 export LANGSMITH_API_KEY="your_langsmith_api_key"   # Optional
 ```
+</Tab>
 <Tab title="Gemini">
 ```bash
 export GOOGLE_API_KEY="your_google_api_key"
@@ -114,7 +111,7 @@ export LANGSMITH_API_KEY="your_langsmith_api_key"   # Optional
 
 :::js
 <Steps>
-<Step title="创建项目目录">
+<Step title="Create project directory">
 
 ```bash
 mkdir deep-research-agent
@@ -122,7 +119,7 @@ cd deep-research-agent
 ```
 
 </Step>
-<Step title="安装依赖项">
+<Step title="Install dependencies">
 
 <Tabs>
 <Tab title="Claude">
@@ -138,7 +135,7 @@ npm install deepagents @langchain/google-genai @langchain/core
 </Tabs>
 
 </Step>
-<Step title="设置 API 密钥">
+<Step title="Set API keys">
 
 <Tabs>
 <Tab title="Claude">
@@ -149,8 +146,6 @@ export LANGSMITH_API_KEY="your_langsmith_api_key"   # Optional
 ```
 </Tab>
 <Tab title="Gemini">
-
-</Tab>
 ```bash
 export GOOGLE_API_KEY="your_google_api_key"
 export TAVILY_API_KEY="your_tavily_api_key"
@@ -166,17 +161,17 @@ export LANGSMITH_API_KEY="your_langsmith_api_key"   # Optional
 ## 构建智能体
 
 :::python
-在项目目录中创建 `agent.py`：
+在项目目录中创建 `agent.py` ：
 :::
 
 :::js
-在项目目录中创建 `agent.ts`：
+在项目目录中创建 `agent.ts` ：
 :::
 
 <Steps>
-<Step title="添加工具">
+<Step title="Add tools">
 
-添加自定义搜索工具。`tavily_search` 工具使用 Tavily 进行 URL 发现，然后获取完整的网页内容，使智能体能够分析完整来源而非摘要。
+添加自定义搜索工具。该 `tavily_search` 工具使用 Tavily 进行 URL 发现，然后获取完整网页内容，以便智能体可以分析完整来源而非摘要。
 
 :::python
 <DeepResearchToolsPy />
@@ -187,14 +182,14 @@ export LANGSMITH_API_KEY="your_langsmith_api_key"   # Optional
 :::
 
 </Step>
-<Step title="添加提示词">
+<Step title="Add prompts">
 
 :::python
-将编排器工作流和子智能体提示词模板添加到 `agent.py`：
+将协调器工作流和子智能体提示模板添加到 `agent.py`:
 :::
 
 :::js
-将编排器工作流和子智能体提示词模板添加到 `agent.ts`：
+将协调器工作流和子智能体提示模板添加到 `agent.ts`:
 :::
 
 :::python
@@ -504,21 +499,19 @@ Your role is to coordinate research by delegating tasks from your TODO list to s
 - Stop when you have sufficient information to answer comprehensively
 - Bias towards focused research over exhaustive exploration`;
 ```
-::::
+:::
 
 </Step>
 <Step title="Create the agent">
 
 :::python
-将模型初始化和代理创建添加到 `agent.py`。选择您的提供商：
+将模型初始化和智能体创建添加到 `agent.py`。选择你的提供商：
 
 <Tabs>
 <Tab title="Claude">
 <DeepResearchAgentClaudePy />
 </Tab>
 <Tab title="Gemini">
-
-</fragment>
 ```python
 from datetime import datetime
 
@@ -562,7 +555,7 @@ agent = create_deep_agent(
 :::
 
 :::js
-将模型初始化和代理创建添加到 `agent.ts`：
+将模型初始化和智能体创建添加到 `agent.ts`:
 
 <DeepResearchAgentClaudeJs />
 :::
@@ -570,16 +563,16 @@ agent = create_deep_agent(
 </Step>
 </Steps>
 
-## 运行代理
+## 运行智能体
 
-你可以同步运行代理，这意味着它会等待完整结果然后打印，或者你可以流式传输实时更新。
+你可以同步运行智能体，即等待完整结果然后打印；或者在结果到来时流式接收更新。
 
 :::python
-将相应标签页中的代码添加到 `agent.py` 文件底部：
+从底部 `agent.py`:
 :::
 
 :::js
-将相应标签页中的代码添加到 `agent.ts` 文件底部：
+添加相应标签页中的代码到 `agent.ts`:
 :::
 
 <Tabs>
@@ -607,7 +600,7 @@ agent = create_deep_agent(
 </Tab>
 </Tabs>
 
-从项目根目录运行代理：
+从项目根目录运行智能体：
 
 :::python
 ```sh
@@ -621,20 +614,20 @@ npx tsx agent.ts
 ```
 :::
 
-如果在运行前设置了 `LANGSMITH_API_KEY` 环境变量，您可以在 [LangSmith](/langsmith/observability) 中查看代理的跟踪记录，以调试和监控多步骤行为。
+如果你在运行前设置了 `LANGSMITH_API_KEY` 环境变量，你可以在 [LangSmith](/langsmith/observability) 用于调试和监控多步行为。
 
 ## 完整代码
 
-在 GitHub 上查看完整的 [Deep Research 示例](https://github.com/langchain-ai/deepagents/tree/main/examples/deep_research)。
+查看完整 [深度研究示例](https://github.com/langchain-ai/deepagents/tree/main/examples/deep_research) 在 GitHub 上。
 
-## 下一步
+## 后续步骤
 
-现在您已经构建了代理，通过更改代理文件中的提示常量来自定义它，以调整工作流程、委托策略或研究人员行为。
+现在您已经构建了代理，通过更改代理文件中的提示词常量来自定义它，以调整工作流程、委托策略或研究者行为。
 您还可以调整委托限制，以允许更多并行子代理或委托轮次。
 
-要了解有关本教程概念的更多信息，请查看以下资源：
+有关本教程中概念的更多信息，请查看以下资源：
 
-- [子代理](/oss/deepagents/subagents)：了解如何使用不同的工具和提示配置子代理
-- [自定义](/oss/deepagents/customization)：自定义模型、工具、系统提示和规划行为
-- [LangSmith](/langsmith/observability)：跟踪研究运行并调试多步骤行为
+- [子代理](/oss/deepagents/subagents)：了解如何使用不同的工具和提示词配置子代理
+- [自定义](/oss/deepagents/customization)：自定义模型、工具、系统提示词和规划行为
+- [LangSmith](/langsmith/observability)：追踪研究运行并调试多步行为
 - [深度研究课程](https://academy.langchain.com/courses/deep-research-with-langgraph)：关于使用 LangGraph 进行深度研究的完整课程

@@ -1,20 +1,20 @@
 ---
 title: 使用 Next.js 部署
 sidebarTitle: Next.js
-description: 在 Next.js App Router 项目中部署 LangChain 深度智能体，支持流式聊天、子智能体和线程历史记录。
+description: 在 Next.js App Router 项目中部署 LangChain 深度智能体，具有流式聊天、子智能体和线程历史功能。
 ---
 
-以下页面详细描述了一个示例应用，它将 LangChain **深度智能体**完全部署在 [Next.js App](https://nextjs.org/) Router 项目中：流式聊天 UI、子智能体和线程历史记录，全部由 [Agent Streaming Protocol](https://github.com/langchain-ai/agent-protocol/tree/main/streaming) 提供支持，并以 Next.js Route Handlers（HTTP + SSE）的形式实现。无需单独的后端进程。
+以下页面详细说明了一个示例应用，该应用部署了一个 LangChain **深度智能体** 完全在 [Next.js App](https://nextjs.org/) Router 项目中：流式聊天 UI、子智能体和线程历史，全部由 [Agent Streaming Protocol](https://github.com/langchain-ai/agent-protocol/tree/main/streaming) 提供支持，实现为 Next.js Route Handlers（HTTP + SSE）。无需单独的后端进程。
 
-源码：[deployment-cookbook](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-next) 中的 [`js-next`](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-next)。
+Source: [`js-next`](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-next) 部署指南中。
 
 ## 部署到 Vercel
 
 <Steps>
 
-<Step title="导入仓库">
+<Step title="Import the repository">
 
-点击下方的 **Deploy with Vercel**，或手动导入 [`langchain-ai/deployment-cookbook`](https://github.com/langchain-ai/deployment-cookbook)。
+点击 **使用 Vercel 部署** 下方，或导入 [`langchain-ai/deployment-cookbook`](https://github.com/langchain-ai/deployment-cookbook) manually.
 
 <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flangchain-ai%2Fdeployment-cookbook&root-directory=js-next&env=OPENAI_API_KEY&envDescription=OpenAI%20API%20key%20for%20the%20agent%20and%20its%20subagents" target="_blank" rel="noopener noreferrer">
   <img src="https://vercel.com/button" alt="Deploy with Vercel" />
@@ -22,47 +22,47 @@ description: 在 Next.js App Router 项目中部署 LangChain 深度智能体，
 
 </Step>
 
-<Step title="配置项目">
+<Step title="Configure the project">
 
-将 **Root Directory** 设置为 `js-next`，并在项目设置中添加 `OPENAI_API_KEY`。
+设置 **根目录** to `js-next` 并在项目设置中添加 `OPENAI_API_KEY` 。
 
 </Step>
 
-<Step title="部署">
+<Step title="Deploy">
 
-部署项目。路由处理器已设置 `runtime = "nodejs"`，SSE 路由已设置 `dynamic = "force-dynamic"`，这是 Vercel 实现流式传输所必需的。
+部署项目。路由处理器已设置 `runtime = "nodejs"` ，SSE 路由设置了 `dynamic = "force-dynamic"`，这是 Vercel 流式传输所需的。
 
 </Step>
 
 </Steps>
 
-（可选）通过添加 [.env.example](https://github.com/langchain-ai/deployment-cookbook/blob/main/js-next/.env.example) 中的变量来启用 LangSmith 追踪。
+（可选）通过添加 [`.env.example`](https://github.com/langchain-ai/deployment-cookbook/blob/main/js-next/.env.example).
 
-## 必需的 API 端点
+## 所需的 API 端点
 
-该应用在 `/api/threads/...` 下暴露 Agent Streaming Protocol。路由处理器位于 `app/api/threads/` 中。
+该应用在 `/api/threads/...`下暴露了 Agent Streaming Protocol。路由处理器位于 `app/api/threads/`.
 
-### 最低要求（流式聊天）
+### 最小配置（流式聊天）
 
-以下三个端点足以使用 `@langchain/react` 的 `HttpAgentServerAdapter` 运行单线程流式聊天：
+这三个端点足以运行带有 `@langchain/react`'s `HttpAgentServerAdapter`:
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `POST` | `/api/threads/:threadId/commands` | 接受协议命令（`run.start`、…）并启动智能体运行 |
 | `POST` | `/api/threads/:threadId/stream` | 运行的协议事件 SSE 流 |
-| `GET` / `POST` | `/api/threads/:threadId/state` | 读取和引导检查点线程状态 |
+| `GET` / `POST` | `/api/threads/:threadId/state` | 读取并引导检查点线程状态 |
 
-客户端使用 `GET /state`（404 时使用 `POST /state`）引导线程，这样在发送第一条消息之前水合不会导致 404。
+客户端使用 `GET /state` （以及 `POST /state` 在 404 时）引导线程，这样水合作用在发送第一条消息之前不会 404。
 
-### 可选（线程侧边栏）
+### 可选配置（线程侧边栏）
 
-此示例还为线程历史侧边栏实现了端点。如果你的 UI 不需要多线程管理，可以省略它们：
+此示例还实现了线程历史侧边栏的端点。如果您的 UI 不需要多线程管理，可以省略它们：
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `GET` | `/api/threads` | 列出检查点已知的所有线程 |
 | `DELETE` | `/api/threads/:threadId` | 删除线程的会话和检查点 |
-| `POST` | `/api/threads/:threadId/history` | 分页检查点历史记录（Agent Protocol） |
+| `POST` | `/api/threads/:threadId/history` | 分页检查点历史（Agent Protocol） |
 
 ### 请求流程
 
@@ -105,30 +105,30 @@ flowchart TB
   class agent output
 ```
 
-1. 引导线程状态（`GET`/`POST /state`）。
-2. 提交时，SDK 向 `/commands` 发送 `run.start` 并接收 `run_id`。
-3. SDK 订阅 `/stream`（SSE）以获取回放 + 实时协议事件。
-4. 子代理（`task`）运行发出命名空间事件，作为 `stream.subagents` 暴露。
+1. 引导线程状态（`GET`/`POST /state`).
+2. 提交时，SDK 发送 `run.start` to `/commands` 并接收 `run_id`.
+3. SDK 订阅 `/stream` （SSE）以进行重放 + 实时协议事件。
+4. 子智能体（`task`）运行发出命名空间事件，作为 `stream.subagents`.
 
 ## 生产环境持久化
 
-开箱即用，代理使用内存中的 `MemorySaver` 检查点（`lib/agent/index.ts`）和进程本地会话映射（`lib/server/registry.ts`）。这适用于本地开发和单实例服务器，但在 Vercel（无服务器、多副本）上，会话状态在冷启动或实例间**不持久**。
+开箱即用，智能体使用内存中 `MemorySaver` 检查点（`lib/agent/index.ts`) 和一个进程本地的会话映射 (`lib/server/registry.ts`). 这适用于本地开发和单实例服务器，但在 Vercel（无服务器、多副本）上，对话状态是 **非持久化的** 在冷启动或实例间不持久化。
 
-对于生产环境，请换入一个[持久化检查点器](/oss/langgraph/checkpointers#checkpointer-libraries)：
+对于生产环境，请换用 [持久化检查点器](/oss/langgraph/checkpointers#checkpointer-libraries):
 
-| 包 | 后端 |
+| Package | Backend |
 | --- | --- |
-| [`@langchain/langgraph-checkpoint-redis`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-redis) | Redis（`RedisSaver`） |
-| [`@langchain/langgraph-checkpoint-postgres`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-postgres) | Postgres（`PostgresSaver`） |
-| [`@langchain/langgraph-checkpoint-sqlite`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-sqlite) | SQLite（`SqliteSaver`） |
+| [`@langchain/langgraph-checkpoint-redis`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-redis) | Redis (`RedisSaver`) |
+| [`@langchain/langgraph-checkpoint-postgres`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-postgres) | Postgres (`PostgresSaver`) |
+| [`@langchain/langgraph-checkpoint-sqlite`](https://www.npmjs.com/package/@langchain/langgraph-checkpoint-sqlite) | SQLite (`SqliteSaver`) |
 
-在 `lib/agent/index.ts` 中将 `MemorySaver` 替换为新的检查点器，并将新的检查点器传递给 `createDeepAgent`。路由处理程序和 `lib/server/threads.ts` 中的辅助函数保持不变。
+替换 `MemorySaver` in `lib/agent/index.ts` 并将新的检查点器传递给 `createDeepAgent`。路由处理程序和 `lib/server/threads.ts` 辅助函数保持不变。
 
 ### Vercel 上的 Redis
 
-Vercel 上常用的一种选择是通过 [Marketplace](https://vercel.com/docs/redis) 使用 Redis（例如 [Upstash Redis](https://vercel.com/marketplace/upstash)）。在你的 Vercel 项目上安装集成；凭证会自动作为环境变量注入。
+Vercel 的常见选择是通过 [市场](https://vercel.com/docs/redis) 使用 Redis（例如 [Upstash Redis](https://vercel.com/marketplace/upstash)）。在 Vercel 项目上安装集成；凭证会自动注入为环境变量。
 
-然后接入 `@langchain/langgraph-checkpoint-redis`：
+然后连接 `@langchain/langgraph-checkpoint-redis`:
 
 ```ts
 import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";
@@ -136,11 +136,11 @@ import { RedisSaver } from "@langchain/langgraph-checkpoint-redis";
 const checkpointer = await RedisSaver.fromUrl(process.env.REDIS_URL!);
 ```
 
-使用您的 Redis 提供商公开的连接字符串（Upstash 同时提供 REST 和 Redis 协议 URL；检查点器需要 Redis URL）。
+使用 Redis 提供商公开的连接字符串（Upstash 同时提供 REST 和 Redis 协议 URL；检查点器需要 Redis URL）。
 
-您还需要在 `lib/server/registry.ts` 中配置一个共享的会话/重放存储，以便 SSE 重连能够在无服务器调用之间正常工作。检查点器交换是实现持久化线程历史的主要步骤；会话存储则是用于实时运行重放的独立功能。
+You will also want a shared session/replay store in `lib/server/registry.ts` 这样 SSE 重连就能跨无服务器调用工作。检查点器交换是实现持久化线程历史记录的主要步骤；会话存储是实时运行回放的独立问题。
 
-更多信息，请参阅[检查点器库](/oss/langgraph/checkpointers#checkpointer-libraries)和[添加内存/持久化](/oss/langgraph/add-memory)。
+更多信息，请参阅 [检查点器库](/oss/langgraph/checkpointers#checkpointer-libraries) 和 [add memory / persistence](/oss/langgraph/add-memory).
 
 ## 本地开发
 
@@ -150,7 +150,7 @@ pnpm install
 pnpm dev
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)。
+打开 [http://localhost:3000](http://localhost:3000).
 
 ```bash
 pnpm build   # production build
@@ -158,17 +158,17 @@ pnpm start   # serve the production build
 pnpm lint    # eslint
 ```
 
-## 项目结构
+## 项目布局
 
-- `lib/agent/`：深度智能体（`createDeepAgent`），包含 `researcher` 和 `math-whiz` 子智能体以及模拟工具。标记为 `server-only`。
-- `lib/server/`：协议服务器逻辑：`session.ts`（SSE 运行）、`threads.ts`（检查点备份状态）、`serialize.ts`、`registry.ts`。
-- `app/api/threads/`：协议端点的 Route Handlers。
+- `lib/agent/`：深度智能体 (`createDeepAgent`) 配合 `researcher` 和 `math-whiz` 子智能体及模拟工具。标记 `server-only`.
+- `lib/server/`：协议服务器逻辑： `session.ts` （SSE 运行）， `threads.ts` （检查点器支持的状态）， `serialize.ts`, `registry.ts`.
+- `app/api/threads/`：上述协议端点的路由处理程序。
 - `lib/chat/threads-client.ts`：浏览器线程引导和侧边栏辅助函数。
-- `components/`：聊天 UI（`ChatApp`、`Chat`、`MessageList`、`Subagents`、`ThreadHistory` 等）。
+- `components/`：聊天 UI (`ChatApp`, `Chat`, `MessageList`, `Subagents`, `ThreadHistory`, …).
 
-## 另请参见
+## 另请参阅
 
 - [框架和平台概述](/langsmith/deploy-frameworks-and-platforms)
-- [智能体流式传输协议](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)
-- [`react-custom-backend`](https://github.com/langchain-ai/streaming-cookbook) — 自定义协议服务器的原始 Vite + Hono 参考实现
-- [Next.js Route Handlers](https://nextjs.org/docs/app/building-your-application/routing/route-handlers)
+- [智能体流式协议](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)
+- [`react-custom-backend`](https://github.com/langchain-ai/streaming-cookbook) — 原始的 Vite + Hono 参考，用于自定义协议服务器
+- [Next.js 路由处理程序](https://nextjs.org/docs/app/building-your-application/routing/route-handlers)

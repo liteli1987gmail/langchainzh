@@ -1,7 +1,7 @@
 ---
-title: 从头构建数据分析代理
-sidebarTitle: 深度代理
-description: 使用 create_agent 和深度代理中间件逐步构建数据分析代理。
+title: 从头构建一个数据分析智能体
+sidebarTitle: Deep Agent
+description: 使用 create 分步骤构建数据分析智能体_和 Deep Agents 中间件。
 ---
 
 import DeepAgentFromScratchMinimalPy from '/snippets/code-samples/deep-agent-from-scratch-minimal-py.mdx';
@@ -19,37 +19,37 @@ import DeepAgentFromScratchSummarizationJs from '/snippets/code-samples/deep-age
 import DeepAgentFromScratchUploadPy from '/snippets/code-samples/deep-agent-from-scratch-upload-py.mdx';
 import DeepAgentFromScratchUploadJs from '/snippets/code-samples/deep-agent-from-scratch-upload-js.mdx';
 
-本指南从头开始构建数据分析代理，使用 `create_agent` 和 Deep Agents 中间件。
+本指南从第一性原理出发，使用 `create_agent` 和 Deep Agents 中间件构建数据分析智能体。
 
-`create_agent` 和 `create_deep_agent` 都为你提供了对工具、内存等的细粒度控制。
-两者的主要区别在于 Deep Agents 已经内置了一系列常用功能，如规划、文件系统工具和子代理。
-如果 Deep Agents 的默认框架不符合你的需求，本指南将展示如何从 `create_agent` 开始，逐步组装框架，这样你可以清楚地看到每个组件的作用，并且只添加你需要的部分。
+两者都 `create_agent` 和 `create_deep_agent` 为您提供了对工具、内存等的细粒度控制。
+两者之间的主要区别在于，Deep Agents 已经内置了一系列常用功能，如规划、文件系统工具和子智能体。
+如果 Deep Agents 默认的 harness 不符合您的需求，本指南将向您展示如何从 `create_agent` 开始，逐步组装 harness，以便您可以清楚地看到每个组件的作用，并仅替换您用例所需的部分。
 
-按照本指南构建一个代理，实现以下功能：
+按照本指南构建一个能够执行以下操作的智能体：
 
 1. 接收 CSV 文件进行分析
 2. 在隔离的沙箱中编写和执行 Python 代码
-3. 将可视化工作委托给专门的子代理
+3. 将可视化工作委托给专门的子智能体
 4. 从技能文件中加载数据分析模式
 
-最终堆栈与 `create_deep_agent` 默认组装的内容相同。
+最终的堆栈与 `create_deep_agent` 默认组装的结构相同。
 
-## 你将学到什么
+## 您将学到的内容
 
-每个步骤为同一个数据分析代理添加一项功能：
+每个步骤为同一个数据分析智能体添加一项功能：
 
-| 步骤 | 没有它的问题 | 添加的内容 |
+| 步骤 | 没有它的困扰 | 添加的内容 |
 |------|-------------------|--------------|
-| 最小代理 | — | 基线循环：模型 + 工具，无框架 |
-| 沙箱 + 文件系统 | 代理无法读取 CSV 或运行 Python | 隔离的[后端](/oss/deepagents/backends) + 文件和执行工具 |
-| 摘要 | 长会话达到上下文限制 | 自动历史压缩 |
-| 技能 | 领域规则使系统提示膨胀 | 通过[渐进式披露](/oss/langchain/multi-agent/skills-sql-assistant)按需获取专业知识 |
-| 子代理 | 图表迭代挤占主线程 | 隔离的工作线程 + 并行委托 |
+| 最小智能体 | — | 基线循环：模型 + 工具，无测试框架 |
+| 沙箱 + 文件系统 | 智能体无法读取 CSV 或运行 Python | 隔离环境 | [后端](/oss/deepagents/backends) + 文件和执行工具 |
+| 摘要总结 | 长会话会触及上下文限制 | 自动历史压缩 |
+| 技能 | 领域规则使系统提示膨胀 | 按需专业知识通过 [渐进式披露](/oss/langchain/multi-agent/skills-sql-assistant) |
+| 子智能体 | 图表迭代挤占主线程 | 隔离工作线程 + 并行委托 |
 
 ## 设置
 
 <Steps>
-  <Step title="安装包">
+  <Step title="Install packages">
 
 安装本教程所需的包：
 
@@ -63,46 +63,48 @@ pip install deepagents langsmith
 ```bash
 npm install deepagents langsmith
 ```
-<Step title="设置 LangSmith API 密钥">
+:::
 
-本教程使用 @[`LangSmithSandbox`]，它通过 `SandboxClient` 配置沙盒。该客户端使用环境中的 `LANGSMITH_API_KEY` 向 LangSmith 进行身份验证，因此运行本教程需要 API 密钥。设置 LangSmith 还能让您查看代理运行时的追踪信息。
+  </Step>
 
-1. [注册免费账户](https://smith.langchain.com)。您可以使用 Google、GitHub 或邮箱注册。
-2. 在 **Settings → API Keys** 中[创建 API 密钥](/langsmith/create-account-api-key)。
+  <Step title="Set up LangSmith API keys">
+
+本教程使用 @[`LangSmithSandbox`], 它通过以下方式配置沙箱 `SandboxClient`。该客户端使用以下方式向 LangSmith 进行身份验证 `LANGSMITH_API_KEY` 从您的环境中获取 API 密钥，因此需要 API 密钥才能运行本教程。设置 LangSmith 还可以让您查看智能体运行时的跟踪信息。
+
+1. [注册免费账户](https://smith.langchain.com)。您可以使用 Google、GitHub 或电子邮件。
+2. [创建 API 密钥](/langsmith/create-account-api-key) in **设置 → API 密钥**.
 3. 导出 LangSmith API 密钥：
 
 ```bash
 export LANGSMITH_API_KEY=...
 ```
 
-4. 启用跟踪以检查工具调用、中间件步骤和子代理委托，随你添加每个组件时：
+4. 启用跟踪以检查工具调用、中间件步骤和子智能体委托，当您添加每个组件时：
 
 ```bash
 export LANGSMITH_TRACING=true
 ```
 
-</Step>
+  </Step>
 
-<Step title="添加模型提供商 API 密钥">
+  <Step title="Add a model provider API key">
 
 导出您在代码示例中使用的模型提供商的 API 密钥。例如：
-
-</Step>
 
 ```bash
 export ANTHROPIC_API_KEY=...
 ```
 
-</Step>
+  </Step>
 </Steps>
 
-## 构建 Agent
+## 构建智能体
 
-## 创建最小化 Agent
+## 创建最小智能体
 
-数据分析 Agent 需要的不只是聊天循环，但首先从基线开始：只有一个模型和一个循环。
+数据分析智能体需要的不仅仅是一个聊天循环，但首先，从基线开始：仅一个模型和一个循环。
 
-使用 @[`create_agent`] 并指定你想要使用的模型：
+使用 @[`create_agent`] 并指定您想要使用的模型：
 
 :::python
 
@@ -116,26 +118,26 @@ export ANTHROPIC_API_KEY=...
 
 :::
 
-这样可以运行，但 Agent 没有文件系统和执行代码的能力。如果你让它分析一个 CSV 文件，它只能根据提示猜测。接下来的步骤将添加真实的文件访问和代码执行功能。
+这可以运行，但智能体没有文件系统，也没有执行代码的方法。如果你要求它分析 CSV，它只能根据提示猜测。接下来的步骤将添加真正的文件访问和代码执行功能。
 
-## 添加沙箱后端
+## 添加沙盒后端
 
-为了高效分析数据，Agent 需要在文件上运行代码。这需要两件事：
+为了高效分析数据，智能体需要在文件上运行代码。这需要两样东西：
 
-- 一个隔离的 [sandbox](/oss/deepagents/sandboxes)，Agent 可以在其中放置文件并对文件运行代码，而无需访问你的主机。
-- 一个 [backend](/oss/deepagents/backends)，它提供文件系统工具来使用 @[`FilesystemMiddleware`] 处理沙箱中的文件（`read_file`、`write_file`、`edit_file`、`glob` 和 `grep`）：**。由于 `LangSmithSandbox` 后端实现了沙箱协议，@[`FilesystemMiddleware`] 也会添加 `execute` 工具，允许 Agent 运行 shell 命令。
+- 一个隔离的 [沙盒](/oss/deepagents/sandboxes) 智能体可以在其中放置文件并在文件上运行代码的环境，而不会获得对您主机的访问权限。
+- A [后端](/oss/deepagents/backends) 它提供文件系统工具来操作沙盒（`read_file`, `write_file`, `edit_file`, `glob`，以及 `grep`）使用 @[`FilesystemMiddleware`]:**。因为 `LangSmithSandbox` 后端实现了沙盒协议，@[`FilesystemMiddleware`] 还添加了 `execute` 工具，该工具允许智能体运行 shell 命令。
 
-@[`LangSmithSandbox`] 是文件存放和命令运行的地方。@[`FilesystemMiddleware`] 是将该环境作为工具暴露给模型的内容。如果你稍后交换后端，相同的中间件也适用于其他后端。
+@[`LangSmithSandbox`] 是文件存放和命令运行的位置。@[`FilesystemMiddleware`] 用于将环境作为工具暴露给模型。如果稍后更换后端，相同的中间件可与其他后端配合工作。
 
 :::python
-@[`LangSmithSandbox`] 为 Agent 提供了一个隔离环境，包含文件系统和用于运行 shell 命令的 `execute` 工具。通过它，Agent 可以安装包、编写脚本并运行它们，而不会影响主机。要从自定义镜像而非默认运行时启动，请将 `snapshot_name` 或 `snapshot_id` 传递给 `create_sandbox()`；请参阅 [沙箱快照](/langsmith/sandbox-snapshots)。
+@[`LangSmithSandbox`] 为智能体提供了一个带有文件系统的隔离环境和一个 `execute` 用于运行 shell 命令的工具。有了它，智能体可以安装包、编写脚本并运行它们，而无需接触主机。要从自定义镜像启动（而不是默认运行时），请传递 `snapshot_name` or `snapshot_id` to `create_sandbox()`；请参阅 [沙盒快照](/langsmith/sandbox-snapshots).
 :::
 
 :::js
-@[`LangSmithSandbox`] 为 Agent 提供了一个隔离环境，包含文件系统和用于运行 shell 命令的 `execute` 工具。通过它，Agent 可以安装包、编写脚本并运行它们，而不会影响主机。要从自定义镜像而非默认运行时启动，请将 `snapshotId` 传递给 `LangSmithSandbox.create()`；请参阅 [沙箱快照](/langsmith/sandbox-snapshots)。
+@[`LangSmithSandbox`] 为智能体提供了一个带有文件系统的隔离环境和一个 `execute` 用于运行 shell 命令的工具。有了它，智能体可以安装包、编写脚本并运行它们，而无需接触主机。要从自定义镜像启动（而不是默认运行时），请传递 `snapshotId` to `LangSmithSandbox.create()`；请参阅 [沙盒快照](/langsmith/sandbox-snapshots).
 :::
 
-用包含 @[`FilesystemMiddleware`] 的 Agent 替换上一步的 Agent：
+将上一步的智能体替换为包含 @[`FilesystemMiddleware`]:
 
 :::python
 
@@ -149,7 +151,7 @@ export ANTHROPIC_API_KEY=...
 
 :::
 
-沙箱文件系统与你的笔记本是分离的。在调用 Agent 之前，你必须将需要的文件上传到沙箱：
+沙盒文件系统与您的笔记本电脑是分开的。在调用智能体之前，您必须将所需文件上传到沙盒：
 
 :::python
 
@@ -164,10 +166,10 @@ export ANTHROPIC_API_KEY=...
 :::
 
 <Note>
-使用 @[`LangSmithSandbox`] 时，上传路径必须是绝对 POSIX 路径（例如，`/sales.csv`）。相对路径（如 `sales.csv`）将被拒绝并显示 `invalid_path`，文件不会被写入沙箱。
+使用 @[`LangSmithSandbox`，上传路径必须是绝对 POSIX 路径（例如， `/sales.csv`）。相对路径（如 `sales.csv` 会被拒绝并显示 `invalid_path` ，并且文件不会被写入沙盒。
 </Note>
 
-将前面步骤中的代码合并为一个脚本并运行：
+将前面步骤的代码合并为一个脚本并运行它：
 
 :::python
 ```bash
@@ -181,17 +183,17 @@ npx tsx analyze-sales.ts
 ```
 :::
 
-首次运行时，LangSmith 会配置一个沙盒环境（这可能需要几秒钟）。脚本会上传 `sales.csv`，流式传输代理运行，并将助手消息打印出来。你应该会看到示例销售数据的分析：按产品分类的收入、最畅销的小部件，以及简要的趋势说明。确切的措辞会因模型运行而异。
+首次运行时，LangSmith 会配置一个沙盒（这可能需要几秒钟）。脚本会上传 `sales.csv`，流式传输智能体运行，并在收到助手消息时打印出来。您应该会看到示例销售数据的分析：产品级收入、哪些小部件卖得最好，以及简要的趋势说明。确切的措辞因模型运行而异。
 
-在 [LangSmith](https://smith.langchain.com/) 中打开该运行，观察代理在回复之前如何使用文件系统工具（如果它在沙盒中运行 Python，则使用 `read_file` 和 `execute`）。
+在 [LangSmith](https://smith.langchain.com/) 中打开该运行，并观察智能体使用文件系统工具（`read_file`，以及 `execute` （如果它在沙盒中运行 Python）在它回复之前。
 
 ## 添加上下文管理
 
-在步骤 2 之后，每个工具结果都保留在消息历史中。实际的分析会话（多个图表、失败的脚本、大量 `read_file` 输出）会迅速填满上下文窗口。
+在步骤2之后，每个工具结果都保留在消息历史中。一个真实的分析会话（多个图表、失败的脚本、大的 `read_file` 输出）会迅速填满上下文窗口。
 
-@[`SummarizationMiddleware`] 会在历史记录增长过大时压缩较早的对话轮次，这样代理可以持续工作而无需你手动修剪消息。这对于第一个 `sales.csv` 问题影响不大，但对于后续问题（例如"现在按产品细分并绘制每月趋势"）更为重要。
+@[`SummarizationMiddleware`] 在历史记录增长过大时压缩较早的轮次，这样代理就可以继续工作，而无需你手动修剪消息。这在第一个 `sales.csv` 问题上影响较小，但在后续问题（如“现在按产品细分并绘制每月趋势”）上影响更大。
 
-通过向中间件列表添加 @[`SummarizationMiddleware`] 来更新步骤 2 中的代理：
+通过将 @[`SummarizationMiddleware`] 添加到中间件列表来更新你在步骤2中的代理：
 
 :::python
 
@@ -205,15 +207,15 @@ npx tsx analyze-sales.ts
 
 :::
 
-运行多轮会话以查看压缩的实际效果。初始分析后，提出后续问题以触发更多文件读取或脚本运行。在 LangSmith 中，查找后续模型调用之前的压缩步骤。欲了解更多详情，请参阅[上下文工程](/oss/langchain/context-engineering)。
+运行一个多轮会话来查看实际运行的摘要。在初始分析之后，提出后续问题以触发更多文件读取或脚本运行。在 LangSmith 中，查找后续模型调用之前的摘要步骤。更多信息， [上下文工程](/oss/langchain/context-engineering).
 
 ## 添加技能
 
-[技能](/oss/langchain/multi-agent/skills-sql-assistant)提供了一种按需向代理赋予领域知识的方式，采用渐进式披露。技能可以包括多步骤工作流、规则和约定。将此信息放在技能中，默认情况下不会添加到系统提示中，这样确保只有在任务需要技能中的信息时才使用相关令牌。
+[技能](/oss/langchain/multi-agent/skills-sql-assistant) 提供了一种使用渐进式披露的方式，在需要时向代理提供按需的领域知识。技能可以包括多步骤工作流程、规则和约定。通过将此信息放入技能中，它默认不会被添加到系统提示中，这确保了令牌仅在任务需要技能中的信息时才被使用。
 
 当代理启动时，它只看到每个技能的轻量级元数据。当任务需要某个技能时，代理会按需加载完整的技能文件。
 
-在 skills 目录中创建一个技能文件：
+在技能目录中创建一个技能文件：
 
 ```
 skills/
@@ -238,9 +240,9 @@ Save figures with `plt.savefig("output.png", dpi=150, bbox_inches="tight")`.
 Write a markdown summary to `report.md` alongside any generated charts.
 ```
 
-此技能包含有关如何进行可视化操作的信息。
+此技能包含有关如何进行可视化的信息。
 
-通过 @[`LangSmithSandbox`]，技能路径在沙箱文件系统中解析，而非您的本地计算机。在配置 @[`SkillsMiddleware`] 之前，请上传您的本地 `skills/` 目录：
+使用 @[`LangSmithSandbox`]，技能路径在沙盒文件系统上解析，而不是在你的本地计算机上。在配置 @[ `skills/` 之前上传你的本地`SkillsMiddleware`]:
 
 :::python
 
@@ -254,7 +256,7 @@ Write a markdown summary to `report.md` alongside any generated charts.
 
 :::
 
-然后通过添加 @[`SkillsMiddleware`] 来创建带有技能的智能体：
+目录。然后通过添加 @[`SkillsMiddleware`]:
 
 :::python
 
@@ -268,15 +270,15 @@ Write a markdown summary to `report.md` alongside any generated charts.
 
 :::
 
-您可以尝试使用类似"使用我们的 pandas 模式分析 sales.csv"的提示。当智能体需要绘图或报告指导时，它会加载该技能。如果您提出一个不需要该技能的其他问题，智能体将不会加载它。
+您可以尝试一个提示，例如"使用我们的 pandas 模式分析 sales.csv"。代理会在需要绘图或报告指导时加载该技能。如果您提出不同的问题且不需要该技能，代理将不会加载它。
 
-## 添加可视化子智能体
+## 添加可视化子代理
 
-某些任务会产生大量中间输出（脚本草稿、失败的运行、文件读取），如果保留在一个线程中，会挤占主智能体的上下文。[subagent](/oss/deepagents/subagents) 在其自己的上下文窗口中运行，因此监督者只看到最终结果，而非沿途的每个工具调用。这使得主分析保持专注，并为后续问题留出空间。
+某些任务会产生大量中间输出（脚本草稿、失败的运行、文件读取），如果保留在一个线程中，会挤占主代理的上下文。 [子代理](/oss/deepagents/subagents) 在自己的上下文窗口中运行，因此监督者只看到最终结果，而不是过程中的每个工具调用。这样可以保持主分析的专注性，并为后续问题留出空间。
 
-使用子智能体有意义的一个例子是图表生成。绘图通常意味着迭代 Python 脚本、安装包，以及在图表准备好之前读取错误输出。下面的 `visualizer` 子智能体可以隔离处理这些工作，而主智能体继续进行规划和分析。通过 @[`TodoListMiddleware`]，主智能体还可以并行委派图表工作，而不是在每个图表上阻塞。
+使用子代理的一个典型场景是图表生成。绘图通常需要反复修改 Python 脚本、安装依赖包、读取错误输出，直到图表最终生成。 `visualizer` 子代理可以在隔离环境中处理这些工作，而主代理继续进行规划和分析。通过 @[`TodoListMiddleware`]，主代理也可以并行委托这些图表工作，而不是阻塞在每个图表上。
 
-通过添加 @[`TodoListMiddleware`] 和 @[`SubAgentMiddleware`] 从第 4 步更新您的智能体：
+通过添加 @[ 来更新步骤 4 中的代理`TodoListMiddleware`] and @[`SubAgentMiddleware`]:
 
 :::python
 
@@ -290,35 +292,36 @@ Write a markdown summary to `report.md` alongside any generated charts.
 
 :::
 
-尝试使用类似"分析 sales.csv，然后创建一个按产品划分收入的条形图"的提示。主智能体处理分析和规划，并通过 `task` 工具将图表生成委派给 `visualizer` 子智能体。
+尝试一个提示，比如"分析 sales.csv，然后创建一个按产品收入柱状图。" 主代理负责分析和规划，并将图表生成委托给 `visualizer` 子代理通过 `task` tool.
 
-如果您在[设置](#setup)中启用了跟踪，请在 [LangSmith](https://smith.langchain.com/) 中打开运行。您应该会看到一个对 `visualizer` 的 `task` 调用，一个带有自己工具循环的单独子运行，以及返回给监督者的简短结果。
+如果您在 [设置](#setup)，在 LangSmith 中打开此运行 [LangSmith](https://smith.langchain.com/)。你应该会看到一个 `task` 对 `visualizer`的调用、一个具有独立工具循环的子运行，以及返回给监督者的简短结果。
+
 
 ## 您构建的内容
 
-您已经构建了一个具有以下中间件的定制智能体：
+您已构建一个包含以下中间件的自定义代理：
 
-| 中间件 | 功能 |
+| 中间件 | 功能说明 |
 |---|---|
 | @[`FilesystemMiddleware`] + `LangSmithSandbox` | 隔离文件系统 + `execute` 工具 |
 | @[`SummarizationMiddleware`] | 自动上下文压缩 |
 | @[`SkillsMiddleware`] | 按需加载领域知识 |
-| @[`TodoListMiddleware`] + @[`SubAgentMiddleware`] | 并行可视化子智能体 |
+| @[`TodoListMiddleware`] + @[`SubAgentMiddleware`] | 并行可视化子代理 |
 
 :::python
-这与 @[`create_deep_agent`] 的基础相同：手动组装以便您精确控制包含的内容。
+这与 @[`create_deep_agent`] 相同的基础：手动组装，因此您可以精确控制所包含的内容。
 :::
 
 :::js
-这与 @[`createDeepAgent`] 的基础相同：手动组装以便您精确控制包含的内容。
+这与 @[`createDeepAgent`] 相同的基础：手动组装，因此您可以精确控制所包含的内容。
 :::
 
-可能性不仅限于此：请参阅[预构建中间件](/oss/langchain/middleware/built-in)获取完整的可组合功能列表，以及 @[`create_agent`] 参考文档了解所有配置选项。
+可能性不仅限于此：参见 [预构建中间件](/oss/langchain/middleware/built-in) 获取可组合功能的完整列表，以及 @[`create_agent`] 参考文档，了解所有配置选项。
 
 :::python
-要使用预组装版本，请参阅[自定义深度智能体](/oss/deepagents/customization)。有关使用 `create_deep_agent` 的完整数据分析示例，请参阅[数据分析](/oss/deepagents/data-analysis)。
+要使用预组装版本，请参阅 [自定义 Deep Agents](/oss/deepagents/customization)。如需查看完整的数据分析示例，请参考 `create_deep_agent`，请参阅 [数据分析](/oss/deepagents/data-analysis).
 :::
 
 :::js
-要使用预组装版本，请参阅[自定义深度智能体](/oss/deepagents/customization)。有关使用 `createDeepAgent` 的完整数据分析示例，请参阅[数据分析](/oss/deepagents/data-analysis)。
+要使用预组装版本，请参阅 [自定义 Deep Agents](/oss/deepagents/customization)。如需查看完整的数据分析示例，请参考 `createDeepAgent`，请参阅 [数据分析](/oss/deepagents/data-analysis).
 :::

@@ -3,42 +3,43 @@ title: 记录 LLM 调用
 sidebarTitle: 记录 LLM 调用
 ---
 
-当您直接调用 LLM（而非通过 [LangChain](/oss/langchain/overview) 或 LangSmith [支持的集成](/langsmith/integrations)）时，您需要提供特定的元数据，以便 LangSmith 能够显示 token 数量、计算成本，并让您使用正确的提供商和模型在 [Playground](/langsmith/prompt-engineering-concepts#playground) 中打开[运行](/langsmith/observability-concepts#runs)。
+当您直接调用 LLM 时，在以下情况之外 [LangChain](/oss/langchain/overview) 或 LangSmith [支持的集成](/langsmith/integrations)，您需要提供特定的元数据，以便 LangSmith 可以显示 token 计数、计算成本，并允许您在 [运行](/langsmith/observability-concepts#runs) 中打开 [Playground](/langsmith/prompt-engineering-concepts#playground) 中使用正确的提供商和模型。
 
-要实现功能完整的 LLM 追踪，需要满足四个要求：
+完整的 LLM 追踪有四个要求：
 
-| 要求 | 操作方法 | 作用 |
+| 要求 | 做什么 | 启用功能 |
 |---|---|---|
-| 1. 设置 [`run_type="llm"`](/langsmith/run-data-format#run-types) | 向 `@traceable` 传递 `run_type="llm"` | LLM 特定渲染，token/成本显示 |
-| 2. 格式化输入/输出 | 使用 OpenAI、Anthropic 或 LangChain 消息格式 | 结构化消息渲染，Playground 支持 |
-| 3. 设置 `ls_provider` 和 `ls_model_name` | 在 `metadata` 中传递这两个参数 | 成本追踪，Playground 模型选择 |
-| 4. 提供 token 数量 | 在运行上设置 `usage_metadata` | Token 计数和成本计算 |
+| 1. 设置 [`run_type="llm"`](/langsmith/run-data-format#run-types) | 传递 `run_type="llm"` to `@traceable` | LLM-specific rendering, token/cost display |
+| 2. Format inputs/outputs | Use OpenAI, Anthropic, or LangChain message format | Structured message rendering, Playground support |
+| 3. 设置 `ls_provider` 和 `ls_model_name` | 在两者中传递 `metadata` | 成本追踪、Playground 模型选择 |
+| 4. 提供 token 计数 | 设置 `usage_metadata` 在运行上 | Token 计数和成本计算 |
 
 <Note>
-如果您使用的是 LangChain OSS、[OpenAI 包装器](/langsmith/trace-openai) 或 [Anthropic 包装器](/langsmith/trace-anthropic)，这些细节会自动处理。
+如果您使用的是 LangChain OSS、 [OpenAI 包装器](/langsmith/trace-openai)或 [Anthropic 包装器](/langsmith/trace-anthropic)，这些细节会自动处理。
 
-本页的示例使用 `traceable` 装饰器/包装器（Python 和 JS/TS 的推荐方法）。如果您直接使用 [RunTree](/langsmith/annotate-code#use-the-runtree-api) 或 [API](/langsmith/smith-api-ref)，同样需要满足这些要求。
+本页示例使用 `traceable` decorator/wrapper (the recommended approach for Python and JS/TS). The same requirements apply if you use the [RunTree](/langsmith/annotate-code#use-the-runtree-api) or [API](/langsmith/smith-api-ref) directly.
 </Note>
 
 ## 消息格式
 
-当追踪自定义模型或自定义输入/输出格式时，它必须遵循 LangChain 格式、OpenAI completions 格式或 Anthropic 消息格式之一。更多详情请参阅 [OpenAI Chat Completions](https://platform.openai.com/docs/api-reference/chat/create) 或 [Anthropic Messages](https://platform.claude.com/docs/en/api/messages) 文档。LangChain 格式如下：
+When tracing a custom model or a custom input/output format, it must either follow the LangChain format, OpenAI completions format or Anthropic messages format. For more details,  refer to the [OpenAI Chat Completions](https://platform.openai.com/docs/api-reference/chat/create) or [Anthropic Messages](https://platform.claude.com/docs/en/api/messages) 文档。LangChain 格式为：
 
- <Expandable title="LangChain 格式">
+
+ <Expandable title="LangChain format">
 
 <ParamField path="messages" type="array" required>
   包含对话内容的消息列表。
 
     <ParamField path="role" type="string" required>
-  标识消息类型。可选值：<code>system</code> | <code>reasoning</code> | <code>user</code> | <code>assistant</code> | <code>tool</code>
+  标识消息类型。可选值： <code>system</code> | <code>reasoning</code> | <code>user</code> | <code>assistant</code> | <code>tool</code>
 </ParamField>
 
     <ParamField path="content" type="array" required>
-      消息内容。类型化字典的列表。
+      消息内容。类型化字典列表。
 
-      <Expandable title="内容选项">
+      <Expandable title="Content options">
         <ParamField path="type" type="string" required>
-          可选值：<code>text</code> | <code>image</code> | <code>file</code> | <code>audio</code> | <code>video</code> | <code>tool_call</code> | <code>server_tool_call</code> | <code>server_tool_result</code>。
+          可选项： <code>text</code> | <code>image</code> | <code>file</code> | <code>audio</code> | <code>video</code> | <code>tool_call</code> | <code>server_tool_call</code> | <code>server_tool_result</code>.
         </ParamField>
 
         <Expandable title="text">
@@ -50,7 +51,7 @@ sidebarTitle: 记录 LLM 调用
             文本注释列表
         </ParamField>
         <ParamField path="extras" type="object">
-            附加的提供商特定数据。
+            额外的提供商特定数据。
         </ParamField>
         </Expandable>
 
@@ -60,27 +61,27 @@ sidebarTitle: 记录 LLM 调用
             文本内容。
           </ParamField>
         <ParamField path="extras" type="object">
-            附加的提供商特定数据。
+            额外的提供商特定数据。
         </ParamField>
         </Expandable>
 
         <Expandable title="image">
           <ParamField path="type" type="literal('image')" required />
           <ParamField path="url" type="string">
-            指向图像位置的 URL。
+            指向图片位置的 URL。
           </ParamField>
         <ParamField path="base64" type="string" required>
-            Base64 编码的图像数据。
+            Base64 编码的图片数据。
           </ParamField>
           <ParamField path="id" type="string">
-            外部存储图像的引用 ID（例如，在提供商的文件系统或存储桶中）。
+            外部存储图片的引用 ID（例如，存储在提供者的文件系统或存储桶中）。
           </ParamField>
           <ParamField path="mime_type" type="string">
-            图像 [MIME 类型](https://www.iana.org/assignments/media-types/media-types.xhtml#image)（例如 `image/jpeg`、`image/png`）。
+            图片 [MIME 类型](https://www.iana.org/assignments/media-types/media-types.xhtml#image) (e.g., `image/jpeg`, `image/png`).
           </ParamField>
         </Expandable>
 
-        <Expandable title="file (例如 PDF)">
+        <Expandable title="file (e.g., PDFs)">
           <ParamField path="type" type="literal('file')" required />
           <ParamField path="url" type="string">
             指向文件的 URL。
@@ -89,10 +90,10 @@ sidebarTitle: 记录 LLM 调用
             Base64 编码的文件数据。
           </ParamField>
           <ParamField path="id" type="string">
-            外部存储文件的引用 ID（例如，在提供商的文件系统或存储桶中）。
+            外部存储文件的引用 ID（例如，存储在提供者的文件系统或存储桶中）。
           </ParamField>
           <ParamField path="mime_type" type="string">
-            文件 [MIME 类型](https://www.iana.org/assignments/media-types/media-types.xhtml#image)（例如 `application/pdf`）。
+            文件 [MIME 类型](https://www.iana.org/assignments/media-types/media-types.xhtml#image) (e.g., `application/pdf`).
           </ParamField>
         </Expandable>
 
@@ -105,10 +106,10 @@ sidebarTitle: 记录 LLM 调用
             Base64 编码的音频数据。
           </ParamField>
           <ParamField path="id" type="string">
-            外部存储音频文件的引用 ID（例如，在提供商的文件系统或存储桶中）。
+            外部存储音频文件的引用 ID（例如，存储在提供者的文件系统或存储桶中）。
           </ParamField>
           <ParamField path="mime_type" type="string">
-            音频 [MIME 类型](https://www.iana.org/assignments/media-types/media-types.xhtml#image)（例如 `audio/mpeg`、`audio/wav`）。
+            音频 [MIME 类型](https://www.iana.org/assignments/media-types/media-types.xhtml#image) (e.g., `audio/mpeg`, `audio/wav`).
           </ParamField>
         </Expandable>
 
@@ -121,10 +122,10 @@ sidebarTitle: 记录 LLM 调用
             Base64 编码的视频数据。
           </ParamField>
           <ParamField path="id" type="string">
-            外部存储视频文件的引用 ID（例如，在提供商的文件系统或存储桶中）。
+            外部存储视频文件的引用 ID（例如，存储在提供者的文件系统或存储桶中）。
           </ParamField>
           <ParamField path="mime_type" type="string">
-            视频 [MIME 类型](https://www.iana.org/assignments/media-types/media-types.xhtml#image)（例如 `video/mp4`、`video/webm`）。
+            视频 [MIME 类型](https://www.iana.org/assignments/media-types/media-types.xhtml#image) (e.g., `video/mp4`, `video/webm`).
           </ParamField>
         </Expandable>
 
@@ -155,16 +156,16 @@ sidebarTitle: 记录 LLM 调用
         <Expandable title="server_tool_result">
           <ParamField path="type" type="literal('server_tool_result')" required />
           <ParamField path="tool_call_id" type="string" required>
-            对应服务器工具调用的标识符。
+            相应服务端工具调用的标识符。
           </ParamField>
           <ParamField path="id" type="string">
             此工具调用的唯一标识符。
           </ParamField>
         <ParamField path="status" type="string" required>
-            服务器端工具的执行状态。可选值：<code>success</code> | <code>error</code>。
+            服务端工具的执行状态。取值为： <code>成功</code> | <code>错误</code>.
           </ParamField>
           <ParamField path="output">
-            已执行工具的输出。
+            执行工具的输出。
           </ParamField>
         </Expandable>
 
@@ -173,11 +174,11 @@ sidebarTitle: 记录 LLM 调用
     </ParamField>
 
     <ParamField path="tool_call_id" type="string">
-    必须与之前 <code>assistant</code> 消息的 <code>tool_calls[i]</code> 条目中的 <code>id</code> 相匹配。仅在 <code>role</code> 为 <code>tool</code> 时有效。
+    必须匹配 <code>id</code> 先前 <code>assistant</code> 消息的 <code>tool_calls[i]</code> 条目。仅在 <code>role</code> is <code>tool</code>.
     </ParamField>
 
     <ParamField path="usage_metadata" type="object">
-    使用此字段可随模型的输出一起发送 token 计数和/或成本信息。更多详情请参阅[提供 token 和成本信息](/langsmith/log-llm-trace#provide-token-and-cost-information)。
+    Use this field to send token counts and/or costs with your model's output. See [提供令牌和成本信息](/langsmith/log-llm-trace#provide-token-and-cost-information) 了解更多详情。
     </ParamField>
 </ParamField>
 
@@ -347,13 +348,14 @@ output = {
 
 </CodeGroup>
 
-## 将自定义 I/O 格式转换为 LangSmith 兼容格式
 
-如果您使用的是自定义输入或输出格式，可以使用 [`@traceable` 装饰器](https://docs.smith.langchain.com/reference/python/run_helpers/langsmith.run_helpers.traceable)（Python）或 [`traceable` 函数](https://docs.smith.langchain.com/reference/js/functions/traceable.traceable)（TS）上的 `process_inputs`/`processInputs` 和 `process_outputs`/`processOutputs` 函数将其转换为 LangSmith 兼容格式。
+## Convert custom I/O formats into LangSmith compatible formats
 
-`process_inputs`/`processInputs` 和 `process_outputs`/`processOutputs` 接受函数，这些函数允许您在将特定追踪的输入和输出记录到 LangSmith 之前对其进行转换。它们可以访问追踪的输入和输出，并可以返回包含处理后数据的新字典。
+如果您使用自定义输入或输出格式，可以使用 `process_inputs`/`processInputs` 和 `process_outputs`/`processOutputs` 函数将其转换为 LangSmith 兼容格式 [`@traceable` 装饰器上的](https://docs.smith.langchain.com/reference/python/run_helpers/langsmith.run_helpers.traceable) （Python）或 [`traceable` 函数](https://docs.smith.langchain.com/reference/js/functions/traceable.traceable) (TS).
 
-以下是一个模板示例，展示了如何使用 `process_inputs` 和 `process_outputs` 将自定义 I/O 格式转换为 LangSmith 兼容格式：
+`process_inputs`/`processInputs` 和 `process_outputs`/`processOutputs` 接受函数，允许您在将特定追踪的输入和输出记录到 LangSmith 之前对其进行转换。它们可以访问追踪的输入和输出，并可以返回包含处理数据的新字典。
+
+以下是使用 `process_inputs` 和 `process_outputs` to convert a custom I/O format into a LangSmith compatible format:
 
 ```python expandable
 class OriginalInputs(BaseModel):
@@ -387,15 +389,12 @@ def chat_model(inputs: dict) -> dict:
 
 ## 在追踪中识别自定义模型
 
-使用自定义模型时，建议同时提供以下 `metadata` 字段，以便在查看追踪和[过滤追踪](/langsmith/filter-traces-in-application)时识别模型。
+使用自定义模型时，建议同时提供以下内容 `metadata` 字段以在查看轨迹时识别模型，以及在 [过滤时](/langsmith/filter-traces-in-application).
 
-- `ls_provider`：模型的提供者，例如 `"openai"`、`"anthropic"`。
-- `ls_model_name`：模型的名称，例如 `"gpt-5.4-mini"`、`"claude-3-opus-20240229"`。
+- `ls_provider`：模型的提供商，例如 `"openai"`, `"anthropic"`.
+- `ls_model_name`：模型的名称，例如 `"gpt-5.4-mini"`, `"claude-3-opus-20240229"`.
 
 <CodeGroup>
-
-
-</CodeGroup>
 
 ```python Python wrap
 from langsmith import traceable
@@ -482,7 +481,7 @@ await chatModel({ messages });
 
 </CodeGroup>
 
-如果你实现了自定义的流式 `chat_model`，则可以将其输出"合并"为与非流式版本相同的格式。这仅在 Python 中受支持：
+如果您实现自定义流式处理 `chat_model`，您可以将输出"归约"为与非流式版本相同的格式。这仅在 Python 中受支持：
 
 ```python expandable wrap
 def _reduce_chunks(chunks: list):
@@ -518,39 +517,37 @@ list(
 ```
 
 <Check>
-在您的 `metadata` 中设置 `ls_model_name` 是必需的，这样 LangSmith 才能识别模型并为自定义 LLM 跟踪计算成本。如果没有设置，token 计数仍会被记录，但不会估算成本。
+设置 `ls_model_name` 在您的 `metadata` 是 LangSmith 识别模型并计算自定义 LLM 追踪成本的必要条件。没有它，token 数量可能仍会被记录，但不会估算成本。
 </Check>
 
-要了解有关如何使用 `metadata` 字段的更多信息，请参阅 [添加元数据和标签](/langsmith/add-metadata-tags) 指南。要自定义自定义代理运行在消息视图中的显示方式，请参阅 [自定义消息视图](/langsmith/view-traces#customize-the-messages-view)。
+要了解更多关于如何使用 `metadata` 字段的信息，请参阅 [添加元数据和标签](/langsmith/add-metadata-tags) 指南。要自定义自定义代理运行在消息视图中的显示方式，请参见 [自定义消息视图](/langsmith/view-traces#customize-the-messages-view).
 
 ## 提供 token 和成本信息
 
-Token 计数用于成本计算，LangSmith 会在[跟踪项目 UI](https://smith.langchain.com/projects) 中显示。有两种提供方式：
+Token 计数用于启用成本计算，LangSmith 在 [追踪项目 UI](https://smith.langchain.com/projects)中显示它们。有两种提供方式：
 
-- **在运行树上设置 `usage_metadata`**：在您的 [`@traceable`](/langsmith/annotate-code#use-%40traceable-%2F-traceable) 函数内调用 [`get_current_run_tree()` / `getCurrentRunTree()`](/langsmith/access-current-span) 并设置 `usage_metadata` 字段。这不会改变函数的返回值。
-- **在输出中返回 `usage_metadata`**：将 `usage_metadata` 作为顶级键包含在函数返回的字典中。
+- **设置 `usage_metadata` 在运行树**：调用 [`get_current_run_tree()` / `getCurrentRunTree()`](/langsmith/access-current-span) 在您的 [`@traceable`](/langsmith/annotate-code#use-%40traceable-%2F-traceable) 函数中并设置 `usage_metadata` 字段。这不会改变函数的返回值。
+- **在输出中返回 `usage_metadata` ：在**中包含 `usage_metadata` 作为函数返回字典中的顶层键。
 
 ### 支持的 `usage_metadata` 字段
 
 | 字段 | 类型 | 描述 |
 |---|---|---|
-| `input_tokens` | `int` | 输入/提示 token 总数 |
-| `output_tokens` | `int` | 输出/补全 token 总数 |
-| `total_tokens` | `int` | 输入 + 输出的总和（可选，可推断） |
-| `input_token_details` | `object` | 明细：`cache_read`、`cache_creation`、`cache_read_over_200k`、`ephemeral_5m_input_tokens`、`ephemeral_1h_input_tokens`、`audio`、`text`、`image` |
-| `output_token_details` | `object` | 明细：`reasoning`、`audio`、`text`、`image` |
+| `input_tokens` | `int` | Total input/prompt tokens |
+| `output_tokens` | `int` | Total output/completion tokens |
+| `total_tokens` | `int` | 输入 + 输出的总和（可选，可推断）|
+| `input_token_details` | `object` | 明细： `cache_read`, `cache_creation`, `cache_read_over_200k`, `ephemeral_5m_input_tokens`, `ephemeral_1h_input_tokens`, `audio`, `text`, `image` |
+| `output_token_details` | `object` | 明细： `reasoning`, `audio`, `text`, `image` |
 
-要直接发送成本（用于非线性定价），您还可以包含 `input_cost`、`output_cost` 和 `total_cost` 字段。有关配置模型定价和在 UI 中查看成本的详细信息，请参阅[成本跟踪](/langsmith/cost-tracking)页面。
+要直接发送成本（用于非线性定价），您还可以包含 `input_cost`, `output_cost`和 `total_cost` 字段。有关配置模型定价和查看 UI 中成本的详细信息，请参阅 [成本追踪](/langsmith/cost-tracking) page.
 
-## 首个 token 到达时间
+## Time-to-first-token
 
-如果您使用的是 `traceable` 或 SDK 包装器之一，LangSmith 将自动为流式 LLM 运行填充首个 token 到达时间。但是，如果您直接使用 [`RunTree` API](/langsmith/annotate-code#use-the-runtree-api)，则需要向运行树添加 `new_token` 事件才能正确填充首个 token 到达时间。
+如果您使用的是 `traceable` 或其中一个 SDK 包装器，LangSmith 将自动填充流式 LLM 运行的首 token 时间。但是，如果您直接使用 [`RunTree` API](/langsmith/annotate-code#use-the-runtree-api) ，则需要向运行树添加一个 `new_token` 事件，以便正确填充首 token 时间。
 
-以下是一个示例：
+示例如下：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from langsmith.run_trees import RunTree
@@ -596,10 +593,10 @@ await runTree.patchRun();
 
 </CodeGroup>
 
-## 相关内容
+## 相关
 
-- [自定义插桩](/langsmith/annotate-code)：核心 `@traceable` 和 `RunTree` 模式。
-- [在追踪函数中访问当前运行（跨度）](/langsmith/access-current-span)：在运行时使用 `get_current_run_tree()` 设置 `usage_metadata` 和其他字段。
-- [追踪 OpenAI 应用](/langsmith/trace-openai)：使用 OpenAI 封装器时自动追踪令牌和成本。
-- [追踪 Anthropic 应用](/langsmith/trace-anthropic)：使用 Anthropic 封装器时自动追踪令牌和成本。
+- [自定义插桩](/langsmith/annotate-code)：核心 `@traceable` 和 `RunTree` patterns.
+- [在追踪函数中访问当前运行（span）](/langsmith/access-current-span)：使用 `get_current_run_tree()` 设置 `usage_metadata` 和其他字段。
+- [追踪 OpenAI 应用程序](/langsmith/trace-openai)：使用 OpenAI 包装器时自动追踪令牌和成本。
+- [追踪 Anthropic 应用程序](/langsmith/trace-anthropic)：使用 Anthropic 包装器时自动追踪令牌和成本。
 - [集成概述](/langsmith/integrations)：内置 LangSmith 支持的提供商和框架完整列表。

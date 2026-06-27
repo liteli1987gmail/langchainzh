@@ -5,27 +5,27 @@ tag: "Alpha"
 description: 在您的代理部署中，用自定义的 BaseCheckpointSaver 实现替换内置的 Postgres 检查点保存器。
 ---
 
-将代理部署到 LangSmith 时，服务器提供了一个内置的 Postgres 支持的检查点保存器，用于处理跨图运行的持久化状态。您可以用自己的 @[BaseCheckpointSaver] 实现替换它，以使用不同的存储后端。
+部署代理到 LangSmith 时，服务器提供一个内置的 Postgres 支持的检查点保存器，用于在图运行之间处理状态持久化。您可以用自己的 @[BaseCheckpointSaver] 实现替换它，以使用不同的存储后端。
 
-您提供一个指向异步上下文管理器的路径，该管理器会生成一个 `BaseCheckpointSaver` 实例，服务器会自动管理其生命周期。
+您提供一个异步上下文管理器的路径，它生成一个 `BaseCheckpointSaver` 实例，服务器自动管理其生命周期。
 
 <Warning>
-自定义检查点保存器处于 **alpha** 阶段。此功能可能在次版本更新中发生重大变更。
+自定义检查点保存器处于 **alpha**阶段。此功能可能在次要版本更新中遇到破坏性更改。
 </Warning>
 
 <Tip>
-如需使用 MongoDB 而非 PostgreSQL 进行检查点存储，请参阅[配置检查点保存器后端](/langsmith/configure-checkpointer)。此页面用于实现完全自定义的存储后端。
+要使用 MongoDB 而不是 PostgreSQL 进行检查点存储，请参阅 [配置检查点保存器后端](/langsmith/configure-checkpointer)。此页面用于实现完全自定义的存储后端。
 </Tip>
 
 ## 定义检查点保存器
 
-从**现有**的 LangSmith 应用程序开始，创建一个文件来定义异步上下文管理器，该管理器会生成您的自定义检查点保存器。如果这是一个新项目，您可以使用 CLI 从模板创建应用程序。
+从一个 **现有的** LangSmith 应用开始，创建一个定义异步上下文管理器以生成自定义检查点保存器的文件。如果您正在开始一个新项目，可以使用 CLI 从模板创建应用。
 
 ```bash
 langgraph new --template=new-langgraph-project-python my_new_project
 ```
 
-异步上下文管理器模式允许服务器在应用程序生命周期的正确时机打开和关闭数据库连接：
+异步上下文管理器模式允许服务器在应用生命周期的适当时间点打开和关闭数据库连接：
 
 ```python
 # ./src/agent/checkpointer.py
@@ -51,11 +51,11 @@ async def generate_checkpointer():
         yield saver
 ```
 
-## 针对合规套件进行测试
+## 针对一致性套件进行测试
 
-大多数开源检查点实现尚未实现 Agent Server 所需的所有操作。在配置检查点之前，请针对合规测试套件对其进行验证以确保兼容性。
+大多数开源检查点保存器实现尚未实现 Agent Server 所需的所有操作。在配置检查点保存器之前，请针对一致性测试套件进行验证以确保兼容性。
 
-安装包：
+安装软件包：
 
 ```bash
 pip install langgraph-checkpoint-conformance
@@ -84,7 +84,7 @@ async def main():
 asyncio.run(main())
 ```
 
-该测试套件会自动检测您的检查点实现器实现了哪些扩展功能，并运行相应的测试。您也可以将其作为 pytest 测试运行：
+该套件自动检测您的检查点保存器实现了哪些扩展功能，并运行相应的测试。您也可以将其作为 pytest 测试运行：
 
 ```python
 import pytest
@@ -105,11 +105,11 @@ async def test_conformance():
     assert report.passed_all_base()
 ```
 
-要查看该套件验证的完整基线和扩展操作列表，请参阅[功能](#capabilities)部分。
+要查看该套件验证的基线和扩展操作的完整列表，请参阅 [功能](#capabilities) section.
 
 ## 配置 `langgraph.json`
 
-将 `checkpointer` 键添加到您的[`langgraph.json` 配置文件](/langsmith/application-structure#configuration-file-concepts)中。`path` 指向您[之前定义的](#define-the-checkpointer)异步上下文管理器。
+将 `checkpointer` 键添加到您的 [`langgraph.json` 配置文件中](/langsmith/application-structure#configuration-file-concepts)。 `path` 指向您之前定义的异步上下文管理器 [](#define-the-checkpointer).
 
 ```json
 {
@@ -132,36 +132,36 @@ async def test_conformance():
 langgraph dev --no-browser
 ```
 
-服务器日志将确认您的自定义检查点存储已激活。
+服务器日志将确认您的自定义检查点保存器处于活动状态。
 
 ## 功能
 
-服务器在启动时检查您的检查点存储的**基础**（必需）和**扩展**（可选）功能。如果缺少扩展功能，服务器将使用后备方案或禁用相应功能。
+服务器在启动时检查您的检查点保存器的 **基础** （必需）和 **扩展** （可选）功能。如果缺少扩展功能，服务器要么使用回退方案，要么禁用相应的功能。
 
 ### 基础功能（必需）
 
-| Method | Description |
+| 方法 | 描述 |
 |---|---|
 | `aput` | 存储检查点 |
 | `aput_writes` | 存储待处理的写入 |
-| `aget_tuple` | 检索检查点 |
+| `aget_tuple` | 获取检查点 |
 | `alist` | 列出检查点 |
 | `adelete_thread` | 删除线程 |
 
 ### 扩展功能（可选）
 
-| Method | Description | Fallback if missing |
+| 方法 | 描述 | 缺失时的回退方案 |
 |---|---|---|
-| `adelete_for_runs` | 删除特定运行的检查点 | 回滚多任务策略不可用 |
-| `acopy_thread` | 复制线程 | 慢速后备方案（逐个重新插入检查点） |
+| `adelete_for_runs` | 删除特定运行的检查点 | 多任务策略回滚不可用 |
+| `acopy_thread` | 复制线程 | 慢速回退（逐个重新插入检查点）|
 | `aprune` | 精简线程历史 | 线程历史精简不可用 |
 
 ## 部署
 
-您可以按原样将此应用部署到 LangSmith 或您自己的托管平台。
+您可以按原样将此应用部署到 LangSmith 或您自托管的平台。
 
-## 下一步
+## 后续步骤
 
-- [构建自定义检查点存储](/oss/langgraph/checkpointers#build-a-custom-checkpointer)，包括增量通道支持。
-- [使用自定义存储](/langsmith/custom-store)替换内置的长期记忆存储。
-- 了解 LangGraph 中的[持久化和内存](/oss/langgraph/persistence)。
+- [构建自定义检查点器](/oss/langgraph/checkpointers#build-a-custom-checkpointer) 包括增量通道支持。
+- [使用自定义存储](/langsmith/custom-store) 来替换内置的长期记忆存储。
+- 了解 [持久化和内存](/oss/langgraph/persistence) 在 LangGraph 中。

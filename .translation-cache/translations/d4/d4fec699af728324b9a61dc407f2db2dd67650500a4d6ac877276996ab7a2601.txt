@@ -1,37 +1,37 @@
 ---
 title: "Oracle AI 向量搜索 - 集成"
-description: "使用 LangChain Python 与 Oracle AI 向量搜索 - 向量存储进行集成。"
+description: "使用 LangChain Python 与 Oracle AI 向量搜索向量存储集成。"
 ---
 
 import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
 
-Oracle AI Database 支持 AI 工作负载，您可以通过**含义**（语义）而非关键词来查询数据。它将**非结构化内容的语义搜索**与**业务数据的关系型过滤**结合在单一系统中——这样您就可以构建检索工作流（如 RAG），而无需引入单独的向量数据库，也不会导致数据分散在多个平台上。
+Oracle AI Database 支持 AI 工作负载，您可以按 **语义** （语义）查询数据，而不仅仅是关键词。它结合了 **对非结构化内容的语义搜索** 与 **业务数据的关联过滤** 相结合——因此您可以构建检索工作流（如 RAG），而无需引入单独的向量数据库并使数据分散在多个平台上。
 
-本指南演示如何使用 `OracleVS`（LangChain 与 Oracle AI Vector Search 的向量存储集成）来：
+本指南演示如何使用 `OracleVS` （Oracle AI Vector Search 的 LangChain 向量存储集成）来：
 
-- 将文档和嵌入向量摄入到 Oracle
+- 将文档和嵌入数据摄取到 Oracle
 - 运行相似性搜索
 - 创建 HNSW 和 IVF 索引
 - 应用元数据过滤器进行高级检索
 - 在 Oracle Database 26ai 中启用混合搜索（关键词 + 语义）
 - 使用 Oracle Text 运行全文搜索
 
-### 前置条件
+### 前提条件
 
-安装 `langchain-oracledb`。`python-oracledb` 驱动程序将自动作为依赖项安装。
+安装 `langchain-oracledb`。 `python-oracledb` 驱动程序将作为依赖项自动安装。
 
 <CodeGroup>
-
-</CodeGroup>
 ```bash pip
 pip install -qU langchain-oracledb
 ```
 ```bash uv
 uv add langchain-oracledb
 ```
-### 连接到 Oracle 数据库
+</CodeGroup>
 
-以下示例代码将展示如何连接到 Oracle 数据库。默认情况下，python-oracledb 以“Thin”模式运行，该模式直接连接到 Oracle 数据库。此模式不需要 Oracle Client 库。但是，当 python-oracledb 使用它们时，会提供一些附加功能。当使用 Oracle Client 库时，python-oracledb 被称为“Thick”模式。两种模式都全面支持 Python Database API v2.0 规范。请参阅以下[指南](https://python-oracledb.readthedocs.io/en/latest/user_guide/appendix_a.html#featuresummary)，了解每种模式支持的功能。如果您无法使用 Thin 模式，可能需要切换到 Thick 模式。
+### 连接到 Oracle Database
+
+以下示例代码将展示如何连接到 Oracle Database。默认情况下，python-oracledb 在“Thin”模式下运行，直接连接到 Oracle Database。此模式不需要 Oracle Client 库。但是，当 python-oracledb 使用它们时，可以获得一些额外的功能。当使用 Oracle Client 库时，python-oracledb 被称为处于“Thick”模式。两种模式都具有全面的功能，支持 Python Database API v2.0 规范。请参阅以下 [指南](https://python-oracledb.readthedocs.io/en/latest/user_guide/appendix_a.html#featuresummary) 了解每种模式支持的功能。如果您无法使用 thin-mode，可能需要切换到 thick-mode。
 
 ```python
 import oracledb
@@ -97,14 +97,15 @@ for doc in documents_json_list:
     documents_langchain.append(doc_langchain)
 ```
 
-### 创建具有不同距离度量的向量存储
+### 使用不同的距离度量创建向量存储
 
-首先，我们将创建三个具有不同距离函数的向量存储。由于我们尚未在其中创建索引，它们目前只会创建表。之后我们将使用这些向量存储来创建 HNSW 索引。要了解 Oracle AI Vector Search 支持的不同类型索引的更多信息，请参阅以下[指南](https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/manage-different-categories-vector-indexes.html)。
+首先，我们将创建三个向量存储，每个都具有不同的距离函数。由于我们尚未在其中创建索引，它们目前只会创建表。稍后我们将使用这些向量存储创建 HNSW 索引。要了解 Oracle AI Vector Search 支持的不同类型索引的更多信息，请参阅以下 [指南](https://docs.oracle.com/en/database/oracle/oracle-database/23/vecse/manage-different-categories-vector-indexes.html).
 
-您可以手动连接到 Oracle 数据库，将看到三个表：
-`Documents_DOT`、`Documents_COSINE` 和 `Documents_EUCLIDEAN`。
+您可以手动连接到 Oracle Database 并将看到三个表：
+`Documents_DOT`, `Documents_COSINE` 和 `Documents_EUCLIDEAN`.
 
-然后我们将创建三个额外的表 `Documents_DOT_IVF`、`Documents_COSINE_IVF` 和 `Documents_EUCLIDEAN_IVF`，它们将用于在表上创建 IVF 索引，而不是 HNSW 索引。
+然后我们将创建三个额外的表 `Documents_DOT_IVF`, `Documents_COSINE_IVF` 和 `Documents_EUCLIDEAN_IVF` 它们将用于
+在表上创建 IVF 索引，而不是 HNSW 索引。
 
 ```python
 # Ingest documents into Oracle Vector Store using different distance strategies
@@ -161,7 +162,7 @@ vector_store_euclidean_ivf = OracleVS.from_documents(
 )
 ```
 
-### 用于文本的添加和删除操作，以及基本相似性搜索
+### 文本的添加和删除操作，以及基本相似性搜索
 
 ```python
 def manage_texts(vector_stores):
@@ -289,59 +290,59 @@ create_search_indices(connection)
 
 ### 高级搜索
 
-Oracle Database 23ai 支持预过滤、过程中过滤和后过滤，以增强 AI 向量搜索功能。这些过滤机制允许用户在向量相似性搜索之前、期间和之后应用约束条件，从而提高搜索性能和准确性。
+Oracle Database 23ai 支持预过滤、过滤中和后过滤，以增强 AI Vector Search 功能。这些过滤机制允许用户在执行向量相似性搜索之前、期间和之后应用约束，提高搜索性能和准确性。
 
-关于 Oracle 23ai 中过滤的关键要点：
+Oracle 23ai 过滤的关键要点：
 
-1. **预过滤**
-    在执行向量相似性搜索之前应用传统 SQL 过滤器来减少数据集。
-    通过限制 AI 算法处理的数据量来帮助提高效率。
-2. **过程中过滤**
-    利用 AI 向量搜索直接在向量嵌入上执行相似性搜索，使用优化的索引和算法。
+1. Pre-filtering
+    在执行向量相似性搜索之前，应用传统SQL过滤器来减少数据集。
+    通过限制AI算法处理的数据量来提高效率。
+2. In-filtering
+    利用AI向量搜索直接在向量嵌入上执行相似性搜索，使用优化的索引和算法。
     基于向量相似性高效过滤结果，无需对整个数据集进行扫描。
-3. **后过滤**
-    在向量相似性搜索之后应用额外的 SQL 过滤来优化结果。
-    允许根据业务逻辑或额外的元数据条件进行进一步优化。
+3. Post-filtering
+    在向量相似性搜索之后，应用额外的SQL过滤来优化结果。
+    允许基于业务逻辑或额外的元数据条件进行进一步优化。
 
 **为什么这很重要？**
 
-- **性能优化**：预过滤显著减少查询执行时间，使大规模数据集上的搜索更加高效。
-- **准确性提升**：过程中过滤确保向量搜索在语义上有意义，从而提升搜索结果的质量。
+- 性能优化：预过滤显著减少查询执行时间，使大规模数据集上的搜索更加高效。
+- 准确性提升：过滤确保向量搜索在语义上有意义，提高搜索结果的质量。
 
 #### 过滤器详情
 
-`OracleVS` 支持一组可使用 `filter` 参数应用于 `metadata` 字段的过滤器。这些过滤器允许您根据各种条件选择和优化数据。
+`OracleVS` 支持一组可应用于 `metadata` 字段的过滤器，使用 `filter` 参数。这些过滤器允许您根据各种条件选择和优化数据。
 
-**可用的过滤操作符：**
+**可用的过滤运算符：**
 
-| 操作符                   | 描述                                                                                                  |
+| 运算符                  | 描述                                                                                                  |
 |----------------------------|--------------------------------------------------------------------------------------------------------------|
 | `\$exists`                 | 字段存在。                                                                                                |
-| `\$eq`                     | 字段值等于操作数值（`=`）。                                                                  |
-| `\$ne`                     | 字段存在且值不等于操作数值（`!=`）。                                              |
-| `\$gt`                     | 字段值大于操作数值（`>`）。                                                         |
-| `\$lt`                     | 字段值小于操作数值（`<`）。                                                            |
-| `\$gte`                    | 字段值大于或等于操作数值（`>=`）。                                            |
-| `\$lte`                    | 字段值小于或等于操作数值（`<=`）。                                               |
+| `\$eq`                     | 字段值等于操作数值（`=`).                                                                  |
+| `\$ne`                     | 字段存在且值不等于操作数值（`!=`).                                              |
+| `\$gt`                     | 字段值大于操作数值（`>`).                                                         |
+| `\$lt`                     | 字段值小于操作数值（`<`).                                                            |
+| `\$gte`                    | 字段值大于或等于操作数值（`>=`).                                            |
+| `\$lte`                    | 字段值小于或等于操作数值（`<=`).                                               |
 | `\$between`                | 字段值在操作数数组中的两个值之间（或相等）。                                        |
 | `\$startsWith`             | 字段值以操作数值开头。                                                                   |
 | `\$hasSubstring`           | 字段值包含操作数作为子字符串。                                                             |
 | `\$instr`                  | 字段值包含操作数作为子字符串。                                                             |
 | `\$regex`                  | 字段值匹配给定的正则表达式模式。                                                    |
-| `\$like`                   | 字段值匹配操作数模式（使用类 SQL 语法）。                                             |
+| `\$like`                   | 字段值匹配操作数模式（使用类SQL语法）。                                             |
 | `\$in`                     | 字段值等于操作数数组中的至少一个值。                                                  |
-| `\$nin`                    | 字段存在，但其值不等于操作数数组中的任何一个值，或字段不存在。           |
-| `\$all`                    | 字段值是一个包含操作数数组中所有项的数组，或是一个与单个操作数匹配的标量。  |
+| `\$nin`                    | 字段存在，但其值不等于操作数数组中的任何值，或字段不存在。           |
+| `\$all`                    | 字段值是包含操作数数组中所有项的数组，或是与单个操作数匹配的标量。  |
 
-- 您可以使用逻辑操作符组合这些过滤器：
+- 您可以使用逻辑运算符组合这些过滤器：
 
-| 逻辑操作符   | 描述          |
+| 逻辑运算符    | 描述          |
 |--------------------|----------------------|
-| `\$and`            | 逻辑与          |
-| `\$or`             | 逻辑或           |
-| `\$nor`            | 逻辑非或          |
+| `\$and`            | 逻辑AND         |
+| `\$or`             | 逻辑OR          |
+| `\$nor`            | 逻辑NOR         |
 
-**过滤示例：**
+**过滤器示例：**
 
 ```json
 {
@@ -364,9 +365,9 @@ Oracle Database 23ai 支持预过滤、过程中过滤和后过滤，以增强 A
 }
 ```
 
-**其他使用技巧：**
+**其他使用提示：**
 
-- 当对象中的所有过滤器都必须满足时，可以省略 `$and`。这两种写法是等价的：
+- 您可以省略 `$and` 当对象中的所有过滤器都必须满足时。这两者是等价的：
 
 ```json
 { "$and": [
@@ -382,19 +383,19 @@ Oracle Database 23ai 支持预过滤、过程中过滤和后过滤，以增强 A
 }
 ```
 
-- `$not` 子句可以否定比较运算符：
+- The `$not` 子句可以对比较运算符取反：
 
 ```json
 { "address.zip": { "$not": { "$eq": "90001" } } }
 ```
 
-- 使用 `field: scalar` 等价于 `field: { "$eq": scalar }`：
+- Using `field: scalar` 等价于 `field: { "$eq": scalar }`:
 
 ```json
 { "animal": "cat" }
 ```
 
-更多过滤示例，请参阅[测试规范](https://github.com/oracle/langchain-oracle/blob/main/libs/oracledb/tests/integration_tests/vectorstores/test_oraclevs.py)。
+更多过滤器示例，请参阅 [测试规范](https://github.com/oracle/langchain-oracle/blob/main/libs/oracledb/tests/integration_tests/vectorstores/test_oraclevs.py).
 
 ```python
 # Conduct advanced searches after creating the indices
@@ -456,15 +457,15 @@ conduct_advanced_searches(vector_store_list)
 
 ### 混合搜索
 
-Oracle Database 26ai 支持混合搜索，将关键字（全文）和语义（向量）搜索组合成单一检索能力。`langchain-oracledb` 集成提供：
+Oracle Database 26ai 支持混合搜索，将关键字（全文）和语义（向量）搜索结合到单一检索能力中。 `langchain-oracledb` 集成提供：
 
 - `OracleVectorizerPreference`：创建数据库端向量器偏好设置，供混合索引使用。
 - `create_hybrid_index` / `acreate_hybrid_index`：创建 HYBRID VECTOR INDEX。
-- `OracleHybridSearchRetriever`：对 `OracleVS` 表执行关键字、语义或混合检索。
+- `OracleHybridSearchRetriever`：对 `OracleVS` table.
 
 #### 先决条件和模型配置
 
-使用混合搜索时，请使用 `OracleEmbeddings` 配置 `OracleVS`，以确保向量器偏好设置与嵌入配置完全匹配。您可以通过 `OracleVectorizerPreference` 提供额外参数来进一步调优混合向量索引。有关详细信息，请参阅[文档](https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create_preference.html)。
+使用混合搜索时，请配置您的 `OracleVS` with `OracleEmbeddings` 以便向量器偏好设置与嵌入配置完全匹配。您可以通过 `OracleVectorizerPreference`提供额外参数来进一步调优混合向量索引。详细信息请参阅 [文档](https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create_preference.html).
 
 ```python
 from langchain_core.documents import Document
@@ -511,10 +512,9 @@ for d in docs:
 # pref.drop_preference()
 ```
 
-*备选方案* 不显式指定偏好创建索引：
+*替代方案* 创建索引时不使用显式偏好设置：
 
-- 如果您不想管理命名偏好，请改用传递 `vector_store` 参数的方式。
-- 该函数将创建临时偏好，构建索引，然后自动删除该偏好。
+- 如果不希望管理命名偏好设置，请传递 `vector_store` 。该函数将创建临时偏好设置、构建索引，然后自动删除该偏好设置。
 
 ```python
 create_hybrid_index(
@@ -525,15 +525,15 @@ create_hybrid_index(
 )
 ```
 
-注意事项和提示：
+注意事项：
 
-- search_mode 决定使用哪些信号：
-  - "keyword"：仅关键词
+- 搜索_模式决定使用的信号：
+  - "keyword"：仅关键字
   - "semantic"：仅向量
   - "hybrid"（默认）：两者结合
-- 通过检索器的 params 参数传递 `DBMS_HYBRID_VECTOR` 参数。
-- `return_scores=True` 会将总体分数以及组件 text_score 和 vector_score 添加到 Document.metadata 中。
-- 支持异步使用，通过 `acreate_hybrid_index` 和 `OracleHybridSearchRetriever.ainvoke`。
+- 通过检索器的 `DBMS_HYBRID_VECTOR` params 参数传递参数。
+- `return_scores=True` 添加总分和组件文本_分数以及向量_分数到 Document.metadata。
+- 支持通过以下方式异步使用 `acreate_hybrid_index` 和 `OracleHybridSearchRetriever.ainvoke`.
 
 更多信息：
 
@@ -542,17 +542,17 @@ create_hybrid_index(
 - [`CREATE_HYBRID_VECTOR_INDEX`](https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/create-hybrid-vector-index.html)
 - [`DBMS_HYBRID_VECTOR.SEARCH`](https://docs.oracle.com/en/database/oracle/oracle-database/26/vecse/search.html)
 
-### 全文搜索（Oracle Text）
+### 全文搜索 (Oracle Text)
 
-您可以使用 Oracle Text 直接对 Oracle Database 运行高质量的关键词搜索。`langchain-oracledb` 集成提供：
+您可以使用 Oracle Text 直接对 Oracle Database 运行高质量关键字搜索。 `langchain-oracledb` 集成提供：
 
-- `create_text_index` / `acreate_text_index`：在列上创建 Oracle Text `SEARCH INDEX`。
-- `OracleTextSearchRetriever`：运行 `CONTAINS` 查询并返回 LangChain `Document` 对象。
+- `create_text_index` / `acreate_text_index`：在列上创建 Oracle Text `SEARCH INDEX` 。
+- `OracleTextSearchRetriever`：运行 `CONTAINS` 查询并返回 LangChain `Document` objects.
 
 索引选项：
 
-- 如果您有 `OracleVS` 向量存储，可以为其内置的 "text" 列建立索引。
-- 也可以通过直接提供 `table_name` + `column_name` 为任何其他表/列建立索引。
+- 如果您有 `OracleVS` 向量存储，可以对其内置的 "text" 列建立索引。
+- You can also index any other table/column by providing `table_name` + `column_name` directly.
 
 ```python
 from langchain_oracledb.retrievers.text_search import create_text_index, OracleTextSearchRetriever
@@ -581,18 +581,18 @@ for d in docs:
 # retriever_text = OracleTextSearchRetriever(client=connection, table_name="MYDOCS", column_name="CONTENT", k=5)
 ```
 
-操作符模式和高级查询：
+运算符模式和高级查询：
 
-- 默认行为（`operator_search=False`）：
-  - 输入被视为字面文本，按非单词字符进行分词，并重写为 ACCUM 表达式。
-  - 当 `fuzzy=True` 时，每个词元都被包装为 `FUZZY("token")` 以匹配拼写错误。
-- 操作符模式（`operator_search=True`）：
-  - 原样传递 Oracle Text 表达式（`NEAR`、`ABOUT`、`AND`、`OR`、`NOT`、`WITHIN` 等）。在此模式下，fuzzy 被忽略。
+- 默认行为 (`operator_search=False`):
+  - 输入被作为字面文本处理，在非单词字符处进行分词，并重写为 ACCUM 表达式。
+  - 使用 `fuzzy=True`，每个token被包装为 `FUZZY("token")` 以匹配拼写错误。
+- 操作符模式（`operator_search=True`):
+  - 原样传递Oracle Text表达式（`NEAR`, `ABOUT`, `AND`, `OR`, `NOT`, `WITHIN`等）。在此模式下，模糊搜索被忽略。
 
 返回列：
 
-- 当目标是原始表时，通过 `returned_columns` 在结果中包含额外的列；它们附加到 `Document.metadata`。
-- 使用 `OracleVS` 时，`returned_columns` 默认为 `["metadata"]`。
+- 当目标是原始表时，通过以下方式在结果中包含额外的列 `returned_columns`；它们附加到 `Document.metadata`.
+- 使用 `OracleVS`, `returned_columns` 默认为 ["metadata"]。
 
 ```python
 # Operator mode example
@@ -604,10 +604,10 @@ retriever_text_ops = OracleTextSearchRetriever(
 docs = retriever_text_ops.invoke('NEAR((policy, refund), 2, TRUE)')
 ```
 
-注意事项和技巧：
+注意事项和提示：
 
-- 当使用 `operator_search=True` 时，fuzzy 会被忽略（这是设计如此）。
-- 支持通过 `acreate_text_index` 和 `OracleTextSearchRetriever.ainvoke` 使用异步。
+- 使用 `operator_search=True`时，模糊搜索被忽略（故意设计）。
+- 支持通过以下方式使用异步 `acreate_text_index` 和 `OracleTextSearchRetriever.ainvoke`.
 
 更多信息：
 
@@ -616,4 +616,4 @@ docs = retriever_text_ops.invoke('NEAR((policy, refund), 2, TRUE)')
 
 ### 端到端演示
 
-请参阅我们的完整演示指南 [Oracle AI Vector Search 端到端演示指南](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb)，了解如何借助 Oracle AI Vector Search 构建端到端 RAG 管道。
+请参阅我们的完整演示指南 [Oracle AI矢量搜索端到端演示指南](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb) 以在Oracle AI矢量搜索的帮助下构建端到端RAG管道。

@@ -1,29 +1,29 @@
 ---
-title: 如何使用轨迹评估来评估您的代理
-sidebarTitle: 评估代理轨迹
+title: 如何使用轨迹评估来评估你的智能体
+sidebarTitle: 评估智能体轨迹
 ---
 
-许多代理行为只有在您使用真实的 LLM 时才会显现，例如代理决定调用哪个工具、如何格式化响应，或者提示修改是否影响整个执行轨迹。LangChain 的 [`agentevals`](https://github.com/langchain-ai/agentevals) 包提供了专门用于使用实时模型测试代理轨迹的评估器。
+许多智能体行为只有在使用真实LLM时才会显现，例如智能体决定调用哪个工具、如何格式化响应，或者提示修改是否影响整个执行轨迹。LangChain的 [`agentevals`](https://github.com/langchain-ai/agentevals) 包提供了专门设计用于使用实时模型测试智能体轨迹的评估器。
 
 <Note>
-本指南涵盖了开源的 [LangChain](/oss/langchain/overview) `agentevals` 包，它与 LangSmith 集成用于轨迹评估。
+本指南涵盖开源 [LangChain](/oss/langchain/overview) `agentevals` 包，它与LangSmith集成用于轨迹评估。
 </Note>
 
-AgentEvals 允许您通过执行*轨迹匹配*或使用 *LLM 评判者*来评估代理的轨迹（消息的确切序列，包括工具调用）：
+AgentEvals允许你通过执行 _轨迹匹配_ 或使用 _LLM评判器_:
 
-<Card title="轨迹匹配" icon="equal" arrow="true" href="#trajectory-match-evaluator">
-为给定输入硬编码一个参考轨迹，并通过逐步比较来验证运行结果。
+<Card title="Trajectory match" icon="equal" arrow="true" href="#trajectory-match-evaluator">
+来评估智能体的轨迹（消息的精确序列，包括工具调用）。
 
-非常适合测试您了解预期行为的明确定义的工作流程。当您对应该调用哪些工具以及调用顺序有具体预期时使用。此方法是确定性的、快速的且经济高效的，因为它不需要额外的 LLM 调用。
+Hard-code a reference trajectory for a given input and validate the run via a step-by-step comparison.
 </Card>
 
-<Card title="LLM 即评判者" icon="hammer" arrow="true" href="#llm-as-judge-evaluator">
-使用 LLM 定性地验证代理的执行轨迹。"评判者" LLM 根据提示评分标准（可包括参考轨迹）审查代理的决策。
+<Card title="LLM-as-judge" icon="hammer" arrow="true" href="#llm-as-judge-evaluator">
+Use a LLM to qualitatively validate your agent's execution trajectory. The "judge" LLM reviews the agent's decisions against a prompt rubric (which can include a reference trajectory).
 
-更加灵活，可以评估效率、适当性等细微方面，但需要 LLM 调用且确定性较低。当您希望评估代理轨迹的总体质量和合理性，而没有严格的工具调用或排序要求时使用。
+More flexible and can assess nuanced aspects like efficiency and appropriateness, but requires an LLM call and is less deterministic. Use when you want to evaluate the overall quality and reasonableness of the agent's trajectory without strict tool call or ordering requirements.
 </Card>
 
-## 安装 AgentEvals
+## 安装AgentEvals
 
 <CodeGroup>
 
@@ -37,24 +37,24 @@ npm install agentevals @langchain/core
 
 </CodeGroup>
 
-或者，直接克隆 [AgentEvals 仓库](https://github.com/langchain-ai/agentevals)。
+或者，克隆 [AgentEvals仓库](https://github.com/langchain-ai/agentevals) directly.
 
 ## 轨迹匹配评估器
 
-AgentEvals 在 Python 中提供 `create_trajectory_match_evaluator` 函数，在 TypeScript 中提供 `createTrajectoryMatchEvaluator` 函数，用于将您的代理的轨迹与参考轨迹进行匹配。
+AgentEvals提供 `create_trajectory_match_evaluator` Python函数和 `createTrajectoryMatchEvaluator` TypeScript函数，用于将智能体的轨迹与参考轨迹进行匹配。
 
-您可以使用以下模式：
+可以使用以下模式：
 
-| 模式 | 描述 | 用例 |
+| 模式 | 描述 | 使用场景 |
 |------|-------------|----------|
-| [`strict`](#strict-match) | 按相同顺序精确匹配消息和工具调用 | 测试特定序列（例如，授权前的策略查询） |
-| [`unordered`](#unordered-match) | 允许以任意顺序调用相同的工具 | 验证信息检索（当顺序无关时） |
-| [`subset`](#subset-and-superset-match) | 代理仅调用参考中的工具（无额外调用） | 确保代理不超过预期范围 |
-| [`superset`](#subset-and-superset-match) | 代理至少调用参考工具（允许额外调用） | 验证是否执行了最少必需的操作 |
+| [`strict`](#strict-match) | 消息和工具调用的完全匹配（顺序相同）| 测试特定序列（例如，授权前进行策略查找）|
+| [`unordered`](#unordered-match) | 允许以任意顺序调用相同的工具 | 验证当顺序无关紧要时的信息检索 |
+| [`subset`](#subset-and-superset-match) | 智能体仅调用参考中的工具（无额外）| 确保智能体不超过预期范围 |
+| [`superset`](#subset-and-superset-match) | 智能体至少调用参考工具（允许额外）| 验证采取了最小要求的操作 |
 
-### 精确匹配
+### 严格匹配
 
-`strict` 模式确保轨迹包含按相同顺序排列的相同消息和相同的工具调用，但允许消息内容存在差异。当需要强制执行特定的操作序列时（例如，要求在授权操作前进行策略查询），这会很有用。
+ `strict` 模式确保轨迹包含顺序相同的相同消息和相同的工具调用，但允许消息内容存在差异。这在需要强制执行特定操作序列时很有用，例如要求在授权操作前进行策略查找。
 
 <CodeGroup>
 
@@ -166,7 +166,7 @@ async function testWeatherToolCalledStrict() {
 
 ### 无序匹配
 
-`unordered` 模式允许相同的工具调用以任意顺序执行，这在你想验证调用了正确的工具集合但不在意顺序时很有帮助。例如，一个代理可能需要检查某个城市的天气和事件，但顺序并不重要。
+ `unordered` 模式允许以任意顺序调用相同的工具，这在你想验证调用的工具集正确但不在意顺序时很有帮助。例如，智能体可能需要检查某个城市的天气和事件，但顺序无关紧要。
 
 <CodeGroup>
 
@@ -297,18 +297,16 @@ async function testMultipleToolsAnyOrder() {
 
 </CodeGroup>
 
-### 子集与超集匹配
+### 子集和超集匹配
 
-`superset` 和 `subset` 模式关注的是被调用的工具而非工具调用的顺序，允许你控制代理的工具调用必须与参考轨迹对齐的严格程度。
+ `superset` 和 `subset` 模式关注的是调用了哪些工具，而不是工具调用的顺序，使您能够控制代理的工具调用必须与参考轨迹对齐的严格程度。
 
-- 当你想验证执行过程中调用了一些关键工具，但可以接受代理额外调用其他工具时，请使用 `superset` 模式。代理轨迹必须至少包含参考轨迹中的所有工具调用，且可以包含参考轨迹之外的其他工具调用。
-- 使用 `subset` 模式来确保代理效率，通过验证代理除了参考轨迹中的工具外没有调用任何无关或不必要的工具。代理轨迹必须仅包含出现在参考轨迹中的工具调用。
+- 使用 `superset` 模式，当您想验证执行过程中调用了一些关键工具，但可以接受代理调用其他额外工具时。代理的轨迹必须至少包含参考轨迹中的所有工具调用，并且可能包含超出参考轨迹的其他工具调用。
+- 使用 `subset` 模式，通过验证代理没有调用参考轨迹之外的任何无关或不必要的工具来确保代理效率。代理的轨迹必须仅包含参考轨迹中出现的工具调用。
 
-以下示例演示了 `superset` 模式，其中参考轨迹仅要求 `get_weather` 工具，但代理可以调用其他工具：
+以下示例演示了 `superset` 模式，其中参考轨迹仅需要 `get_weather` 工具，但代理可以调用其他工具：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from langchain.agents import create_agent
@@ -435,23 +433,20 @@ async function testAgentCallsRequiredToolsPlusExtra() {
 </CodeGroup>
 
 <Info>
-你还可以通过设置 `tool_args_match_mode`（Python）或 `toolArgsMatchMode`（TypeScript）属性，以及 `tool_args_match_overrides`（Python）或 `toolArgsMatchOverrides`（TypeScript）属性来自定义评估器如何判断实际轨迹与参考轨迹之间工具调用的相等性。默认情况下，只有参数完全相同的同一工具调用才会被视为相等。访问[仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#tool-args-match-modes)了解更多详情。
+您还可以通过设置 `tool_args_match_mode` (Python) 或 `toolArgsMatchMode` (TypeScript) 属性，以及 `tool_args_match_overrides` (Python) 或 `toolArgsMatchOverrides` (TypeScript) 属性来自定义评估器如何考虑实际轨迹与参考轨迹之间工具调用的相等性。默认情况下，只有具有相同参数调用相同工具的才被视为相等。访问 [仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#tool-args-match-modes) 了解更多详情。
 </Info>
 
-## LLM 即评判者评估器
+## LLM 评判评估器
 
 <Note>
-本节介绍 `agentevals` 包中特定于轨迹的 LLM 即评判者评估器。如需了解 LangSmith 中的通用 LLM 即评判者评估器，请参阅 [LLM 即评判者评估器](/langsmith/llm-as-judge)。
+本节介绍来自 `agentevals` 包的轨迹专用 LLM 作为评判者评估器。关于 LangSmith 中的通用 LLM 作为评判者评估器，请参阅 [LLM 评判评估器](/langsmith/llm-as-judge).
 </Note>
 
-你还可以使用 LLM 来评估智能体的执行路径。与轨迹匹配评估器不同，它不需要参考轨迹，但如果可用，也可以提供。
+您还可以使用 LLM 来评估代理的执行路径。与轨迹匹配评估器不同，它不需要参考轨迹，但如果可用，可以提供一个。
 
 ### 无参考轨迹
 
 <CodeGroup>
-
-
-</CodeGroup>
 
 ```python Python
 from langchain.agents import create_agent
@@ -535,9 +530,9 @@ async function testTrajectoryQuality() {
 
 </CodeGroup>
 
-### 使用参考轨迹
+### 有参考轨迹
 
-如果您有参考轨迹，可以向提示词添加一个额外的变量并传入参考轨迹。下面，我们使用预置的 `TRAJECTORY_ACCURACY_PROMPT_WITH_REFERENCE` 提示词并配置 `reference_outputs` 变量：
+如果您有参考轨迹，可以向提示中添加一个额外变量并传入参考轨迹。下面我们使用预构建的 `TRAJECTORY_ACCURACY_PROMPT_WITH_REFERENCE` 提示并配置 `reference_outputs` variable:
 
 <CodeGroup>
 
@@ -569,14 +564,14 @@ const evaluation = await evaluator({
 </CodeGroup>
 
 <Info>
-要更灵活地配置 LLM 评估轨迹的方式，请访问[仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#trajectory-llm-as-judge)。
+有关 LLM 评估轨迹的可配置性的更多详情，请访问 [仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#trajectory-llm-as-judge).
 </Info>
 
 ## 异步支持 (Python)
 
-所有 `agentevals` 评估器都支持 Python asyncio。对于使用工厂函数的评估器，只需在函数名中的 `create_` 后添加 `async` 即可获得异步版本。
+所有 `agentevals` 评估器都支持 Python asyncio。对于使用工厂函数的评估器，通过在函数名后添加 `async` 可以获得异步版本。 `create_` 。
 
-以下是使用异步评判器和评估器的示例：
+以下是使用异步判断器和评估器的示例：
 
 ```python
 from agentevals.trajectory.llm import create_async_trajectory_llm_as_judge, TRAJECTORY_ACCURACY_PROMPT

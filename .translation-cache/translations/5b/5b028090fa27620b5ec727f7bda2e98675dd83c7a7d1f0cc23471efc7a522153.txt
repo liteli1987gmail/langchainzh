@@ -4,27 +4,27 @@ sidebarTitle: Gemini Live
 description: 在 LangSmith 中追踪使用 Google Agent Development Kit (ADK) 构建的 Gemini Live 语音代理。
 ---
 
-[Gemini Live API](https://ai.google.dev/gemini-api/docs/live-api) 支持通过持久的 WebSocket 连接与 Gemini 模型进行低延迟双向语音交互。本指南展示了如何将使用 [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/streaming/) 构建的 Gemini Live 语音代理追踪到 LangSmith。
+该 [Gemini Live API](https://ai.google.dev/gemini-api/docs/live-api) 支持通过持久 WebSocket 连接与 Gemini 模型进行低延迟、双向的语音交互。本指南展示了如何将使用 [Google Agent Development Kit (ADK)](https://google.github.io/adk-docs/streaming/) 构建的 Gemini Live 语音代理追踪到 LangSmith。
 
-Gemini Live 是一个语音到语音模型：它原生处理音频，并通过持久的 WebSocket 连接与您的应用程序交换连续的事件流，而不是进行离散的请求/响应调用。以下部分展示了这些事件以及如何将它们转换为 LangSmith 追踪。有关充分利用语音代理追踪的高级原则，请参阅[语音追踪基础知识](/langsmith/trace-voice-fundamentals)。
+Gemini Live is a speech-to-speech model: it processes audio natively and exchanges a continuous stream of events with your application over a persistent WebSocket connection, rather than making discrete request/response calls. The following sections show those events and how to turn them into a LangSmith trace. For our high-level principles on getting the most out of your voice agent traces, see [语音追踪基础](/langsmith/trace-voice-fundamentals).
 
 ## ADK Live 事件模型
 
-对话运行时，ADK 会向您的应用程序流式传输一系列事件。每个事件报告对话中发生的事情：音频块、转录片段、工具调用、轮次边界或中断。每个事件具有相同的结构，大部分字段是可选的，因此您根据**哪些字段被填充**来确定事件代表什么：
+对话运行时，ADK 会向您的应用程序流式发送一系列事件。每个事件报告对话中发生的事情：音频片段、转录片段、工具调用、轮次边界或中断。每个事件具有相同的结构，且大多数字段是可选的，因此您需要根据 **哪些字段被填充**:
 
-| 填充字段 | 含义 |
+| 已填充字段 | 含义 |
 | --- | --- |
-| `content.parts[*].inline_data` | 代理音频块（PCM16 字节）。代理的声音以大量此类数据块的形式到达。 |
-| `input_transcription` | *用户*语音转录的片段。最终事件会重复完整话语并带有 `finished=True`。 |
-| `output_transcription` | *代理*语音转录的片段。 |
-| `content.parts[*].function_call` | 模型请求调用工具（名称和参数）。 |
-| `content.parts[*].function_response` | ADK 执行了工具并将结果返回给模型。 |
-| `turn_complete` | 服务器完成了其一半的交互。 |
-| `interrupted` | 服务器检测到用户对代理的打断。请刷新您的扬声器缓冲区。 |
+| `content.parts[*].inline_data` | 代理音频块（PCM16 字节）。代理的声音以大量此类音频块形式到达。 |
+| `input_transcription` | *用户* 语音转录片段。最终事件会重复完整的话语并附带 `finished=True`. |
+| `output_transcription` | *代理* 语音转录片段。 |
+| `content.parts[*].function_call` | 模型请求了工具（名称和参数）。 |
+| `content.parts[*].function_response` | ADK 执行了工具并正在将结果返回给模型。 |
+| `turn_complete` | 服务器完成了其半部分的交换。 |
+| `interrupted` | 服务器检测到用户打断代理。请刷新您的扬声器缓冲区。 |
 
 ## 事件如何映射到 LangSmith 运行
 
-为了从追踪中获得最大收益，请在一个对话追踪中捕获每个有意义的事件及其包含的数据，每个事件对应一个 span：
+为了充分利用追踪效果，请在单个对话追踪中捕获每个有意义的事件及其包含的数据，每个事件一个 span：
 
 ```text
 conversation                           ← root run (combined audio recording; ls_modality="audio")
@@ -44,11 +44,11 @@ conversation                           ← root run (combined audio recording; l
 pip install "google-adk>=2.0" google-genai "langsmith>=0.4"
 ```
 
-安装 `sounddevice` 和 `numpy`（如果您想捕获本地音频并附加对话录音）。
+安装 `sounddevice` 以及 `numpy` ，如果您想捕获本地音频并附加对话录音。
 
 ## 设置您的环境
 
-以下步骤演示了如何使用 LangSmith SDK 进行跟踪。您也可以直接使用 OpenTelemetry 进行跟踪。请参阅[使用 OpenTelemetry 进行跟踪](/langsmith/trace-with-opentelemetry)。
+以下步骤演示了如何使用 LangSmith SDK 进行追踪。您也可以直接使用 OpenTelemetry 进行追踪。请参阅 [使用 OpenTelemetry 追踪](/langsmith/trace-with-opentelemetry).
 
 ```bash
 export LANGSMITH_API_KEY=...
@@ -60,10 +60,10 @@ export GOOGLE_API_KEY=...
 ## 快速入门
 
 <Note>
-本指南专注于追踪层。它假设您已经拥有一个可正常工作的 ADK Live 应用：即 `LlmAgent`、`Runner` 和 `LiveRequestQueue`，它们产生 `run_live` 事件流，以及您的麦克风和扬声器 I/O。如需查看所有这些功能的完整可运行实现，请参阅[语音演示仓库](https://github.com/langchain-ai/voice-demo/tree/main/src/voice_demo/adk)。
+本指南专注于追踪层。它假设您已经有一个可用的 ADK Live 应用： `LlmAgent`, `Runner`，以及 `LiveRequestQueue` 生成 `run_live` event stream, plus your microphone and speaker I/O. For a complete, runnable implementation of all of that, see the [语音演示仓库](https://github.com/langchain-ai/voice-demo/tree/main/src/voice_demo/adk).
 </Note>
 
-### 步骤 1: 构建 RunConfig
+### 步骤 1：构建 RunConfig
 
 ```python
 from google.adk.agents.run_config import RunConfig, StreamingMode
@@ -78,12 +78,12 @@ run_config = RunConfig(
 ```
 
 <Note>
-**转录是可选的。**除非您在 `RunConfig` 中启用输入和输出转录，否则您将不会获得任何转录内容。`finished=True` 转录事件包含完整的语音内容，因此无需在客户端累积片段。
+**转录是可选的。** 除非您在 `RunConfig`中启用输入和输出转录，否则您不会获得任何转录文本。 `finished=True` 转录事件携带完整的话语，因此无需在客户端累积片段。
 </Note>
 
-### 步骤 2：打开会话根运行
+### 步骤 2：打开对话根运行
 
-为整个会话打开一个运行，并使用 `ls_modality="audio"` 将其标记为语音追踪，遵循[单追踪约定](/langsmith/trace-voice-fundamentals#trace-each-conversation-as-a-single-trace)。在整个会话期间保持此运行处于打开状态，并在会话结束时将其最终化。
+为整个对话打开一个运行，并使用 `ls_modality="audio"`将其标记为语音追踪，遵循 [单追踪约定](/langsmith/trace-voice-fundamentals#trace-each-conversation-as-a-single-trace)。在会话的整个生命周期内保持此运行处于打开状态，并在会话结束时最终化它。
 
 ```python
 from langsmith import RunTree
@@ -96,9 +96,9 @@ session = RunTree(
 session.post()
 ```
 
-### Step 3: 追踪每个事件
+### 第3步：追踪每个事件
 
-定义一个小型的辅助函数，为单个事件打开一个子运行，记录其清理后的负载，并在代码块退出时关闭它。这个 `scrub` 过程会用占位符替换原始音频字节，从而使跨度保持较小：
+定义一个小辅助函数，为一个事件打开一个子运行，记录其清理后的负载，并在代码块退出时关闭它。 `scrub` 传递会用占位符替换原始音频字节，使跨度保持较小：
 
 ```python
 from contextlib import contextmanager
@@ -136,7 +136,7 @@ def event_span(parent, event, *, name, inbound):
         child.patch()
 ```
 
-然后遍历你的应用 `run_live` 流中的事件，跳过纯音频块并遍历其余部分。`runner`、`adk_session` 和 `queue` 来自你的 ADK Live 应用（参见 [demo agent](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/adk/agent.py)）；`LiveEvent` 是在下方备注中定义的包装器：
+然后遍历您应用中 `run_live` 流的数据，跳过仅音频的数据块并为其余数据创建跨度。 `runner`, `adk_session`和 `queue` 来自您的 ADK Live 应用（参见 [演示代理](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/adk/agent.py)); `LiveEvent` 是下面注释中定义的包装器：
 
 ```python
 async for raw_event in runner.run_live(
@@ -154,11 +154,11 @@ async for raw_event in runner.run_live(
 ```
 
 <Note>
-跳过纯音频事件，即代理语音片段。它们在一次简短的对话中会成千上万地到达，会淹没跟踪信息，因此将它们播放到扬声器但不进行跨度标记。
+跳过仅音频的事件，即代理语音的数据块。在一次简短的对话中它们会成千上万地到达，会淹没追踪结果，所以将它们播放到扬声器但不创建跨度。
 </Note>
 
 <Note>
-在[演示仓库](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/adk/events.py)中定义了一个带有辅助函数的 `LiveEvent` 包装器。请将此实现适配到您自己的代码中。
+A `LiveEvent` 带有辅助函数的包装器在 [演示代码仓库](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/adk/events.py)中定义。将实现适配到您自己的代码中。
 </Note>
 
 ## 附加音频
@@ -167,11 +167,11 @@ async for raw_event in runner.run_live(
 音频速率因方向而异：ADK Live 期望 16 kHz PCM16 输入并产生 24 kHz 输出。如果您的麦克风捕获不是 16 kHz，请在发送路径上对其进行重采样。
 </Info>
 
-要在聆听对话的同时查看其转录文本，请将整个对话的单个合并录音附加到根运行。将双方录制为一个立体声 WAV 文件（用户的麦克风在左声道，代理的音频在右声道），以便中断显示为声道之间的重叠。在您将用户的麦克风帧发送到 ADK 时写入它们，并在扬声器上捕获代理的音频，这样在 barge-in 时刷新出的音频永远不会到达录音，文件才能反映用户实际听到的内容。
+要边听对话边查看其转录文本，请将整个对话的单个合并录音附加到根运行。将双方录制到一个立体声 WAV 文件中（用户的麦克风在左声道，代理的音频在右声道），这样中断会显示为两个声道之间的重叠。在发送时写入用户的麦克风帧，并在扬声器上窃听代理的音频，这样在打断时刷新到扬声器的音频永远不会进入录音，文件反映的是用户实际听到的内容。
 
-有关底层附件 API，请参阅[使用 traces 上传文件](/langsmith/upload-files-with-traces)。有关跨提供商的原理，请参阅[录制单个合并音频文件](/langsmith/trace-voice-fundamentals#record-a-single-combined-audio-file)。
+有关底层附件 API，请参阅 [上传文件并附加到追踪](/langsmith/upload-files-with-traces)。有关跨提供商的原理，请参阅 [录制单个合并音频文件](/langsmith/trace-voice-fundamentals#record-a-single-combined-audio-file).
 
-在会话结束时完成根运行。将事件循环包装在 `try`/`finally` 中，以便运行始终关闭，即使出现错误：
+在会话结束时最终化根运行。将事件循环包装在 `try`/`finally` 中，这样运行总是会关闭，即使发生错误：
 
 ```python
 try:
@@ -183,25 +183,25 @@ finally:
     session.patch()
 ```
 
-演示仓库封装了每个框架的完整录音流程，包括麦克风重采样、扬声器点击捕获和立体声 WAV 重建。对于 Gemini Live，请参阅 [ADK agent](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/adk/agent.py) 和共享的 [recording helpers](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/sdk_tracing.py)。
+演示代码仓库为每个框架封装了完整的录制流程，包括麦克风重采样、扬声器窃听捕获和立体声 WAV 重建。对于 Gemini Live，请参阅 [ADK 代理](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/adk/agent.py) 和共享的 [录制辅助函数](https://github.com/langchain-ai/voice-demo/blob/main/src/voice_demo/sdk_tracing.py).
 
 ## 故障排除
 
-- **没有转录配置意味着空的跟踪。** 这是最常见的失败模式。`RunConfig` 上必须同时设置 `input_audio_transcription` 和 `output_audio_transcription`。
+- **没有转录配置意味着追踪看起来为空。** 这是最常见的失败模式。 `input_audio_transcription` 和 `output_audio_transcription` 都必须设置在 `RunConfig`.
 - **不要累积转录片段。** 使用 `finished=True` 事件的完整文本；片段仅用于实时 UI 显示。
-- **不要跨越纯音频事件。** 几分钟的对话会产生数千个此类事件。
-- **字段同时出现。** 按优先级分类，而不是假设每个事件只有一个字段。
-- **工具在 ADK 内部运行。** 不要自己合成工具运行。这样做会重复计算 `function_call` 和 `function_response` 已经记录的内容。
-- **如果您的采集不是 16 kHz，请重新采样麦克风**（ADK 输入是 16 kHz，输出是 24 kHz）。
-- **消除 ADK 的启动噪音**用于控制台 UI：`logging.getLogger("google_adk").setLevel(logging.ERROR)` 会抑制 `run_live` 的实验性功能警告和 MCP 未安装的行。
+- **不要为仅音频的事件创建跨度。** 几分钟的对话会产生成千上万个这样的事件。
+- **字段会同时出现。** 按优先级分类，不要假设每个事件只有一个字段。
+- **工具运行在 ADK 内部。** 不要合成您自己的工具运行。这样做会重复计算 `function_call` 和 `function_response` 已经记录的内容。
+- **重新采样麦克风** 如果您的捕获不是 16 kHz（ADK 输入为 16 kHz，输出为 24 kHz）。
+- **静音 ADK 的启动噪音** 用于控制台 UI： `logging.getLogger("google_adk").setLevel(logging.ERROR)` 抑制实验性功能警告 `run_live` 以及 MCP 未安装的提示行。
 
-## 下一步
+## 后续步骤
 
 <CardGroup cols={2}>
-  <Card title="语音基础" icon="waveform" href="/langsmith/trace-voice-fundamentals">
-    追踪语音代理的核心约定。
+  <Card title="Voice fundamentals" icon="waveform" href="/langsmith/trace-voice-fundamentals">
+    语音代理追踪的核心约定。
   </Card>
-  <Card title="使用跟踪上传文件" icon="paperclip" href="/langsmith/upload-files-with-traces">
-    将对话录音附加到您的跟踪。
+  <Card title="Upload files with traces" icon="paperclip" href="/langsmith/upload-files-with-traces">
+    将对话音频录制附加到您的追踪记录中。
   </Card>
 </CardGroup>

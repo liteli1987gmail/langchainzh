@@ -1,15 +1,13 @@
-```yaml
 ---
 title: "IBM watsonx.ai 集成"
 description: "使用 LangChain Python 与 IBM watsonx.ai 检索器集成。"
 ---
-```
 
 import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-unmaintained.mdx';
 
->`WatsonxRerank` 是一个包装器，用于 IBM [watsonx.ai](https://www.ibm.com/products/watsonx-ai) 基础模型。
+>`WatsonxRerank` 是 IBM 的包装器 [watsonx.ai](https://www.ibm.com/products/watsonx-ai) 基础模型。
 
-本笔记本展示了如何在检索器中使用 [watsonx 的重排序端点](https://cloud.ibm.com/apidocs/watsonx-ai#text-rerank)。
+本笔记本演示如何使用 [watsonx 的重排序端点](https://cloud.ibm.com/apidocs/watsonx-ai#text-rerank) 在检索器中。
 
 ## 概述
 
@@ -17,7 +15,7 @@ import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-un
 
 | 类 | 包 | [JS 支持](https://js.langchain.com/docs/integrations/document_compressors/ibm/) | 下载量 | 版本 |
 | :--- | :--- | :---: | :---: | :---: |
-| [`WatsonxRerank`](https://reference.langchain.com/python/integrations/langchain_ibm/WatsonxRerank/) | [`langchain-ibm`](https://reference.langchain.com/python/integrations/langchain_ibm/) | ✅ | ![PyPI - Downloads](https://img.shields.io/pypi/dm/langchain-ibm?style=flat-square&label=%20) | ![PyPI - Version](https://img.shields.io/pypi/v/langchain-ibm?style=flat-square&label=%20) |
+| [`WatsonxRerank`](https://reference.langchain.com/python/integrations/langchain_ibm/WatsonxRerank/) | [`langchain-ibm`](https://reference.langchain.com/python/integrations/langchain_ibm/) | ✅ | ![PyPI - 下载量](https://img.shields.io/pypi/dm/langchain-ibm?style=flat-square&label=%20) | ![PyPI - 版本](https://img.shields.io/pypi/v/langchain-ibm?style=flat-square&label=%20) |
 
 ## 设置
 
@@ -25,10 +23,10 @@ import LangchainCommunityUnmaintained from '/snippets/oss/langchain-community-un
 
 ### 凭证
 
-下面的单元格定义了使用 watsonx 基础模型推理所需的凭证。
+下面的单元格定义使用 watsonx Foundation Model 推理所需的凭证。
 
-**操作：** 提供 IBM Cloud 用户 API 密钥。详情请参阅
-[管理用户 API 密钥](https://cloud.ibm.com/docs/account?topic=account-userapikey&interface=ui)。
+**Action:** 提供 IBM Cloud 用户 API 密钥。详情请参阅
+[管理用户 API 密钥](https://cloud.ibm.com/docs/account?topic=account-userapikey&interface=ui).
 
 ```python
 import os
@@ -38,7 +36,7 @@ watsonx_api_key = getpass()
 os.environ["WATSONX_APIKEY"] = watsonx_api_key
 ```
 
-此外，您还能够将其他密钥作为环境变量传递。
+此外，您还可以将其他密钥作为环境变量传递。
 
 ```python
 import os
@@ -52,7 +50,7 @@ os.environ["WATSONX_INSTANCE_ID"] = "your instance_id for accessing the CPD clus
 
 ### 安装
 
-LangChain IBM 集成位于 `langchain-ibm` 包中：
+LangChain IBM 集成位于 `langchain-ibm` package:
 
 <LangchainCommunityUnmaintained />
 
@@ -62,7 +60,7 @@ LangChain IBM 集成位于 `langchain-ibm` 包中：
 !pip install -qU langchain_text_splitters
 ```
 
-出于实验目的，请同时安装 `faiss` 或 `faiss-cpu` 包：
+出于实验目的，请同时安装 `faiss` or `faiss-cpu` package:
 
 ```python
 !pip install -qU  faiss
@@ -87,18 +85,18 @@ def pretty_print_docs(docs):
 
 ### 设置基础向量存储检索器
 
-让我们开始初始化一个简单的向量存储检索器并存储 2023 年国情咨文演讲（分块）。我们可以将检索器设置为检索大量（20）个文档。
+让我们从初始化一个简单的向量存储检索器开始，并存储 2023 年国情咨文演讲（分块）。我们可以将检索器设置为检索大量（20 个）文档。
 
-初始化 `WatsonxEmbeddings`。更多详情请参见 [WatsonxEmbeddings](/oss/integrations/embeddings/ibm_watsonx)。
+初始化 `WatsonxEmbeddings`。有关更多详细信息，请参阅 [WatsonxEmbeddings](/oss/integrations/embeddings/ibm_watsonx).
 
-**注意**：
+**注意**:
 
-- 要为 API 调用提供上下文，你必须添加 `project_id` 或 `space_id`。更多信息请参见[文档](https://www.ibm.com/docs/en/watsonx-as-a-service?topic=projects)。
-- 根据你的配置服务实例所在的区域，使用其中一个[特定区域的身份验证 URL](https://ibm.github.io/watsonx-ai-python-sdk/setup_cloud.html#authentication)。
+- 要为 API 调用提供上下文，您必须添加 `project_id` or `space_id`。有关更多信息，请参阅 [文档](https://www.ibm.com/docs/en/watsonx-as-a-service?topic=projects).
+- 根据您的配置服务实例所在区域，使用以下之一 [区域特定的认证 URL](https://ibm.github.io/watsonx-ai-python-sdk/setup_cloud.html#authentication).
 
-在这个示例中，我们将使用 `project_id` 和达拉斯 URL。
+在此示例中，我们将使用 `project_id` 和达拉斯 URL。
 
-你需要指定将用于嵌入的 `model_id`。所有可用的模型可以在[文档](https://ibm.github.io/watsonx-ai-python-sdk/fm_embeddings.html#EmbeddingModels)中找到。
+您需要指定 `model_id` 将用于嵌入。所有可用模型可以在以下位置找到 [文档](https://ibm.github.io/watsonx-ai-python-sdk/fm_embeddings.html#EmbeddingModels).
 
 ```python
 from langchain_ibm import WatsonxEmbeddings
@@ -171,12 +169,12 @@ And I’m taking robust action to make sure the pain of our sanctions  is target
 Tonight, I can announce that the United States has worked with 30 other countries to release 60 Million barrels of oil from reserves around the world.
 ```
 
-## 使用方法
+## 用法
 
 ### 使用 WatsonxRerank 进行重排序
 
-现在让我们用 `ContextualCompressionRetriever` 包装我们的基础检索器。我们将添加一个 `WatsonxRerank`，它使用 watsonx 重排序端点来对返回的结果进行重排序。
-请注意，在 WatsonxRerank 中指定模型名称是强制性的！
+现在让我们用 `ContextualCompressionRetriever`包装我们的基础检索器。 `WatsonxRerank`来重排序返回的结果。
+请注意，必须在 WatsonxRerank 中指定模型名称！
 
 ```python
 from langchain_ibm import WatsonxRerank
@@ -245,9 +243,9 @@ In this struggle as President Zelenskyy said in his speech to the European Parli
 
 ## 在链中使用
 
-当然，你可以在 QA 管道中使用此检索器
+您当然可以在问答管道中使用此检索器
 
-初始化 `ChatWatsonx`。更多详细信息请参阅 [ChatWatsonx](/oss/integrations/chat/ibm_watsonx)。
+初始化 `ChatWatsonx`。更多详情请参阅 [ChatWatsonx](/oss/integrations/chat/ibm_watsonx).
 
 ```python
 from langchain_ibm import ChatWatsonx
@@ -278,4 +276,4 @@ chain.invoke(query)
 
 ## API 参考
 
-有关所有 `WatsonxRerank` 特性和配置的详细文档，请前往 [API 参考](https://reference.langchain.com/python/integrations/langchain_ibm/WatsonxRerank/)。
+有关所有功能和配置的详细文档，请参阅 `WatsonxRerank` API 参考 [API 参考](https://reference.langchain.com/python/integrations/langchain_ibm/WatsonxRerank/).

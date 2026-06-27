@@ -1,10 +1,10 @@
 ---
-title: 沙箱 SDK 使用指南
+title: 沙箱 SDK 使用
 sidebarTitle: SDK 使用
 description: 使用 Python 或 TypeScript SDK 以编程方式创建和管理沙箱。
 ---
 
-[LangSmith SDK](/langsmith/reference) 提供了一个编程接口来创建沙箱并与其交互。
+此 [LangSmith SDK](/langsmith/reference) 提供以编程方式创建和与沙箱交互的接口。
 
 ## 安装
 
@@ -26,7 +26,7 @@ yarn add langsmith
 
 </CodeGroup>
 
-Python 的 `[sandbox]` extra 会安装 `websockets`，它支持实时流和 `timeout=0`。没有它，`run()` 会自动回退到 HTTP。对于 TypeScript，请安装可选的 `ws` 包以支持 WebSocket 流：
+此 `[sandbox]` Python 安装的额外依赖 `websockets`，可实现实时流式传输和 `timeout=0`。如果没有它， `run()` 会自动回退到 HTTP。对于 TypeScript，请安装可选的 `ws` 包以支持 WebSocket 流式传输：
 
 ```bash
 npm install ws
@@ -34,11 +34,9 @@ npm install ws
 
 ## 创建并运行沙箱
 
-当您想从可重用的自定义文件系统镜像启动时，传递快照 ID 或名称；请参阅[快照](/langsmith/sandbox-snapshots)了解该流程。
+当您想从可重用的自定义文件系统镜像启动时，请传递快照 ID 或名称；请参阅 [快照](/langsmith/sandbox-snapshots) 以了解该流程。
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from langsmith.sandbox import SandboxClient
@@ -72,11 +70,9 @@ await sandbox.delete();
 
 ## 运行命令
 
-每个 `run()` 调用都会返回一个包含 `stdout`、`stderr`、`exit_code` 和 `success` 的 `ExecutionResult`。
+每个 `run()` 调用返回一个 `ExecutionResult` ，包含 `stdout`, `stderr`, `exit_code`和 `success`.
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 with client.sandbox() as sb:
@@ -114,11 +110,11 @@ try {
 
 </CodeGroup>
 
-## 直播输出
+## 流式输出
 
-对于长时间运行的命令，使用回调或 `CommandHandle` 实时直播输出。
+对于长时间运行的命令，请使用回调或 `CommandHandle`.
 
-### 使用回调进行直播
+### 使用回调进行流式处理
 
 <CodeGroup>
 
@@ -146,9 +142,9 @@ console.log(`Exit code: ${result.exit_code}`);
 
 </CodeGroup>
 
-### 使用 CommandHandle 流式传输
+### 使用 CommandHandle 进行流式处理
 
-设置 `wait=False` 以获取 `CommandHandle`，从而完全控制输出流。
+设置 `wait=False` 以获取 `CommandHandle` ，以便完全控制输出流。
 
 <CodeGroup>
 
@@ -189,7 +185,7 @@ console.log(`Exit code: ${result.exit_code}`);
 
 </CodeGroup>
 
-### 发送 stdin 和 kill 命令
+### 发送 stdin 和终止命令
 
 <CodeGroup>
 
@@ -226,8 +222,6 @@ for await (const chunk of handle) {
 终止正在运行的命令：
 
 <CodeGroup>
-
-</fragment>
 
 ```python Python
 with client.sandbox() as sb:
@@ -288,8 +282,6 @@ for await (const chunk of newHandle) {
 
 <CodeGroup>
 
-</fragment>
-
 ```python Python
 with client.sandbox() as sb:
     # Write a file
@@ -328,14 +320,17 @@ try {
 }
 ```
 
-## 沙箱生命周期与保留
+</CodeGroup>
 
-沙箱由一个基于**空闲活动**和 **`stopped`** 状态的双阶段保留模型管理。
+## 沙箱生命周期和保留期
 
-| Field | 控制内容 | 触发时机 |
-|-------|----------|----------|
-| `idle_ttl_seconds` | 启动器在指定秒数的空闲时间后停止沙箱。任何命令执行或文件 I/O 都会重置计时器。`0` 禁用空闲停止。 | 省略时默认 `600`（10 分钟）。 |
-| `delete_after_stop_seconds` | 沙箱进入 `stopped` 状态后，此计时器开始计时。计时结束后，沙箱记录 + 文件系统克隆由服务端清理程序永久删除。`0` 禁用基于停止的删除（需要手动清理）。 | 省略时服务器应用其配置的默认值（通常为 14 天）。 |
+沙箱由基于 **空闲
+活动** 和 **`stopped`** state.
+
+| 字段 | 控制内容 | 触发时间 |
+|-------|------------------|---------------|
+| `idle_ttl_seconds` | The launcher stops the sandbox after this many seconds of inactivity. Any command execution or file I/O resets the timer. `0` 禁用空闲停止。| 默认值 `600` （10 分钟）当省略时。|
+| `delete_after_stop_seconds` | 一旦沙箱进入 `stopped` 状态，此计时器开始。计时结束后，沙箱行和文件系统克隆将由服务器端清理永久删除。 `0` 禁用停止锚定删除（需要手动清理）。| 当省略时，服务器应用其配置的默认值（通常为 14 天）。|
 
 两个值都必须是 60 的倍数（分钟分辨率）。完整生命周期如下：
 
@@ -343,7 +338,10 @@ try {
 running ──(idle for idle_ttl_seconds)──▶ stopped ──(delete_after_stop_seconds)──▶ deleted
 ```
 
-您也可以显式地调用 `stop_sandbox` / `stopSandbox` — 这也会填充 `stopped_at` 并启动删除计时器。
+您也可以调用 `stop_sandbox` / `stopSandbox` 显式调用——这也
+填充 `stopped_at` 并启动删除计时器。
+
+<CodeGroup>
 
 ```python Python
 # Default retention (server defaults: 10-min idle stop, 14-day delete)
@@ -393,20 +391,18 @@ await client.updateSandbox(sb.name, {
 });
 ```
 
-<CodeGroup>
+</CodeGroup>
 
 ## 命令生命周期和 TTL
 
-沙箱守护进程通过两种超时机制管理命令会话生命周期：
+沙箱守护进程通过两个超时机制管理命令会话生命周期：
 
-- **会话 TTL（已完成的命令）**：命令完成后，其会话在内存中保留一个 TTL 周期。在此期间您可以重新连接以检索输出。TTL 过期后，会话将被清理。
-- **空闲超时（运行中的命令）**：没有已连接客户端的运行中命令会在空闲超时后被终止（默认：5 分钟）。每次客户端连接时，空闲计时器都会重置。设置为 `-1` 可禁用空闲超时。
+- **会话 TTL（已完成的命令）**：命令完成后，其会话会在内存中保留一个 TTL 期间。在此期间您可以重新连接以检索输出。TTL 到期后，会话将被清理。
+- **空闲超时（运行中的命令）**：没有连接客户端的运行命令会在空闲超时后被终止（默认值：5 分钟）。每次客户端连接时，空闲计时器都会重置。设置为 `-1` 表示无空闲超时。
 
 ### 组合生命周期选项
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 with client.sandbox() as sb:
@@ -454,11 +450,11 @@ try {
 
 </CodeGroup>
 
-设置 `kill_on_disconnect=True`（Python）或 `killOnDisconnect: true`（TypeScript），可以在最后一个客户端断开连接时立即终止命令，而不是等待空闲超时。
+设置 `kill_on_disconnect=True` （Python）或 `killOnDisconnect: true` （TypeScript）以便在最后一个客户端断开时立即终止命令，而不是等待空闲超时。
 
 ## 服务 URL（Python）
 
-通过经过身份验证的 URL 访问在沙箱中运行的 HTTP 服务。您可以在浏览器中打开它、从代码中调用它，或与队友共享。
+通过经过身份验证的 URL 访问在沙箱中运行的 HTTP 服务。您可以在浏览器中打开它、从代码中调用它，或与队友共享它。
 
 ```python
 with client.sandbox() as sb:
@@ -474,11 +470,11 @@ with client.sandbox() as sb:
     resp = svc.post("/api/data", json={"key": "value"})
 ```
 
-更多详情，包括使用案例、REST API 访问和完整的 FastAPI 示例，请参阅 [Service URLs](/langsmith/sandbox-service-urls)。
+有关更多详细信息（包括用例、REST API 访问和完整的 FastAPI 示例），请参阅 [服务 URL](/langsmith/sandbox-service-urls).
 
 ## TCP 隧道（Python）
 
-将沙箱内运行的任何 TCP 服务视为本地服务进行访问。隧道会打开一个本地 TCP 端口，并通过 WebSocket 将连接转发到沙箱内的目标端口。
+像访问本地服务一样访问在沙箱中运行的任何 TCP 服务。隧道会打开一个本地 TCP 端口，并通过 WebSocket 将连接转发到沙箱内的目标端口。
 
 ```python
 import psycopg2
@@ -508,7 +504,7 @@ finally:
     client.delete_sandbox(sb.name)
 ```
 
-隧道可与任何 TCP 服务（Redis、HTTP 服务器等）配合使用，并且你可以同时打开多个隧道：
+隧道适用于任何 TCP 服务（Redis、HTTP 服务器等），您可以同时打开多个隧道：
 
 ```python
 with sb.tunnel(remote_port=5432, local_port=25432) as t1, \
@@ -517,7 +513,7 @@ with sb.tunnel(remote_port=5432, local_port=25432) as t1, \
     pass
 ```
 
-## 异步支持 (Python)
+## 异步支持（Python）
 
 Python SDK 提供了一个完整的异步客户端：
 
@@ -547,13 +543,11 @@ async def main():
             token = await svc.get_token()
 ```
 
-## 跟踪沙盒活动
+## 跟踪沙箱活动
 
-通过 `run()` 上的 `env` 参数传递 LangSmith 追踪环境变量，以发送在沙盒中运行的代码的追踪记录。在进程退出前调用 `flush()`，以确保所有追踪记录都已发送。
+通过 `env` 上的 `run()` 参数传递 LangSmith 跟踪环境变量，以发送在沙箱中运行的代码的跟踪信息。在进程退出前调用 `flush()` 以确保所有跟踪信息都已发送。
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from langsmith.sandbox import SandboxClient
@@ -595,19 +589,19 @@ try {
 }
 ```
 
-在沙箱中，任何 LangSmith-instrumented 代码（`@traceable`、LangChain、LangGraph）都会自动从注入的环境变量中获取 tracing 配置。
+</CodeGroup>
+
+在沙箱内，任何带有 LangSmith 检测的代码（`@traceable`、LangChain、LangGraph）会自动从注入的环境变量中获取跟踪配置。
 
 <Warning>
-在沙箱进程退出前务必调用 `flush()`——Python 中使用 `langsmith.Client().flush()`，TypeScript 中使用 `await new Client().flush()`。如果不调用，traces 可能会丢失，因为容器会在命令执行完毕时被销毁。
+请务必在沙箱进程退出前调用 `flush()` —— `langsmith.Client().flush()` 用 Python 或 `await new Client().flush()` 用 TypeScript。否则可能会丢失跟踪信息，因为命令完成时容器会被销毁。
 </Warning>
 
 ## 错误处理
 
-两个 SDK 都提供类型化异常用于特定的错误处理：
+两个 SDK 都为特定错误处理提供了类型化异常：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from langsmith.sandbox import (
@@ -656,10 +650,8 @@ try {
 }
 ```
 
-<CodeGroup>
+</CodeGroup>
 
 <Note>
-更多详情，请参阅 GitHub 上的沙盒 SDK 参考文档，适用于 [Python](https://github.com/langchain-ai/langsmith-sdk/tree/main/python/langsmith/sandbox) 或 [TypeScript](https://github.com/langchain-ai/langsmith-sdk/tree/main/js/src/sandbox)。
+更多详细信息，请参阅 GitHub 上的沙箱 SDK 参考（ [Python](https://github.com/langchain-ai/langsmith-sdk/tree/main/python/langsmith/sandbox) or [TypeScript](https://github.com/langchain-ai/langsmith-sdk/tree/main/js/src/sandbox).
 </Note>
-
-</fragment>

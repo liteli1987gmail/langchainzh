@@ -3,13 +3,13 @@ title: 评估复杂代理
 sidebarTitle: 评估复杂代理
 ---
 
-在本教程中，我们将构建一个客户支持机器人，帮助用户在数字音乐商店中导航。然后，我们将介绍对聊天机器人运行的三种最有效的评估类型：
+在本教程中，我们将构建一个客户服务机器人，帮助用户在数字音乐商店中导航。然后，我们将介绍对聊天机器人运行的三种最有效的评估类型：
 
 * **[最终响应](#final-response-evaluator)**：评估代理的最终响应。
-* **[轨迹](#trajectory-evaluator)**：评估代理是否采用了预期的路径（例如，工具调用）来得出最终答案。
-* **[单步](#single-step-evaluators)**：隔离评估任何代理步骤（例如，评估是否为给定步骤选择了合适的第一步工具）。
+* **[轨迹](#trajectory-evaluator)**：评估代理是否采用了预期的路径（例如工具调用）来得出最终答案。
+* **[单步](#single-step-evaluators)**：独立评估任何代理步骤（例如，它是否为给定步骤选择了合适的第一步工具）。
 
-我们将使用 [LangGraph](https://github.com/langchain-ai/langgraph) 构建代理，但这里展示的技术和 LangSmith 功能与框架无关。
+我们将使用 [LangGraph](https://github.com/langchain-ai/langgraph)来构建我们的代理，但此处展示的技术和 LangSmith 功能与框架无关。
 
 ## 设置
 
@@ -18,8 +18,6 @@ sidebarTitle: 评估复杂代理
 让我们安装所需的依赖项：
 
 <CodeGroup>
-
-</CodeGroup>
 ```bash pip
 pip install -U langgraph "langchain[openai]"
 ```
@@ -29,7 +27,7 @@ uv add langgraph "langchain[openai]"
 ```
 </CodeGroup>
 
-让我们为 OpenAI 和 [LangSmith](https://smith.langchain.com) 设置环境变量：
+让我们为 OpenAI 和 [LangSmith](https://smith.langchain.com):
 
 ```python
 import getpass
@@ -46,9 +44,9 @@ _set_env("OPENAI_API_KEY")
 
 ### 下载数据库
 
-我们将在本教程中创建一个 SQLite 数据库。SQLite 是一个轻量级数据库，易于设置和使用。我们将加载 `chinook` 数据库，这是一个代表数字媒体商店的示例数据库。有关更多信息，请参阅 [Chinook 示例数据库](https://www.sqlitetutorial.net/sqlite-sample-database/)。
+我们将为此教程创建一个 SQLite 数据库。SQLite 是一个轻量级数据库，易于设置和使用。我们将加载 `chinook` 数据库，这是一个代表数字媒体商店的示例数据库。如需更多信息，请参阅 [Chinook 示例数据库](https://www.sqlitetutorial.net/sqlite-sample-database/).
 
-为方便起见，我们将数据库托管在一个公共 GCS 存储桶中：
+为方便起见，我们将数据库托管在一个公开的 GCS 存储桶中：
 
 ```python
 import requests
@@ -77,34 +75,34 @@ import sqlite3
 [(1, 'AC/DC'), (2, 'Accept'), (3, 'Aerosmith'), (4, 'Alanis Morissette'), (5, 'Alice In Chains'), (6, 'Antônio Carlos Jobim'), (7, 'Apocalyptica'), (8, 'Audioslave'), (9, 'BackBeat'), (10, 'Billy Cobham')]
 ```
 
-以下是数据库架构（图片来源于 [https://github.com/lerocha/chinook-database](https://github.com/lerocha/chinook-database)）：
+以下是数据库架构（图片来自 [https://github.com/lerocha/chinook-database](https://github.com/lerocha/chinook-database)):
 
 ![Chinook DB](/langsmith/images/chinook-diagram.png)
 
 ### 定义客户支持代理
 
-我们将创建一个带有有限数据库访问权限的 [LangGraph](https://langchain-ai.github.io/langgraph/) 代理。出于演示目的，我们的代理将支持两种基本类型的请求：
+我们将创建一个 [LangGraph](https://langchain-ai.github.io/langgraph/) 代理，它对我们数据库的访问权限有限。为演示目的，我们的代理将支持两种基本类型的请求：
 
-* Lookup（查询）：客户可以基于其他标识信息查找歌曲标题、艺术家姓名和专辑。例如："你们有哪些 Jimi Hendrix 的歌曲？"
-* Refund（退款）：客户可以申请对过去购买进行退款。例如："我叫 Claude Shannon，我想对上周的一笔购买申请退款，你能帮我吗？"
+* 查询：客户可以根据其他识别信息查找歌曲名称、艺术家姓名和专辑。例如：「您有哪些 Jimi Hendrix 的歌曲？」
+* 退款：客户可以申请退还过去的购买。例如：「我叫 Claude Shannon，我想退还上周购买的一件商品，您能帮我吗？」
 
-为简化本演示，我们将通过删除相应的数据库记录来实现退款。我们将跳过用户身份验证和其他生产安全措施的实现。
+为简化此演示，我们将通过删除相应的数据库记录来实现退款。我们将跳过用户认证和其他生产安全措施的实现。
 
 代理的逻辑将被构建为两个独立的子图（一个用于查询，一个用于退款），以及一个将请求路由到相应子图的父图。
 
 #### 退款代理
 
-让我们构建退款处理代理。此代理需要：
+让我们构建退款处理代理。这个代理需要：
 
 1. 在数据库中查找客户的购买记录
-2. 删除相应的 Invoice 和 InvoiceLine 记录以处理退款
+2. 删除相关的 Invoice 和 InvoiceLine 记录以处理退款
 
 我们将创建两个 SQL 辅助函数：
 
-1. 用于通过删除记录来执行退款的函数
-2. 用于查询客户购买历史的函数
+1. 一个通过删除记录来执行退款的函数
+2. 一个用于查找客户购买历史的函数
 
-为简化测试，我们将为这些函数添加"模拟"模式。启用模拟模式后，这些函数将模拟数据库操作而不会实际修改任何数据。
+为了更容易进行测试，我们将为这些函数添加一个「模拟」模式。当启用模拟模式时，这些函数将模拟数据库操作，而不实际修改任何数据。
 
 ```python
 import sqlite3
@@ -115,19 +113,19 @@ def _refund(invoice_id: int | None, invoice_line_ids: list[int] | None, mock: bo
 def _lookup( ...
 ```
 
-现在让我们定义我们的图。我们将使用一个简单的架构，包含三条主要路径：
+现在让我们定义我们的图。我们将使用一个包含三条主要路径的简单架构：
 
 1. 从对话中提取客户和购买信息
 
 2. 将请求路由到三条路径之一：
 
-   * 退款路径：如果我们有足够的购买详情（Invoice ID 或 Invoice Line IDs）来处理退款
+   * 退款路径：如果我们有足够的购买详细信息（发票ID或发票行项目ID）来处理退款
    * 查询路径：如果我们有足够的客户信息（姓名和电话）来搜索他们的购买历史
-   * 响应路径：如果我们需要更多信息，向用户回复请求所需的具体信息
+   * 响应路径：如果我们需要更多信息，向用户回复请求所需的具体详细信息
 
-图的 state 将追踪：
+图的state将追踪：
 
-* 对话历史（用户和代理之间的消息）
+* 对话历史记录（用户与代理之间的消息）
 * 从对话中提取的所有客户和购买信息
 * 要发送给用户的下一条消息（跟进文本）
 
@@ -280,17 +278,17 @@ graph_builder.add_edge("refund", END)
 refund_graph = graph_builder.compile()
 ```
 
-我们可以可视化退款图表：
+我们可以可视化我们的退款图：
 
 ```
 # Assumes you're in an interactive Python environmentfrom IPython.display import Image, display ...
 ```
 
-![退款图表](/langsmith/images/refund-graph.png)
+![退款图](/langsmith/images/refund-graph.png)
 
-#### 查找代理
+#### 查询代理
 
-对于查找（即问答）代理，我们将使用一个简单的 ReACT 架构，并为代理提供工具来根据各种过滤器查找曲目名称、艺术家名称和专辑名称。例如，您可以按特定艺术家查找专辑、发行了特定名称歌曲的艺术家等。
+对于查询（即问答）代理，我们将使用一个简单的ReACT架构，并赋予代理工具来根据各种过滤器查找曲目名称、艺术家名称和专辑名称。例如，您可以按特定艺术家查找专辑、按特定名称查找发行过歌曲的艺术家等。
 
 ```python
 from langchain.embeddings import init_embeddings
@@ -334,7 +332,7 @@ display(Image(qa_graph.get_graph(xray=True).draw_mermaid_png()))
 
 #### 父代理
 
-现在让我们定义一个父代理，它将两个任务特定的代理组合在一起。父代理的唯一职责是通过分类用户当前的意图来路由到子代理之一，并将输出编译成后续消息。
+现在让我们定义一个父代理，它结合了我们的两个任务特定代理。父代理的唯一工作是通过对用户当前意图进行分类来路由到其中一个子代理，并将输出编译成跟进消息。
 
 ```python
 # Schema for routing user intent.
@@ -396,7 +394,7 @@ graph_builder.add_edge("compile_followup", END)
 graph = graph_builder.compile()
 ```
 
-我们可以可视化编译后的父图，包括其所有子图：
+我们可以可视化包含所有子图的编译后的父图：
 
 ```python
 display(Image(graph.get_graph().draw_mermaid_png()))
@@ -406,7 +404,7 @@ display(Image(graph.get_graph().draw_mermaid_png()))
 
 #### 试试看
 
-让我们来体验一下自定义支持代理吧！
+让我们试试我们的自定义支持代理！
 
 ```python
 state = await graph.ainvoke(
@@ -434,17 +432,17 @@ Which of the following purchases would you like to be refunded for? ...
 
 ## 评估
 
-现在我们有了可测试的代理版本，让我们运行一些评估。代理评估可以关注至少 3 个方面：
+现在我们有了可测试的代理版本，让我们运行一些评估。代理评估可以关注至少三个方面：
 
-- [最终响应](#final-response-evaluator)：输入是一个提示词和一个可选的工具列表。输出是最终的代理响应。
-- [轨迹](#trajectory-evaluator)：与之前相同，输入是一个提示词和一个可选的工具列表。输出是工具调用列表
-- [单步](#single-step-evaluators)：与之前相同，输入是一个提示词和一个可选的工具列表。输出是工具调用。
+* [最终响应](#final-response-evaluator)：输入是一个提示和一个可选的工具列表。输出是最终的代理响应。
+* [轨迹](#trajectory-evaluator)：与之前一样，输入是一个提示和一个可选的工具列表。输出是工具调用列表
+* [单步](#single-step-evaluators)：与之前一样，输入是一个提示和一个可选的工具列表。输出是工具调用。
 
 让我们运行每种类型的评估：
 
 ### 最终响应评估器
 
-首先，让我们创建一个[数据集](/langsmith/evaluation-concepts#datasets)来评估代理的端到端性能。为简单起见，我们将使用相同的数据集进行最终响应和轨迹评估，因此我们将为每个示例问题添加真实响应和轨迹。我们将在下一节介绍轨迹。
+首先，让我们创建一个 [数据集](/langsmith/evaluation-concepts#datasets) 来评估代理的端到端性能。为简单起见，我们将使用相同的数据集进行最终响应和轨迹评估，因此我们将为每个示例问题添加真实响应和轨迹。我们将在下一节介绍轨迹。
 
 ```python
 from langsmith import Client
@@ -510,7 +508,7 @@ if not client.has_dataset(dataset_name=dataset_name):
     )
 ```
 
-我们将创建一个自定义的 [LLM-as-judge](/langsmith/evaluation-concepts#llm-as-judge) 评估器，它使用另一个模型来比较我们代理在每个示例上的输出与参考响应，并判断它们是否等价：
+我们将创建一个自定义 [LLM-as-judge](/langsmith/evaluation-concepts#llm-as-judge) 评估器，它使用另一个模型将我们代理在每个示例上的输出与参考响应进行比较，并判断它们是否等价：
 
 ```python
 # LLM-as-judge instructions
@@ -552,9 +550,9 @@ async def final_answer_correct(inputs: dict, outputs: dict, reference_outputs: d
     return grade["is_correct"]
 ```
 
-现在我们可以运行评估了。我们的评估器假设目标函数返回一个 'response' 键，所以让我们定义一个这样的目标函数。
+现在我们可以运行评估了。我们的评估器假设我们的目标函数返回一个'response'键，所以我们定义一个这样的目标函数。
 
-还要记住，在我们的退款图中，我们使退款节点可配置，这样如果指定了 `config={"env": "test"}`，我们会模拟退款而不实际更新数据库。我们将在目标 `run_graph` 方法中调用图时使用这个可配置变量：
+还要记住，在我们的退款图中，我们使退款节点可配置，这样如果我们指定了 `config={"env": "test"}`，我们将在不实际更新数据库的情况下模拟退款。我们将在目标函数中使用这个可配置变量 `run_graph` 调用图时的方法：
 
 ```python
 # Target function
@@ -577,18 +575,18 @@ experiment_results = await client.aevaluate(
 experiment_results.to_pandas()
 ```
 
-您可以在此处查看这些结果的外观：[LangSmith link](https://smith.langchain.com/public/708d08f4-300e-4c75-9677-c6b71b0d28c9/d)。
+您可以在此处查看这些结果的样子： [LangSmith 链接](https://smith.langchain.com/public/708d08f4-300e-4c75-9677-c6b71b0d28c9/d).
 
 ### 轨迹评估器
 
-随着代理变得越来越复杂，它们有更多潜在的失败点。与其使用简单的通过/失败评估，不如使用能够在代理采取一些正确步骤时给予部分分数的评估，即使它没有达到正确的最终答案。
+As agents become more complex, they have more potential points of failure. Rather than using simple pass/fail evaluations, it's often better to use evaluations that can give partial credit when an agent takes some correct steps, even if it doesn't reach the right final answer.
 
 这就是轨迹评估的用武之地。轨迹评估：
 
-1. 将代理采取的实际步骤序列与预期序列进行比较
-2. 根据正确完成的预期步骤数量计算分数
+1. 将智能体实际执行的步骤序列与预期序列进行比较
+2. 根据正确完成的预期步骤数量计算得分
 
-对于这个示例，我们的端到端数据集包含我们期望代理采取的有序步骤列表。让我们创建一个评估器，检查代理的实际轨迹与这些预期步骤，并计算完成了多少百分比：
+在这个示例中，我们的端到端数据集包含一个预期智能体执行的步骤有序列表。让我们创建一个评估器，检查智能体的实际轨迹与这些预期步骤，并计算完成百分比：
 
 
 ```python
@@ -606,9 +604,9 @@ def trajectory_subsequence(outputs: dict, reference_outputs: dict) -> float:
     return i / len(reference_outputs['trajectory'])
 ```
 
-现在我们可以运行我们的评估。我们的评估器假设目标函数返回一个 'trajectory' 键，因此让我们定义一个能做到这一点的目标函数。我们需要使用 [LangGraph 的流式处理能力](https://langchain-ai.github.io/langgra/langsmith/observability-concepts/streaming/) 来记录轨迹。
+现在我们可以运行评估了。我们的评估器假设目标函数返回一个 'trajectory' 键，因此让我们定义一个这样做的目标函数。我们需要使用 [LangGraph 的流式处理能力](https://langchain-ai.github.io/langgra/langsmith/observability-concepts/streaming/) 来记录轨迹。
 
-请注意，我们重用了与最终响应评估相同的数据集，因此我们可以同时运行两个评估器，并定义一个同时返回 "response" 和 "trajectory" 的目标函数。在实践中，为每种类型的评估准备单独的数据集通常更有用，这就是为什么我们在这里分别展示它们的原因：
+请注意，我们正在重用与最终响应评估相同的数据集，因此我们可以一起运行两个评估器，并定义一个同时返回 "response" 和 "trajectory" 的目标函数。在实践中，为每种类型的评估使用单独的数据集通常很有用，这就是为什么我们在此分别展示它们：
 
 ```python
 async def run_graph(inputs: dict) -> dict:
@@ -646,13 +644,13 @@ experiment_results = await client.aevaluate(
 experiment_results.to_pandas()
 ```
 
-您可以在此处查看这些结果的样子：[LangSmith link](https://smith.langchain.com/public/708d08f4-300e-4c75-9677-c6b71b0d28c9/d)。
+您可以在此处查看这些结果的样子： [LangSmith 链接](https://smith.langchain.com/public/708d08f4-300e-4c75-9677-c6b71b0d28c9/d).
 
 ### 单步评估器
 
-虽然端到端测试能够为您提供关于智能体性能的最强信号，但为了调试和迭代您的智能体，准确定位那些困难的特定步骤并直接进行评估会更有帮助。
+虽然端到端测试可以为您提供关于智能体性能的最强信号，但为了调试和迭代您的智能体，精确定位困难的特定步骤并直接评估它们可能会很有帮助。
 
-在我们的案例中，智能体的一个关键部分是将用户意图正确路由到"退款"路径或"问答"路径。让我们创建一个数据集并运行一些评估，以直接对这个组件进行压力测试。
+在我们的案例中，智能体的一个关键部分是它能正确地将用户意图路由到 "退款" 路径或 "问答" 路径。让我们创建一个数据集并运行一些评估，以直接对这个组件进行压力测试。
 
 ```python
 # Create dataset
@@ -704,13 +702,13 @@ experiment_results = await client.aevaluate(
 )
 ```
 
-您可以在此处查看这些结果的外观： [LangSmith 链接](https://smith.langchain.com/public/f133dae2-8a88-43a0-9bfd-ab45bfa3920b/d)。
+您可以在此处查看这些结果的样子： [LangSmith 链接](https://smith.langchain.com/public/f133dae2-8a88-43a0-9bfd-ab45bfa3920b/d).
 
 ## 参考代码
 
-以下是包含上述所有代码的整合脚本：
+以下是包含所有上述代码的整合脚本：
 
-<Accordion title="参考代码">
+<Accordion title="Reference code">
 ```python
 import json
 import sqlite3

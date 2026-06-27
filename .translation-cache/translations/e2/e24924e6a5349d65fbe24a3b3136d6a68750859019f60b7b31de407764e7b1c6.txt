@@ -7,61 +7,61 @@ sidebarTitle: 将 LangSmith 遥测数据导出到您的可观测性后端
 **本节仅适用于 Kubernetes 部署。**
 </Warning>
 
-自托管 LangSmith 实例以日志、指标和追踪的形式生成遥测数据。本节将向您展示如何访问并将这些数据导出到可观测性收集器或后端。
+自托管 LangSmith 实例以日志、指标和追踪的形式生成遥测数据。本节将向您展示如何访问这些数据并将其导出到可观测性收集器或后端。
 
-本节假设您已经设置了监控基础设施，或者您将设置此基础设施并想了解如何配置 LangSmith 以从中收集数据。
+本节假设您已经设置了监控基础设施，或者您将设置此基础设施并希望了解如何配置 LangSmith 以从中收集数据。
 
 基础设施包括：
 
-* 收集器，例如 [OpenTelemetry](https://opentelemetry.io/docs/collector/)、[FluentBit](https://docs.fluentbit.io/manual) 或 [Prometheus](https://prometheus.io/)。
-* 可观测性后端，例如 [Datadog](https://www.datadoghq.com/) 或 [Grafana](https://grafana.com/) 生态系统。
+* 收集器，例如 [OpenTelemetry](https://opentelemetry.io/docs/collector/), [FluentBit](https://docs.fluentbit.io/manual) or [Prometheus](https://prometheus.io/).
+* 可观测性后端，例如 [Datadog](https://www.datadoghq.com/) 或 [Grafana](https://grafana.com/) ecosystem.
 
 ## 日志
 
-参考配置示例，请参阅 [OTel 收集器示例](/langsmith/langsmith-collector#logs)。
+参考设置，请参阅 [OTel 收集器示例](/langsmith/langsmith-collector#logs).
 
-作为 LangSmith 自托管部署一部分的所有服务都会将日志写入其节点的文件系统和 stdout。要访问这些日志，您需要设置收集器从文件系统或 stdout 读取。大多数流行的收集器都支持从文件系统读取日志。
+作为 LangSmith 自托管部署一部分的所有服务会将日志写入其节点的文件系统并输出到 stdout。为了访问这些日志，您需要设置收集器以从文件系统或 stdout 读取。大多数流行的收集器都支持从文件系统读取日志。
 
-* **OpenTelemetry**：[File Log Receiver](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/filelogreceiver)
-* **FluentBit**：[Tail Input](https://docs.fluentbit.io/manual/pipeline/inputs/tail)
-* **Datadog**：[Kubernetes 日志收集](https://docs.datadoghq.com/containers/kubernetes/log/?tab=datadogoperator)
+* **OpenTelemetry**: [文件日志接收器](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/filelogreceiver)
+* **FluentBit**: [Tail 输入](https://docs.fluentbit.io/manual/pipeline/inputs/tail)
+* **Datadog**: [Kubernetes 日志收集](https://docs.datadoghq.com/containers/kubernetes/log/?tab=datadogoperator)
 
 ## 指标
 
-参考配置示例，请参阅 [OTel 收集器示例](/langsmith/langsmith-collector#metrics)。
+参考设置，请参阅 [OTel 收集器示例](/langsmith/langsmith-collector#metrics).
 
 ### LangSmith 服务
 
-以下 LangSmith 服务以 Prometheus 指标格式在端点暴露指标。前端目前不暴露指标。
+以下 LangSmith 服务以 Prometheus 指标格式在端点处暴露指标。前端目前不暴露指标。
 
-* **后端**：`http://<langsmith_release_name>-backend.<namespace>.svc.cluster.local:1984/metrics`
-* **平台后端**：`http://<langsmith_release_name>-platform-backend.<namespace>.svc.cluster.local:1986/metrics`
-* **Playground**：`http://<langsmith_release_name>-playground.<namespace>.svc.cluster.local:1988/metrics`
-* **（仅限 LangSmith 控制平面）主机后端**：`http://<langsmith_release_name>-host-backend.<namespace>.svc.cluster.local:1985/metrics`
+* **后端**: `http://<langsmith_release_name>-backend.<namespace>.svc.cluster.local:1984/metrics`
+* **平台后端**: `http://<langsmith_release_name>-platform-backend.<namespace>.svc.cluster.local:1986/metrics`
+* **Playground**: `http://<langsmith_release_name>-playground.<namespace>.svc.cluster.local:1988/metrics`
+* **（仅限 LangSmith 控制平面）主机后端**: `http://<langsmith_release_name>-host-backend.<namespace>.svc.cluster.local:1985/metrics`
 
-您可以使用 [Prometheus](https://prometheus.io/docs/prometheus/latest/getting_started/#configure-prometheus-to-monitor-the-sample-targets) 或 [OpenTelemetry](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver) 收集器来抓取这些端点，并将指标导出到您选择的后端。
+您可以使用 [Prometheus](https://prometheus.io/docs/prometheus/latest/getting_started/#configure-prometheus-to-monitor-the-sample-targets) or [OpenTelemetry](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver) 收集器来抓取端点，并将指标导出到您选择的后端。
 
 ### 前端 Nginx
 
-前端服务在以下端点暴露其 Nginx 指标：`langsmith-frontend.langsmith.svc.cluster.local:80/nginx_status`。您可以自己抓取这些指标，或者部署一个 [Prometheus Nginx exporter](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-nginx-exporter)。
+前端服务在以下端点暴露其 Nginx 指标： `langsmith-frontend.langsmith.svc.cluster.local:80/nginx_status`。您可以自行抓取这些指标，或使用 [Prometheus Nginx 导出器](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-nginx-exporter).
 
 <Warning>
-**以下部分仅适用于集群内数据库。如果您使用的是外部数据库，则需要配置指标暴露和获取。**
+**以下部分仅适用于集群内数据库。如果您使用的是外部数据库，则需要配置指标暴露和抓取。**
 </Warning>
 
 ### Postgres + Redis
 
-如果您使用的是集群内 Postgres/Redis 实例，您可以使用 Prometheus exporter 来暴露实例的指标。您可以部署 [Postgres exporter](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-postgres-exporter) 和/或 [Redis exporter](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-redis-exporter)。
+If you are using in-cluster Postgres/Redis instances, you can use a Prometheus exporter to expose metrics from your instance. You can deploy a [Postgres 导出器](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-postgres-exporter) and/or [Redis 导出器](https://github.com/prometheus-community/helm-charts/tree/main/charts/prometheus-redis-exporter).
 
 ### Clickhouse
 
-集群内 Clickhouse 已配置为无需 exporter 即可暴露指标。您可以使用收集器抓取 `http://<langsmith_release_name>-clickhouse.<namespace>.svc.cluster.local:9363/metrics` 的指标。
+集群内 Clickhouse 配置为无需导出器即可暴露指标。您可以使用收集器从以下位置抓取指标 `http://<langsmith_release_name>-clickhouse.<namespace>.svc.cluster.local:9363/metrics`
 
 ## 追踪
 
-参考配置示例，请参阅 [OTel 收集器示例](/langsmith/langsmith-collector#traces)。
+参考设置，请参阅 [OTel 收集器示例](/langsmith/langsmith-collector#traces).
 
-LangSmith 后端、平台后端、Playground 和 LangSmith Queue 部署已进行仪表化以发出 [Otel](https://opentelemetry.io/docs/concepts/signals/traces/) 追踪。追踪默认关闭，可以使用以下配置在您的 `langsmith_config.yaml`（或等效文件）中为所有 LangSmith 服务启用：
+LangSmith 后端、平台后端、Playground 和 LangSmith Queue 部署已添加检测功能以发送 [Otel](https://opentelemetry.io/docs/concepts/signals/traces/) 跟踪。跟踪默认关闭，您可以通过在您的配置中添加以下内容来为所有 LangSmith 服务启用跟踪 `langsmith_config.yaml` （或等效）文件中：
 
 ```yaml
 config:

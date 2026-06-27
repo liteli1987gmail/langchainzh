@@ -1,21 +1,21 @@
 ---
-title: 删除追踪
-sidebarTitle: 删除追踪
+title: 删除轨迹
+sidebarTitle: 删除轨迹
 ---
 
-LangSmith UI 目前不支持删除单个追踪。但是，可以通过直接从 ClickHouse 的所有物化视图中移除追踪（runs_history 视图除外）以及 runs 和 feedback 表本身来实现这一点。
+LangSmith UI 目前不支持删除单个轨迹。但是，可以通过直接从 ClickHouse 中的所有物化视图（runs 除外）_历史视图）以及 runs 和 feedback 表本身中删除轨迹来实现。
 
-此命令可以使用追踪 ID 作为参数运行，也可以使用包含追踪 ID 列表的文件。
+此命令可以使用轨迹 ID 作为参数运行，也可以使用包含轨迹 ID 列表的文件运行。
 
-### 前置条件
+### 前提条件
 
-确保您已准备好以下工具/项目。
+Ensure you have the following tools/items ready.
 
 1. kubectl
 
    * [https://kubernetes.io/docs/tasks/tools/](https://kubernetes.io/docs/tasks/tools/)
 
-2. Clickhouse 数据库凭据
+2. ClickHouse 数据库凭据
 
    * 主机
    * 端口
@@ -26,75 +26,75 @@ LangSmith UI 目前不支持删除单个追踪。但是，可以通过直接从 
    * 数据库名称
      * 如果使用捆绑版本，则为 `default`
 
-3. 从运行 `delete_trace_by_id` 脚本的机器到 ClickHouse 数据库的连接。
+3. 从运行该 `delete_trace_by_id` 脚本的计算机到 ClickHouse 数据库的连接。
 
-   * 如果您使用的是捆绑版本，可能需要将 clickhouse 服务端口转发到本地机器。
-   * 运行 `kubectl port-forward svc/langsmith-clickhouse 8123:8123` 将 clickhouse 服务端口转发到本地机器。
+   * 如果使用捆绑版本，可能需要将 ClickHouse 服务端口转发到本地计算机。
+   * 运行 `kubectl port-forward svc/langsmith-clickhouse 8123:8123` 将 ClickHouse 服务端口转发到本地计算机。
 
-4. 用于删除追踪的脚本
+4. 用于删除轨迹的脚本
 
-   * 下载[追踪脚本](https://github.com/langchain-ai/helm/blob/main/charts/langsmith/scripts/delete_trace_by_id.sh)
+   * 下载 [轨迹脚本](https://github.com/langchain-ai/helm/blob/main/charts/langsmith/scripts/delete_trace_by_id.sh)
 
 <Warning>
-**批量大小限制**
+**批处理大小限制**
 
-此脚本针对多个 ClickHouse 表每批执行 `DELETE` 变更。大量删除可能会导致服务中断。
+此脚本对每个批次针对多个 ClickHouse 表执行 `DELETE` 变更。大量删除可能会导致服务中断。
 
-- **每次运行最多 10,000 条追踪**：将较大的文件拆分并顺序处理。
-- **批次之间等待**：在开始下一批之前留出时间让删除完成。
+- **每次最多 10,000 条轨迹**：请分割较大的文件并顺序处理。
+- **批次之间等待**：允许删除完成后再开始下一批次。
 - 使用 `--sync` 标志进行顺序（较慢但更安全）删除。
 </Warning>
 
-### 运行单个追踪的删除脚本
+### 运行删除脚本删除单个轨迹
 
-运行以下命令以使用单个追踪 ID 运行追踪删除脚本：
+运行以下命令使用单个轨迹 ID 运行轨迹删除脚本：
 
 ```bash
 sh delete_trace_by_id.sh <clickhouse_url> --trace_id <trace_id>
 ```
 
-例如，如果您正在使用捆绑版本并带有端口转发，则命令如下：
+例如，如果使用带端口转发的捆绑版本，命令如下：
 
 ```bash
 sh delete_trace_by_id.sh "clickhouse://default:password@localhost:8123/default" --trace_id 4ec70ec7-0808-416a-b836-7100aeec934b
 ```
 
-如果您访问 LangSmith UI，您应该会看到指定的 trace ID 不再存在，也不再反映在统计数据中。
+如果访问 LangSmith UI，应该会看到指定的轨迹 ID 不再存在，也不会反映在统计中。
 
-### 对包含每行一个 trace ID 的文件中的多个 trace 运行删除脚本
+### 运行删除脚本从文件中删除多个轨迹（每行一个轨迹 ID）
 
-运行以下命令，使用 trace ID 列表运行 trace 删除脚本：
+运行以下命令使用轨迹 ID 列表运行轨迹删除脚本：
 
 ```bash
 sh delete_trace_by_id.sh <clickhouse_url> --file <path/to/foo.txt>
 ```
 
-例如，如果您正在使用带有端口转发的打包版本，命令将如下所示：
+例如，如果使用带端口转发的捆绑版本，命令如下：
 
 ```bash
 sh delete_trace_by_id.sh "clickhouse://default:password@localhost:8123/default" --file path/to/traces.txt
 ```
 
-如果访问 LangSmith UI，您现在应该会看到所有指定的追踪已被移除。
+如果访问 LangSmith UI，应该会看到所有指定的轨迹都已被删除。
 
 ## 故障排除
 
-### "无法找到追踪 ID"错误
+### “找不到轨迹 ID”错误
 
-如果您收到一条错误消息，指出无法找到追踪 ID，请将 `--ssl` 标志添加到您的命令中。如果没有此标志，脚本可能无法正确连接到 ClickHouse，从而导致虚假的"追踪 ID 未找到"错误。
+如果收到轨迹 ID 找不到的错误消息，请将 `--ssl` 标志添加到命令中。如果没有此标志，脚本可能无法正确连接到 ClickHouse，导致误报“找不到轨迹 ID”错误。
 
-SSL 标志示例：
+带 SSL 标志的示例：
 
 ```bash
 sh delete_trace_by_id.sh "clickhouse://default:password@localhost:8123/default" --file path/to/traces.txt --ssl
 ```
 
-你也可以通过直接连接 ClickHouse 并使用 `clickhouse-cli` 查询 trace ID 来验证 traces 是否存在，然后再运行删除脚本。
+您也可以通过直接连接到 ClickHouse 来验证追踪是否存在 `clickhouse-cli` 并在运行删除脚本之前查询追踪 ID
 
 ### 大规模删除后的服务中断
 
-如果在删除大量 traces 后服务变得无响应，则删除队列可能已过载。
+如果在删除大量追踪后服务无响应，删除队列可能已超载
 
-**预防：** 将每次运行的删除数量限制在 10,000 条 traces，并在批次之间等待几分钟以便删除处理完成。
+**Prevention:** 将每次运行的删除量限制为 10,000 条追踪，并在批次之间等待几分钟以便删除处理
 
-如果在大量删除后遇到问题，请联系[支持](https://support.langchain.com/)。
+如果在大量删除后遇到问题，请联系 [支持](https://support.langchain.com/).

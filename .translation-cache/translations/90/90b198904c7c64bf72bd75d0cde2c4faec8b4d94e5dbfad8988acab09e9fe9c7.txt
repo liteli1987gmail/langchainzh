@@ -3,28 +3,25 @@ title: 如何模拟多轮交互
 sidebarTitle: 模拟多轮交互
 ---
 
-具有对话界面的 AI 应用（如聊天机器人）通过与用户的多次交互（也称为对话 *轮次*）运行。在评估此类应用的性能时，[构建数据集](/langsmith/evaluation-concepts#datasets)以及定义用于评判应用输出的[评估器](/langsmith/evaluation-concepts#evaluators) 和指标等核心概念仍然很有用。但是，您可能还会发现，在您的应用和用户之间运行*模拟*，然后评估这个动态创建的轨迹会很有用。
+具有对话界面的AI应用程序（如聊天机器人）通过与用户的多次交互来运行，这些交互也称为对话 *轮次*。在评估此类应用程序的性能时，核心概念如 [构建数据集](/langsmith/evaluation-concepts#datasets) 和定义 [评估器](/langsmith/evaluation-concepts#evaluators) 以及用于评判应用输出的指标仍然很有用。但是，您可能还会发现运行 *模拟* 您的应用和用户之间的模拟，然后评估这个动态创建的轨迹会很有用。
 
 这样做的一些优点包括：
 
-* 与对现有轨迹完整数据集进行评估相比，更容易上手
+* 易于入门，而非对现有轨迹的完整数据集进行评估
 * 从初始查询到成功或失败解决的端到端覆盖
-* 能够检测您的应用在多次迭代中出现的重复行为或上下文丢失
+* 能够检测应用多次迭代中的重复行为或上下文丢失
 
-缺点是，由于您正在扩大评估范围以包含多轮交互，因此与给定数据集中静态输入评估应用的单个输出相比，一致性会降低。
+缺点是，由于扩大了评估范围以包含多个轮次，与使用静态数据集输入评估应用的单个输出相比，一致性会降低。
 
 ![多轮追踪](/langsmith/images/multi-turn-trace.png)
 
-本指南将向您展示如何使用开源 [`openevals`](https://github.com/langchain-ai/openevals) 包模拟多轮交互并对其进行评估，该包包含预构建的评估器和其他用于评估 AI 应用的便捷资源。本指南还将使用 OpenAI 模型，不过您也可以使用其他提供商。
+本指南将向您展示如何模拟多轮交互并使用开源 [`openevals`](https://github.com/langchain-ai/openevals) 包进行评估，该包包含用于评估AI应用的预构建评估器和其他便利资源。它还将使用OpenAI模型，不过您也可以使用其他提供商。
 
 ## 设置
 
 首先，确保已安装所需的依赖项：
 
 <CodeGroup>
-
-
-</fragment>
 
 ```bash Python
 pip install -U langsmith openevals
@@ -34,15 +31,13 @@ pip install -U langsmith openevals
 npm install langsmith openevals
 ```
 
-<CodeGroup>
+</CodeGroup>
 
 <Info>
-如果您使用 `yarn` 作为包管理器，则还需要手动将 `@langchain/core` 安装为 `openevals` 的对等依赖项。这对于 LangSmith 评估来说不是必需的。
+如果您使用的是 `yarn` 作为您的包管理器，您还需要手动安装 `@langchain/core` 作为的同行依赖 `openevals`。这通常不是 LangSmith 评估所必需的。
 </Info>
 
 并设置您的环境变量：
-
-</CodeGroup>
 
 ```bash
 export LANGSMITH_TRACING="true"
@@ -52,18 +47,16 @@ export OPENAI_API_KEY="<Your OpenAI API key>"
 
 ## 运行模拟
 
-运行开始前，您需要准备两个主要组件：
+您需要两个主要组件才能开始：
 
-* `app`：您的应用程序，或包装它的函数。必须接受一个聊天消息（包含 "role" 和 "content" 键的字典）作为输入参数，以及 `thread_id` 作为关键字参数。应该接受其他关键字参数，因为未来的版本可能会添加更多。返回一个聊天消息作为输出，至少包含 role 和 content 键。
-* `user`：模拟用户。在本指南中，我们将使用导入的预构建函数 `create_llm_simulated_user`，它使用 LLM 生成用户响应，不过您也可以[创建自己的函数](https://github.com/langchain-ai/openevals?tab=readme-ov-file#custom-simulated-users)。
+* `app`：您的应用程序或封装它的函数。必须接受单个聊天消息（带有 "role" 和 "content" 键的字典）作为输入参数和 `thread_id` 作为关键字参数。应该接受其他关键字参数，因为未来版本可能会添加更多。返回至少包含 role 和 content 键的聊天消息作为输出。
+* `user`：模拟用户。在本指南中，我们将使用一个导入的预构建函数，名为 `create_llm_simulated_user` 它使用 LLM 生成用户响应，尽管您可以 [也可以创建自己的](https://github.com/langchain-ai/openevals?tab=readme-ov-file#custom-simulated-users).
 
-`openevals` 中的模拟器在每个轮次中会从 `user` 向您的 `app` 传递一条聊天消息。因此，如果需要，您应该根据 `thread_id` 在内部有状态地跟踪当前历史记录。
+中的模拟器 `openevals` 为每一轮将单个聊天消息传递给您的 `app` 来自 `user` 。因此您应该根据需要内部跟踪当前历史记录 `thread_id` 如需要。
 
-下面是一个模拟多轮客户支持交互的示例。本指南使用一个简单的聊天应用程序包装了对 OpenAI 聊天补全 API 的单次调用，然而这里才是您应该调用自己的应用程序或代理的地方。在本例中，我们的模拟用户扮演的是一个特别激进的客户：
+这是一个模拟多轮客户支持交互的示例。本指南使用一个简单的聊天应用，它封装了对 OpenAI 聊天补全 API 的单个调用，但是这里您应该调用您的应用程序或代理。在这个示例中，我们的模拟用户扮演的是一个特别激进的客户：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from openevals.simulators import run_multiturn_simulation, create_llm_simulated_user
@@ -156,14 +149,9 @@ const result = await runMultiturnSimulation({
 console.log(result);
 ```
 
-<fragment>
-
 </CodeGroup>
 
-The response looks like this:
-
-
-</fragment>
+响应如下所示：
 
 ```json
 {
@@ -192,37 +180,37 @@ The response looks like this:
 }
 ```
 
-模拟首先生成来自模拟 `user` 的初始查询，然后在达到 `max_turns` 之前来回传递响应聊天消息（你也可以传入一个 `stopping_condition`，它接受当前轨迹并返回 `True` 或 `False`——参见 [OpenEvals README 获取更多信息](https://github.com/langchain-ai/openevals?tab=readme-ov-file#multiturn-simulation)）。返回值是构成对话**轨迹**的最终聊天消息列表。
+模拟首先从模拟 `user`，然后来回传递响应聊天消息，直到达到 `max_turns` （您也可以传递一个 `stopping_condition` ，它接受当前轨迹并返回 `True` or `False` - [查看 OpenEvals README 了解更多详情](https://github.com/langchain-ai/openevals?tab=readme-ov-file#multiturn-simulation)）。返回值为组成对话的最终聊天消息列表 **轨迹**.
 
 <Info>
-有多种方式可以配置模拟用户，例如让它在模拟的前几轮返回固定响应，以及配置整个模拟。若要了解完整详情，请参阅 [OpenEvals README](https://github.com/langchain-ai/openevals?tab=readme-ov-file#multiturn-simulation)。
+有多种方式可以配置模拟用户，例如让它在前几轮模拟中返回固定响应，以及对整个模拟进行配置。详细说明请参阅 [OpenEvals README](https://github.com/langchain-ai/openevals?tab=readme-ov-file#multiturn-simulation).
 </Info>
 
-最终跟踪结果将类似于 [这样](https://smith.langchain.com/public/648ca37d-1c4d-4f7b-9b6a-89e35dc5d4f0/r)，其中 `app` 和 `user` 的响应交错出现：
+最终跟踪结果大致如下 [所示](https://smith.langchain.com/public/648ca37d-1c4d-4f7b-9b6a-89e35dc5d4f0/r) 包含来自您的 `app` 和 `user` interleaved:
 
-![Multi turn trace](/langsmith/images/multi-turn-trace.png)
+![多轮跟踪](/langsmith/images/multi-turn-trace.png)
 
-恭喜！你刚刚运行了第一个多轮模拟。接下来，我们将介绍如何在 LangSmith 实验中运行它。
+恭喜！您已成功运行第一个多轮模拟。接下来，我们将介绍如何在 LangSmith 实验中运行它。
 
 ## 在 LangSmith 实验中运行
 
-你可以将多轮模拟的结果作为 LangSmith 实验的一部分，用于跟踪随时间推移的性能和进展。对于这些部分，熟悉 LangSmith 的至少一种 [`pytest`](/langsmith/pytest)（仅 Python）、[`Vitest`/`Jest`](/langsmith/vitest-jest)（仅 JS）或 [`evaluate`](/langsmith/evaluate-llm-application) 运行器会有所帮助。
+您可以将多轮模拟结果作为 LangSmith 实验的一部分来跟踪性能和改进。对于这些部分，最好熟悉 LangSmith 的至少一种 [`pytest`](/langsmith/pytest) （仅限 Python）， [`Vitest`/`Jest`](/langsmith/vitest-jest) （仅限 JS），或 [`evaluate`](/langsmith/evaluate-llm-application) runners.
 
-### 使用 `pytest` 或 `Vitest/Jest`
+### 使用 `pytest` or `Vitest/Jest`
 
 <Check>
 请参阅以下指南，了解如何使用 LangSmith 与测试框架的集成来设置评估：
 
 * [`pytest`](https://docs.smith.langchain.com/langsmith/pytest)
-* [`Vitest` 或 `Jest`](https://docs.smith.langchain.com/langsmith/vitest-jest)
+* [`Vitest` or `Jest`](https://docs.smith.langchain.com/langsmith/vitest-jest)
 
 </Check>
 
-如果你使用的是 [LangSmith 测试框架集成](/langsmith/pytest) 之一，则可以在运行模拟时传入一个 OpenEvals 评估器数组作为 `trajectory_evaluators` 参数。这些评估器将在模拟结束时运行，接收最终的聊天消息列表作为 `outputs` kwarg。因此，你传入的 `trajectory_evaluator` 必须接受此 kwarg。
+如果您使用的是 [LangSmith 测试框架集成](/langsmith/pytest)，您可以将 OpenEvals 评估器数组作为 `trajectory_evaluators` 参数传入来运行模拟。这些评估器将在模拟结束时运行，将最终的聊天消息列表作为 `outputs` 关键字参数。您传入的 `trajectory_evaluator` 必须因此接受此关键字参数。
 
-![Multi turn vitest](/langsmith/images/multi-turn-vitest.png)
+![多轮 vitest](/langsmith/images/multi-turn-vitest.png)
 
-这是一个示例：
+以下是一个示例：
 
 <CodeGroup>
 
@@ -367,18 +355,18 @@ ls.describe("Multiturn demo", () => {
 
 </CodeGroup>
 
-LangSmith 会自动检测并记录从传入的 `trajectory_evaluators` 返回的反馈，并将其添加到实验中。还需要注意的是，测试用例在模拟用户上使用 `fixed_responses` 参数来使用特定输入启动对话，你可以记录该输入并将其作为存储数据集的一部分。
+LangSmith 会自动检测并记录从传入的 `trajectory_evaluators`返回的反馈，并将其添加到实验。还要注意的是，测试用例使用 `fixed_responses` 参数在模拟用户上启动特定输入的对话，您可以将其记录并作为存储数据集的一部分。
 
-你可能还会发现，将模拟用户的系统提示词作为日志数据集的一部分会很方便。
+您可能还会发现，将模拟用户的系统提示作为日志记录数据集的一部分会很方便。
 
 ### 使用 `evaluate`
 
-你也可以使用 [`evaluate`](/langsmith/evaluate-llm-application) 运行器来评估模拟的多轮交互。这与 `pytest`/`Vitest`/`Jest` 示例在以下方面略有不同：
+您也可以使用 [`evaluate`](/langsmith/evaluate-llm-application) 运行器来评估模拟的多轮交互。这与 `pytest`/`Vitest`/`Jest` 示例在以下方面略有不同：
 
-* 模拟应作为 `target` 函数的一部分，并且 target 函数应返回最终轨迹。
-  * 这将使轨迹成为 LangSmith 传递给评估器的 `outputs`。
-* 不应使用 `trajectory_evaluators` 参数，而应将评估器作为参数传递给 `evaluate()` 方法。
-* 你需要一个包含输入的现有数据集，以及（可选的）参考轨迹。
+* 模拟应该是您 `target` 函数的一部分，您的目标函数应返回最终轨迹。
+  * 这将使轨迹成为 `outputs` ，LangSmith 将其传递给您的评估器。
+* 与使用 `trajectory_evaluators` 参数不同，您应该将评估器作为参数传入 `evaluate()` method.
+* 您需要一个现有的输入数据集和（可选的）参考轨迹。
 
 以下是一个示例：
 
@@ -536,13 +524,11 @@ await evaluate(target, {
 
 </CodeGroup>
 
-## 修改模拟用户角色
+## 修改模拟用户人设
 
-上述示例对所有输入示例使用相同的模拟用户角色，该角色由传递给 `create_llm_simulated_user` 的 `system` 参数定义。如果您希望对数据集中的特定项使用不同的角色，可以更新数据集示例，使其也包含一个包含所需 `system` 提示的额外字段，然后在创建模拟用户时传入该字段，如下所示：
+以上示例使用相同的模拟用户角色来运行所有输入示例，由以下内容定义 `system` 参数传入 `create_llm_simulated_user`。如果您想为数据集中的特定项目使用不同的角色，可以更新数据集示例，使其也包含一个包含所需内容的额外字段 `system` 提示的字段，然后在创建模拟用户时传递该字段，如下所示：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from openevals.simulators import run_multiturn_simulation, create_llm_simulated_user
@@ -722,12 +708,12 @@ await evaluate(target, {
 
 ## 后续步骤
 
-您已经了解了模拟多轮交互并在 LangSmith 评估中运行的一些技术。
+您刚刚了解了用于模拟多轮交互并在 LangSmith 评估中运行它们的一些技术。
 
-以下是您可能想要接下来探索的主题：
+以下是您可能想要接下来探索的一些主题：
 
-* [跨不同轨迹追踪多轮对话](/langsmith/threads)
+* [跨不同追踪追踪多轮对话](/langsmith/threads)
 * [在 playground UI 中使用多条消息](/langsmith/multiple-messages)
 * [在一个评估器中返回多个指标](/langsmith/multiple-scores)
 
-您还可以探索 [OpenEvals README](https://github.com/langchain-ai/openevals) 了解更多关于预构建评估器的内容。
+您还可以探索 [OpenEvals README](https://github.com/langchain-ai/openevals) 了解更多预置评估器。

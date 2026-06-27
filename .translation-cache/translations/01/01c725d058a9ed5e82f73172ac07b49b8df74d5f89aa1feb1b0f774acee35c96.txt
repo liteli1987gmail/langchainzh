@@ -1,11 +1,11 @@
 ---
 title: Agent 评估
-description: 使用 AgentEvals 和 LangSmith 通过确定性匹配或 LLM 即评判者评估器来评估 Agent 执行轨迹。
+description: 使用确定性匹配或 LLM-as-judge 评估器通过 AgentEvals 和 LangSmith 评估代理轨迹。
 ---
 
-评估（"evals"）通过评估 Agent 的执行轨迹（它生成的消息序列和工具调用）来衡量其表现。与[集成测试](/oss/langchain/test/integration-testing)不同，集成测试验证基本正确性，而评估则根据参考或评分标准对 Agent 行为进行评分，使它们在您更改提示、工具或模型时有助于捕获回归问题。
+评估（"evals"）通过评估代理的执行轨迹（它生成的消息和工具调用序列）来衡量代理的表现。与 [集成测试](/oss/langchain/test/integration-testing) 验证基本正确性不同，evals 根据参考或评分标准对代理行为进行评分，使它们在更改提示词、工具或模型时有助于发现回归问题。
 
-评估器是一个函数，它接收 Agent 输出（以及可选的参考输出）并返回分数：
+评估器是一个函数，它接收代理输出（可选地也接收参考输出）并返回一个分数：
 
 :::python
 ```python
@@ -31,12 +31,12 @@ function evaluator({ outputs, referenceOutputs }: {
 ```
 :::
 
-[`agentevals`](https://github.com/langchain-ai/agentevals) 包提供用于智能体轨迹的预构建评估器。您可以通过执行**轨迹匹配**（确定性比较）或使用 **LLM 评判器**（定性评估）来进行评估：
+该 [`agentevals`](https://github.com/langchain-ai/agentevals) 包为代理轨迹提供预构建的评估器。您可以通过执行 **轨迹匹配** （确定性比较）或使用 **LLM 评判** （定性评估）进行评估：
 
-| 方法 | 适用场景 |
+| 方法 | 使用场景 |
 |----------|-------------|
-| [轨迹匹配](#trajectory-match-evaluator) | 您知道预期的工具调用，并希望进行快速、确定性、无成本的检查 |
-| [LLM 即评判器](#llm-as-judge-evaluator) | 您希望评估整体质量和推理过程，而不设定严格预期 |
+| [轨迹匹配](#trajectory-match-evaluator) | 您知道预期的工具调用并需要快速、确定性、免费的检查 |
+| [LLM-as-judge](#llm-as-judge-evaluator) | 您想评估整体质量和推理但没有严格要求 |
 
 ## 安装 AgentEvals
 
@@ -52,25 +52,25 @@ npm install agentevals @langchain/core
 ```
 :::
 
-或者，直接克隆 [AgentEvals 仓库](https://github.com/langchain-ai/agentevals)。
+或者，克隆 [AgentEvals 仓库](https://github.com/langchain-ai/agentevals) directly.
 
 ## 轨迹匹配评估器
 
 :::python
-AgentEvals 提供 `create_trajectory_match_evaluator` 函数，用于将您的代理轨迹与参考轨迹进行匹配。共有四种模式：
+AgentEvals 提供 `create_trajectory_match_evaluator` 函数来将您的代理轨迹与参考轨迹进行匹配。有四种模式：
 :::
 :::js
-AgentEvals 提供 `createTrajectoryMatchEvaluator` 函数，用于将您的代理轨迹与参考轨迹进行匹配。共有四种模式：
+AgentEvals 提供 `createTrajectoryMatchEvaluator` 函数来将您的代理轨迹与参考轨迹进行匹配。有四种模式：
 :::
 
 | 模式 | 描述 | 使用场景 |
 |------|-------------|----------|
-| `strict` | 消息结构和工具调用顺序完全匹配（消息内容可以不同） | 测试特定序列（例如，授权前的策略查询） |
-| `unordered` | 消息结构和工具调用与参考一致，但工具调用可以以任意顺序发生 | 验证当顺序无关时的信息检索 |
-| `subset` | 代理仅调用参考中的工具（无额外工具） | 确保代理不超过预期范围 |
-| `superset` | 代理至少调用参考中的工具（允许额外工具） | 验证是否采取了所需的最小操作 |
+| `strict` | 按相同顺序精确匹配消息结构和工具调用（消息内容可以不同） | 测试特定序列（例如，在授权前进行策略查找） |
+| `unordered` | 与参考相同的消息结构和工具调用，但工具调用可以按任意顺序执行 | 验证信息检索（当顺序不重要时） |
+| `subset` | 代理仅调用参考中的工具（无额外调用） | 确保代理不超过预期范围 |
+| `superset` | 代理至少调用参考中的工具（允许额外调用） | 验证至少采取了所需的最小操作 |
 
-下面的示例共享一个共同的设置，即带有 `get_weather` 工具的代理：
+以下示例共享一个通用设置，一个具有 `get_weather` tool:
 
 :::python
 ```python
@@ -115,9 +115,9 @@ const agent = createAgent({
 ```
 :::
 
-<Accordion title="严格匹配">
+<Accordion title="Strict match">
 
-`strict` 模式确保轨迹包含完全相同的消息、相同的顺序和相同的工具调用，尽管它允许消息内容存在差异。当需要强制执行特定的操作顺序时（例如要求在进行授权操作之前先进行策略查找），这会非常有用。
+该 `strict` 模式确保轨迹以相同顺序包含相同的消息和工具调用，尽管它允许消息内容存在差异。当您需要强制执行特定的操作顺序时，这很有用，例如要求在授权操作前进行策略查找。
 
 :::python
 ```python
@@ -186,11 +186,12 @@ async function testWeatherToolCalledStrict() {
 }
 ```
 :::
+
 </Accordion>
 
-<Accordion title="无序匹配">
+<Accordion title="Unordered match">
 
-`unordered` 模式允许以任意顺序调用相同的工具。这在您想验证是否检索到特定信息但不在意顺序时很有帮助。例如，一个代理使用不同的工具调用来检查某个城市的天气和活动。
+该 `unordered` 模式允许以任意顺序进行相同的工具调用。当您想验证是否检索到了特定信息但不在意顺序时，这很有帮助。例如，一个使用不同工具调用检查城市天气和事件的代理。
 
 :::python
 ```python
@@ -283,9 +284,13 @@ async function testMultipleToolsAnyOrder() {
   expect(evaluation.score).toBe(true);
 }
 ```
-<Accordion title="子集和超集匹配">
+:::
 
-`superset` 和 `subset` 模式匹配部分轨迹。`superset` 模式验证智能体至少调用了参考轨迹中的工具，允许额外的工具调用。`subset` 模式确保智能体没有调用参考轨迹之外的任何工具。
+</Accordion>
+
+<Accordion title="Subset and superset match">
+
+该 `superset` 和 `subset` 模式匹配部分轨迹。该 `superset` 模式验证代理至少调用了参考轨迹中的工具，允许额外的工具调用。该 `subset` 模式确保代理没有调用参考之外的任何工具。
 
 :::python
 ```python
@@ -372,25 +377,29 @@ async function testAgentCallsRequiredToolsPlusExtra() {
   expect(evaluation.score).toBe(true);
 }
 ```
+:::
+
+</Accordion>
+
 <Info>
 :::python
-您还可以设置 `tool_args_match_mode` 属性和/或 `tool_args_match_overrides` 来自定义评估器如何判断实际轨迹与参考轨迹中工具调用之间的相等性。默认情况下，只有具有相同参数的相同工具调用才被视为相等。访问[仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#tool-args-match-modes)了解更多详情。
+您还可以设置 `tool_args_match_mode` property and/or `tool_args_match_overrides` 用于自定义评估器如何考虑实际轨迹与参考轨迹之间工具调用的相等性。默认情况下，只有具有相同参数的相同工具的调用才被视为相等。请访问 [仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#tool-args-match-modes) 了解更多详情。
 :::
 :::js
-您还可以设置 `toolArgsMatchMode` 属性和/或 `toolArgsMatchOverrides` 来自定义评估器如何判断实际轨迹与参考轨迹中工具调用之间的相等性。默认情况下，只有具有相同参数的相同工具调用才被视为相等。访问[仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#tool-args-match-modes)了解更多详情。
+您也可以设置 `toolArgsMatchMode` property and/or `toolArgsMatchOverrides` 来自定义评估器如何考虑实际轨迹与参考轨迹之间工具调用的相等性。默认情况下，只有具有相同参数的相同工具的调用才被视为相等。请访问 [仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#tool-args-match-modes) 了解更多详情。
 :::
 </Info>
 
-## LLM 即评判者评估器
+## LLM即裁判评估器
 
 :::python
-您可以使用 LLM 通过 `create_trajectory_llm_as_judge` 函数来评估代理的执行路径。与轨迹匹配评估器不同，它不需要参考轨迹，但如果可以提供，也可以提供。
+您可以使用LLM通过 `create_trajectory_llm_as_judge` 函数来评估代理的执行路径。与轨迹匹配评估器不同，它不需要参考轨迹，但如果可用，也可以提供。
 :::
 :::js
-您可以使用 LLM 通过 `createTrajectoryLLMAsJudge` 函数来评估代理的执行路径。与轨迹匹配评估器不同，它不需要参考轨迹，但如果可以提供，也可以提供。
+您可以使用LLM通过 `createTrajectoryLLMAsJudge` 函数来评估代理的执行路径。与轨迹匹配评估器不同，它不需要参考轨迹，但如果可用，也可以提供。
 :::
 
-<Accordion title="无参考轨迹">
+<Accordion title="Without reference trajectory">
 :::python
 ```python
 from agentevals.trajectory.llm import create_trajectory_llm_as_judge, TRAJECTORY_ACCURACY_PROMPT
@@ -434,9 +443,9 @@ async function testTrajectoryQuality() {
 :::
 </Accordion>
 
-<Accordion title="使用参考轨迹">
+<Accordion title="With reference trajectory">
 
-如果您有参考轨迹，请使用预置的 `TRAJECTORY_ACCURACY_PROMPT_WITH_REFERENCE` 提示词：
+如果您有参考轨迹，请使用预构建的 `TRAJECTORY_ACCURACY_PROMPT_WITH_REFERENCE` prompt:
 
 :::python
 ```python
@@ -472,18 +481,15 @@ const evaluation = await evaluator({
 </Accordion>
 
 <Info>
-如需更灵活地配置 LLM 评估轨迹的方式，请访问[仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#trajectory-llm-as-judge)。
+要获得对LLM评估轨迹方式的更多可配置性，请访问 [仓库](https://github.com/langchain-ai/agentevals?tab=readme-ov-file#trajectory-llm-as-judge).
 </Info>
 
 :::python
 ### 异步支持
 
-所有 `agentevals` 评估器都支持 Python asyncio。通过在函数名中的 `create_` 后面添加 `async`，可以获得异步版本。
+所有 `agentevals` 评估器支持Python asyncio。异步版本可通过在函数名称中添加 `async` 来获取。 `create_` 函数名称中。
 
-<Accordion title="异步评判器和评估器示例">
-
-
-</fragment>
+<Accordion title="Async judge and evaluator example">
 
 ```python
 from agentevals.trajectory.llm import create_async_trajectory_llm_as_judge, TRAJECTORY_ACCURACY_PROMPT
@@ -511,9 +517,9 @@ async def test_async_evaluation():
 
 :::
 
-## 在 LangSmith 中运行评估
+## 在LangSmith中运行评估
 
-要随时间跟踪实验，请将评估器结果记录到 [LangSmith](https://smith.langchain.com)。首先，设置所需的环境变量：
+要跟踪实验进展，请将评估器结果记录到 [LangSmith](https://smith.langchain.com)。首先，设置所需的环境变量：
 
 ```bash
 export LANGSMITH_API_KEY="your_langsmith_api_key"
@@ -521,9 +527,9 @@ export LANGSMITH_TRACING="true"
 ```
 
 :::python
-LangSmith 提供两种主要的评估运行方式：[pytest](/langsmith/pytest) 集成和 `evaluate` 函数。
+LangSmith提供两种主要的评估运行方式： [pytest](/langsmith/pytest) 集成和 `evaluate` function.
 
-<Accordion title="使用 pytest 集成">
+<Accordion title="Use pytest integration">
 
 ```python
 import pytest
@@ -560,7 +566,7 @@ def test_trajectory_accuracy():
     )
 ```
 
-使用 pytest 运行评估：
+使用pytest运行评估：
 
 ```bash
 pytest test_trajectory.py --langsmith-output
@@ -568,14 +574,12 @@ pytest test_trajectory.py --langsmith-output
 
 </Accordion>
 
-<Accordion title="使用 evaluate 函数">
+<Accordion title="Use the evaluate function">
 
-创建一个 [LangSmith 数据集](/langsmith/manage-datasets) 并使用 `evaluate` 函数。数据集必须具有以下 schema：
+创建一个 [LangSmith数据集](/langsmith/manage-datasets) 并使用 `evaluate` 函数。数据集必须具有以下模式：
 
-* **input**：`{"messages": [...]}` 用于调用代理的输入消息。
-* **output**：`{"messages": [...]}` 代理输出中的预期消息历史。对于轨迹评估，您可以选择仅保留助手消息。
-
-</fragment>
+* **输入**: `{"messages": [...]}` 用于调用代理的输入消息。
+* **输出**: `{"messages": [...]}` 代理输出中期望的消息历史。对于轨迹评估，您可以选择仅保留助手消息。
 
 ```python
 from langsmith import Client
@@ -601,16 +605,14 @@ experiment_results = client.evaluate(
 </Accordion>
 
 <Tip>
-要了解有关评估代理的更多信息，请参阅 [LangSmith 文档](/langsmith/pytest)。
+要了解有关评估代理的更多信息，请参阅 [LangSmith文档](/langsmith/pytest).
 </Tip>
 :::
 
 :::js
-LangSmith 提供两种主要的评估运行方式：Vitest/Jest 集成和 `evaluate` 函数。
+LangSmith提供两种主要的评估运行方式： [Vitest/Jest](/langsmith/vitest-jest) 集成和 `evaluate` function.
 
-<Accordion title="使用 Vitest/Jest 集成">
-
-</fragment>
+<Accordion title="Use vitest/jest integration">
 
 ```ts
 import * as ls from "langsmith/vitest";
@@ -662,7 +664,7 @@ ls.describe("trajectory accuracy", () => {
 });
 ```
 
-使用你的测试运行器运行评估：
+使用测试运行器运行评估：
 
 ```bash
 vitest run test_trajectory.eval.ts
@@ -672,12 +674,12 @@ jest test_trajectory.eval.ts
 
 </Accordion>
 
-<Accordion title="使用 evaluate 函数">
+<Accordion title="Use the evaluate function">
 
-创建一个 [LangSmith 数据集](/langsmith/manage-datasets) 并使用 `evaluate` 函数。数据集必须具有以下模式：
+创建一个 [LangSmith数据集](/langsmith/manage-datasets) 并使用 `evaluate` 函数。数据集必须具有以下模式：
 
-- **input**: `{"messages": [...]}` 调用代理的输入消息。
-- **output**: `{"messages": [...]}` 代理输出中的预期消息历史。对于轨迹评估，您可以选择仅保留助手消息。
+* **输入**: `{"messages": [...]}` 用于调用代理的输入消息。
+* **输出**: `{"messages": [...]}` 预期的消息历史记录在智能体输出中。对于轨迹评估，您可以选择仅保留助手消息。
 
 ```ts
 import { evaluate } from "langsmith/evaluation";
@@ -705,6 +707,6 @@ await evaluate(
 </Accordion>
 
 <Tip>
-要了解更多关于评估您的代理的信息，请参阅 [LangSmith 文档](/langsmith/vitest-jest)。
+要了解有关评估智能体的更多信息，请参阅 [LangSmith 文档](/langsmith/vitest-jest).
 </Tip>
 :::

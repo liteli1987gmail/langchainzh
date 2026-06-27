@@ -1,6 +1,6 @@
 ---
-title: 使用 LangGraph 构建自定义 RAG agent
-sidebarTitle: 自定义 RAG agent
+title: 使用 LangGraph 构建自定义 RAG 智能体
+sidebarTitle: 自定义 RAG 智能体
 ---
 
 import AgenticRagAssembleGraphJs from '/snippets/code-samples/agentic-rag-assemble-graph-js.mdx';
@@ -27,14 +27,14 @@ import AgenticRagVisualizeGraphPy from '/snippets/code-samples/agentic-rag-visua
 
 ## 概述
 
-在本教程中，我们将使用 LangGraph 构建一个[检索](/oss/langchain/retrieval)智能体。
+在本教程中，我们将构建一个 [检索](/oss/langchain/retrieval) 智能体。
 
-LangChain 提供内置的[智能体](/oss/langchain/agents)实现，这些实现使用 [LangGraph](/oss/langgraph/overview) 原语构建。如果需要更深入的定制，可以直接在 LangGraph 中实现智能体。本指南演示了检索智能体的示例实现。[检索](/oss/langchain/retrieval)智能体在您希望 LLM 决定是从向量存储中检索上下文还是直接响应用户时非常有用。
+LangChain 提供内置 [智能体](/oss/langchain/agents) 实现，采用 [LangGraph](/oss/langgraph/overview) 原语构建。如果需要更深入的定制，可以直接在 LangGraph 中实现智能体。本指南演示了检索智能体的示例实现。 [检索](/oss/langchain/retrieval) 智能体在您希望 LLM 决定是从向量存储中检索上下文还是直接回复用户时很有用。
 
 在本教程结束时，我们将完成以下操作：
 
 1. 获取并预处理将用于检索的文档。
-2. 为这些文档建立索引以进行语义搜索，并创建智能体的检索器工具。
+2. 为语义搜索索引这些文档，并为智能体创建检索器工具。
 3. 构建一个可以决定何时使用检索器工具的智能体 RAG 系统。
 
 ![混合 RAG](/images/langgraph-hybrid-rag-tutorial.png)
@@ -43,8 +43,8 @@ LangChain 提供内置的[智能体](/oss/langchain/agents)实现，这些实现
 
 我们将涵盖以下概念：
 
-- 使用[文档加载器](/oss/integrations/document_loaders)、[文本分割器](/oss/integrations/splitters)、[嵌入模型](/oss/integrations/embeddings)和[向量存储](/oss/integrations/vectorstores)进行[检索](/oss/langchain/retrieval)
-- LangGraph [图形 API](/oss/langgraph/graph-api)，包括状态、节点、边和条件边。
+- [使用](/oss/langchain/retrieval) 文档加载器进行 [检索](/oss/integrations/document_loaders), [文本分割器](/oss/integrations/splitters), [嵌入](/oss/integrations/embeddings)和 [向量存储](/oss/integrations/vectorstores)
+- LangGraph [图 API](/oss/langgraph/graph-api)，包括状态、节点、边和条件边。
 
 ## 设置
 
@@ -80,20 +80,20 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
 :::
 
 <Tip>
-  注册 LangSmith，快速发现问题和提升 LangGraph 项目的性能。[LangSmith](https://docs.smith.langchain.com) 让您可以使用跟踪数据来调试、测试和监控使用 LangGraph 构建的 LLM 应用。
+  注册 LangSmith 以快速发现问题和改进 LangGraph 项目的性能。 [LangSmith](https://docs.smith.langchain.com) 让您使用追踪数据来调试、测试和监控使用 LangGraph 构建的 LLM 应用。
 </Tip>
 
 ## 1. 预处理文档
 
 :::python
-1. 获取用于 RAG 系统的文档。我们将使用 [Lilian Weng 的优秀博客](https://lilianweng.github.io/) 中最新的三页内容。我们首先使用基于 `requests` 和 `BeautifulSoup` 构建的最小辅助工具来获取页面的内容：
+1. 获取要在 RAG 系统中使用的文档。我们将使用 [Lilian Weng 优秀的博客](https://lilianweng.github.io/)中最近的三篇文章。我们将首先使用基于 `requests` 构建的最小辅助函数获取页面的内容 `BeautifulSoup`.
   <AgenticRagPreprocessPy />
 2. 将获取的文档分割成更小的块，以便索引到向量存储中：
   <AgenticRagSplitDocumentsPy />
 :::
 
 :::js
-1. 获取用于 RAG 系统的文档。我们将使用 [Lilian Weng 的优秀博客](https://lilianweng.github.io/) 中最新的三页内容。我们首先使用基于 `fetch` 和 `cheerio` 构建的最小辅助工具来获取页面的内容：
+1. 获取要在 RAG 系统中使用的文档。我们将使用 [Lilian Weng 优秀的博客](https://lilianweng.github.io/)中最近的三篇文章。我们将首先使用基于 `fetch` 构建的最小辅助函数获取页面的内容 `cheerio`:
   <AgenticRagPreprocessJs />
 2. 将获取的文档分割成更小的块，以便索引到向量存储中：
   <AgenticRagSplitDocumentsJs />
@@ -101,16 +101,14 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
 
 ## 2. 创建检索器工具
 
-现在我们有了分割后的文档，可以将它们索引到向量存储中，用于语义搜索。
+现在我们已经有了分割好的文档，可以将它们索引到用于语义搜索的向量存储中。
 
 :::python
 1. 使用内存向量存储和 OpenAI 嵌入：
   <AgenticRagCreateRetrieverPy />
-2. 使用 `@tool` 装饰器创建检索器工具：
+2. 使用以下方式创建检索工具 `@tool` decorator:
   <AgenticRagCreateRetrieverToolPy />
 3. 测试该工具：
-
-</fragment>
   ```python
   retriever_tool.invoke({"query": "types of reward hacking"})
   ```
@@ -119,7 +117,7 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
 :::js
 1. 使用内存向量存储和 OpenAI 嵌入：
   <AgenticRagCreateRetrieverToolJs />
-2. 使用 LangChain 预置的 `createRetrieverTool` 创建检索器工具：
+2. 使用 LangChain 的预构建 `createRetrieverTool`:
   ```typescript
   import { createRetrieverTool } from "@langchain/classic/tools/retriever";
 
@@ -133,27 +131,29 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   );
   const tools = [tool];
   ```
+:::
+
 ## 3. 生成查询
 
-现在我们将开始为我们的智能体 RAG 图构建组件（[节点](/oss/langgraph/graph-api#nodes)和[边](/oss/langgraph/graph-api#edges)）。
+现在我们开始构建组件（[节点](/oss/langgraph/graph-api#nodes) 和 [边](/oss/langgraph/graph-api#edges)）用于我们的代理式 RAG 图。
 
 :::python
-请注意，这些组件将基于 [`MessagesState`](/oss/langgraph/graph-api#messagesstate) 进行操作——这是一种包含 `messages` 键的图状态，该键存储了聊天消息列表（[chat messages](https://python.langchain.com/docs/concepts/messages/)）。
+请注意，这些组件将对 [`MessagesState`](/oss/langgraph/graph-api#messagesstate)——图状态进行操作，该状态包含一个 `messages` 键，其值为 [聊天消息](https://python.langchain.com/docs/concepts/messages/).
 
-1. 构建一个 `generate_query_or_respond` 节点。它将调用 LLM 根据当前图状态（消息列表）生成响应。根据输入消息，它将决定使用检索工具进行检索，或直接响应用户。请注意，我们通过 `.bind_tools` 赋予了聊天模型对我们之前创建的 `retriever_tool` 的访问权限：
+1. 构建一个 `generate_query_or_respond` 节点。它将调用 LLM 根据当前图状态（消息列表）生成响应。根据输入消息，它将决定使用检索工具进行检索，或直接响应用户。请注意，我们通过 `retriever_tool` 向聊天模型提供我们之前创建的 `.bind_tools`:
   <AgenticRagGenerateQueryOrRespondPy />
-2. 用一个随机输入测试它：
+2. 用随机输入测试：
   ```python
   input = {"messages": [{"role": "user", "content": "hello!"}]}
   generate_query_or_respond(input)["messages"][-1].pretty_print()
   ```
-**输出：**
+  **Output:**
   ```
   ================================== Ai Message ==================================
 
   Hello! How can I help you today?
   ```
-3. 提一个需要语义搜索的问题：
+3. 提出一个需要语义搜索的问题：
   ```python
   input = {
       "messages": [
@@ -165,7 +165,7 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   }
   generate_query_or_respond(input)["messages"][-1].pretty_print()
   ```
-**输出：**
+  **Output:**
   ```
   ================================== Ai Message ==================================
   Tool Calls:
@@ -177,11 +177,9 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
 :::
 
 :::js
-1. 构建一个 `generateQueryOrRespond` 节点。它将调用 LLM 来基于当前图状态（消息列表）生成响应。给定输入消息，它将决定使用检索器工具进行检索，或直接响应用户。请注意，我们通过 `.bindTools` 为聊天模型提供对我们之前创建的 `tools` 的访问权限：
+1. 构建一个 `generateQueryOrRespond` 节点。它将调用 LLM 根据当前图状态（消息列表）生成响应。根据输入消息，它将决定使用检索工具进行检索，或直接响应用户。请注意，我们通过 `tools` 向聊天模型提供我们之前创建的 `.bindTools`:
   <AgenticRagGenerateQueryOrRespondJs />
-2. 在随机输入上尝试：
-
-:::
+2. 用随机输入测试：
   ```typescript
   import { HumanMessage } from "@langchain/core/messages";
 
@@ -189,7 +187,7 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   const result = await generateQueryOrRespond(input);
   console.log(result.messages[0]);
   ```
-**输出：**
+  **Output:**
   ```
   AIMessage {
     content: "Hello! How can I help you today?",
@@ -206,7 +204,7 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   const result = await generateQueryOrRespond(input);
   console.log(result.messages[0]);
   ```
-**输出：**
+  **Output:**
   ```
   AIMessage {
     content: "",
@@ -220,12 +218,14 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
     ]
   }
   ```
-## 4. 文档评分
+:::
+
+## 4. 给文档评分
 
 :::python
-1. 添加一个[条件边](/oss/langgraph/graph-api#conditional-edges)—`grade_documents`—来判断检索到的文档是否与问题相关。我们将使用具有结构化输出 schema `GradeDocuments` 的模型进行文档评分。`grade_documents` 函数将根据评分决策返回要跳转的节点名称（`generate_answer` 或 `rewrite_question`）：
+1. 添加一个 [条件边](/oss/langgraph/graph-api#conditional-edges)—`grade_documents`——用于确定检索到的文档是否与问题相关。我们将使用具有结构化输出模式的模型 `GradeDocuments` 进行文档评分。该 `grade_documents` 函数将根据评分决定返回要前往的节点名称（`generate_answer` or `rewrite_question`):
   <AgenticRagGradeDocumentsPy />
-2. 使用工具响应中的不相关文档运行此操作：
+2. 使用工具响应中无关的文档运行此操作：
   ```python
   from langchain_core.messages import convert_to_messages
 
@@ -253,7 +253,7 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   }
   grade_documents(input)
   ```
-3. 确认相关文档已被分类为上述类型：
+3. 确认相关文档被正确分类：
   ```python
   input = {
       "messages": convert_to_messages(
@@ -286,9 +286,9 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
 :::
 
 :::js
-1. 添加一个节点——`gradeDocuments`——来判断检索到的文档是否与问题相关。该节点首先使用带有结构化输出的模型，利用 Zod 进行文档评分，如果结构化解析失败则回退到简单的 yes 或 no 响应。然后我们添加一个[条件边](/oss/langgraph/graph-api#conditional-edges)，根据 `gradeDocuments` 的结果路由到 `generate` 或 `rewrite`：
+1. 添加一个节点——`gradeDocuments`——用于确定检索到的文档是否与问题相关。该节点首先使用带有 Zod 结构化输出的模型进行文档评分，如果结构化解析失败则回退到简单的 yes 或 no 响应。然后我们添加一个 [条件边](/oss/langgraph/graph-api#conditional-edges) 根据 `gradeDocuments` 结果进行路由（`generate` or `rewrite`):
   <AgenticRagGradeDocumentsJs />
-2. 使用工具响应中包含不相关文档的场景运行此流程：
+2. 使用工具响应中无关的文档运行此操作：
   ```typescript
   import { ToolMessage } from "@langchain/core/messages";
 
@@ -313,7 +313,7 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   }
   const result = await gradeDocuments(input);
   ```
-3. 确认相关文档已被正确分类：
+3. 确认相关文档被正确分类：
   ```typescript
   const input = {
     messages: [
@@ -336,14 +336,14 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   }
   const result = await gradeDocuments(input);
   ```
+:::
+
 ## 5. 重写问题
 
 :::python
-1. 构建 `rewrite_question` 节点。检索工具可能返回不相关的文档，这表明需要改进原始用户问题。为此，我们将调用 `rewrite_question` 节点：
+1. 构建 `rewrite_question` 节点。检索工具可能返回潜在不相关的文档，这表明需要改进原始用户问题。为此，我们将调用 `rewrite_question` node:
   <AgenticRagRewriteQuestionPy />
 2. 试试看：
-
-:::
   ```python
   input = {
       "messages": convert_to_messages(
@@ -371,18 +371,16 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   response = rewrite_question(input)
   print(response["messages"][-1].content)
   ```
-**输出:**
+  **Output:**
   ```
   What are the different types of reward hacking described by Lilian Weng, and how does she explain them?
   ```
 :::
 
 :::js
-1. 构建 `rewrite` 节点。检索工具可能会返回不相关的文档，这表明需要改进原始用户问题。为此，我们将调用 `rewrite` 节点：
+1. 构建 `rewrite` 节点。检索工具可能返回潜在不相关的文档，这表明需要改进原始用户问题。为此，我们将调用 `rewrite` node:
   <AgenticRagRewriteQuestionJs />
 2. 试试看：
-
-:::
   ```typescript
   import { HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 
@@ -407,16 +405,18 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   const response = await rewrite(input);
   console.log(response.messages[0].content);
   ```
-**输出：**
+  **Output:**
   ```
   What are the different types of reward hacking described by Lilian Weng, and how does she explain them?
   ```
+:::
+
 ## 6. 生成答案
 
 :::python
-1. 构建 `generate_answer` 节点：如果我们通过了评分器检查，我们可以基于原始问题和检索到的上下文生成最终答案：
+1. 构建 `generate_answer` 节点：如果我们通过了评估器检查，我们可以根据原始问题和检索到的上下文生成最终答案：
   <AgenticRagGenerateAnswerPy />
-2. 尝试一下：
+2. 试一试：
   ```python
   input = {
       "messages": convert_to_messages(
@@ -448,22 +448,18 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   response = generate_answer(input)
   response["messages"][-1].pretty_print()
   ```
-<fragment>
-  **输出：**
-
-</fragment>
+  **Output:**
   ```
   ================================== Ai Message ==================================
 
   Lilian Weng categorizes reward hacking into two types: environment or goal misspecification, and reward tampering. She considers reward hacking as a broad concept that includes both of these categories. Reward hacking occurs when an agent exploits flaws or ambiguities in the reward function to achieve high rewards without performing the intended behaviors.
   ```
 :::
-:::js
-1. 构建 `generate` 节点：如果我们通过了评分器的检查，我们可以根据原始问题和检索到的上下文生成最终答案：
-  <AgenticRagGenerateAnswerJs />
-2. 试试看：
 
-:::
+:::js
+1. 构建 `generate` 节点：如果我们通过了评估器检查，我们可以根据原始问题和检索到的上下文生成最终答案：
+  <AgenticRagGenerateAnswerJs />
+2. 试一试：
   ```typescript
   import { HumanMessage, AIMessage, ToolMessage } from "@langchain/core/messages";
 
@@ -491,26 +487,28 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
   const response = await generate(input);
   console.log(response.messages[0].content);
   ```
-**输出：**
+  **Output:**
   ```
   Lilian Weng categorizes reward hacking into two types: environment or goal misspecification, and reward tampering. She considers reward hacking as a broad concept that includes both of these categories. Reward hacking occurs when an agent exploits flaws or ambiguities in the reward function to achieve high rewards without performing the intended behaviors.
   ```
+:::
+
 ## 7. 组装图
 
-现在我们将所有节点和边组装成一个完整的图：
+现在我们将把所有节点和边组装成一个完整的图：
 
 :::python
-* 从 `generate_query_or_respond` 开始，确定是否需要调用 `retriever_tool`
-* 根据模型是否发出工具调用来路由到下一步：
-  * 如果 `generate_query_or_respond` 返回了 `tool_calls`，则调用 `retriever_tool` 来检索上下文
-  * 否则直接响应用户
-* 对检索到的文档内容与问题的相关性进行评分（`grade_documents`），然后路由到下一步：
-  * 如果不相关，使用 `rewrite_question` 重写问题，然后再次调用 `generate_query_or_respond`
-  * 如果相关，继续执行 `generate_answer` 并使用 @[`ToolMessage`] 中的检索文档上下文生成最终响应
+* 从一个 `generate_query_or_respond` 开始，确定是否需要调用 `retriever_tool`
+* 根据模型是否调用了工具来路由到下一步：
+  * If `generate_query_or_respond` 返回 `tool_calls`，则调用 `retriever_tool` 来检索上下文
+  * 否则，直接响应用户
+* 评估检索到的文档内容与问题的相关性（`grade_documents`）并路由到下一步：
+  * 如果不相关，使用 `rewrite_question` 重写问题，然后调用 `generate_query_or_respond` 再次
+  * 如果相关，继续进行到 `generate_answer` 并使用 @[`ToolMessage`] 结合检索到的文档上下文生成最终响应
 
 <AgenticRagAssembleGraphPy />
 
-可视化该图：
+可视化图：
 
 <AgenticRagVisualizeGraphPy />
 
@@ -522,20 +520,20 @@ bun add @langchain/langgraph @langchain/openai @langchain/textsplitters cheerio
 :::
 
 :::js
-* 从 `generateQueryOrRespond` 开始，确定是否需要调用检索器工具
+* 从一个 `generateQueryOrRespond` 开始，确定是否需要调用检索工具
 * 使用条件边路由到下一步：
-  * 如果 `generateQueryOrRespond` 返回了 `tool_calls`，则调用检索器工具来检索上下文
-  * 否则直接响应用户
-* 对检索到的文档内容与问题的相关性进行评分（`gradeDocuments`），然后路由到下一步：
-  * 如果不相关，使用 `rewrite` 重写问题，然后再次调用 `generateQueryOrRespond`
-  * 如果相关，继续执行 `generate` 并使用 @[`ToolMessage`] 中的检索文档上下文生成最终响应
+  * If `generateQueryOrRespond` 返回 `tool_calls`，调用检索工具来检索上下文
+  * 否则，直接响应用户
+* 评估检索到的文档内容与问题的相关性（`gradeDocuments`）并路由到下一步：
+  * 如果不相关，使用 `rewrite` 重写问题，然后调用 `generateQueryOrRespond` 再次
+  * 如果相关，继续进行到 `generate` 并使用 @[`ToolMessage`] 结合检索到的文档上下文生成最终响应
 
 <AgenticRagAssembleGraphJs />
 :::
 
-## 8. 运行代理 RAG
+## 8. 运行智能 RAG
 
-现在让我们通过一个问题来测试完整的工作流：
+现在让我们通过一个问题来测试完整的图：
 
 :::python
 <AgenticRagRunAgentPy />

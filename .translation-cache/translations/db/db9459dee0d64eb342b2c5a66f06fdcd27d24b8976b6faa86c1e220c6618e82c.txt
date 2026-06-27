@@ -3,37 +3,35 @@ title: 如何使用 OpenTelemetry 进行评估
 sidebarTitle: 使用 OpenTelemetry
 ---
 
-本指南介绍如何使用 LangSmith 的 OpenTelemetry 追踪来运行评估。
+本指南向您展示如何使用 LangSmith 的 OpenTelemetry 跟踪来运行评估。
 
 <Info>
-[评估](/langsmith/evaluation-concepts#evaluation-lifecycle) | [数据集](/langsmith/evaluation-concepts#datasets) | [使用 OpenTelemetry 追踪](/langsmith/trace-with-opentelemetry)
+[评估](/langsmith/evaluation-concepts#evaluation-lifecycle) | [数据集](/langsmith/evaluation-concepts#datasets) | [使用 OpenTelemetry 进行跟踪](/langsmith/trace-with-opentelemetry)
 </Info>
 
-如果您已经在使用 OpenTelemetry 来追踪您的 LLM 应用程序，您可以通过将追踪路由到实验会话来运行评估。当您想要评估使用 OpenTelemetry 进行检测但不使用 LangSmith SDK 的 @[`evaluate()`][Client.evaluate] 函数的应用程序时，此方法非常有用。
+如果您已经使用 OpenTelemetry 来跟踪您的 LLM 应用程序，您可以通过将跟踪路由到实验会话来运行评估。这种方法在您想要评估使用 OpenTelemetry 插桩但不使用 LangSmith SDK 的 @[`evaluate()`][Client.evaluate] 函数。
 
 ## 概述
 
 使用 OpenTelemetry 进行评估时，您需要：
 
-1. 在 LangSmith 中创建实验会话。
-2. 配置 OpenTelemetry 将追踪发送到 LangSmith。
-3. 添加特定的跨度属性以将追踪链接到实验和数据集示例。
-4. 针对数据集中的每个示例运行您的应用程序。
+1. 在 LangSmith 中创建一个实验会话。
+2. 配置 OpenTelemetry 将跟踪发送到 LangSmith。
+3. 添加特定的 span 属性以将跟踪链接到实验和数据集示例。
+4. 为数据集中的每个示例运行您的应用程序。
 
-## 前置条件
+## 前提条件
 
-本指南假设您已具备：
+本指南假设您具备：
 
-* 一个使用 OpenTelemetry 进行检测并向 LangSmith 发送追踪的应用程序。
-* 一个在 LangSmith 中创建的数据集，其中包含要评估的示例。您可以通过 [LangSmith UI](/langsmith/evaluation-concepts#datasets) 或通过 [SDK](/langsmith/manage-datasets-programmatically) 创建数据集。
+* 一个使用 OpenTelemetry 插桩并向 LangSmith 发送跟踪的应用程序。
+* 在 LangSmith 中创建了一个包含待评估示例的数据集。您可以通过以下方式创建数据集 [LangSmith UI](/langsmith/evaluation-concepts#datasets) 或通过 [SDK](/langsmith/manage-datasets-programmatically).
 
-本教程使用 Strands 代理作为示例实现，但该方法适用于任何 OpenTelemetry 检测。
+本教程使用 Strands agents 作为示例实现，但该方法适用于任何 OpenTelemetry 插桩。
 
 安装依赖项：
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```bash Python
 pip install langsmith strands-agents strands-agents-tools opentelemetry-sdk opentelemetry-exporter-otlp
@@ -60,16 +58,17 @@ AWS_REGION_NAME="<your-aws-region>"
 ```
 
 <Note>
-如果您正在[自托管 LangSmith](/langsmith/self-hosted)，请将 `OTEL_EXPORTER_OTLP_ENDPOINT` 替换为您自托管的 URL，并追加 `/api/v1/otel`。例如：`OTEL_EXPORTER_OTLP_ENDPOINT = "https://ai-company.com/api/v1/otel"`。
+如果您正在 [自托管 LangSmith](/langsmith/self-hosted)，请替换 `OTEL_EXPORTER_OTLP_ENDPOINT` 为您的自托管 URL 并附加 `/api/v1/otel`。例如： `OTEL_EXPORTER_OTLP_ENDPOINT = "https://ai-company.com/api/v1/otel"`.
 
-将 `LANGSMITH_ENDPOINT` 替换为您的 LangSmith API 端点。例如：`LANGSMITH_ENDPOINT = "https://ai-company.com/api/v1"`。
+替换 `LANGSMITH_ENDPOINT` 为您的 LangSmith API 端点。例如： `LANGSMITH_ENDPOINT = "https://ai-company.com/api/v1"`.
 </Note>
 
-## 步骤 1. 创建实验会话
 
-本指南假设已在 LangSmith 中创建了包含评估示例的数据集。您可以通过 [LangSmith UI](/langsmith/evaluation-concepts#datasets) 或通过 [SDK](/langsmith/manage-datasets-programmatically) 创建数据集。
+## 步骤 1. 创建一个实验会话
 
-实验会话会将所有评估追踪组合在一起。使用 LangSmith 客户端创建一个：
+本指南假设已在 LangSmith 中创建了包含待评估示例的数据集。您可以通过以下方式创建数据集 [LangSmith UI](/langsmith/evaluation-concepts#datasets) 或通过 [SDK](/langsmith/manage-datasets-programmatically).
+
+实验会话将所有评估跟踪分组在一起。使用 LangSmith 客户端创建一个：
 
 <CodeGroup>
 
@@ -114,16 +113,18 @@ const experimentId = project.id;
 
 </CodeGroup>
 
-此外，您可以在 LangSmith UI 中创建评估器，并将其绑定到您的数据集。对于在 UI 中定义并绑定到数据集的评估器，它们将在实验追踪上自动运行。
+此外，您可以在 LangSmith UI 中创建评估器并将其绑定到您的数据集。对于在 UI 中定义并绑定到您的数据集的评估器，它们将自动在实验跟踪上运行。
 
-要了解更多关于评估器的信息，请参阅[评估器](/langsmith/evaluation-concepts#evaluators)。
+要了解有关评估器的更多信息，请参阅 [评估器](/langsmith/evaluation-concepts#evaluators).
 
-## 第 2 步：定义应用程序并配置 OpenTelemetry
 
-首先，您需要一个使用 OpenTelemetry 进行追踪的应用程序。本示例使用 Strands 代理，但您可以使用任何已检测的 OpenTelemetry 应用程序。通过在 OTEL headers 中包含实验 ID 来设置 OpenTelemetry，将追踪路由到您的实验会话。这一步的基本思路是拥有一个已检测的代理或应用程序。
+
+## 步骤 2. 定义应用程序并配置 OpenTelemetry
+
+首先，您需要一个使用 OpenTelemetry 进行跟踪的应用程序。此示例使用 Strands agent，但您可以使用任何 OpenTelemetry 插桩的应用程序。通过在 OTEL headers 中包含实验 ID 来设置 OpenTelemetry 以将跟踪路由到您的实验会话。这一步的总体思路是拥有一个使用 OpenTelemetry 插桩的 agent 或应用程序。
 
 <Note>
-由于 `Strands TypeScript SDK` 目前不支持 `OpenTelemetry` 可观测性（截至 2026 年 2 月），此步骤不提供 TypeScript 示例。
+此步骤不提供 TypeScript 示例，因为 `Strands TypeScript SDK` 目前不支持 `OpenTelemetry` 可观测性（截至 2026 年 2 月）。
 </Note>
 
 <CodeGroup>
@@ -152,11 +153,13 @@ agent = Agent(
 
 </CodeGroup>
 
-有关使用 LangSmith 设置 OpenTelemetry 追踪的详细信息，请参阅[使用 OpenTelemetry 进行追踪](/langsmith/trace-with-opentelemetry)。
+有关使用 LangSmith 设置 OpenTelemetry 追踪的详细信息，请参阅 [使用 OpenTelemetry 追踪](/langsmith/trace-with-opentelemetry).
 
-## 步骤 3. 设置关键跨度属性
 
-为每个应用运行添加所需的跨度属性。这些属性将每个追踪链接到实验和特定的数据集示例。
+
+## 步骤 3. 设置关键 span 属性
+
+为每次应用运行添加必需的 span 属性。这些属性将每个追踪链接到实验和特定的数据集示例。
 
 以下属性与实验评估相关：
 
@@ -164,11 +167,11 @@ agent = Agent(
 |-----------|---------|
 | `langsmith.trace.session_id` | 将追踪路由到您的实验会话 |
 | `langsmith.reference_example_id` | 将追踪链接到特定的数据集示例 |
-| `langsmith.span.kind` | 设置跨度类型（例如："llm"、"chain"、"tool"） |
+| `langsmith.span.kind` | 设置 span 类型（例如 "llm"、"chain"、"tool"）|
 | `inputs` | 记录应用的输入 |
 | `outputs` | 记录应用的输出 |
 
-有关支持的 OpenTelemetry 属性的完整列表，请参阅[使用 OpenTelemetry 进行追踪](/langsmith/trace-with-opentelemetry#supported-opentelemetry-attribute-and-event-mapping)。
+有关支持的 OpenTelemetry 属性完整列表，请参阅 [使用 OpenTelemetry 追踪](/langsmith/trace-with-opentelemetry#supported-opentelemetry-attribute-and-event-mapping).
 
 <CodeGroup>
 
@@ -240,9 +243,10 @@ async function evaluateWithAgent(
 
 </CodeGroup>
 
-## 第 4 步。通过迭代数据集示例运行评估
 
-每次实验运行都会在 LangSmith 中创建与您的数据集示例相关联的追踪。
+## 步骤 4. 通过迭代数据集示例运行评估
+
+每次实验运行都会在 LangSmith 中创建链接到您数据集示例的追踪。
 
 <CodeGroup>
 
@@ -282,10 +286,10 @@ for await (const example of client.listExamples({ datasetName })) {
 
 </CodeGroup>
 
-运行评估后，您可以在 [LangSmith UI](/langsmith/analyze-an-experiment) 中分析实验，查看：
+运行评估后，您可以 [分析实验](/langsmith/analyze-an-experiment) 在 LangSmith UI 中查看：
 
-* 每个示例的单个跟踪详情
+* 每个示例的单独追踪详情
 * 评估器评分和反馈
 * 不同实验运行之间的比较
 
-导航到 [LangSmith UI](https://smith.langchain.com) 中的实验来分析结果。
+在 [LangSmith UI](https://smith.langchain.com) 中导航至您的实验以分析结果。

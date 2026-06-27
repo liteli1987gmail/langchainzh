@@ -1,80 +1,80 @@
 ---
-title: 支出策略
-description: 在整个组织中设置 LLM 使用成本限制，并在费用达到提供商之前防止失控支出。
+title: 消费策略
+description: 为组织内的 LLM 使用设置成本上限，防止在费用到达提供商之前出现失控支出。
 ---
 
 <Note>
-**私人测试版：** LLM Gateway 处于私人[测试版](/langsmith/release-stages)。[注册加入候补名单](https://www.langchain.com/langsmith-llm-gateway-waitlist)以获取访问权限。
+**私人测试版：** LLM 网关处于私人 [测试版](/langsmith/release-stages). [加入候补名单](https://www.langchain.com/langsmith-llm-gateway-waitlist) 以获取访问权限。
 </Note>
 
-支出策略为特定范围（组织、工作区、API 密钥或用户）在时间窗口（每月、每周、每天或每小时）内定义成本上限。[LLM Gateway](/langsmith/llm-gateway) 实时追踪支出，并阻止任何会使支出超过上限的请求，返回 `402` 响应：
+消费策略为特定范围（组织、工作区、API 密钥或用户）在时间窗口（每月、每周、每天或每小时）内定义成本上限。 [LLM 网关](/langsmith/llm-gateway) 实时追踪费用并阻止任何会使支出超过上限的请求，返回 `402` response:
 
 ```
 API Error: 402 request blocked by gateway policies: R&D Spend Cap
 ```
 
-被阻止的请求会被追踪到 LangSmith，策略违规会被记录为元数据，因此您可以准确了解被阻止的内容及原因。
+被阻止的请求会被追踪到 LangSmith，策略违规记录为元数据，因此您可以准确了解被阻止的内容和原因。
 
 ## 策略维度
 
-支出策略从最广泛到最具体进行评估。所有匹配的策略都会被检查，如果其中任何一个返回阻止，则请求被拒绝。您可以将策略设置为默认策略（对所有工作区、用户或 API 密钥应用总支出上限）或精细策略（单独限制或对一组实体的限制）。
+消费策略从最广泛到最具体进行评估。所有匹配的策略都会被检查，如果任何一个返回阻止，则请求被拒绝。您可以将策略设置为默认（对所有工作区、用户或 API 密钥应用统一的支出上限）或粒化策略（个人限制或一组实体的限制）。
 
 | 范围 | 限制内容 | 示例 |
 | --- | --- | --- |
-| **组织** | 整个组织内所有工作区的总支出 | "整个组织在 LLM 调用上的支出不能超过每月 $10,000" |
-| **工作区** | 单个工作区或一组工作区内的总支出 | "与研发相关的工作区不能超过每月 $2,000 的支出" |
-| **API 密钥** | 单个 API 密钥或一组 API 密钥（映射到某个服务或代理）的支出 | "客户支持代理密钥的累计支出不能超过每月 $500" |
-| **用户** | 单个用户或一组用户（从 API 密钥的身份解析）的支出 | "单个开发者的日支出不能超过 $50" |
+| **组织** | Total spend across all workspaces in the org | "The entire org cannot spend more than $10,000/month on LLM calls" |
+| **工作区** | Total spend within a single workspace or group of workspaces | "The workspaces related to R&D cannot spend more than $2,000/month" |
+| **API 密钥** | Spend by a single API key or group of API keys (maps to a service or agent) | "The customer support agent keys cannot spend more than $500/month cumulatively" |
+| **用户** | Spend by a single user or group of users (resolved from the API key's identity) | "No individual developer can spend more than $50/day" |
 
 ### 冲突解决
 
-默认情况下，LLM Gateway 首先评估最广泛的范围。如果存在精细策略，则限制最严格的策略生效。较窄的范围只能收紧限制，不能放宽。如果组织级策略限制为 $10,000/月，而工作区级策略限制为 $15,000/月，则仍适用 $10,000 的组织上限。
+By default, LLM Gateway assesses the broadest scope first. If a granular policy applies, the most restrictive policy wins. Narrower scopes can only tighten limits, never loosen them. If an org-level policy caps spend at \$10,000/month and a workspace-level policy caps at \$15,000/month, the $10,000 org cap still applies.
 
-### 默认值与精细策略
+### 默认策略与粒化策略
 
-支出策略有两个方面：
+消费策略有两个方面：
 
-1. **跨维度的总和：** 该范围的总上限。示例："此工作区的总支出不能超过每月 $5,000。"
-2. **维度中每个成员的默认值：** 适用于该范围内每个 API 密钥或用户的基础限制，除非被覆盖。示例："此工作区中的每个 API 密钥默认获得每月 $200 的上限。"单个 API 密钥可以接收额外的策略以提高其具体限制，但没有任何策略可以放宽在更广泛范围设置的上限。
+1. **跨维度汇总：** the total cap for that scope. Example: "This workspace's total spend cannot exceed $5,000/month."
+2. **每个维度成员的默认设置：** a base limit that applies to every API key or user within a scope unless overridden. Example: "Each API key in this workspace gets a $200/month default cap." Individual API keys can receive additional policies that raise their specific limit, but no policy can loosen a cap set at a broader scope.
 
 ## 时间窗口
 
 | 窗口 | 重置时间 | 使用场景 |
 | --- | --- | --- |
 | **每月** | 每月第一天 | 预算对齐、整体成本控制 |
-| **每周** | 每周一 UTC 午夜 | 周度预算 |
-| **每日** | UTC 午夜 | 防止单日成本激增（例如，编码代理在一夜之间陷入重试循环） |
-| **每小时** | 每小时整点 | 快速捕获失控的代理 |
+| **每周** | 每周周一 UTC 零点 | 每周预算 |
+| **每天** | UTC 零点 | 防止单日成本激增（例如，编码代理在夜间重试循环中） |
+| **每小时** | 每小时整点 | 快速捕获失控代理 |
 
-您可以将多个时间窗口应用于同一范围。例如，一个工作区可以同时设置每月 $5,000 的上限和每日 $500 的上限。两者独立执行。
+You can apply multiple time windows to the same scope. For example, a workspace can have both a \$5,000/month cap and a \$500/day cap. Both are enforced independently.
 
-## 创建支出策略
+## 创建消费策略
 
 <Warning>
-创建和管理策略需要 `organization:manage` 权限。完整的权限细分，请参阅[追踪、引擎和访问控制](/langsmith/llm-gateway-access)。
+创建和管理策略需要 `organization:manage` 权限。完整的权限细分，请参阅 [追踪、引擎和访问控制](/langsmith/llm-gateway-access).
 </Warning>
 
-1. 进入 **设置 → 网关 → LLM Gateway**。
-1. 点击 **创建策略**。
+1. Go to **设置 → 网关 → LLM 网关**.
+1. 点击 **创建策略**.
 1. 选择范围（组织、工作区、API 密钥或用户）。
-1. 设置时间窗口（每月、每周、每日或每小时）。
-1. 设置以美元为单位的支出上限。
-1. 保存。
+1. 设置时间窗口（每月、每周、每天或每小时）。
+1. 以美元设置支出上限。
+1. Save.
 
-策略立即生效。网关在每次传入请求时评估它们，执行延迟在亚秒级以内。
+策略立即生效。网关在每个传入请求上评估这些策略，执行延迟低于一秒。
 
 ## 查看支出
 
-支出可见性仪表板显示实时成本汇总，以便您了解 LLM 预算的去向，避免达到上限。
+支出可见性仪表板显示实时成本汇总，以便您了解 LLM 预算的去向，而不会达到限额。
 
 从网关设置页面，您可以查看每个策略相对于其上限的支出情况。
 
 ## 与 LangSmith Engine 集成
 
-当支出策略阻止请求时，违规行为会作为元数据记录在追踪上。这些违规会在 [LangSmith Engine](/langsmith/engine) 中显示为问题，您可以从问题点击进入追踪，了解代理在达到限制时的行为。
+当消费策略阻止某个请求时，违规行为会作为元数据记录在追踪中。这些违规会在 [LangSmith Engine](/langsmith/engine)中显示为问题，你可以从问题点击进入追踪，了解代理在达到限制时正在做什么。
 
-这对于诊断被阻止的请求是代表真正的成本问题（陷入重试循环的编码代理）还是需要调整的策略（超出其上限的合法工作负载）非常有用。
+这对于诊断被阻止的请求是代表真正的成本问题（处于重试循环中的编码代理）还是需要调整的策略（超出其上限的合法工作负载）非常有用。
 
-## 下一步
+## 后续步骤
 
-- [PII 和密钥脱敏](/langsmith/llm-gateway-redaction)：在成本控制之外添加数据保护策略。
+- [PII 和敏感信息脱敏](/langsmith/llm-gateway-redaction)：在成本控制之外添加数据保护策略。

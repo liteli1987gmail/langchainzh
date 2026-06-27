@@ -1,48 +1,48 @@
 ---
-title: Messages 视图集成
-description: 在 LangSmith Messages 视图中渲染的框架和 SDK。
+title: 消息视图集成
+description: 在 LangSmith 消息视图中渲染的框架和 SDK。
 ---
 
-[Messages 视图](/langsmith/view-traces#messages-view) 将代理的追踪渲染为聊天风格的对话：用户提示、模型响应、工具调用和工具结果，按顺序排列。它可以自动与本页面表格中列出的任何集成配合使用。有几个集成（单独的 `wrap_anthropic` 和 JavaScript Claude Agent SDK）需要手动设置一个元数据键，这些内容在表格和[已知限制](#known-limitations)中列出。
+该 [消息视图](/langsmith/view-traces#messages-view) 将代理的跟踪渲染为聊天式对话：用户提示、模型响应、工具调用和工具结果，按顺序显示。它自动适用于本页表格中列出的任何集成。部分集成（`wrap_anthropic` 单独使用，以及 JavaScript Claude Agent SDK）需要手动设置一个元数据键，这些内容在表格和 [已知限制](#known-limitations).
 
 ## 支持的集成
 
-| 集成 | 追踪 SDK | 需要设置 |
+| 集成 | 追踪 SDK | 所需设置 |
 | --- | --- | --- |
 | LangChain 聊天模型 | langchain-core | 无 |
 | LangGraph | langgraph | 无 |
-| `langchain.create_agent` | langchain | 无（参见[已知限制](#known-limitations)中的注意事项） |
+| `langchain.create_agent` | langchain | 无（见 [已知限制](#known-limitations)) |
 | Deep Agents | deepagents | 无 |
-| OpenAI Chat Completions | `wrap_openai` | 无 |
-| OpenAI Responses | `wrap_openai` (responses API) | 无 |
+| OpenAI 聊天补全 | `wrap_openai` | 无 |
+| OpenAI Responses | `wrap_openai` （responses API）| 无 |
 | OpenAI Agents SDK | Python 追踪处理器 | 无 |
 | Vercel AI SDK | `wrapAISDK` | 无 |
-| Anthropic Messages (`wrap_anthropic`) | `wrap_anthropic` | 设置 `ls_message_format: "anthropic"` |
+| Anthropic 消息（`wrap_anthropic`) | `wrap_anthropic` | 设置 | `ls_message_format: "anthropic"` |
 | Claude Agent SDK (Python) | claude-agent-sdk | 无 |
-| Claude Agent SDK (JS) | claude-agent-sdk-js | 设置 `ls_message_format: "anthropic"` |
+| Claude Agent SDK (JS) | claude-agent-sdk-js | 设置 | `ls_message_format: "anthropic"` |
 | Claude Code | claude-code | 无 |
 
-有关每个集成的完整检测规则、预期负载形状和 JSON 示例，请参阅[追踪格式参考](/langsmith/messages-view-trace-format)。
+有关每个集成的完整检测规则、预期负载格式和 JSON 示例，请参阅 [追踪格式参考](/langsmith/messages-view-trace-format).
 
 ## 已知限制
 
-某些集成需要元数据覆盖才能被识别：
+部分集成需要元数据覆盖才能被识别：
 
-- **单独的 `wrap_anthropic`：**包装器没有设置 `ls_message_format`，因此目前检测无法匹配。在调用时设置 `metadata={"ls_message_format": "anthropic"}`（或通过 `RunnableConfig`）以便追踪该运行。
-- **Claude Agent SDK (JS)：**自动检测目前仅允许列表中的 `"claude-agent-sdk"` 和 `"claude-code"`，而不是 JS 发出的 `"claude-agent-sdk-js"`。需要在 JavaScript 追踪中明确设置 `ls_message_format: "anthropic"`。
-- **`langchain.create_agent`：**不在显式检测允许列表中。它目前通过匹配 OpenAI/Anthropic 检测中的 `ls_provider`/`ls_message_format` 后备机制，或通过 `graph_id`/`langgraph_node` 在代理在 LangGraph 内部运行时进行追踪。如果路由不可靠，请明确设置 `metadata.ls_message_format: "langchain"`。
+- **`wrap_anthropic` alone:** 该包装器未设置 `ls_message_format`，因此当前检测不匹配。设置 `metadata={"ls_message_format": "anthropic"}` 在调用时（通过 `RunnableConfig`）以声明该运行。
+- **Claude Agent SDK (JS)：** 自动检测当前仅允许 `"claude-agent-sdk"` 和 `"claude-code"`，而非 JS 发出的 `"claude-agent-sdk-js"`。设置 `ls_message_format: "anthropic"` 在 JS 追踪上。
+- **`langchain.create_agent`:** 不在显式检测允许列表中。当代理在 LangGraph 内运行时，它通过 `ls_provider`/`ls_message_format` fallthroughs in the matching OpenAI/Anthropic detection, or via `graph_id` / `langgraph_node` 来声明。如果路由不可靠，请设置 `metadata.ls_message_format: "langchain"` explicitly.
 
-## 从 Messages 视图中排除运行
+## 从消息视图排除运行
 
-在运行的元数据上设置 `LS_MESSAGE_VIEW_EXCLUDE` 会告诉 Messages 视图跳过该运行。重要的是键的存在；`True` 是常规值。过滤器在任何提取策略看到追踪之前运行，因此被排除的 LLM 或工具运行永远不会影响检测、消息提取或工具调用配对。
+设置 `LS_MESSAGE_VIEW_EXCLUDE` 在运行的元数据上会指示消息视图跳过该运行。关键在于该键的存在； `True` 是常规值。过滤器在任何提取策略之前运行，因此被排除的 LLM 或工具运行不会影响检测、消息提取或工具调用配对。
 
-`LS_MESSAGE_VIEW_EXCLUDE` 是从 `langsmith`（Python 和 JS）导出的顶级常量，其值是字符串 `"ls_message_view_exclude"`。优先使用该常量以避免拼写错误；字面字符串仍然有效。
+`LS_MESSAGE_VIEW_EXCLUDE` 是从导出的顶级常量 `langsmith` （Python 和 JS），其值为字符串 `"ls_message_view_exclude"`。建议使用该常量以避免拼写错误；字面字符串仍然有效。
 
-将其用于非对话回合的 LLM 子跨度，例如分类调用、嵌入查找、安全过滤器或路由/防护决策，您仍然希望这些在 LangSmith 的其他地方可见，但不希望它们弄乱对话记录。
+Use it for LLM subspans that are not conversational turns, such as classification calls, embedding lookups, safety filters, or routing/guardrail decisions, that you still want visible elsewhere in LangSmith but do not want cluttering the conversation transcript.
 
 ### Python
 
-**1. 在 `@traceable` 装饰器上：**排除整个函数的运行。
+**1. On a `@traceable` 装饰器**：排除整个函数的运行。
 
 ```python
 from langsmith import LS_MESSAGE_VIEW_EXCLUDE, traceable
@@ -53,7 +53,7 @@ def classify_intent(query: str) -> str:
     return llm.predict(f"Classify the intent of: {query}")
 ```
 
-**2. 通过 `trace` 上下文管理器**：排除一个临时跨度。
+**2. 通过 `trace` 上下文管理器**：排除一个临时 span。
 
 ```python
 from langsmith import LS_MESSAGE_VIEW_EXCLUDE, trace
@@ -67,7 +67,7 @@ with trace(
     run.end(outputs={"score": result})
 ```
 
-**3. 从正在运行的函数内部**：在任何修补运行之前的时刻，在当前运行树中设置键。
+**3. 从正在运行的函数内部**：在运行被修补之前的任何时间点，在当前运行树中设置密钥。
 
 ```python
 from langsmith import LS_MESSAGE_VIEW_EXCLUDE, get_current_run_tree, traceable
@@ -82,7 +82,7 @@ def maybe_internal(query: str) -> str:
     return result
 ```
 
-**4. 每次调用时使用 `wrap_openai` / `wrap_anthropic`**：将 `langsmith_extra` 传递到被包装的客户端调用。
+**4. 每次调用时使用 `wrap_openai` / `wrap_anthropic`**：传递 `langsmith_extra` 到被包装的客户端调用中。
 
 ```python
 import openai
@@ -98,7 +98,7 @@ resp = client.chat.completions.create(
 )
 ```
 
-**5. LangChain `RunnableConfig`**：排除单个链或聊天模型调用。
+**5. LangChain `RunnableConfig`**：排除链或聊天模型的单个调用。
 
 ```python
 from langchain_openai import ChatOpenAI
@@ -113,7 +113,7 @@ result = llm.invoke(
 
 ### TypeScript
 
-**1. 在 `traceable` 包装器上**：排除整个函数的执行。
+**1. On a `traceable` 包装器**：排除整个函数的运行。
 
 ```typescript
 import { LS_MESSAGE_VIEW_EXCLUDE } from "langsmith";
@@ -131,7 +131,7 @@ const classifyIntent = traceable(
 );
 ```
 
-**2. 从正在运行的函数内部**：修改当前的运行树。
+**2. 从正在运行的函数内部**：修改当前运行树。
 
 ```typescript
 import { LS_MESSAGE_VIEW_EXCLUDE } from "langsmith";
@@ -151,7 +151,7 @@ const maybeInternal = traceable(
 );
 ```
 
-**3. 每次调用使用 `wrapOpenAI`**：在调用时传递 `langsmithExtra`。
+**3. 每次调用时使用 `wrapOpenAI`**：传递 `langsmithExtra` 在调用上。
 
 ```typescript
 import { LS_MESSAGE_VIEW_EXCLUDE } from "langsmith";
@@ -169,7 +169,7 @@ const resp = await client.chat.completions.create(
 );
 ```
 
-**4. Vercel AI SDK 中间件**：通过 `wrapAISDK` 上的 `lsConfig.metadata` 传递密钥。中间件将其合并到每个发出的 LLM 运行中。
+**4. Vercel AI SDK 中间件**：通过以下方式传递密钥 `lsConfig.metadata` on `wrapAISDK`。中间件将此合并到每个发出的 LLM 运行中。
 
 ```typescript
 import * as ai from "ai";
@@ -181,9 +181,9 @@ const { generateText } = wrapAISDK(ai, {
 });
 ```
 
-要仅排除部分调用而非全部，请正常使用 `wrapAISDK` 包装，但改为在调用 AI SDK 的父级 `traceable` 内部修改 `getCurrentRunTree()`，或者使用子级 `RunTree` 并传入 `createChild({ extra: { metadata: { [LS_MESSAGE_VIEW_EXCLUDE]: true } } })`。
+要仅排除某些调用而不是其他调用，请用 `wrapAISDK` 进行正常包装，然后修改 `getCurrentRunTree()` 从父级内部 `traceable` 调用 AI SDK 的父级，或使用子级 `RunTree` 使用 `createChild({ extra: { metadata: { [LS_MESSAGE_VIEW_EXCLUDE]: true } } })`.
 
-**5. Manual `RunTree.createChild`**：当你手动构建 runs 时使用。
+**5. 手动 `RunTree.createChild`**：当你手动构建运行时。
 
 ```typescript
 import { LS_MESSAGE_VIEW_EXCLUDE } from "langsmith";
@@ -199,19 +199,19 @@ const child = parent.createChild({
 
 ### 注意事项
 
-- 过滤器检查的是**键是否存在**，而不是真值。`{LS_MESSAGE_VIEW_EXCLUDE: false}` 仍然会排除该运行。完全省略该键以包含该运行。
-- 在 `@traceable`（Python）或 `traceable`（JS）父级内执行的子运行通过共享的追踪上下文继承排除规则：Python 的 `_METADATA` `ContextVar` 和 JS 的 `AsyncLocalStorage`。子运行自身的装饰器时元数据会叠加在继承值之上。
-- 被排除的运行仍会出现在常规追踪视图、运行浏览器和指标中。只有 Messages 视图会将其过滤掉。
+- 过滤器检查的是 **键的存在**，而不是真值性。 `{LS_MESSAGE_VIEW_EXCLUDE: false}` 仍然排除该运行。完全省略该键以包含该运行。
+- 在 `@traceable` (Python) 或 `traceable` (JS) 父级中执行的子运行通过共享追踪上下文继承排除规则：Python 的 `_METADATA` `ContextVar` 和 JS 的 `AsyncLocalStorage`。子级自己的装饰器时元数据层叠在继承值之上。
+- 被排除的运行仍然会出现在常规追踪视图、运行浏览器和指标中。只有消息视图会过滤掉它们。
 
 ## 手动插桩
 
-如果您在没有 [支持的集成](#supported-integrations) 中提供的包装器的情况下进行追踪（例如，通过 `RunTree`、REST API 或围绕提供商 SDK 的自定义包装器发出运行），请在每个 LLM 运行的元数据上设置 `ls_message_format`，以将追踪路由到正确的提取器：
+如果你在没有以下包装器的情况下进行追踪 [支持的集成](#supported-integrations)——例如，通过 `RunTree`、REST API 或围绕提供商 SDK 的自定义包装器发出运行——在每个 LLM 运行的元数据上设置 `ls_message_format` 以将追踪路由到正确的提取器：
 
-| 追踪形状 | 设置到元数据 |
+| 追踪形状 | 在元数据上设置 |
 | --- | --- |
-| LangChain 消息（构造函数信封） | `ls_message_format: "langchain"` |
-| OpenAI Chat Completions | `ls_message_format: "completions"` |
-| OpenAI Responses API | `ls_message_format: "responses"` |
-| Anthropic Messages API | `ls_message_format: "anthropic"` |
+| LangChain 消息（构造函数包装器）| `ls_message_format: "langchain"` |
+| OpenAI 聊天补全 | `ls_message_format: "completions"` |
+| OpenAI 响应 API | `ls_message_format: "responses"` |
+| Anthropic 消息 API | `ls_message_format: "anthropic"` |
 
-有关每个提取器期望的 JSON 形状，请参阅[追踪格式参考](/langsmith/messages-view-trace-format)。
+有关每个提取器期望的JSON结构，请参阅 [跟踪格式参考](/langsmith/messages-view-trace-format).

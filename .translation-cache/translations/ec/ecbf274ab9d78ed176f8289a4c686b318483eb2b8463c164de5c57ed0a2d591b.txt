@@ -3,59 +3,58 @@ title: 护栏
 description: 为您的代理实现安全检查和内容过滤
 ---
 
-护栏通过在代理执行的关键环节验证和过滤内容，帮助您构建安全、合规的 AI 应用。它们可以检测敏感信息、实施内容策略、验证输出，并在不安全行为造成问题之前将其阻止。
+护栏通过在代理执行的关键环节验证和过滤内容，帮助您构建安全、合规的 AI 应用程序。它们可以检测敏感信息、执行内容策略、验证输出，并在不安全行为造成问题之前将其阻止。
 
 常见用例包括：
-
-- 防止 PII 泄漏
+- 防止 PII 泄露
 - 检测和阻止提示词注入攻击
 - 阻止不当或有害内容
-- 实施业务规则和合规要求
+- 执行业务规则和合规要求
 - 验证输出质量和准确性
 
-您可以使用[中间件](/oss/langchain/middleware)实现护栏，在关键环节拦截执行——在代理启动前、完成後，或在模型和工具调用周围。
+您可以使用 [中间件](/oss/langchain/middleware) 在关键位置拦截执行——在代理启动前、完成後，或在模型和工具调用周围。
 
 <div style={{ display: "flex", justifyContent: "center" }}>
     <img
         src="/oss/images/middleware_final.png"
-        alt="Middleware flow diagram"
+        alt="中间件流程图"
         className="rounded-lg"
     />
 </div>
 
-护栏可以使用两种互补的方法来实现：
+护栏可以使用两种互补的方法实现：
 
 <CardGroup cols={2}>
-    <Card title="确定性护栏" icon="list-check">
-        使用基于规则的逻辑（如正则表达式、关键词匹配或显式检查）。快速、可预测且成本效益高，但可能遗漏细微的违规行为。
+    <Card title="Deterministic guardrails" icon="list-check">
+        使用基于规则的逻辑（如正则表达式模式、关键词匹配或显式检查）。快速、可预测、成本效益高，但可能遗漏细微的违规行为。
     </Card>
-    <Card title="基于模型的护栏" icon="brain">
-        使用 LLM 或分类器通过语义理解来评估内容。能捕捉到规则遗漏的细微问题，但速度较慢且成本较高。
+    <Card title="Model-based guardrails" icon="brain">
+        使用 LLM 或分类器通过语义理解来评估内容。能捕捉规则遗漏的细微问题，但速度较慢且成本更高。
     </Card>
 </CardGroup>
 
-LangChain 既提供内置护栏（例如 [PII 检测](#pii-detection)、[人工介入](#human-in-the-loop)），也提供灵活的中间件系统，让您可以使用任一方法构建自定义护栏。
+LangChain 提供了内置护栏（例如， [PII 检测](#pii-detection), [human-in-the-loop](#human-in-the-loop)）以及一个灵活的中间件系统，可使用任一方法构建自定义护栏。
 
 ## 内置护栏
 
 ### PII 检测
 
-LangChain 提供内置中间件，用于检测和处理对话中的个人身份信息 (PII)。此中间件可以检测常见的 PII 类型，如电子邮件、信用卡、IP 地址等。
+LangChain 提供内置中间件，用于检测和处理对话中的个人身份信息（PII）。该中间件可以检测常见的 PII 类型，如电子邮件、信用卡、IP 地址等。
 
-PII 检测中间件适用于有合规要求的医疗和金融应用、需要清理日志的客服代理，以及一般处理敏感用户数据的任何应用。
+PII 检测中间件适用于医疗和金融等有合规要求的应用、需要清理日志的客户服务代理，以及任何处理敏感用户数据的应用。
 
 PII 中间件支持多种处理已检测 PII 的策略：
 
 | 策略 | 描述 | 示例 |
 |----------|-------------|---------|
 | `redact` | 替换为 `[REDACTED_{PII_TYPE}]` | `[REDACTED_EMAIL]` |
-| `mask` | 部分隐藏（例如後 4 位数字） | `****-****-****-1234` |
+| `mask` | 部分遮蔽（例如后 4 位）| `****-****-****-1234` |
 | `hash` | 替换为确定性哈希值 | `a8f5f167...` |
 | `block` | 检测到时抛出异常 | 抛出错误 |
 
 :::python
 <Note>
-使用 `apply_to_output=True` 时，`PIIMiddleware` 还会通过注册的流转换器编辑流式传输内容——文本增量、工具调用参数、工具输出和状态快照。需要 `langchain>=1.3.2`。请参阅[在中间件上注册转换器](/oss/langchain/event-streaming#register-transformers-on-middleware)。
+通过 `apply_to_output=True`, `PIIMiddleware` 还会通过注册的流转换器对流式传输的线输出（文本增量、工具调用参数、工具输出和状态快照）进行编辑。需要 `langchain>=1.3.2`。请参阅 [在中间件上注册转换器](/oss/langchain/event-streaming#register-transformers-on-middleware).
 </Note>
 
 ```python
@@ -136,48 +135,48 @@ const result = await agent.invoke({
 ```
 :::
 
-<Accordion title="内置 PII 类型与配置">
+<Accordion title="Built-in PII types and configuration">
 
 **内置 PII 类型：**
 - `email` - 电子邮件地址
-- `credit_card` - 信用卡号码（经过 Luhn 验证）
+- `credit_card` - 信用卡号码（经 Luhn 验证）
 - `ip` - IP 地址
 - `mac_address` - MAC 地址
-- `url` - URL 地址
+- `url` - URL
 
 **配置选项：**
 
 :::python
-Parameter | Description | Default
+参数 | 描述 | 默认值
 -----------|-------------|---------
-`pii_type` | 要检测的 PII 类型（内置或自定义） | 必填
-`strategy` | 如何处理检测到的 PII（`"block"`、`"redact"`、`"mask"`、`"hash"`） | `"redact"`
-`detector` | 自定义检测器函数或正则表达式 | `None`（使用内置）
+`pii_type` | 要检测的 PII 类型（内置或自定义）| 必填
+`strategy` | 如何处理检测到的 PII（`"block"`, `"redact"`, `"mask"`, `"hash"`) | `"redact"`
+`detector` | 自定义检测器函数或正则表达式 | `None` （使用内置）
 `apply_to_input` | 在模型调用前检查用户消息 | `True`
 `apply_to_output` | 在模型调用后检查 AI 消息 | `False`
-`apply_to_tool_results` | 在工具执行后检查工具结果消息 | `False`
+`apply_to_tool_results` | 在执行后检查工具结果消息 | `False`
 :::
 
 :::js
-Parameter | Description | Default
+参数 | 描述 | 默认值
 -----------|-------------|---------
-`piiType` | 要检测的 PII 类型（内置或自定义） | 必填
-`strategy` | 如何处理检测到的 PII（`"block"`、`"redact"`、`"mask"`、`"hash"`） | `"redact"`
-`detector` | 自定义检测器正则表达式 | `undefined`（使用内置）
+`piiType` | 要检测的 PII 类型（内置或自定义）| 必填
+`strategy` | 如何处理检测到的 PII（`"block"`, `"redact"`, `"mask"`, `"hash"`) | `"redact"`
+`detector` | 自定义检测器正则表达式 | `undefined` （使用内置）
 `applyToInput` | 在模型调用前检查用户消息 | `true`
 `applyToOutput` | 在模型调用后检查 AI 消息 | `false`
-`applyToToolResults` | 在工具执行后检查工具结果消息 | `false`
+`applyToToolResults` | 在执行后检查工具结果消息 | `false`
 :::
 
 </Accordion>
 
-有关 PII 检测功能的完整详情，请参阅[中间件文档](/oss/langchain/middleware#pii-detection)。
+请参阅 [中间件文档](/oss/langchain/middleware#pii-detection) 了解 PII 检测功能的完整详情。
 
-### 人工介入
+### Human-in-the-loop
 
-LangChain 提供内置中间件，用于在执行敏感操作前要求人工审批。这是最有效的高风险决策防护措施之一。
+LangChain 提供内置中间件，要求在执行敏感操作前获得人工批准。这是高风险决策最有效的防护措施之一。
 
-人工介入中间件适用于以下场景：金融交易和转账、删除或修改生产数据、向外部各方发送通信，以及任何具有重大业务影响的操作。
+人工介入中间件适用于金融交易和转账、删除或修改生产数据、向外部方发送通信，以及任何具有重大业务影响的操作。
 
 :::python
 ```python
@@ -257,17 +256,19 @@ result = await agent.invoke(
   config  // Same thread ID to resume the paused conversation
 );
 ```
+:::
+
 <Tip>
-    有关实施审批工作流程的完整详细信息，请参阅[人工介入文档](/oss/langchain/human-in-the-loop)。
+    请参阅 [人工介入文档](/oss/langchain/human-in-the-loop) 了解实施审批工作流的完整详情。
 </Tip>
 
 ## 自定义防护栏
 
-对于更复杂的防护栏，您可以创建在代理执行之前或之后运行的自定义中间件。这让您可以完全控制验证逻辑、内容过滤和安全检查。
+对于更复杂的防护栏，您可以创建自定义中间件，在代理执行之前或之后运行。这使您能够完全控制验证逻辑、内容过滤和安全检查。
 
 ### 代理前防护栏
 
-使用"代理前"钩子在每次调用的开始时验证一次请求。这对于会话级检查（如身份验证、速率限制或在处理开始之前阻止不当请求）非常有用。
+使用"代理前"钩子在每次调用的开始时验证一次请求。这对于会话级检查（如身份验证、速率限制或在任何处理开始前阻止不当请求）很有用。
 
 :::python
 
@@ -447,9 +448,9 @@ const result = await agent.invoke({
 ```
 :::
 
-### 代理后护栏
+### 代理后防护栏
 
-使用"代理后"钩子在返回用户之前验证一次最终输出。这对于基于模型的安全检查、质量验证或对完整代理响应的最终合规扫描非常有用。
+使用"代理后"钩子在返回给用户之前验证一次最终输出。这对于基于模型的安全检查、质量验证或对完整代理响应的最终合规扫描很有用。
 
 :::python
 
@@ -621,13 +622,11 @@ const result = await agent.invoke({
 ```
 :::
 
-### 组合多个护栏
+### 组合多个防护栏
 
-你可以通过将它们添加到中间件数组中来堆叠多个护栏。它们按顺序执行，允许你构建分层保护：
+您可以通过将多个防护栏添加到中间件数组来堆叠它们。它们按顺序执行，允许您构建分层保护：
 
 :::python
-
-:::
 ```python
 from langchain.agents import create_agent
 from langchain.agents.middleware import PIIMiddleware, HumanInTheLoopMiddleware
@@ -692,7 +691,7 @@ const agent = createAgent({
 
 ## 其他资源
 
-- [中间件文档](/oss/langchain/middleware) - 自定义中间件的完整指南
-- [中间件 API 参考](https://reference.langchain.com/python/langchain/middleware/) - 自定义中间件的完整指南
-- [人在环中](/oss/langchain/human-in-the-loop) - 为敏感操作添加人工审核
+- [中间件文档](/oss/langchain/middleware) - 自定义中间件完整指南
+- [中间件 API 参考](https://reference.langchain.com/python/langchain/middleware/) - 自定义中间件完整指南
+- [Human-in-the-loop](/oss/langchain/human-in-the-loop) - 为敏感操作添加人工审查
 - [测试代理](/oss/langchain/test/) - 测试安全机制的策略

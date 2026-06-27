@@ -1,12 +1,13 @@
 ---
 title: Markdown 消息
-description: 将 LLM 响应渲染为富文本格式的 Markdown，并提供完整的流式支持
+description: 将 LLM 响应渲染为格式丰富的 Markdown，并提供完整的流式支持
 ---
 
-大语言模型（LLM）天然会产生 Markdown 格式的文本，包括标题、列表、代码块、
-表格和内联格式。如果将这些内容渲染为纯文本，会浪费模型所提供的结构信息。
-本模式向你展示如何解析和渲染模型以流式方式输出的 Markdown 内容，
-覆盖所有主流前端框架。
+LLM 自然生成 Markdown 格式的文本，包括标题、列表、代码块、
+表格和内联格式。将此内容渲染为纯文本会浪费模型
+提供的结构。本模式向您展示如何解析和渲染
+从 agent 流式传输时实时渲染 Markdown，涵盖所有主流前端
+frameworks.
 
 import { PatternEmbed } from "/snippets/pattern-embed.jsx"
 import UseStreamTypeInference from '/snippets/oss/use-stream-type-inference.mdx';
@@ -15,21 +16,24 @@ import UseStreamTypeInference from '/snippets/oss/use-stream-type-inference.mdx'
 
 ## Markdown 渲染的工作原理
 
-渲染管道有三个步骤：
+渲染管线包含三个步骤：
 
-1. **接收：** @[`useStream`] 将流式文本累积到每个 AI 消息的 `msg.text` 中，随着新 token 的到达进行响应式更新。
-2. **解析：** Markdown 解析器将原始文本转换为 HTML（或 React 元素树）。这在每次更新时运行，但对于聊天长度的内容来说足够快（5 KB 消息 < 5ms）。
-3. **渲染：** 解析后的输出被渲染到 DOM 中。React 使用虚拟 DOM diffing；Vue 和 Svelte 使用 `v-html` / `{@html}` 与经过 sanitized 的 HTML。
+1. **Receive:** @[`useStream`] 将流式文本累积到 `msg.text` on
+   每个 AI 消息中，随着新 token 的到达而响应式更新。
+2. **Parse:** Markdown 解析器将原始文本转换为 HTML（或 React
+   元素树）。这在每次更新时运行，但对于聊天长度的
+   内容来说速度足够快（5 KB 消息 < 5ms）。
+3. **Render:** 解析后的输出被渲染到 DOM。React 使用虚拟
+   DOM diffing；Vue 和 Svelte 使用 `v-html` / `{@html}` 和经过净化的 HTML。
 
 ## 设置 `useStream`
 
-Markdown 模式使用一个简单的聊天代理，无需特殊配置。将 @[`useStream`] 与你的代理 URL 和助手 ID 连接起来。
+Markdown 模式使用简单的聊天 agent，无需特殊配置。
+将 @[`useStream`] 与您的 agent URL 和 assistant ID 连接。
 
 <UseStreamTypeInference />
 
 <CodeGroup>
-
-</CodeGroup>
 ```tsx React
 import { useStream } from "@langchain/react";
 import { AIMessage, HumanMessage } from "langchain";
@@ -129,18 +133,20 @@ export class ChatComponent {
 
 ## 选择 Markdown 库
 
-每个框架都有其天然选择的 Markdown 渲染方案：
+每个框架都有其主流的 Markdown 渲染选择：
 
 | 框架 | 库 | 输出 | 原因 |
 | --- | --- | --- | --- |
-| React | `react-markdown` + `remark-gfm` | React 元素 | 组件化、虚拟 DOM 差分、无需 `dangerouslySetInnerHTML` |
-| Vue | `marked` + `dompurify` | 通过 `v-html` 渲染净化后的 HTML | 轻量、快速、内置 GFM |
-| Svelte | `marked` + `dompurify` | 通过 `{@html}` 渲染净化后的 HTML | 与 Vue 相同，API 一致 |
-| Angular | `marked` + `dompurify` | 通过 `[innerHTML]` 渲染净化后的 HTML | 与 Vue/Svelte 相同 |
+| React | `react-markdown` + `remark-gfm` | React 元素 | 基于组件、虚拟 DOM diffing，无需 `dangerouslySetInnerHTML` |
+| Vue | `marked` + `dompurify` | 通过净化后的 HTML `v-html` | 轻量级、快速、内置 GFM |
+| Svelte | `marked` + `dompurify` | 通过净化后的 HTML `{@html}` | 与 Vue 相同，一致的 API |
+| Angular | `marked` + `dompurify` | 通过净化后的 HTML `[innerHTML]` | Same as Vue/Svelte |
 
 <Tip>
-React 的 `react-markdown` 会将 Markdown 直接转换为 React 元素，因此不需要 HTML 净化。不涉及 `dangerouslySetInnerHTML`。
-对于 Vue、Svelte 和 Angular，在渲染前务必使用 `dompurify` 对解析后的 HTML 进行净化。
+React 的 `react-markdown` 直接将 Markdown 转换为 React 元素，因此
+不需要 HTML 净化。没有 `dangerouslySetInnerHTML` involved.
+对于 Vue、Svelte 和 Angular，请务必使用 `dompurify`
+在渲染前净化解析后的 HTML。
 </Tip>
 
 ## 构建 Markdown 组件
@@ -235,13 +241,14 @@ export class MarkdownComponent {
 ```
 </CodeGroup>
 
-## 清理 HTML 输出
+## 净化 HTML 输出
 
-将解析后的 markdown 渲染为原始 HTML（`v-html`、`{@html}`、`[innerHTML]`）时，
-必须清理输出以防止跨站脚本攻击（XSS）。LLM
-响应可能包含任意文本，包括 markdown 解析器可以转换为可执行 HTML 的标记。
+当将解析后的 Markdown 作为原始 HTML 渲染时（`v-html`, `{@html}`, `[innerHTML]`),
+您必须净化输出以防止跨站脚本攻击（XSS）。LLM
+响应可能包含任意文本，包括 Markdown 解析器
+可能转换为可执行 HTML 的标记。
 
-使用 `dompurify` 剥离危险元素：
+使用 `dompurify` 来剥离危险元素：
 
 ```ts
 import DOMPurify from "dompurify";
@@ -249,34 +256,52 @@ import DOMPurify from "dompurify";
 const safeHtml = DOMPurify.sanitize(rawHtml);
 ```
 
-DOMPurify 会移除 `<script>` 标签、`onclick` 属性、`javascript:` URL 以及其他 XSS 向量，同时保留安全的 Markdown 输出，如标题、列表、代码块、表格和链接。
+DOMPurify 会移除 `<script>` 标签、 `onclick` 属性、 `javascript:` URL、
+和其他 XSS 攻击向量，同时保留安全的 markdown 输出，如标题、
+列表、代码块、表格和链接。
 
 <Note>
-React 的 `react-markdown` 不需要 `dompurify`，因为它直接生成 React 元素，不涉及原始 HTML 注入。
+React 的 `react-markdown` 不需要 `dompurify` 因为它直接生成 React
+元素，不涉及原始 HTML 注入。
 </Note>
 
-## 流式渲染注意事项
+## 流式传输注意事项
 
-`useStream` 在每个 token 到达时响应式更新 `msg.text`。Markdown 组件在每次更新时都会重新解析。对于典型的聊天消息，这已经足够高效：
+`useStream` 更新 `msg.text` 响应式地随着每个 token 到达而更新。markdown
+组件在每次更新时都会重新解析。对于典型的聊天消息，这
+performant:
 
-- `marked` 的解析速度约为 1 MB/s。5 KB 的消息耗时 < 5ms
-- `react-markdown` + remark 管线对聊天长度的内容同样快速
-- 浏览器布局引擎能高效处理 DOM 更新
+- `marked` parses at ~1 MB/s. A 5 KB message takes < 5ms
+- `react-markdown` + remark 处理管道对于聊天长度的内容同样快速
+- 浏览器的布局引擎会高效地处理 DOM 更新
 
-对于非常长的响应 (> 50 KB)，建议采用以下优化策略：
+对于非常长的响应（> 50 KB），请考虑以下优化：
 
-- **节流渲染：** 使用 `requestAnimationFrame` 以 60fps 的频率批量更新，而非每个 token 都重新渲染
-- **增量解析：** 仅解析新内容并追加到已渲染的缓冲区（高级特性，通常聊天界面不需要）
+- **节流渲染：** 使用 `requestAnimationFrame` 在 60fps 下批量更新
+  而不是在每个 token 时都重新渲染
+- **增量解析：** 只解析新内容并追加到已渲染的
+  缓冲区（高级用法，通常聊天 UI 不需要）
 
 <Info>
-对于大多数聊天应用，在每个 token 到来时重新解析完整消息已足够高效。仅当观察到滚动卡顿或长消息出现丢帧时，才需要考虑优化。
+对于大多数聊天应用，在每个 token 时重新解析完整消息的简单方法
+已经足够。只有在观察到很长的消息出现滚动卡顿或
+掉帧时再进行优化。
 </Info>
 
 ## 最佳实践
 
-- **始终进行清理：** 使用 `v-html`、`{@html}` 或 `[innerHTML]` 时，务必将解析后的输出通过 `dompurify` 处理。绝不要信任来自 LLM 输出的 Markdown 解析器生成的原始 HTML。
-- **启用 GFM：** GitHub Flavored Markdown 支持表格、删除线、任务列表和自动链接。这些特性在 LLM 输出中很常见。
-- **处理空内容：** 在解析前检查空字符串，避免渲染空容器。
-- **使用 `breaks: true`：** 开启换行符转换，使 LLM 输出中的单个换行符渲染为 `<br>` 而非被忽略。LLM 常使用单个换行符来分隔内容。
-- **为聊天场景设计样式：** 使用适合聊天气泡的紧凑边距和尺寸，而非全幅文章布局。
-- **测试富内容：** 验证标题、多层列表、长行代码块、宽表格和引用块的渲染效果，以发现溢出或布局问题。
+- **始终进行清理：** 在使用 `v-html`, `{@html}`, or `[innerHTML]`,
+  时，始终将解析后的输出通过 `dompurify`处理。永远不要信任来自
+  markdown 解析器（处理 LLM 输出）的原始 HTML。
+- **启用 GFM：** GitHub 风格 Markdown 添加了表格、删除线、任务
+  列表和自动链接。这些功能是 LLM 常用的。
+- **处理空内容：** 在解析前检查空字符串，以避免
+  渲染空容器。
+- **使用 `breaks: true`:** 启用换行符转换，使 LLM 输出中的单个换行符
+  渲染为 `<br>` 而不是被忽略。LLM 经常使用单个
+  换行符来实现视觉分隔。
+- **聊天场景的样式：** 使用紧凑的边距和适合
+  聊天气泡的尺寸，而非全宽文章布局。
+- **使用丰富内容测试：** 验证标题、嵌套列表、
+  长行代码块、宽表格和引用块的渲染，以发现溢出
+  或布局问题。

@@ -1,20 +1,20 @@
 ---
-title: 让对话变为私有
-sidebarTitle: 让对话变为私有
+title: 使对话私密
+sidebarTitle: 使对话私密
 ---
-在本教程中，您将扩展[上一教程中创建的聊天机器人](/langsmith/set-up-custom-auth)，为每个用户提供专属的私密对话。您将添加[资源级访问控制](/langsmith/auth#single-owner-resources)，使用户只能看到自己的线程。
+在本教程中，您将扩展 [在上一教程中创建的聊天机器人](/langsmith/set-up-custom-auth) 为每个用户提供自己的私密对话。您将添加 [资源级访问控制](/langsmith/auth#single-owner-resources) 使用户只能看到自己的线程。
 
-![Authorization flow: after authentication, an authorization handler tags each resource with owner=user id and returns a filter so users only see their own threads.](/langsmith/images/authorization.png)
+![授权流程：认证后，授权处理程序用 owner=user id 标记每个资源，并返回过滤器，使用户只能看到自己的线程。](/langsmith/images/authorization.png)
 
-## 前置条件
+## 前提条件
 
-在开始本教程之前，请确保您已成功运行[第一个教程中的机器人](/langsmith/set-up-custom-auth)。
+在开始本教程之前，请确保您已具备 [第一个教程中的机器人](/langsmith/set-up-custom-auth) 正常运行无错误。
 
 ## 1. 添加资源授权
 
-回想一下，在上一教程中，@[`Auth`][Auth] 对象允许您注册一个[身份验证函数](/langsmith/auth#authentication)，LangSmith 使用该函数来验证传入请求中的 bearer 令牌。现在您将使用它来注册一个 **授权** 处理程序。
+回顾上一教程，@[`Auth`][Auth] 对象允许您注册一个 [认证函数](/langsmith/auth#authentication)，LangSmith 使用它来验证传入请求中的 bearer token。现在您将使用它来注册一个 **授权** handler.
 
-授权处理程序是在身份验证**成功之后**运行的函数。这些处理程序可以为资源添加[元数据](/langsmith/auth#filter-operations)（例如资源的所有者），并过滤每个用户可以查看的内容。
+授权处理程序是运行的函数 **在** 认证成功之后。这些处理程序可以添加 [元数据](/langsmith/auth#filter-operations) 到资源上（如资源的所有者），并过滤每个用户可以查看的内容。
 
 更新您的 `src/security/auth.py` 并添加一个授权处理程序，使其在每个请求上运行：
 
@@ -105,19 +105,19 @@ async def add_owner(
     return filters
 ```
 
-处理程序接收两个参数：
+该处理程序接收两个参数：
 
-1. `ctx` (@[AuthContext])：包含当前 `user` 的信息、用户的 `permissions`、被访问的 `resource`（"threads"、"crons"、"assistants"）以及正在执行的 `action`（"create"、"read"、"update"、"delete"、"search"、"create_run"）
-2. `value`（`dict`）：正在被创建或访问的数据。该字典的内容取决于被访问的资源和操作。请参阅下方的[添加作用域授权处理程序](#scoped-authorization)获取更细粒度访问控制的信息。
+1. `ctx` (@[AuthContext])：包含当前 `user`、用户的 `permissions`、 `resource` （"threads"、"crons"、"assistants"）以及 `action` 正在执行的操作（"create"、"read"、"update"、"delete"、"search"、"create_run"）
+2. `value` (`dict`：正在创建或访问的数据。此字典的内容取决于所访问的资源类型和操作。请参阅下面的 [添加作用域授权处理程序](#scoped-authorization) 以获取有关如何实现更精确的访问控制的信息。
 
 请注意，简单的处理程序执行两个操作：
 
 1. 将用户的 ID 添加到资源的元数据中。
 2. 返回一个元数据过滤器，使用户只能看到自己拥有的资源。
 
-## 2. 测试私人对话
+## 2. 测试私密对话
 
-测试您的授权。如果设置正确，您将看到所有 ✅ 消息。请确保开发服务器正在运行（运行 `langgraph dev`）：
+测试您的授权。如果您正确设置了所有内容，您将看到所有 ✅ 消息。请确保您的开发服务器正在运行（运行 `langgraph dev`):
 
 ```python
 from langgraph_sdk import get_client
@@ -170,9 +170,7 @@ print(f"✅ Alice sees {len(alice_threads)} thread")
 print(f"✅ Bob sees {len(bob_threads)} thread")
 ```
 
-<fragment>
-
-</fragment>
+Output:
 
 ```bash
 ✅ Alice created assistant: fc50fb08-78da-45a9-93cc-1d3928a3fc37
@@ -186,16 +184,16 @@ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/St
 
 这意味着：
 
-1. 每个用户可以创建并在自己的线程中聊天
-2. 用户之间无法看到彼此的线程
-3. 列出线程时只会显示你自己的
+1. 每个用户可以在自己的线程中创建和聊天
+2. 用户无法看到彼此的线程
+3. 列出线程只显示您自己的
 
 <a id="scoped-authorization"></a>
 ## 3. 添加作用域授权处理程序
 
-宽泛的 `@auth.on` 处理程序会匹配所有[授权事件](/langsmith/auth#supported-resources)。这很简洁，但也意味着 `value` 字典的内容没有良好的作用域划分，相同的用户级访问控制被应用到每个资源上。如果你想更细粒度地控制，也可以对资源上的特定操作进行控制。
+宽泛的 `@auth.on` 处理程序与所有 [授权事件](/langsmith/auth#supported-resources)相匹配。这很简洁，但这意味着 `value` 字典的作用域不够细致，相同的用户级访问控制被应用于每个资源。如果您想要更细粒度的控制，也可以对特定资源操作进行控制。
 
-更新 `src/security/auth.py` 以添加特定资源类型的处理程序：
+更新 `src/security/auth.py` 以为特定资源类型添加处理程序：
 
 ```python
 # Keep our previous handlers...
@@ -266,17 +264,17 @@ async def authorize_store(ctx: Auth.types.AuthContext, value: dict):
     assert namespace[0] == ctx.user.identity, "Not authorized"
 ```
 
-请注意，你现在不再是单一的全域处理程序，而是为以下内容提供了特定的处理程序：
+请注意，您现在拥有针对以下内容的特定处理程序，而不是一个全局处理程序：
 
 1. 创建线程
 2. 读取线程
 3. 访问助手
 
-前三个对应每个资源上的特定 **操作**（请参阅[资源操作](/langsmith/auth#resource-specific-handlers)），而最后两个（`@auth.on.assistants` 和 `@auth.on.store`）对应 `assistants` 和 `store` 资源上的_任何_操作。对于每个请求，LangGraph 将运行最具体的、与被访问的资源和方法相匹配的处理程序。这意味着上述四个处理程序将运行，而不是范围更广的 "`@auth.on`" 处理程序。
+前三个对应特定的 **操作** 每个资源（参见 [资源操作](/langsmith/auth#resource-specific-handlers)），而最后两个（`@auth.on.assistants` 和 `@auth.on.store`）匹配 _任何_ 资源上的操作 `assistants` 和 `store` 资源上的任何操作。对于每个请求，LangGraph 将运行最具体的匹配处理程序。这意味着上述四个处理程序将优先执行，而不是使用更广泛的作用域的"`@auth.on`"处理程序。
 
-Store 授权的运作方式与 threads 和 assistants 不同。有关 store 隔离模式和权衡的更多信息，请参阅[为每个用户隔离 store](/langsmith/store-auth)。
+存储授权的工作方式与threads和assistants不同。关于存储隔离模式和权衡，参见 [为每个用户隔离存储](/langsmith/store-auth).
 
-尝试将以下测试代码添加到你的测试文件中：
+尝试将以下测试代码添加到测试文件中：
 
 ```python
 # ... Same as before
@@ -299,9 +297,7 @@ alice_thread = await alice.threads.create()
 print(f"✅ Alice created thread: {alice_thread['thread_id']}")
 ```
 
-<fragment>
-
-</fragment>
+Output:
 
 ```bash
 ✅ Alice created thread: dcea5cd8-eb70-4a01-a4b6-643b14e8f754
@@ -315,16 +311,12 @@ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/St
 ✅ Alice correctly denied access to searching assistants:
 ```
 
-<fragment>
+恭喜！您已构建了一个聊天机器人，每个用户都能进行私人对话。虽然此系统使用简单的基于令牌的身份验证，但这些授权模式可与任何真实身份验证系统配合使用。在下一个教程中，您将使用 OAuth2 将测试用户替换为真实用户账户。
 
-恭喜！您已经构建了一个聊天机器人，其中每个用户都有自己专属的私密对话。虽然此系统使用简单的基于令牌的身份验证，但这些授权模式可以与任何真实身份验证系统的实现配合使用。在下一个教程中，您将使用 OAuth2 将测试用户替换为真实用户账户。
+## 后续步骤
 
-## 下一步
+既然您可以控制对资源的访问，您可能想要：
 
-现在您已经可以控制对资源的访问，您可能想要：
-
-1. 继续[连接身份验证提供商](/langsmith/add-auth-server)以添加真实用户账户。
-2. 阅读更多关于[授权模式](/langsmith/auth#authorization)的信息。
+1. 继续进行 [连接身份验证提供程序](/langsmith/add-auth-server) 以添加真实用户账户。
+2. 了解更多关于 [授权模式](/langsmith/auth#authorization).
 3. 查看 @[API 参考][Auth] 了解本教程中使用的接口和方法的详细信息。
-
-</fragment>

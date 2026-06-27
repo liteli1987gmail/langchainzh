@@ -1,12 +1,12 @@
 ---
-title: 使用 OpenTelemetry Gateway 架构脱敏敏感数据
+title: 使用 OpenTelemetry 网关架构脱敏敏感数据
 sidebarTitle: 使用 OTEL 脱敏敏感数据
-description: 使用 OpenTelemetry 收集器在跟踪数据到达 LangSmith 之前对其中的敏感数据进行脱敏处理。
+description: 使用 OpenTelemetry 收集器在追踪数据到达 LangSmith 之前对其进行脱敏处理。
 ---
 
-[LangChain](/langsmith/trace-with-langchain) 和 [LangGraph](/langsmith/trace-with-langgraph) 应用支持[基于 OpenTelemetry 的跟踪](/langsmith/trace-with-opentelemetry)。与其直接将跟踪数据发送到 LangSmith，不如将它们路由到你控制的 OpenTelemetry 收集器中，应用脱敏规则来移除敏感字段，然后将清理后的跟踪数据转发到 LangSmith。
+[LangChain](/langsmith/trace-with-langchain) 和 [LangGraph](/langsmith/trace-with-langgraph) 应用程序支持 [基于 OpenTelemetry 的追踪](/langsmith/trace-with-opentelemetry)。您可以将追踪数据通过您控制的 OpenTelemetry 收集器进行路由，应用脱敏规则去除敏感字段，然后将清理后的追踪数据转发到 LangSmith，而无需直接发送到 LangSmith。
 
-跟踪数据通过 OTLP/HTTP 从你的应用流向收集器。收集器运行一个转换处理器，在将清理后的跨度转发到 LangSmith API 之前，对其进行脱敏处理，移除敏感的跨度属性信息（例如提示词输入和模型输出）。
+Traces flow from your application to the collector over OTLP/HTTP. The collector runs a transform processor that redacts sensitive span attributes, such as prompt inputs and model completions, before forwarding the sanitized spans to the LangSmith API.
 
 ```mermaid
 flowchart TD
@@ -27,7 +27,7 @@ flowchart TD
 
 ## 前提条件
 
-以下两种方法均需要设置以下环境变量。请将 `OTEL_EXPORTER_OTLP_ENDPOINT` 设置为你的收集器的地址：
+以下两种方法都需要以下环境变量。将 `OTEL_EXPORTER_OTLP_ENDPOINT` 设置为您的收集器地址：
 
 ```bash
 LANGSMITH_OTEL_ENABLED="true"
@@ -37,11 +37,11 @@ LANGSMITH_PROJECT="my-project"
 OTEL_EXPORTER_OTLP_ENDPOINT="http://<my-otel-collector-endpoint>:4318"
 ```
 
+有关 `LANGSMITH_PROJECT`的更多信息，请参阅 [将追踪数据记录到特定项目](/langsmith/log-traces-to-project).
+
 ## 配置收集器
 
-有关 `LANGSMITH_PROJECT` 的更多信息，请参阅[日志追踪到特定项目](/langsmith/log-traces-to-project)。
-
-两种方法都需要一个 OpenTelemetry 收集器作为您的应用程序和 LangSmith 之间的中间环节。以下配置设置了一个在端口 `4318` 上的 OTLP 接收器、一个转换处理器（用于删除 `gen_ai.prompt` 和 `gen_ai.completion` span 属性），以及一个将清理后的追踪转发到 LangSmith API 的导出器：
+两种方法都需要一个 OpenTelemetry 收集器作为您的应用程序和 LangSmith 之间的中介。以下配置设置了一个在端口 `4318`上的 OTLP 接收器、一个用于脱敏 `gen_ai.prompt` 和 `gen_ai.completion` span 属性的转换处理器，以及一个将清理后的追踪数据转发到 LangSmith API 的导出器：
 
 ```yaml
 receivers:
@@ -78,7 +78,7 @@ service:
 
 ## 使用 LangChain 或 LangGraph 进行追踪
 
-如果您的应用程序已经使用 [LangChain](/langsmith/trace-with-langchain) 或 [LangGraph](/langsmith/trace-with-langgraph)，请使用此方法。追踪集成会根据您的环境变量自动处理 span 的创建，因此无需额外的插桩代码：
+如果您的应用程序已经使用 [LangChain](/langsmith/trace-with-langchain) or [LangGraph](/langsmith/trace-with-langgraph)，请使用此方法。追踪集成会根据您的环境变量自动处理 span 创建，因此无需额外的插桩代码：
 
 ```python
 from langchain.agents import create_agent
@@ -113,7 +113,7 @@ print(result["messages"][-1].content)
 
 ## 直接使用 OpenTelemetry SDK 进行追踪
 
-如果您需要对 tracer provider 和 exporter 进行编程控制，请使用此方法。例如，在运行时设置每个请求的项目名称或配置自定义标头。您在代码中显式配置 provider，而不是仅依赖环境变量：
+如果您需要对追踪提供程序和导出器进行编程控制，请使用此方法。例如，在运行时设置每个请求的项目名称或配置自定义标头。您需要在代码中显式配置提供程序，而不是仅依赖环境变量：
 
 ```python
 import os
@@ -156,5 +156,5 @@ provider.shutdown()
 ```
 
 <Note>
-如果您希望在不使用收集器的情况下隐藏敏感数据，请参阅[防止在追踪中记录敏感数据](/langsmith/mask-inputs-outputs)。
+如果您希望通过收集器路由来脱敏敏感数据，请参阅 [防止在追踪数据中记录敏感数据](/langsmith/mask-inputs-outputs).
 </Note>

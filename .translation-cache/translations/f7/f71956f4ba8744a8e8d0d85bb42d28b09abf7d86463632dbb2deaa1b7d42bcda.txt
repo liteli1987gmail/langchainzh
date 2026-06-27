@@ -10,18 +10,18 @@ import VectorstoreTabsJS from '/snippets/vectorstore-tabs-js.mdx';
 
 ## 概述
 
-本教程将帮助您熟悉 LangChain 的[嵌入](/oss/integrations/embeddings)和[向量存储](/oss/integrations/vectorstores)抽象。这些抽象旨在支持从（向量）数据库和其他来源检索数据，以便与 LLM 工作流集成。它们对于以下应用程序很重要：在模型推理过程中获取数据以进行推理（如检索增强生成或 [RAG](/oss/langchain/retrieval)）。
+本教程将帮助您熟悉 LangChain 的 [嵌入](/oss/integrations/embeddings) 和 [向量存储](/oss/integrations/vectorstores) 抽象。这些抽象旨在支持从（向量）数据库和其他来源检索数据，以便与 LLM 工作流程集成。它们对于在模型推理过程中获取数据进行推理的应用程序非常重要，例如检索增强生成的情况，或 [RAG](/oss/langchain/retrieval).
 
-我们将在此构建一个基于 PDF 文档的搜索引擎。这将使我们能够检索与输入查询相似的 PDF 段落。本指南还包括基于搜索引擎的最小化 RAG 实现。
+在这里，我们将在 PDF 文档上构建一个搜索引擎。这将允许我们检索与输入查询相似的 PDF 段落。该指南还包括在搜索引擎之上的最小 RAG 实现。
 
 ### 概念
 
-本指南重点介绍文本数据检索。我们将涵盖以下概念：
+本指南专注于文本数据的检索。我们将涵盖以下概念：
 
 - [文档](https://reference.langchain.com/python/langchain-core/documents);
 - [文本分割器](/oss/integrations/splitters);
 - [嵌入](/oss/integrations/embeddings);
-- [向量存储](/oss/integrations/vectorstores)和[检索器](/oss/integrations/retrievers)。
+- [向量存储](/oss/integrations/vectorstores) 和 [检索器](/oss/integrations/retrievers).
 
 ## 设置
 
@@ -29,11 +29,9 @@ import VectorstoreTabsJS from '/snippets/vectorstore-tabs-js.mdx';
 
 :::python
 
-本教程使用 `pypdf` 包读取 PDF：
+本教程使用以下方式读取 PDF `pypdf` package:
 
 <CodeGroup>
-
-</CodeGroup>
 ```bash pip
 pip install pypdf
 ```
@@ -49,7 +47,7 @@ uv add pypdf
 
 :::js
 
-本指南使用 `pdf-parse` 包来读取 PDF 文件：
+本指南使用以下方式读取 PDF `pdf-parse` package:
 
 <CodeGroup>
 ```bash npm
@@ -65,13 +63,15 @@ pnpm add pdf-parse
 
 :::
 
-更多详细信息，请参阅我们的[安装指南](/oss/langchain/install)。
+更多详情，请参阅我们的 [安装指南](/oss/langchain/install).
 
 ### LangSmith
 
-您使用 LangChain 构建的许多应用程序将包含多个步骤以及多次 LLM 调用。随着这些应用程序变得越来越复杂，能够检查链或代理内部正在发生的事情变得至关重要。最好的方法是使用 [LangSmith](https://smith.langchain.com)。
+您使用 LangChain 构建的许多应用程序将包含多个步骤和多次 LLM 调用。
+随着这些应用程序变得越来越复杂，能够检查链或智能体内部发生的情况变得至关重要。
+做到这一点的最佳方式是使用 [LangSmith](https://smith.langchain.com).
 
-在上述链接注册后，请确保设置环境变量以开始记录跟踪：
+在上述链接注册后，请务必设置您的环境变量以开始记录跟踪：
 
 ```shell
 export LANGSMITH_TRACING="true"
@@ -80,9 +80,7 @@ export LANGSMITH_API_KEY="..."
 
 :::python
 
-或者，如果在 notebook 中，你可以用以下方式设置它们：
-
-:::
+或者，如果在笔记本环境中，您可以通过以下方式设置它们：
 
 ```python
 import getpass
@@ -96,22 +94,22 @@ os.environ["LANGSMITH_API_KEY"] = getpass.getpass()
 
 ## 1. 文档
 
-LangChain 实现了一个 @[Document] 抽象，旨在表示一个文本单元及其关联的元数据。它有三个属性：
+LangChain 实现了 @[Document] 抽象，旨在表示一个文本单元及其关联的元数据。它具有三个属性：
 
 :::python
-- `page_content`：一个表示内容的字符串；
-- `metadata`：一个包含任意元数据的字典；
+- `page_content`：表示内容的字符串；
+- `metadata`：包含任意元数据的字典；
 - `id`：（可选）文档的字符串标识符。
 :::
 :::js
-- `pageContent`：一个表示内容的字符串；
-- `metadata`：一个包含任意元数据的字典；
+- `pageContent`：表示内容的字符串；
+- `metadata`：包含任意元数据的字典；
 - `id`：（可选）文档的字符串标识符。
 :::
 
-`metadata` 属性可以捕获关于文档来源、与其他文档的关系以及其他信息。请注意，单独的 @[`Document`] 对象通常表示一个更大文档的块。
+ `metadata` 属性可以捕获有关文档来源、与其他文档的关系以及其他信息。请注意，单独的 @[`Document`] 对象通常代表较大文档的一个块。
 
-我们可以根据需要生成示例文档：
+我们可以在需要时生成示例文档：
 
 :::python
 ```python
@@ -147,11 +145,11 @@ const documents = [
 ```
 :::
 
-## 2. 向量化
+## 2. 嵌入
 
-向量搜索是一种存储和搜索非结构化数据（如非结构化文本）的常用方法。其核心思想是存储与文本相关联的数值向量。给定一个查询，我们可以将其[嵌入](/oss/integrations/embeddings)为相同维度的向量，并使用向量相似度度量（如余弦相似度）来识别相关文本。
+向量搜索是存储和搜索非结构化数据（如非结构化文本）的常用方法。其思想是存储与文本关联的数值向量。给定一个查询，我们可以 [嵌入](/oss/integrations/embeddings) 将其转换为相同维度的向量，并使用向量相似度指标（如余弦相似度）来识别相关文本。
 
-LangChain 支持来自[众多提供商](/oss/integrations/embeddings/)的嵌入模型。这些模型指定了文本应如何转换为数值向量。让我们选择一个模型：
+LangChain 支持来自 [数十个提供商](/oss/integrations/embeddings/)的嵌入模型。这些模型指定了如何将文本转换为数值向量。让我们选择一个模型：
 
 :::python
 <EmbeddingsTabsPy />
@@ -168,9 +166,6 @@ print(vector_1[:10])
 :::js
 <EmbeddingsTabsJS />
 
-
-</fragment>
-
 ```typescript
 const vector1 = await embeddings.embedQuery(documents[0].pageContent);
 const vector2 = await embeddings.embedQuery(documents[1].pageContent);
@@ -186,7 +181,26 @@ Generated vectors of length 1536
 
 [-0.008586574345827103, -0.03341241180896759, -0.008936782367527485, -0.0036674530711025, 0.010564599186182022, 0.009598285891115665, -0.028587326407432556, -0.015824200585484505, 0.0030416189692914486, -0.012899317778646946]
 ```
+有了用于生成文本嵌入的模型后，我们接下来可以将它们存储在支持高效相似度搜索的特殊数据结构中。
 
+## 3. 向量存储
+
+LangChain @[VectorStore] 对象包含用于添加文本和 @[`Document`] 对象到存储中的方法，以及使用各种相似度指标进行查询的方法。它们通常使用 [嵌入](/oss/integrations/embeddings) 模型进行初始化，这些模型决定了如何将文本数据转换为数值向量。
+
+LangChain 包含一套 [集成](/oss/integrations/vectorstores) ，可对接不同的向量存储技术。某些向量存储由提供商托管，需要特定的凭证才能使用；某些可在独立的基础设施中运行，既可在本地运行，也可通过第三方运行；还有一些可在内存中运行，适用于轻量级工作负载。让我们选择一个向量存储：
+
+:::python
+<VectorstoreTabsPy />
+:::
+:::js
+<VectorstoreTabsJS />
+:::
+
+### 向向量存储中填充数据
+
+让我们用 PDF 中的内容填充存储。 [这里是一份示例 PDF](https://github.com/langchain-ai/langchain/blob/v0.3/docs/docs/example_data/nke-10k-2023.pdf) ——耐克公司2023年的10-K文件。我们将使用一个小工具直接读取PDF，并将其分割成较小的块后再建立索引。
+
+:::python
 ```python
 import pypdf
 from langchain_core.documents import Document
@@ -244,12 +258,10 @@ console.log(docs.length);
 107
 ```
 
-页面可能过于粗粒度，不适合检索和下游问答。进一步拆分有助于确保文档相关部分的含义不会被周围文本"冲淡"。我们使用 [`RecursiveCharacterTextSplitter`](/oss/integrations/splitters)，它使用常见的分隔符（如换行符）递归拆分文档，直到每个块达到适当的大小。这是用于通用文本用例的推荐文本拆分器。
+一页可能对于检索和下游问答来说过于粗粒度。进一步分割有助于确保文档相关部分的含义不会因周围文本而被"稀释"。我们使用 [`RecursiveCharacterTextSplitter`](/oss/integrations/splitters)，它使用常见的分隔符（如换行符）递归分割文档，直到每个块达到合适的大小。这是针对通用文本用例推荐的文本分割器。
 
 :::python
-我们设置 `add_start_index=True`，以便每个拆分后的 Document 在原始 Document 中开始的字符索引作为元数据属性 `start_index` 被保留。
-
-:::
+我们设置 `add_start_index=True` 以便保留每个分割 Document 在初始 Document 中的起始字符索引，作为元数据属性 `start_index`.
 
 ```python
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -281,7 +293,7 @@ console.log(allSplits.length);
 516
 ```
 
-我们现在可以将块索引到向量存储中。
+我们现在可以将这些块索引到向量存储中。
 
 :::python
 ```python
@@ -294,25 +306,25 @@ await vectorStore.addDocuments(allSplits);
 ```
 :::
 
-请注意，大多数向量存储实现都允许您连接现有的向量存储——例如，通过提供客户端、索引名称或其他信息。请参阅特定[集成](/oss/integrations/vectorstores)的文档以了解更多详情。
+请注意，大多数向量存储实现都允许您连接到现有的向量存储——例如，通过提供客户端、索引名称或其他信息。请参阅特定 [集成](/oss/integrations/vectorstores) 的文档以了解更多详情。
 
 :::python
 
-一旦我们实例化了一个包含文档的 @[`VectorStore`]，我们就可以查询它。@[VectorStore] 包含以下查询方法：
+一旦我们实例化了一个包含文档的 @[`VectorStore`]，我们就可以对其进行查询。@[VectorStore] 包含以下查询方法：
 - 同步和异步；
-- 通过字符串查询和向量；
+- 通过字符串查询和通过向量查询；
 - 是否返回相似度分数；
-- 通过相似度和 @[最大边际相关性][VectorStore.max_marginal_relevance_search]（以平衡检索结果中的相似性与多样性）。
+- 通过相似度和 @[最大边际相关性][VectorStore.max_边际_相关性_搜索]（以平衡查询相似度与检索结果的多样性）。
 
 :::
 
 :::js
 
-一旦我们实例化了一个包含文档的 @[`VectorStore`]，我们就可以查询它。@[VectorStore] 包含以下查询方法：
+一旦我们实例化了一个包含文档的 @[`VectorStore`]，我们就可以对其进行查询。@[VectorStore] 包含以下查询方法：
 - 同步和异步；
-- 通过字符串查询和向量；
+- 通过字符串查询和通过向量查询；
 - 是否返回相似度分数；
-- 通过相似度和 @[最大边际相关性][VectorStore.maxMarginalRelevanceSearch]（以平衡检索结果中的相似性与多样性）。
+- 通过相似性和 @[最大边际相关性][VectorStore.maxMarginalRelevanceSearch]（以在查询相似性和检索结果多样性之间取得平衡）。
 
 :::
 
@@ -320,9 +332,9 @@ await vectorStore.addDocuments(allSplits);
 
 **用法**
 
-嵌入（Embeddings）通常将文本表示为"密集"向量，使得含义相似的文本在几何上接近。这使得我们无需了解文档中使用的任何特定关键词，只需传入一个问题就能检索相关信息。
+嵌入通常将文本表示为"密集"向量，使得含义相似的文本在几何上接近。这使我们能够仅通过传入一个问题来检索相关信息，而无需了解文档中使用的任何特定关键词。
 
-根据与字符串查询的相似度返回文档：
+根据与字符串查询的相似性返回文档：
 
 :::python
 ```python
@@ -358,6 +370,7 @@ Document {
 }
 ```
 :::
+
 :::python
 异步查询：
 
@@ -424,11 +437,9 @@ Document {
 ```
 :::
 
-根据嵌入查询的相似度返回文档：
+根据与嵌入查询的相似性返回文档：
 
 :::python
-
-```
 ```python
 embedding = embeddings.embed_query("How were Nike's margins impacted in 2023?")
 
@@ -479,15 +490,15 @@ Document {
 
 了解更多：
 
-- @[API Reference][VectorStore]
+- @[API 参考][VectorStore]
 - [集成特定文档](/oss/integrations/vectorstores)
 
 ## 4. 检索器
 
-LangChain @[`VectorStore`] 对象不继承 @[Runnable]。LangChain @[Retrievers] 是 Runnable，因此它们实现了一组标准方法（例如同步和异步的 `invoke` 和 `batch` 操作）。虽然我们可以从向量存储中构建检索器，但检索器也可以与非向量存储数据源（例如外部 API）进行交互。
+LangChain @[`VectorStore`] 对象不继承 @[Runnable]。LangChain @[检索器] 是 Runnable，因此它们实现了一组标准方法（例如同步和异步 `invoke` 和 `batch` 操作）。虽然我们可以从向量存储构建检索器，但检索器也可以与向量存储以外的数据源（如外部 API）进行交互。
 
 :::python
-我们可以创建一个简单的版本，而无需继承 `Retriever`。如果我们选择想要用来检索文档的方法，就可以轻松地创建一个 runnable。下面我们将围绕 `similarity_search` 方法构建一个检索器：
+我们可以自己创建一个简单的版本，无需继承 `Retriever`。如果我们选择想要用来检索文档的方法，可以轻松创建一个 runnable。下面我们将围绕 `similarity_search` method:
 
 
 ```python
@@ -515,7 +526,9 @@ retriever.batch(
 [[Document(metadata={'page': 4, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 3125}, page_content='direct to consumer operations sell products through the following number of retail stores in the United States:\nU.S. RETAIL STORES NUMBER\nNIKE Brand factory stores 213 \nNIKE Brand in-line stores (including employee-only stores) 74 \nConverse stores (including factory stores) 82 \nTOTAL 369 \nIn the United States, NIKE has eight significant distribution centers. Refer to Item 2. Properties for further information.\n2023 FORM 10-K 2')],
  [Document(metadata={'page': 3, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0}, page_content='Table of Contents\nPART I\nITEM 1. BUSINESS\nGENERAL\nNIKE, Inc. was incorporated in 1967 under the laws of the State of Oregon. As used in this Annual Report on Form 10-K (this "Annual Report"), the terms "we," "us," "our,"\n"NIKE" and the "Company" refer to NIKE, Inc. and its predecessors, subsidiaries and affiliates, collectively, unless the context indicates otherwise.\nOur principal business activity is the design, development and worldwide marketing and selling of athletic footwear, apparel, equipment, accessories and services. NIKE is\nthe largest seller of athletic footwear and apparel in the world. We sell our products through NIKE Direct operations, which are comprised of both NIKE-owned retail stores\nand sales through our digital platforms (also referred to as "NIKE Brand Digital"), to retail accounts and to a mix of independent distributors, licensees and sales')]]
 ```
-向量存储（Vectorstores）实现了 `as_retriever` 方法，该方法会生成一个检索器（Retriever），具体来说是 [`VectorStoreRetriever`](https://reference.langchain.com/python/langchain-core/vectorstores/base/VectorStoreRetriever)。这些检索器包含特定的 `search_type` 和 `search_kwargs` 属性，用于标识要调用底层向量存储的哪些方法，以及如何对其进行参数化。例如，我们可以使用以下方式复制上述功能：
+:::
+
+Vectorstores 实现了一个 `as_retriever` 方法，该方法将生成一个检索器，具体是 [`VectorStoreRetriever`](https://reference.langchain.com/python/langchain-core/vectorstores/base/VectorStoreRetriever)。这些检索器包含特定的 `search_type` 和 `search_kwargs` 属性，用于标识要调用的底层向量存储方法以及如何参数化它们。例如，我们可以用以下方式复制上述功能：
 
 :::python
 ```python
@@ -536,7 +549,7 @@ retriever.batch(
  [Document(metadata={'page': 3, 'source': '../example_data/nke-10k-2023.pdf', 'start_index': 0}, page_content='Table of Contents\nPART I\nITEM 1. BUSINESS\nGENERAL\nNIKE, Inc. was incorporated in 1967 under the laws of the State of Oregon. As used in this Annual Report on Form 10-K (this "Annual Report"), the terms "we," "us," "our,"\n"NIKE" and the "Company" refer to NIKE, Inc. and its predecessors, subsidiaries and affiliates, collectively, unless the context indicates otherwise.\nOur principal business activity is the design, development and worldwide marketing and selling of athletic footwear, apparel, equipment, accessories and services. NIKE is\nthe largest seller of athletic footwear and apparel in the world. We sell our products through NIKE Direct operations, which are comprised of both NIKE-owned retail stores\nand sales through our digital platforms (also referred to as "NIKE Brand Digital"), to retail accounts and to a mix of independent distributors, licensees and sales')]]
 ```
 
-`VectorStoreRetriever` 支持以下搜索类型：`"similarity"`（默认）、`"mmr"`（最大边际相关性，如上所述）和 `"similarity_score_threshold"`。我们可以使用后者通过相似度分数来筛选检索器输出的文档。
+`VectorStoreRetriever` 支持以下搜索类型 `"similarity"` （默认）、 `"mmr"` （最大边际相关性，如上所述）和 `"similarity_score_threshold"`。我们可以使用后者根据相似度分数对检索器输出的文档进行阈值筛选。
 :::
 :::js
 ```typescript
@@ -566,15 +579,14 @@ await retriever.batch([
 ```
 :::
 
+检索器可以轻松集成到更复杂的应用程序中，例如 [检索增强生成 (RAG)](/oss/langchain/retrieval) 应用程序，这类程序将给定的问题与检索到的上下文结合成一个提示发送给 LLM。要了解更多关于构建此类应用程序的信息，请查看 [RAG 教程](/oss/langchain/rag) tutorial.
 
-检索器可以轻松集成到更复杂的应用中，例如将给定问题与检索到的上下文组合成提示词发送给 LLM 的[检索增强生成 (RAG)](/oss/langchain/retrieval) 应用。要了解如何构建此类应用，请查看 [RAG 教程](/oss/langchain/rag)。
 
+## 后续步骤
 
-## 下一步
+您现在已经了解了如何构建一个针对 PDF 文档的语义搜索引擎。
 
-您已经了解了如何基于 PDF 文档构建语义搜索引擎。
-
-了解更多关于嵌入模型的信息：
+了解更多关于嵌入的信息：
 
 - [概述](/oss/langchain/retrieval)
 - [可用集成](/oss/integrations/embeddings/)
@@ -586,4 +598,4 @@ await retriever.batch([
 
 了解更多关于 RAG 的信息，请参阅：
 
-- [构建检索增强生成 (RAG) 应用](/oss/langchain/rag/)
+- [构建检索增强生成 (RAG) 应用程序](/oss/langchain/rag/)

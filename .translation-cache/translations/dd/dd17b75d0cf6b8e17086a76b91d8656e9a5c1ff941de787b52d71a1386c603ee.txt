@@ -3,13 +3,13 @@ title: "Docugami 集成"
 description: "使用 LangChain Python 与 Docugami 文档加载器集成。"
 ---
 
-本笔记本介绍如何从 `Docugami` 加载文档。与其他数据加载器相比，它提供了使用该系统的优势。
+本笔记本介绍如何从以下位置加载文档 `Docugami`。它提供了使用此系统相对于其他数据加载器的优势。
 
-## 前置条件
+## 前提条件
 
 1. 安装必要的 Python 包。
-2. 获取工作区访问令牌，并确保将其设置为 `DOCUGAMI_API_KEY` 环境变量。
-3. 获取处理文档的文档集 ID 和文档 ID，详见：[help.docugami.com/home/docugami-api](https://help.docugami.com/home/docugami-api)
+2. 获取您工作区的访问令牌，并确保将其设置为 `DOCUGAMI_API_KEY` 环境变量。
+3. 获取已处理文档的 docset 和文档 ID，如下所述： [help.docugami.com/home/docugami-api](https://help.docugami.com/home/docugami-api)
 
 ```python
 # You need the dgml-utils package to use the DocugamiLoader (run pip install directly without "poetry run" if you are not using poetry)
@@ -18,21 +18,21 @@ description: "使用 LangChain Python 与 Docugami 文档加载器集成。"
 
 ## 快速开始
 
-1. 创建一个 [Docugami 工作区](http://www.docugami.com)（提供免费试用）
-2. 添加您的文档（PDF、DOCX 或 DOC），并让 Docugami 提取并将其聚类为相似的文档集，例如：保密协议、租赁协议和服务协议。系统没有固定的文档类型支持集，创建的聚类取决于您特定的文档，您之后可以[更改文档集分配](https://help.docugami.com/home/working-with-the-doc-sets-view)。
-3. 通过开发者平台为您的 workspace 创建访问令牌。[详细说明](https://help.docugami.com/home/docugami-api)
-4. 探索 [Docugami API](https://api-docs.docugami.com) 获取处理过的文档集 ID 列表，或特定文档集内的文档 ID。
-6. 按照以下详细说明使用 DocugamiLoader 获取文档的丰富语义块。
-7. （可选）构建并发布一个或多个 [报告或摘要](https://help.docugami.com/home/reports)。这有助于 Docugami 根据您的偏好改进语义 XML 及更好的标签，这些标签随后会作为元数据添加到 DocugamiLoader 输出中。使用自查询检索器等技术进行高精度文档问答。
+1. 创建一个 [Docugami 工作区](http://www.docugami.com) （提供免费试用）
+2. 添加您的文档（PDF、DOCX 或 DOC），并允许 Docugami 提取并将其聚类为相似文档集，例如 NDA、租赁协议和服务协议。系统支持的文档类型没有固定限制，创建的聚类取决于您的特定文档，您可以 [更改 docset 分配](https://help.docugami.com/home/working-with-the-doc-sets-view) later.
+3. 通过 Developer Playground 为您的工作区创建访问令牌。 [详细说明](https://help.docugami.com/home/docugami-api)
+4. 探索 [Docugami API](https://api-docs.docugami.com) 以获取已处理的 docset ID 列表，或仅获取特定 docset 的文档 ID。
+6. 如下所述使用 DocugamiLoader，以获取文档的丰富语义块。
+7. 可选地，构建并发布一个或多个 [报告或摘要](https://help.docugami.com/home/reports)。这有助于 Docugami 根据您的偏好使用更好的标签改进语义 XML，然后将这些标签作为元数据添加到 DocugamiLoader 输出中。使用自我查询检索器等技术进行高精度文档问答。
 
 ## 与其他分块技术的优势
 
-文档的正确分块对于文档检索至关重要。存在多种分块技术，包括简单的基于空白字符的分块和基于字符长度的递归分块。Docugami 提供了不同的方法：
+适当的文档分块对文档检索至关重要。存在多种分块技术，包括依赖空白和基于字符长度的递归分块分割的简单方法。Docugami 提供了不同的方法：
 
-1. **智能分块：** Docugami 将每个文档分解为分层语义 XML 树，其中包含不同大小的块，从单个单词或数值到整个章节。这些块遵循文档的语义轮廓，比任意长度或简单基于空白字符的分块提供了更有意义的表示。
-2. **语义标注：** 块使用在整个文档集中一致的语义标签进行标注，有助于跨多个文档进行一致的层级查询，即使文档的编写和格式不同。例如，在一组租赁协议中，您可以轻松识别关键条款，如房东、租户或续约日期，以及更复杂的信息，如任何转租条款的措辞或特定司法管辖区是否在终止条款中包含例外部分。
-3. **结构化表示：** 此外，XML 树指示每个文档的结构轮廓，使用表示标题、段落、列表、表格和其他常见元素的属性，并在所有支持的文档格式（如扫描的 PDF 或 DOCX 文件）中保持一致。它适当处理长文档特征，如页面页眉/页脚或多栏流程，以实现干净的文本提取。
-4. **附加元数据：** 如果用户使用了 Docugami，块还会附加额外元数据。此附加元数据可用于高精度文档问答，不受上下文窗口限制。请参阅下面的详细代码演示。
+1. **智能分块：** Docugami 将每个文档分解为一个分层语义 XML 树，其中包含不同大小的块，从单个单词或数值到整个部分。这些块遵循文档的语义轮廓，提供比任意长度或简单的基于空白分块更有意义的表示。
+2. **语义注释：** 块使用在整个文档集中一致的语义标签进行注释，便于跨多个文档进行一致的层次查询，即使它们的编写和格式不同。例如，在租赁协议集中，您可以轻松识别关键条款，如房东、租户或续订日期，以及更复杂的信息，如任何转租条款的措辞或特定管辖区是否在终止条款中包含例外部分。
+3. **结构化表示：** In addition, the XML tree indicates the structural contours of every document, using attributes denoting headings, paragraphs, lists, tables, and other common elements, and does that consistently across all supported document formats, such as scanned PDFs or DOCX files. It appropriately handles long-form document characteristics like page headers/footers or multi-column flows for clean text extraction.
+4. **附加元数据：** 如果用户使用过 Docugami，块还会使用附加元数据进行注释。此附加元数据可用于高精度文档问答，不受上下文窗口限制。参见下面的详细代码演练。
 
 ```python
 import os
@@ -42,7 +42,7 @@ from docugami_langchain.document_loaders import DocugamiLoader
 
 ## 加载文档
 
-如果已设置 DOCUG_API_KEY 环境变量，则无需将其显式传递给加载器；否则，您可以通过 `access_token` 参数传递它。
+如果设置了 DOCUGAMI_API_KEY 环境变量，则无需将其显式传递给加载器，否则您可以将其作为 `access_token` parameter.
 
 ```python
 DOCUGAMI_API_KEY = os.environ.get("DOCUGAMI_API_KEY")
@@ -62,18 +62,18 @@ len(chunks)
 120
 ```
 
-`@[`Document`]的 `metadata`（实际上是一个真正的 PDF、DOC 或 DOCX 文件的块）包含一些有用的附加信息：
+该 `metadata` 每个 @[`Document`]（实际上，一个真实的 PDF、DOC 或 DOCX 片段）包含一些有用的附加信息：
 
-1. **id and source：** ID 和文件名 (PDF、DOC 或 DOCX)，即该块来源于 Docugami 中的哪个文件。
-2. **xpath：** 文档 XML 表示中该块的 XPath。可用于直接引用文档 XML 中的实际块，非常适合源引用。
-3. **structure：** 该块的结构属性，例如 h1、h2、div、table、td 等。如果调用方需要，可用于过滤掉某些类型的块。
-4. **tag：** 使用各种生成和提取技术为该块添加的语义标签。更多详细信息请参阅：[github.com/docugami/DFM-benchmarks](https://github.com/docugami/DFM-benchmarks)
+1. **ID 和来源：** 片段来源的 Docugami 内的文件（PDF、DOC 或 DOCX）的 ID 和名称。
+2. **xpath:** 文档 XML 表示中该片段的 XPath。可用于直接引用文档 XML 内实际片段的来源引用。
+3. **structure:** 片段的结构属性，例如 h1、h2、div、table、td 等。如果调用方需要，可用于过滤掉某些类型的片段。
+4. **tag:** 使用各种生成和提取技术为片段标注的语义标签。更多详情： [github.com/docugami/DFM-benchmarks](https://github.com/docugami/DFM-benchmarks)
 
-你可以通过在 `DocugamiLoader` 实例上设置以下属性来控制分块行为：
+您可以通过在 `DocugamiLoader` instance:
 
-1. 你可以设置最小和最大块大小，系统会尽量在最小截断的情况下遵循这些设置。你可以设置 `loader.min_text_length` 和 `loader.max_text_length` 来控制这些。
-2. 默认情况下，只返回块的文本。但是，Docugami 的 XML 知识图谱包含其他丰富信息，包括块内实体的语义标签。如果你想要返回块上的附加 xml 元数据，请设置 `loader.include_xml_tags = True`。
-3. 此外，如果你想让 Docugami 在返回的块中包含父块，可以设置 `loader.parent_hierarchy_levels`。子块通过 `loader.parent_id_key` 值指向父块。例如，这在使用 MultiVector Retriever 进行 [small-to-big](https://www.youtube.com/watch?v=ihSiRrOUwmg) 检索时很有用。请参阅本笔记本后面部分的详细示例。
+1. 您可以设置最小和最大片段大小，系统会尽量遵守这些限制，同时最大程度减少截断。您可以设置 `loader.min_text_length` 和 `loader.max_text_length` 来控制这些。
+2. 默认情况下，仅返回片段的文本。不过，Docugami 的 XML 知识图谱包含其他丰富信息，包括片段内实体的语义标签。设置 `loader.include_xml_tags = True` 如果您希望返回的片段包含附加的 xml 元数据。
+3. 此外，您可以设置 `loader.parent_hierarchy_levels` 如果您希望 Docugami 在返回的片段中包含父片段。子片段通过 `loader.parent_id_key` 值指向父片段。这在与 [small-to-big](https://www.youtube.com/watch?v=ihSiRrOUwmg) 检索一起使用时很有用。请参阅本笔记本后面的详细示例。
 
 ```python
 loader.min_text_length = 64
@@ -94,7 +94,7 @@ page_content='2.3 <RegularWorkingHours>All work will be executed during regular 
 
 ## 基本用法：用于文档问答的 Docugami 加载器
 
-您可以将 Docugami 加载器像标准加载器一样用于多文档问答，只是分块效果更好，能够遵循文档的自然轮廓。这有很多很好的教程，例如[这个](https://www.youtube.com/watch?v=3yPBVii7Ct0)。我们可以使用相同的代码，但使用 `DocugamiLoader` 来获得更好的分块效果，而不是直接使用基础分块技术加载文本或 PDF 文件。
+您可以将 Docugami 加载器像标准加载器一样用于多个文档的问答，只不过分块效果更好，遵循文档的自然结构。这方面有很多很好的教程，例如 [这一个](https://www.youtube.com/watch?v=3yPBVii7Ct0)。我们可以直接使用相同的代码，但使用 `DocugamiLoader` 来获得更好的分块，而不是用基本的分割技术直接加载文本或 PDF 文件。
 
 ```python
 !poetry run pip install -U langchain-openai tiktoken langchain-chroma hnswlib
@@ -121,9 +121,9 @@ print(len(chunks))
 4674
 ```
 
-加载器返回的文档已经经过分割，因此我们不需要使用文本分割器。我们可以选择使用每个文档上的元数据，例如结构或标签属性，来进行任何我们想要的后处理。
+加载器返回的文档已经被分割，因此我们不需要使用文本分割器。我们可以选择使用每个文档上的元数据，例如结构或标签属性，来进行我们想要的后处理。
 
-我们直接使用 `DocugamiLoader` 的输出，按照常规方式设置检索式问答链。
+我们将直接使用 `DocugamiLoader` 的输出，按照常规方式设置检索问答链。
 
 ```python
 from langchain_classic.chains import RetrievalQA
@@ -152,11 +152,11 @@ qa_chain("What can tenants do with signage on their properties?")
   Document(page_content='8. SIGNS:\n Tenant shall not install signs upon the Premises without Landlord’s prior written approval, which approval shall not be unreasonably withheld or delayed, and any such signage shall be subject to any applicable governmental laws, ordinances, regulations, and other requirements. Tenant shall remove all such signs by the terminations of this Lease. Such installations and removals shall be made in such a manner as to avoid injury or defacement of the Building and other improvements, and Tenant shall repair any injury or defacement, including without limitation discoloration caused by such installations and/or removal.', metadata={'id': '6b7d88f0c979c65d5db088fc177fa81f', 'name': 'Lease Agreements/Bioplex, Inc.pdf', 'structure': 'lim h1 div', 'xpath': '/dg:chunk/docset:WITNESSETH-section/docset:WITNESSETH/dg:chunk/docset:TheObligation/dg:chunk[8]/dg:chunk'})]}
 ```
 
-## 使用 Docugami 知识图谱实现高准确度文档问答
+## 使用 Docugami 知识图谱实现高精度文档问答
 
-大文档存在一个常见问题：您问题的正确答案可能依赖于文档中相隔很远的文本块。即使使用重叠技术，传统的分块方法也难以为 LLM 提供足够的上下文来回答此类问题。随着即将推出的超大上下文 LLM，虽然可能可以在上下文窗口中塞入大量 token，甚至整个文档，但对于非常长的文档或大量文档，仍然会在某些时候达到限制。
+大型文档的一个问题是，您问题的正确答案可能取决于文档中相距很远的片段。即使使用重叠，典型的分块技术也很难为 LLM 提供足够的上下文来回答此类问题。随着未来超长上下文 LLM 的出现，可能可以将大量 token（甚至整个文档）放入上下文中，但对于非常长的文档或大量文档，这仍然会在某个时候达到限制。
 
-例如，如果我们提出一个更复杂的问题，需要 LLM 调用来自文档不同部分的文本块，即使是最强大的 OpenAI LLM 也无法正确回答。
+例如，如果我们提出一个更复杂的问题，需要 LLM 利用文档不同部分的片段，即使 OpenAI 强大的 LLM 也无法正确回答。
 
 ```python
 chain_response = qa_chain("What is rentable area for the property owned by DHA Group?")
@@ -178,9 +178,9 @@ chain_response["source_documents"]
  Document(page_content='1.6 Rentable Area of the Premises.', metadata={'id': '5b39a1ae84d51682328dca1467be211f', 'name': 'Sample Commercial Leases/Shorebucks LLC_TX.pdf', 'structure': 'lim h1', 'xpath': '/docset:OFFICELEASE-section/docset:OFFICELEASE/docset:WITNESSETH-section/docset:WITNESSETH/dg:chunk/dg:chunk/docset:BasicLeaseInformation/docset:BASICLEASEINFORMATIONANDDEFINEDTERMS-section/docset:BASICLEASEINFORMATIONANDDEFINEDTERMS/docset:LandmarkLlc/dg:chunk[6]/dg:chunk'})]
 ```
 
-乍一看答案似乎合理，但实际上是错误的。如果你仔细检查这个答案的源块，你会发现文档的分块并没有将房东名称和可出租面积放在同一个上下文中，因此产生了不相关的块，导致答案错误（应该是 **13,500 平方英尺**）
+乍一看答案可能看起来合理，但实际上是不正确的。如果您仔细查看这个答案的来源片段，您会发现文档的分块最终没有将房东名称和可租赁面积放在同一上下文中，因此产生了无关的片段，答案是错误的（应该是 **13,500 sq ft**)
 
-Docugami 可以提供帮助。如果用户一直在[使用 Docugami](https://help.docugami.com/home/reports)，则可以使用不同的技术为块添加额外的元数据。更多技术方法将在以后添加。
+Docugami 可以提供帮助。如果用户已 [使用 Docugami](https://help.docugami.com/home/reports)，则片段会使用不同技术创建的附加元数据进行注释。后续将添加更多技术方法。
 
 具体来说，让我们要求 Docugami 在其输出中返回 XML 标签以及额外的元数据：
 
@@ -197,7 +197,7 @@ print(chunks[0].metadata)
 {'xpath': '/docset:OFFICELEASE-section/dg:chunk', 'id': '47297e277e556f3ce8b570047304560b', 'name': 'Sample Commercial Leases/Shorebucks LLC_AZ.pdf', 'source': 'Sample Commercial Leases/Shorebucks LLC_AZ.pdf', 'structure': 'h1 h1 p', 'tag': 'chunk Lease', 'Lease Date': 'March  29th , 2019', 'Landlord': 'Menlo Group', 'Tenant': 'Shorebucks LLC', 'Premises Address': '1564  E Broadway Rd ,  Tempe ,  Arizona  85282', 'Term of Lease': '96  full calendar months', 'Square Feet': '16,159'}
 ```
 
-我们可以使用自查询检索器来提高查询准确性，使用这些额外的元数据：
+我们可以使用自查询检索器来利用这些额外的元数据提高查询准确性：
 
 ```python
 !poetry run pip install -U lark --quiet
@@ -235,7 +235,7 @@ qa_chain = RetrievalQA.from_chain_type(
 )
 ```
 
-让我们再次运行同样的问题。它返回了正确的结果，因为所有块都有元数据键值对，这些键值对承载着关于文档的关键信息，即使这些信息在物理上距离用于生成答案的源块非常远。
+Let's run the same question again. It returns the correct result since all the chunks have metadata key/value pairs on them carrying key information about the document even if this information is physically very far away from the source chunk used to generate the answer.
 
 ```python
 qa_chain(
@@ -258,13 +258,13 @@ qa_chain(
   Document(page_content='1.11 Percentage Rent.\n (a) <GrossRevenue><Percent>55% </Percent>of Gross Revenue to Landlord until Landlord receives Percentage Rent in an amount equal to the Annual Market Rent Hurdle (as escalated); and </GrossRevenue>', metadata={'Landlord': 'DHA Group', 'Lease Date': 'March  29th , 2019', 'Premises Address': '111  Bauer Dr ,  Oakland ,  New Jersey ,  07436', 'Square Feet': '13,500', 'Tenant': 'Shorebucks LLC', 'Term of Lease': '84  full calendar  months', 'id': 'c8bb9cbedf65a578d9db3f25f519dd3d', 'name': 'Sample Commercial Leases/Shorebucks LLC_NJ.pdf', 'source': 'Sample Commercial Leases/Shorebucks LLC_NJ.pdf', 'structure': 'lim h1 lim p', 'tag': 'chunk GrossRevenue', 'xpath': '/docset:OFFICELEASE-section/docset:OFFICELEASE-section/docset:OFFICELEASE/docset:WITNESSETH-section/docset:WITNESSETH/docset:GrossRentCredit-section/docset:GrossRentCredit/dg:chunk/dg:chunk/dg:chunk/docset:PercentageRent/dg:chunk[1]/dg:chunk[1]'})]}
 ```
 
-这次答案是正确的，因为自查询检索器在元数据的房东属性上创建了过滤器，正确地过滤到专门关于 DHA Group 房东的文档。结果源块都与该房东相关，这提高了答案的准确性，即使房东没有在包含正确答案的特定块中直接提及。
+这次答案是正确的，因为自查询检索器在元数据的 landlord 属性上创建了一个过滤器，正确过滤到了专门关于 DHA Group 房东的文档。结果来源块都与这个房东相关，这提高了答案的准确性，即使房东没有在包含正确答案的特定块中直接提及。
 
-# 高级主题：使用文档知识图谱层级的小到大型检索
+# 高级主题：使用文档知识图谱层次结构的小到大检索
 
-文档本质上是半结构化的，DocugamiLoader 能够导航文档的语义和结构轮廓，以在其返回的块上提供父块引用。这在与 MultiVector Retriever 一起用于[小到大型](https://www.youtube.com/watch?v=ihSiRrOUwmg)检索时很有用。
+文档本质上是半结构化的，DocugamiLoader 能够导航文档的语义和结构轮廓，以在其返回的块上提供父块引用。例如，这在与 MultiVector Retriever 一起使用时很有用 [small-to-big](https://www.youtube.com/watch?v=ihSiRrOUwmg) retrieval.
 
-要获取父块引用，您可以将 `loader.parent_hierarchy_levels` 设置为非零值。
+要获取父块引用，您可以设置 `loader.parent_hierarchy_levels` 为非零值。
 
 ```python
 from typing import Dict, List

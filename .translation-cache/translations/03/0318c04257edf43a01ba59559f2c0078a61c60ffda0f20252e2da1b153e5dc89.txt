@@ -1,89 +1,89 @@
 ---
-title: Configure LangSmith for scale
-sidebarTitle: Configure for scale
+title: 配置 LangSmith 以实现规模化
+sidebarTitle: 配置规模化
 ---
 
 <Warning>
-The scaling guidance and example configurations on this page apply to **LangSmith version v0.13.0 or higher**.
+本页面的规模化指南和示例配置适用于 **LangSmith v0.13.0 或更高版本**.
 </Warning>
 
-A self-hosted LangSmith instance can handle a large number of traces and users. The default configuration for the self-hosted deployment can handle substantial load, and you can configure your deployment to be able to achieve higher scale. This page describes scaling considerations and provides some examples to help configure your self-hosted instance.
+自托管 LangSmith 实例可以处理大量追踪和用户。自托管部署的默认配置可以处理大量负载，您可以配置您的部署以实现更高的规模化。本页面描述了规模化注意事项，并提供了一些示例配置来帮助您配置自托管实例。
 
-For example configurations, refer to [Example LangSmith configurations for scale](#example-langsmith-configurations-for-scale).
+有关示例配置，请参阅 [LangSmith 规模化示例配置](#example-langsmith-configurations-for-scale).
 
-## Summary
+## 摘要
 
 The table below provides an overview comparing different LangSmith configurations for various load patterns (reads / writes):
 
 |  | **[Low / low](#low-reads-low-writes)** | **[Low / high](#low-reads-high-writes)** | **[High / low](#high-reads-low-writes)** | [Medium / medium](#medium-reads-medium-writes) | [High / high](#high-reads-high-writes) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| <Tooltip tip="Number of users actively viewing traces on the frontend">Concurrent frontend users</Tooltip> | 5 | 5 | 50 | 20 | 50 |
-| <Tooltip tip="Number of traces being ingested via SDKs or API endpoints">Traces submitted per second</Tooltip> | 10 | 1000 | 10 | 100 | 1000 |
-| **Frontend replicas**<br />(500m CPU, 1Gi per replica) | 1 (default) | 4 | 2 | 2 | 4 |
-| **Platform backend replicas**<br />(1 CPU, 2Gi per replica) | 3 (default) | 20 | 3 (default) | 3 (default) | 20 |
-| **Ingest queue replicas**<br />(1 CPU, 2Gi per replica) | 3 (default) | 24 | 3 (default) | 6 | 24 |
-| **Backend replicas**<br />(1 CPU, 2Gi per replica) | 2 (default) | 5 | 40 | 16 | 50 |
-| **Redis resources** | 8 Gi (default) | 26 Gi external | 8 Gi (default) | 13Gi external | 26 Gi external |
-| **ClickHouse resources** | 4 CPU<br />16 Gi (default) | 10 CPU<br />32Gi memory | 8 CPU<br />16 Gi per replica | 16 CPU<br />24Gi memory | 14 CPU<br />24 Gi per replica |
-| **ClickHouse setup** | Single instance | Single instance | 3-node <Tooltip tip="Recommended for high read loads to prevent degraded performance. Another option would be [managed clickhouse](/langsmith/self-host-external-clickhouse#langsmith-managed-clickhouse).">replicated cluster</Tooltip> | Single instance | 3-node <Tooltip tip="Recommended for high read loads to prevent degraded performance. Another option would be [managed clickhouse](/langsmith/self-host-external-clickhouse#langsmith-managed-clickhouse).">replicated cluster</Tooltip> |
-| <Tooltip tip="We recommend using an external instance and enabling autoexpansion for the disk to handle growing data requirements.">Postgres resources</Tooltip> | 2 CPU<br />8 GB memory<br />10 GB storage (external) | 2 CPU<br />8 GB memory<br />10 GB storage (external) | 2 CPU<br />8 GB memory<br />10 GB storage (external) | 2 CPU<br />8 GB memory<br />10 GB storage (external) | 2 CPU<br />8 GB memory<br />10 GB storage (external) |
-| **Blob storage** | Disabled | Enabled | Enabled | Enabled | Enabled |
+| <Tooltip tip="Number of users actively viewing traces on the frontend">并发前端用户</Tooltip> | 5 | 5 | 50 | 20 | 50 |
+| <Tooltip tip="Number of traces being ingested via SDKs or API endpoints">每秒提交的追踪数</Tooltip> | 10 | 1000 | 10 | 100 | 1000 |
+| **前端副本**<br />(500m CPU, 1Gi 每副本) | 1 (默认) | 4 | 2 | 2 | 4 |
+| **平台后端副本**<br />(1 CPU, 2Gi 每副本) | 3 (默认) | 20 | 3 (默认) | 3 (默认) | 20 |
+| **摄取队列副本**<br />(1 CPU, 2Gi 每副本) | 3 (默认) | 24 | 3 (默认) | 6 | 24 |
+| **后端副本**<br />(1 CPU, 2Gi 每副本) | 2 (默认) | 5 | 40 | 16 | 50 |
+| **Redis 资源** | 8 Gi (默认) | 26 Gi 外部 | 8 Gi (默认) | 13Gi 外部 | 26 Gi 外部 |
+| **ClickHouse 资源** | 4 CPU<br />16 Gi (默认) | 10 CPU<br />32Gi 内存 | 8 CPU<br />16 Gi 每副本 | 16 CPU<br />24Gi 内存 | 14 CPU<br />24 Gi 每副本 |
+| **ClickHouse 配置** | 单实例 | 单实例 | 3 节点 <Tooltip tip="Recommended for high read loads to prevent degraded performance. Another option would be [managed clickhouse](/langsmith/self-host-external-clickhouse#langsmith-managed-clickhouse).">复制集群</Tooltip> | 单实例 | 3 节点 <Tooltip tip="Recommended for high read loads to prevent degraded performance. Another option would be [managed clickhouse](/langsmith/self-host-external-clickhouse#langsmith-managed-clickhouse).">复制集群</Tooltip> |
+| <Tooltip tip="We recommend using an external instance and enabling autoexpansion for the disk to handle growing data requirements.">Postgres 资源</Tooltip> | 2 CPU<br />8 GB 内存<br />10 GB 存储 (外部) | 2 CPU<br />8 GB 内存<br />10 GB 存储 (外部) | 2 CPU<br />8 GB 内存<br />10 GB 存储 (外部) | 2 CPU<br />8 GB 内存<br />10 GB 存储 (外部) | 2 CPU<br />8 GB 内存<br />10 GB 存储 (外部) |
+| **对象存储** | 禁用 | 启用 | 启用 | 启用 | 启用 |
 
 
-Below we go into more details about the read and write paths as well as provide a `values.yaml` snippet for you to start with for your self-hosted LangSmith instance.
+下面我们将详细介绍读写路径，并提供 `values.yaml` 一段代码供您开始使用自托管 LangSmith 实例。
 
-## Trace ingestion (write path)
+## 追踪摄取（写入路径）
 
-Common usage that put load on the write path:
+对写入路径造成负载的常见用法：
 
-- Ingesting traces via the Python or JavaScript LangSmith SDK
-- Ingesting traces via the `@traceable` wrapper
-- Submitting traces via the `/runs/multipart` endpoint
+- 通过 Python 或 JavaScript LangSmith SDK 引入追踪
+- 通过以下方式引入追踪 `@traceable` 包装器
+- 通过以下方式提交追踪 `/runs/multipart` 端点
 
-Services that play a large role in trace ingestion:
+在追踪引入中发挥重要作用的服务：
 
-- Platform backend service: Receives initial request to ingest traces and places traces on a Redis queue
-- Redis cache: Used to queue traces that need to be persisted
-- Ingest queue service: Persists traces for querying
-- ClickHouse: Persistent storage used for traces
+- 平台后端服务：接收引入追踪的初始请求并将追踪放入 Redis 队列
+- Redis 缓存：用于对需要持久化的追踪进行排队
+- 引入队列服务：持久化追踪以供查询
+- ClickHouse：用于存储追踪的持久化存储
 
 When scaling up the write path (trace ingestion), it is helpful to monitor the four services/resources listed above. Here are some typical changes that can help increase performance of trace ingestion:
 
-- Give ClickHouse more resources (CPU and memory) if it is approaching resource limits.
-- Increase the number of platform-backend pods if ingest requests are taking long to respond.
-- Increase ingest queue service pod replicas if traces are not being processed from Redis fast enough.
-- Use a larger Redis cache if you notice that the current Redis instance is reaching resource limits. This could also be a reason why ingest requests take a long time.
+- 如果 ClickHouse 接近资源限制，请为其分配更多资源（CPU 和内存）。
+- 如果引入请求响应时间过长，请增加平台后端 pod 的数量。
+- 如果追踪从 Redis 处理的速度不够快，请增加引入队列服务 pod 副本数。
+- 如果发现当前 Redis 实例达到资源限制，请使用更大的 Redis 缓存。这也可能是引入请求耗时长的原因。
 
-## Trace querying (read path)
+## 追踪查询（读取路径）
 
-Common usage that puts load on the read path:
+对读取路径造成负载的常见用法：
 
-- Users on the frontend looking at tracing projects or individual traces
-- Scripts used to query for trace info
-- Hitting either the `/runs/query` or `/runs/<run-id>` api endpoints
+- 前端用户查看追踪项目或单个追踪
+- 用于查询追踪信息的脚本
+- 访问以下任一 `/runs/query` or `/runs/<run-id>` API 端点
 
-Services that play a large role in querying traces:
+在查询追踪中发挥重要作用的服务：
 
-- Backend service: Receives the request and submits a query to ClickHouse to then respond to the request
-- ClickHouse: Persistent storage for traces. This is the main database that is queried when requesting trace info.
+- 后端服务：接收请求，向 ClickHouse 提交查询，然后响应请求
+- ClickHouse：追踪的持久化存储。这是请求追踪信息时查询的主要数据库。
 
 When scaling up the read path (trace querying), it is helpful to monitor the two services/resources listed above. Here are some typical changes that can help improve performance of trace querying:
 
-- Increase the number of backend service pods. This would be most impactful if backend service pods are reaching 1 core CPU usage.
-- Give ClickHouse more resources (CPU or Memory). ClickHouse can be very resource intensive, but it should lead to better performance.
-- Move to a [replicated ClickHouse cluster](/langsmith/self-host-external-clickhouse#ha-replicated-clickhouse-cluster). Adding replicas of ClickHouse helps with read performance, but we recommend staying below 5 replicas (start with 3).
+- 增加后端服务 pod 的数量。如果后端服务 pod 达到 1 核 CPU 使用率，这将产生最显著的影响。
+- 为 ClickHouse 分配更多资源（CPU 或内存）。ClickHouse 可能非常消耗资源，但应该会带来更好的性能。
+- 迁移到 [复制的 ClickHouse 集群](/langsmith/self-host-external-clickhouse#ha-replicated-clickhouse-cluster)。添加 ClickHouse 副本有助于提高读取性能，但我们建议保持在 5 个副本以下（从 3 个开始）。
 
-For more precise guidance on how this translates to helm chart values, refer to the examples the following [section](#example-langsmith-configurations-for-scale). If you are unsure why your LangSmith instance cannot handle a certain load pattern, contact the LangChain team.
+如需更精确的指导来了解这如何转化为 helm chart 值，请参阅以下示例 [部分](#example-langsmith-configurations-for-scale)。如果您不确定为什么 LangSmith 实例无法处理某种负载模式，请联系 LangChain 团队。
 
-## KEDA autoscaling for LangSmith queues
+## LangSmith 队列的 KEDA 自动扩缩容
 
 <Note>
-Available in LangSmith v0.13.0 and later.
+适用于 LangSmith v0.13.0 及更高版本。
 </Note>
 
-We highly recommend installing [KEDA](https://keda.sh/) (Kubernetes Event-driven Autoscaling) on your cluster. KEDA enables the `queue` and `ingest-queue` services to scale automatically based on their queue backlog size, as well as CPU and memory. This results in more efficient resource utilization and better handling of traffic spikes.
+我们强烈建议安装 [KEDA](https://keda.sh/) （Kubernetes 事件驱动自动扩缩容）在您的集群上。KEDA 使 `queue` 和 `ingest-queue` 服务能够根据其队列积压大小以及 CPU 和内存自动扩缩容。这可以提高资源利用率并更好地处理流量峰值。
 
-### Install KEDA
+### 安装 KEDA
 
 ```bash
 helm repo add kedacore https://kedacore.github.io/charts
@@ -92,7 +92,7 @@ helm install keda kedacore/keda --namespace keda --create-namespace
 
 ### 配置 KEDA 自动扩缩容
 
-安装 KEDA 后，您可以在 `values.yaml` 中为 `queue` 和 `ingest-queue` 服务启用基于 KEDA 的自动扩缩容：
+安装 KEDA 后，您可以为以下服务启用基于 KEDA 的自动扩缩容 `queue` 和 `ingest-queue` 服务在您的 `values.yaml`:
 
 ```yaml
 queue:
@@ -106,37 +106,41 @@ ingestQueue:
       enabled: true
 ```
 
-启用 KEDA 后，队列服务将自动在积压增长时扩容，在积压被处理时缩容。这对于处理可变的追踪数据摄取负载特别有用，无需过度配置资源。
+启用 KEDA 后，队列服务将在积压量增长时自动扩容，在积压量被处理时自动缩容。这对于处理可变的追踪数据摄取负载特别有用，无需过度配置资源。
 
 <Note>
-您也可以为其他服务（`backend`、`platformBackend` 等）启用 KEDA，但它们仍然只能根据 CPU 和内存进行缩放。
+您也可以为其他服务启用 KEDA（`backend`, `platformBackend`等），但它们仍然只能根据 CPU 和内存进行缩放。
 </Note>
 
-## LangSmith 扩缩容配置示例
+## 扩展配置的 LangSmith 示例
 
-下面我们根据预期的读取和写入负载提供一些 LangSmith 配置示例。
+下面我们提供一些基于预期读写负载的 LangSmith 配置示例。
 
-读取负载（追踪查询）：
+对于读取负载（追踪查询）：
 
-- Low 表示大约 5 个用户同时查看追踪（约每秒 10 个请求）
-- Medium 表示大约 20 个用户同时查看追踪（约每秒 40 个请求）
-- High 表示大约 50 个用户同时查看追踪（约每秒 100 个请求）
+- 低意味着大约 5 个用户同时查看追踪（约 10 请求/秒）
+- 中意味着大约 20 个用户同时查看追踪（约 40 请求/秒）
+- 高意味着大约 50 个用户同时查看追踪（约 100 请求/秒）
 
-写入负载（追踪摄取）：
+对于写入负载（追踪数据摄取）：
 
-- Low 表示每秒最多提交 10 个追踪
-- Medium 表示每秒最多提交 100 个追踪
-- High 表示每秒最多提交 1000 个追踪
+- 低意味着每秒提交最多 10 条追踪
+- 中意味着每秒提交最多 100 条追踪
+- 高意味着每秒提交最多 1000 条追踪
 
 <Note>
-确切的最佳配置取决于您的使用方式和追踪负载。以下示例可与上述信息及您的具体使用情况结合使用，以便根据需要更新 LangSmith 配置。如有任何问题，请联系 LangChain 团队。
+具体的最佳配置取决于您的使用情况和追踪负载。请结合上面的信息和您的具体使用场景，按照下面的示例来调整您的 LangSmith 配置。如有任何问题，请联系 LangChain 团队。
 </Note>
 
-### Low reads, high writes <a name="low-reads-high-writes"></a>
+### 低读取，低写入 <a name="low-reads-low-writes"></a>
 
-您的追踪摄取规模非常大，但同时在前端查询追踪的用户数量仅为个位数。
+默认的 LangSmith 配置即可处理此负载。无需自定义资源配置。
 
-对于这种情况，我们建议如下配置：
+### 低读取，高写入 <a name="low-reads-high-writes"></a>
+
+您的追踪数据摄取规模非常大，但前端同时查询追踪的用户数为个位数。
+
+鉴于此，我们推荐以下配置：
 
 ```yaml
 config:
@@ -214,11 +218,11 @@ commonEnv:
 
 ### 高读取，低写入 <a name="high-reads-low-writes"></a>
 
-您的追踪数据摄入规模相对较低，但有许多前端用户在查询追踪数据，或者有脚本频繁访问 `/runs/query` 或 `/runs/<run-id>` 端点。
+You have a relatively low scale of trace ingestions, but many frontend users querying traces and/or have scripts that hit the `/runs/query` or `/runs/<run-id>` 频繁访问端点。
 
-**因此，我们强烈建议您设置一个复制的 ClickHouse 集群，以实现低延迟的高读取扩展。** 有关如何设置复制型 ClickHouse 集群的更多指导，请参阅我们的[外部 ClickHouse 文档](/langsmith/self-host-external-clickhouse#ha-replicated-clickhouse-cluster)。对于这种负载模式，我们建议使用 3 节点复制设置，集群中每个副本应具有 8+ 核心和 16+ GB 内存的资源请求，以及 12 核心和 32 GB 内存的资源限制。
+**鉴于此，我们强烈建议设置一个复制的 ClickHouse 集群，以实现低延迟的高读取扩展。** 查看我们的 [外部 ClickHouse 文档](/langsmith/self-host-external-clickhouse#ha-replicated-clickhouse-cluster) 获取更多关于如何设置复制 ClickHouse 集群的指导。对于这种负载模式，我们建议使用 3 节点复制设置，集群中的每个副本应具有 8 核以上和 16GB 以上的资源请求，以及 12 核和 32GB 内存的资源限制。
 
-对于这种场景，我们建议使用如下配置：
+鉴于此，我们建议采用如下配置：
 
 ```yaml
 config:
@@ -265,9 +269,9 @@ clickhouse:
 
 ### 中等读取，中等写入 <a name="medium-reads-medium-writes"></a>
 
-这是一个全面的良好配置，应该能够处理 LangSmith 的大部分使用模式。在内部测试中，此配置使我们能够扩展到每秒摄入 100 条 trace 和每秒 40 个读取请求。
+这是一个全面的良好配置，应该能够处理大多数 LangSmith 使用模式。在内部测试中，此配置使我们能够扩展到每秒 100 条追踪摄取和每秒 40 个读取请求。
 
-为此，我们推荐如下配置：
+鉴于此，我们建议采用如下配置：
 
 ```yaml
 config:
@@ -332,14 +336,14 @@ commonEnv:
 ```
 
 <Warning>
-如果在上述配置下仍然发现读取缓慢，我们建议迁移到[复制型 ClickHouse 集群设置](/langsmith/self-host-external-clickhouse#ha-replicated-clickhouse-cluster)
+如果您在使用上述配置时仍然发现读取缓慢，我们建议迁移到 [复制的 ClickHouse 集群设置](/langsmith/self-host-external-clickhouse#ha-replicated-clickhouse-cluster)
 </Warning>
 
-### 高读取量，高写入量 <a name="high-reads-high-writes"></a>
+### 高读取，高写入 <a name="high-reads-high-writes"></a>
 
-您的追踪数据摄入率非常高（接近每秒 1000 条追踪），同时也有大量用户在前端查询追踪数据（超过 50 个用户），和/或脚本持续向 `/runs/query` 或 `/runs/<run-id>` 端点发送请求。
+You have a very high rate of trace ingestion (approaching 1000 traces submitted per second) and also have many users querying traces on the frontend (over 50 users) and/or scripts that are consistently making requests to `/runs/query` or `/runs/<run-id>` endpoints.
 
-**因此，我们强烈建议您设置一个复制型 ClickHouse 集群，以防止在高写入量时出现读取性能下降。** 有关如何设置复制型 ClickHouse 集群的详细指导，请参阅我们的[外部 ClickHouse 文档](/langsmith/self-host-external-clickhouse#ha-replicated-clickhouse-cluster)。针对这种负载模式，我们建议使用 3 节点复制设置，集群中每个副本的资源请求应配置为 14+ 核心和 24+ GB 内存，资源限制为 20 核心和 48 GB 内存。我们还建议每个 ClickHouse 节点/实例为每个启用的 TTL 天数配备 600 Gi 的卷存储（如下面的配置所示）。
+**鉴于此，我们强烈建议设置一个复制的 ClickHouse 集群，以防止在高写入扩展时读取性能下降。** 查看我们的 [外部 ClickHouse 文档](/langsmith/self-host-external-clickhouse#ha-replicated-clickhouse-cluster) for more guidance on how to set up a replicated ClickHouse cluster. For this load pattern, we recommend using a 3 node replicated setup, where each replica in the cluster should have resource requests of 14+ cores and 24+ GB memory, and resource limit of 20 cores and 48 GB memory. We also recommend that each node/instance of ClickHouse has 600 Gi of volume storage for each day of TTL that you enable (as per the configuration below).
 
 总体而言，我们建议采用如下配置：
 
@@ -418,7 +422,7 @@ commonEnv:
 ```
 
 <Note>
-确保 Kubernetes 集群配置了足够的资源以扩展到建议的大小。部署后，Kubernetes 集群中的所有 Pod 都应处于 `Running` 状态。停滞在 `Pending` 状态的 Pod 可能表示您已达到节点池限制或需要更大的节点。
+确保 Kubernetes 集群配置了足够的资源以扩展到建议的大小。部署后，Kubernetes 集群中的所有 pod 应处于 `Running` 状态。陷入 `Pending` 可能表明您正在达到节点池限制，或者需要更大的节点。
 
-另外，请确保部署在集群上的任何入口控制器能够处理所需的负载，以防止出现瓶颈。
+此外，请确保部署在集群上的任何入口控制器都能够处理所需的负载，以防止瓶颈。
 </Note>

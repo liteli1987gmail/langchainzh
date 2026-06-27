@@ -1,28 +1,26 @@
 ---
 title: "Oracle AI 向量搜索文档处理集成"
-description: "使用 LangChain Python 与 Oracle AI 向量搜索文档处理文档加载器集成。"
+description: "使用 LangChain Python 与 Oracle AI 向量搜索文档处理文档加载器进行集成。"
 ---
 
-Oracle AI Database 通过将非结构化内容的语义搜索与业务数据的关系查询结合在单一系统中，支持以文档为中心的 AI 工作流。这使得构建检索工作流（如 RAG）变得更加容易，而无需将数据和向量拆分到多个数据库中。
+Oracle AI 数据库通过将非结构化内容的语义搜索与业务数据的关联查询结合在单一系统中，支持以文档为中心的 AI 工作流。这使得构建检索工作流（如 RAG）变得更加容易，无需将数据和向量分散到多个数据库中。
 
 在本指南中，您将学习如何：
 
-- 从 Python 连接到 Oracle Database
-- 使用 `OracleDocLoader` 加载文档（从数据库表、文件或目录）
-- 使用 `OracleTextSplitter` 分块内容，为嵌入和检索做准备
+- 从 Python 连接到 Oracle 数据库
+- 使用以下方式加载文档 `OracleDocLoader` （从数据库表、文件或目录中）
+- 使用以下工具分块内容 `OracleTextSplitter` 以准备生成嵌入和检索
 
 > **为什么选择数据库内文档处理？**
-> 您可以将 Oracle Database 的功能——安全性、事务、可扩展性和高可用性——应用到相同的流水线中，该流水线负责加载、分块和存储用于 AI 搜索和检索的内容。
+> 您可以将 Oracle 数据库的功能（包括安全性、事务、可扩展性和高可用性）应用到加载、分块和存储用于 AI 搜索和检索内容的同一管道中。
 
-如果您刚开始接触 Oracle Database，可以考虑探索 [免费 Oracle 26 AI](https://www.oracle.com/database/free/#resources)，它提供了简单的设置方式。在使用数据库时，通常建议避免使用 `SYSTEM` 用户进行应用工作负载；相反，应创建具有最小所需权限的专用用户。有关端到端设置演练，请参阅 [Oracle AI 向量搜索演示笔记本](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb)。有关用户管理的背景知识，请参阅官方 [Oracle 指南](https://docs.oracle.com/en/database/oracle/oracle-database/19/admqs/administering-user-accounts-and-security.html#GUID-36B21D72-1BBB-46C9-A0C9-F0D2A8591B8D)。
+如果您刚开始使用 Oracle 数据库，建议探索 [免费 Oracle 26 AI](https://www.oracle.com/database/free/#resources)，它提供了一种简单的设置方法。在使用数据库时，通常建议避免使用 `SYSTEM` 用户进行应用程序工作负载；而是创建具有最小所需权限的专用用户。关于端到端设置演练，请参阅 [Oracle AI 向量搜索演示笔记本](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb)。关于用户管理的背景信息，请参阅官方 [Oracle 指南](https://docs.oracle.com/en/database/oracle/oracle-database/19/admqs/administering-user-accounts-and-security.html#GUID-36B21D72-1BBB-46C9-A0C9-F0D2A8591B8D).
 
-### 前置条件
+### 前提条件
 
-安装 `langchain-oracledb`。`python-oracledb` 驱动程序将作为依赖项自动安装。
+安装 `langchain-oracledb`。 `python-oracledb` 驱动程序将作为依赖项自动安装。
 
 <CodeGroup>
-
-</fragment>
 ```bash pip
 pip install -qU langchain-oracledb
 ```
@@ -31,9 +29,9 @@ uv add langchain-oracledb
 ```
 </CodeGroup>
 
-### 连接 Oracle 数据库
+### 连接到 Oracle 数据库
 
-以下示例代码将演示如何连接 Oracle 数据库。默认情况下，python-oracledb 以「瘦」模式运行，直接连接到 Oracle 数据库。此模式不需要 Oracle Client 库。但是，当 python-oracledb 使用 Oracle Client 库时，可以获得一些额外的功能。当使用 Oracle Client 库时，python-oracledb 被称为处于「厚」模式。两种模式都提供了全面的功能，支持 Python Database API v2.0 规范。请参阅以下[指南](https://python-oracledb.readthedocs.io/en/latest/user_guide/appendix_a.html#featuresummary)，了解每种模式支持的功能。如果您无法使用瘦模式，可能需要切换到厚模式。
+以下示例代码将展示如何连接到 Oracle 数据库。默认情况下，python-oracledb 以“精简”模式运行，直接连接到 Oracle 数据库。此模式不需要 Oracle Client 库。但是，当 python-oracledb 使用 Oracle Client 库时，某些额外功能可用。当使用 Oracle Client 库时，Python-oracledb 被称为处于“厚”模式。两种模式都全面支持 Python 数据库 API v2.0 规范。请参阅以下 [指南](https://python-oracledb.readthedocs.io/en/latest/user_guide/appendix_a.html#featuresummary) ，了解每种模式支持的功能。如果您无法使用精简模式，可能需要切换到厚模式。
 
 ```python
 import sys
@@ -49,7 +47,7 @@ connection = oracledb.connect(user=username, password=password, dsn=dsn)
 print("Connection successful!")
 ```
 
-现在让我们创建一个表并插入一些示例文档来测试。
+现在让我们创建一个表并插入一些示例文档进行测试。
 
 ```python
 try:
@@ -91,11 +89,11 @@ except Exception as e:
 
 ### 加载文档
 
-用户可以灵活地从 Oracle 数据库、文件系统或两者加载文档，通过适当配置加载器参数。有关这些参数的详细信息，请参阅 [Oracle AI Vector Search Guide](https://docs.oracle.com/en/database/oracle/oracle-database/23/arpls/dbms_vector_chain1.html#GUID-73397E89-92FB-48ED-94BB-1AD960C4EA1F)。
+用户可以灵活地从 Oracle 数据库、文件系统或两者加载文档，只需适当配置加载器参数。有关这些参数的详细信息，请参阅 [Oracle AI 向量搜索指南](https://docs.oracle.com/en/database/oracle/oracle-database/23/arpls/dbms_vector_chain1.html#GUID-73397E89-92FB-48ED-94BB-1AD960C4EA1F).
 
-使用 `OracleDocLoader` 的一个显著优势是其能够处理超过 150 种不同的文件格式，无需为不同文档类型使用多个加载器。有关支持的格式完整列表，请参阅 [Oracle Text Supported Document Formats](https://docs.oracle.com/en/database/oracle/oracle-database/23/ccref/oracle-text-supported-document-formats.html)。
+使用 OracleDocLoader 的一个重要优势是它能够处理 150 多种不同的文件格式，无需为不同文档类型使用多个加载器。有关支持格式的完整列表，请参阅 [Oracle Text 支持的文档格式](https://docs.oracle.com/en/database/oracle/oracle-database/23/ccref/oracle-text-supported-document-formats.html).
 
-以下是演示如何使用 `OracleDocLoader` 的示例代码片段：
+以下是示例代码片段，演示如何使用 `OracleDocLoader`:
 
 ```python
 from langchain_oracledb.document_loaders.oracleai import OracleDocLoader
@@ -129,9 +127,9 @@ print(f"Number of docs loaded: {len(docs)}")
 
 ### 拆分文档
 
-文档的大小可能会有所不同，从小型到大型不等。用户通常更喜欢将文档拆分为较小的部分，以方便生成嵌入向量。此拆分过程提供了多种自定义选项。如需了解这些参数的详细信息，请参阅 [Oracle AI 向量搜索指南](https://docs.oracle.com/en/database/oracle/oracle-database/23/arpls/dbms_vector_chain1.html#GUID-4E145629-7098-4C7C-804F-FC85D1F24240)。
+文档大小可能有所不同，从小型到大型不等。用户通常更喜欢将文档分块成较小的部分，以方便生成嵌入。此拆分过程有多种自定义选项可用。有关这些参数的详细信息，请参阅 [Oracle AI 向量搜索指南](https://docs.oracle.com/en/database/oracle/oracle-database/23/arpls/dbms_vector_chain1.html#GUID-4E145629-7098-4C7C-804F-FC85D1F24240).
 
-以下是展示如何实现此操作的示例代码：
+以下是一个示例代码，展示了如何实现此功能：
 
 ```python
 from langchain_oracledb.document_loaders.oracleai import OracleTextSplitter
@@ -167,4 +165,4 @@ print(f"Number of Chunks: {len(list_chunks)}")
 
 ### 端到端演示
 
-请参阅我们完整的演示指南 [Oracle AI 向量搜索端到端演示指南](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb) 来构建一个端到端 RAG 管道，借助 Oracle AI 向量搜索。
+请参阅我们完整的演示指南 [Oracle AI 向量搜索端到端演示指南](https://github.com/langchain-ai/langchain/blob/v0.3/cookbook/oracleai_demo.ipynb) 以在 Oracle AI 向量搜索的帮助下构建端到端 RAG 管道。

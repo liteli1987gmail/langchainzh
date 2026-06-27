@@ -1,22 +1,20 @@
 ---
-title: 沙箱快照
+title: 沙盒快照
 sidebarTitle: 快照
-description: 为沙箱构建和捕获可复用的文件系统镜像。
+description: 为沙盒构建和捕获可复用的文件系统镜像。
 ---
 
-**快照**是由 Docker 镜像支撑的可复用文件系统包。当您想从自定义文件系统镜像启动沙箱时，可以构建或捕获快照。
+A **快照** 是一个由 Docker 镜像支持的可复用文件系统包。当您想从自定义文件系统镜像启动沙盒时，请构建或捕获快照。
 
-您也可以从正在运行的沙箱中捕获快照——安装软件包、写入数据文件或配置状态，然后将结果快照化并作为新的起点复用。
+您也可以从运行中的沙盒捕获快照——安装软件包、写入数据文件或配置状态，然后对结果进行快照并将其作为新的起点复用。
 
-![Sandboxes snapshots page](/images/langsmith/sandboxes/sb-snapshots.png)
+![沙盒快照页面](/images/langsmith/sandboxes/sb-snapshots.png)
 
 ## 从 Docker 镜像构建快照
 
-通过指向任意 Docker 镜像来构建快照。调用会阻塞直到快照就绪（默认超时为 60 秒；大型镜像请调高该值）。
+通过指向任何 Docker 镜像来构建快照。调用会阻塞直到快照就绪（默认超时为 60 秒；对于大型镜像请增加超时时间）。
 
 <CodeGroup>
-
-</fragment>
 
 ```python Python
 from langsmith.sandbox import SandboxClient
@@ -48,9 +46,9 @@ console.log(snapshot.id);
 
 </CodeGroup>
 
-### 私有注册表
+### 私有镜像仓库
 
-传递注册表凭证（或预先注册的 `registry_id` / `registryId`），用于从私有注册表中拉取镜像。
+传递镜像仓库凭据（或预先注册的 `registry_id` / `registryId`）来从私有镜像仓库拉取。
 
 <CodeGroup>
 
@@ -82,17 +80,15 @@ const snapshot = await client.createSnapshot(
 );
 ```
 
-<CodeGroup>
+</CodeGroup>
 
 ## 从 Dockerfile 构建快照
 
-当您有一个本地 `Dockerfile` 但不想先将其镜像发布到 registry 时，可以直接从 `Dockerfile` 及其构建上下文构建快照。LangSmith 会启动一个临时构建器沙箱，上传上下文，在其中使用 [BuildKit](https://docs.docker.com/build/buildkit/) 运行构建，并将生成的镜像捕获为快照。构建完成后，构建器沙箱会自动拆除。
+当您有本地 `Dockerfile` 但不想先将镜像发布到镜像仓库时，请直接从 `Dockerfile` 及其构建上下文构建快照。LangSmith 会启动一个临时构建器沙盒，上传上下文，在其中运行构建并使用 [BuildKit](https://docs.docker.com/build/buildkit/)将生成的镜像捕获为快照。构建完成后，构建器沙盒会自动销毁。
 
-该调用会阻塞直到快照准备就绪（默认超时为 60 秒；对于大型或慢速构建，请增大该值）。`fs_capacity_bytes` 必须足够大，以容纳构建上下文、中间层和最终镜像。
+调用会阻塞直到快照就绪（默认超时为 60 秒；对于大型或慢速构建请增加超时时间）。 `fs_capacity_bytes` 必须足够大以容纳构建上下文、中间层和最终镜像。
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 from langsmith.sandbox import SandboxClient
@@ -127,17 +123,14 @@ console.log(snapshot.id);
 </CodeGroup>
 
 <Note>
-`dockerfile` 相对于 `context` 进行解析，除非你传入绝对路径，且它必须位于 context 目录内。`.git` 目录会自动从上传的 context 中排除。
+`dockerfile` 相对于 `context` 进行解析，除非传入绝对路径，且必须位于上下文目录内。 `.git` 目录会自动从上传的上下文中排除。
 </Note>
 
 ### 构建参数和目标阶段
 
-传递 `build_args` / `buildArgs` 来设置 Docker `ARG` 值，传递 `target` 以停止在多阶段构建的特定阶段。
+传递 `build_args` / `buildArgs` 来设置 Docker `ARG` 值，以及 `target` 来在多阶段构建的特定阶段停止。
 
 <CodeGroup>
-
-
-</CodeGroup>
 
 ```python Python
 snapshot = client.create_snapshot_from_dockerfile(
@@ -163,9 +156,9 @@ const snapshot = await client.createSnapshotFromDockerfile(
 
 </CodeGroup>
 
-### 流式构建日志
+### 流式传输构建日志
 
-传递一个回调函数给 `on_build_log` / `onBuildLog`，以接收构建运行时的 stdout 和 stderr，这在显示进度或调试构建失败时非常有用。
+向 `on_build_log` / `onBuildLog` 传递回调函数以接收构建运行时产生的 stdout 和 stderr，这在显示进度或调试构建失败时非常有用。
 
 <CodeGroup>
 
@@ -187,15 +180,13 @@ const snapshot = await client.createSnapshotFromDockerfile(
 );
 ```
 
-<CodeGroup>
+</CodeGroup>
 
 ### 加速冷构建
 
-`vcpus` / `vCpus` 和 `mem_bytes` / `memBytes` 用于调整临时构建器沙箱的大小。构建在内部运行 BuildKit 和原生快照器的层副本，它们默认会争夺单个核心的资源，因此为构建器额外分配一个 vCPU 可以大幅缩短冷构建的墙钟时间。
+`vcpus` / `vCpus` 和 `mem_bytes` / `memBytes` 调整临时构建器沙盒的规格。构建在 BuildKit 加上原生 snapshotter 的层拷贝内运行，默认情况下它们会争用单个核心，因此为构建器额外分配一个 vCPU 可以大幅缩短冷构建的墙上时间。
 
 <CodeGroup>
-
-</CodeGroup>
 
 ```python Python
 snapshot = client.create_snapshot_from_dockerfile(
@@ -224,12 +215,12 @@ const snapshot = await client.createSnapshotFromDockerfile(
 </CodeGroup>
 
 <Tip>
-同步 `SandboxClient` 和 `AsyncSandboxClient` 都以相同的参数公开此方法——在异步客户端上为 `await client.create_snapshot_from_dockerfile(...)` 。
+同步 `SandboxClient` 和 `AsyncSandboxClient` 都以此方法暴露相同的参数——`await client.create_snapshot_from_dockerfile(...)` 在异步客户端上。
 </Tip>
 
-## 从运行中的沙箱捕获快照
+## 从运行中的沙盒捕获快照
 
-从现有快照启动沙箱，安装软件包或准备数据，然后将结果捕获为新快照。返回的快照的 `source_sandbox_id` 被设置为它所捕获的沙箱，可用作后续任何 `create_sandbox` 调用的 `snapshot_id` 。
+从现有快照启动沙盒，安装软件包或准备数据，然后将结果捕获为新快照。返回的快照的 `source_sandbox_id` 会被设置为它所捕获自的沙盒，并且可以用作后续任何 `snapshot_id` 的 `create_sandbox` call.
 
 <CodeGroup>
 
@@ -273,16 +264,13 @@ try {
 </CodeGroup>
 
 <Note>
-Capture 仅保留**持久文件系统**。已安装的包（在 `/usr/local`、`/root`、`/opt`、主目录等下）以及你写入这些位置的文件都会被保留。运行中的进程、打开的套接字、内存中的状态以及 `/tmp` 下的任何内容（tmpfs）都**不会**保留 — 请启动新沙盒并重新启动你需要的进程。
+捕获会保留 **仅限持久文件系统**。已安装的包（在 `/usr/local`, `/root`, `/opt`、主目录等）中以及写入这些位置的文件会被保留。正在运行的进程、打开的套接字、内存中的状态，以及 `/tmp` （这是一个 tmpfs）下的内容 **不会** 被保留——请启动新的沙箱并重新启动您需要的进程。
 </Note>
 
 <Tip>
-你可以通过名称（而非 ID）从快照启动沙盒 — 当你知道你捕获时使用的人类可读标签时会很有用：
+您可以通过 **名称** 而不是 ID 来从快照启动沙箱——当您知道使用以下命令捕获的人类可读标签时非常方便：
 
 <CodeGroup>
-
-
-</Tip>
 
 ```python Python
 sb = client.create_sandbox(snapshot_name="ml-ready")
@@ -294,12 +282,12 @@ const sb = await client.createSandbox({ snapshotName: "ml-ready" });
 
 </CodeGroup>
 
-最多传递一个 `snapshot_id` / `snapshot_name`（或在 TypeScript 中为 `snapshotId` / `snapshotName`）。同时省略两者以使用默认运行时。
+最多传递一个 `snapshot_id` / `snapshot_name` (or `snapshotId` / `snapshotName` （在 TypeScript 中）。省略两者以使用默认运行时。
 </Tip>
 
-### 调整捕获时机
+### 调整捕获时间
 
-`capture_snapshot` 会阻塞，直到新快照就绪。如果您的文件系统很大或存储后端较慢，请增加 `timeout` 参数的值（默认 60 秒）。
+`capture_snapshot` 会阻塞直到新快照准备就绪。请提高 `timeout` 参数（默认 60 秒）如果您的文件系统很大或存储后端很慢。
 
 <CodeGroup>
 
@@ -311,7 +299,7 @@ snapshot = sb.capture_snapshot("ml-ready-v2", timeout=600)
 const snapshot = await sb.captureSnapshot("ml-ready-v2", { timeout: 600 });
 ```
 
-<CodeGroup>
+</CodeGroup>
 
 ## 列出、获取和删除快照
 
@@ -341,10 +329,10 @@ const snapshot = await client.getSnapshot("550e8400-e29b-41d4-a716-446655440000"
 await client.deleteSnapshot(snapshot.id);
 ```
 
-<CodeGroup>
+</CodeGroup>
 
 <Note>
-`list_snapshots` / `listSnapshots` 在服务器端进行分页（默认页面大小为 50，最大为 500），并接受可选过滤器：`name_contains` / `nameContains`（对名称不区分大小写的子字符串匹配）、`limit`（1–500）和 `offset`（≥ 0）。通过递增 `offset` 来翻页获取结果。
+`list_snapshots` / `listSnapshots` 支持服务器端分页（默认页面大小 50，最大 500）并接受可选的过滤器： `name_contains` / `nameContains` （名称不区分大小写的子字符串）， `limit` （1–500），以及 `offset` （≥ 0）。通过增加 `offset`.
 
 <CodeGroup>
 
@@ -362,7 +350,7 @@ const page = await client.listSnapshots({ nameContains: "ml", limit: 100 });
 
 ## 停止和启动沙箱
 
-沙箱可以停止和重新启动，而不会丢失文件系统状态。您在上一次运行期间写入的文件在沙箱恢复时仍然存在。
+沙箱可以停止和重启而不会丢失文件系统状态。您在上一次运行期间写入的文件在沙箱重新启动后仍然存在。
 
 <CodeGroup>
 
@@ -392,10 +380,12 @@ const result = await sb.run("cat /tmp/state.txt");
 console.log(result.stdout.trim()); // "hello"
 ```
 
-您也可以通过客户端直接按名称停止和启动（Python 中为 `client.stop_sandbox(name)` / `client.start_sandbox(name)`，TypeScript 中为 `client.stopSandbox(name)` / `client.startSandbox(name)`）。
+</CodeGroup>
 
-## 下一步
+您也可以通过客户端直接按名称停止和启动（`client.stop_sandbox(name)` / `client.start_sandbox(name)` 在 Python 中， `client.stopSandbox(name)` / `client.startSandbox(name)` 在 TypeScript 中）。
+
+## 后续步骤
 
 - [使用 SDK 从快照创建沙箱](/langsmith/sandbox-sdk)
-- [使用服务 URL 公开 HTTP 服务](/langsmith/sandbox-service-urls)
+- [通过服务 URL 公开 HTTP 服务](/langsmith/sandbox-service-urls)
 - [通过 Auth 代理注入凭据](/langsmith/sandbox-auth-proxy)

@@ -1,6 +1,6 @@
 ---
 title: 评分标准
-description: LLM-as-a-judge 评分，用于代理根据评分标准迭代直到完成
+description: LLM即评判者评分，用于代理根据评分标准迭代直到完成
 tag: "Beta"
 ---
 
@@ -13,14 +13,14 @@ import RubricCodeGenerationAgentPy from '/snippets/code-samples/rubric-code-gene
 import RubricCodeGenerationInvokePy from '/snippets/code-samples/rubric-code-generation-invoke-py.mdx';
 
 <Note>
-`RubricMiddleware` 需要 `deepagents>=0.6.5`。目前处于[**测试版**](/oss/versioning)；API 可能在未来发生变化。
+`RubricMiddleware` 需要 `deepagents>=0.6.5`. It is in [**beta**](/oss/versioning)；API 未来可能会发生变化。
 </Note>
 
-某些智能体任务有明确的"完成"定义，仅靠工作模型无法在第一次就可靠地达到：符合正确音节模式的俳句、所有测试通过的代码重构、涵盖所有要求章节的报告。`RubricMiddleware` 允许你将*什么是"完成"*声明为评分标准，并让智能体**自我评估和迭代**，直到满足评分标准（或达到配置的最大迭代次数）。
+某些代理任务有明确的"完成"定义，但工作模型本身无法在第一次尝试时可靠地达到：符合音节模式的俳句、通过所有测试的重构、涵盖所有必需要求的报告。 `RubricMiddleware` 允许你声明 *什么样的结果才算完成* 作为评分标准，并让代理 **自我评估并迭代**  直到评分标准满足（或达到配置的最大迭代次数上限）。
 
-**LLM-as-a-judge** 是一种模式，即由一个语言模型根据预定义的标准评估另一个模型的输出。在 [LangSmith 评估](/langsmith/evaluation-concepts#llm-as-judge) 中，LLM-as-a-judge 评估器离线批量对应用输出进行评分。`RubricMiddleware` 在运行时应用相同的模式：在深度智能体生成输出后，专门的评分模型根据你的评分标准审查对话记录，并推动修订，直到每项标准都通过（或达到配置的迭代上限）。
+**LLM-as-a-judge** 是一种模式，其中一个语言模型根据定义的标准评估另一个模型的输出。在 [LangSmith 评估](/langsmith/evaluation-concepts#llm-as-judge)中，LLM即评判者评估器以离线批处理方式对应用程序输出进行评分。 `RubricMiddleware` 在运行时应用相同的模式：深度代理生成输出后，专门的评判器模型会根据你的评分标准审查对话记录，并驱动修订，直到每个标准都通过（或达到配置的迭代上限）。
 
-当深度智能体完成推理后，LLM-as-a-judge 评分子智能体会审查输出并返回判定结果。如果返回 `needs_revision`，则将每项标准的反馈重新注入对话，并让智能体再次运行。循环在 `satisfied`、`max_iterations_reached`、`failed` 或 `grader_error` 时终止。
+当深度代理完成推理时，LLM即评判者评判子代理会审查输出并返回裁决。如果返回 `needs_revision`，则会逐标准反馈注入对话，代理再次运行。循环在 `satisfied`, `max_iterations_reached`, `failed`, or `grader_error`.
 
 ```mermaid
 graph LR
@@ -50,21 +50,21 @@ graph LR
 
 ## 配置中间件
 
-在调用 `create_deep_agent` 时，将 `RubricMiddleware` 添加到 `middleware` 列表中：
+添加 `RubricMiddleware` 到 `middleware` 调用时的 `create_deep_agent`:
 
 <RubricConfigurePy />
 
 | 参数 | 必填 | 默认值 | 描述 |
 | --- | --- | --- | --- |
-| `model` | 是 | `None` | LLM-as-a-judge 评分子代理使用的聊天模型。接受 `"provider:model-id"` 字符串或 `BaseChatModel` 实例。通常比深度代理的工作模型更小或更便宜。 |
-| `system_prompt` | 否 | 内置评分器提示词 | 自定义评分指令。回退到默认系统提示词，教导评分器判决格式及其可用的工具。 |
-| `tools` | 否 | `None` | 评分器在做出判决前可以调用的工具，用于收集证据（运行测试、计算 token、读取文件）。如果不提供工具，评分器仅根据对话记录进行推理。 |
-| `max_iterations` | 否 | `3` | 每次评分标准尝试的评分器迭代次数硬上限。最大输入值为 20。当达到上限仍未获得 `satisfied` 判决时，代理将以 `max_iterations_reached` 状态终止。 |
-| `on_evaluation` | 否 | `None` | 可选回调，在每次评分迭代后（无论使用 `invoke()`、`stream()` 还是 `stream_events()`）调用，包含每个 `RubricEvaluation`。可用于日志记录、自定义指标、评估数据集或 UI 更新。 |
+| `model` | 是 | `None` | LLM即评判者评判子代理使用的聊天模型。接受 `"provider:model-id"` 字符串或 `BaseChatModel` 实例。通常比深度代理的工作模型更小或更便宜的模型。|
+| `system_prompt` | 否 | 内置评判器提示 | 自定义评分指令。回退到默认系统提示，向评判器教授裁决格式及其可用的工具。|
+| `tools` | No | `None` | 评判器在做出裁决前可调用的工具，用于收集证据（运行测试、计算令牌数、读取文件）。如果没有工具，评判器仅根据对话记录进行推理。|
+| `max_iterations` | No | `3` | 每次评分标准尝试的评判器迭代硬上限。最大输入值为 20。当达到上限而未获得 `satisfied` 裁决时，代理以 `max_iterations_reached`. |
+| `on_evaluation` | No | `None` 状态终止。| 可选的回调函数，在每次 `RubricEvaluation` 评分迭代后触发，无论你是否使用 `invoke()`, `stream()` or `stream_events()`。可用于日志记录、自定义指标、评估数据集或 UI 更新。|
 
 ## 调用时传递评分标准
 
-在调用状态上传递 `rubric` 字符串以启动自评循环。使用 `invoke()` 进行单个阻塞调用，或使用 [`stream_events(..., version="v3")`](/oss/langchain/event-streaming) 配合 [`CustomTransformer`](/oss/langchain/event-streaming#custom-updates) 接收 `stream.custom` 上实时发生的评分事件：
+在调用状态时传递 `rubric` 字符串以启动自我评估循环。使用 `invoke()` 进行单个阻塞调用，或 [`stream_events(..., version="v3")`](/oss/langchain/event-streaming) 配合 [`CustomTransformer`](/oss/langchain/event-streaming#custom-updates) 以在 `stream.custom` 上接收实时评分事件：
 
 <Tabs>
     <Tab title="invoke()">
@@ -73,87 +73,87 @@ graph LR
     <Tab title="stream_events()">
         <RubricStreamPy />
 
-        评分标准评分在 `stream.custom` 上发出以下自定义事件：
+        评分标准评分会在 `stream.custom`:
 
-        | 事件 | 触发时机 | 载荷字段 |
+        | 事件 | 触发时机 | Payload 字段 |
         | --- | --- | --- |
-        | `rubric_evaluation_start` | 评分器运行之前。 | <ul><li>`type`：事件名称</li><li>`grading_run_id`：在一次评分标准尝试中所有事件共享</li><li>`iteration`：当前评分运行的从零开始的索引</li></ul> |
-        | `rubric_evaluation_end` | 评分器返回后或评分器异常后。 | <ul><li>`type`：事件名称</li><li>`grading_run_id`：在一次评分标准尝试中所有事件共享</li><li>`iteration`：当前评分器遍历的从零开始的索引</li><li>`result`：本次遍历的最终判决</li><li>`explanation`：评分器的摘要</li><li>`criteria`：每项标准的判决</li></ul> |
+        | `rubric_evaluation_start` | 在评判器运行之前。| <ul><li>`type`：事件名称</li><li>`grading_run_id`：在一次评分尝试内的所有事件中共享</li><li>`iteration`：当前评分运行的从零开始的索引</li></ul> |
+        | `rubric_evaluation_end` | 在评分器返回后或评分器异常后。 | <ul><li>`type`：事件名称</li><li>`grading_run_id`：在一次评分尝试内的所有事件中共享</li><li>`iteration`：当前评分遍次的从零开始的索引</li><li>`result`：此次遍次的最终裁决</li><li>`explanation`：来自评分器的摘要</li><li>`criteria`：每个标准的裁决</li></ul> |
     </Tab>
 </Tabs>
 
-### 评分标准判决
+### 评分裁决
 
-当深度代理完成推理并产生输出后，LLM-as-a-judge 评分子代理会根据评分标准审查输出，并产生以下判决之一：
+当深度智能体完成推理并产生输出后，LLM 即评分器子智能体会根据评分标准审查该输出，并产生以下裁决之一：
 
-| 状态 | 含义 | 是否回环？ |
+| 状态 | 含义 | 是否循环回退？ |
 | --- | --- | --- |
-| `satisfied` | 评分标准中的每项标准都通过。 | 否 |
-| `needs_revision` | 至少一项标准未通过；评分器反馈被注入，代理再次运行。 | 是 |
-| `max_iterations_reached` | 评分器仍希望进行修改，但已达到 `max_iterations`。 | 否 |
-| `failed` | 评分器判定评分标准格式不正确或无法根据对话记录进行评估。 | 否 |
-| `grader_error` | LLM-as-a-judge 评分子代理本身抛出异常（提供商超时、凭据缺失、格式错误的结构化响应等）。 | 否 |
+| `satisfied` | 评分标准中的每个标准都通过。 | 否 |
+| `needs_revision` | 至少一个标准未通过；评分器反馈被注入，智能体再次运行。 | 是 |
+| `max_iterations_reached` | 评分器仍希望进行修改，但 `max_iterations` 已达到。 | 否 |
+| `failed` | 评分器判定评分标准格式错误或无法根据记录进行评估。 | 否 |
+| `grader_error` | LLM 即评分器子智能体本身抛出了异常（提供商超时、凭据缺失、结构化响应格式错误等）。 | 否 |
 
 ## 观察迭代进度
 
-`on_evaluation` 是一个回调函数，在每次评分迭代后（无论你调用 `invoke()` 还是 `stream_events()`）触发，包含评分器的判决。如果你没有从 `stream.custom`（使用 `CustomTransformer`）读取评分事件，也没有使用 LangSmith 对运行进行跟踪，这是检查评分过程中发生了什么的主要方式。
+`on_evaluation` 是一个回调函数，在每次评分迭代后触发，并附带评分器的裁决，无论你是否调用 `invoke()` or `stream_events()`。如果你没有从 `stream.custom` 中读取评分事件（配合 `CustomTransformer`) or [使用 LangSmith 追踪运行情况](/langsmith/trace-with-langgraph)），它是检查评分过程中发生情况的主要方式。
 
 <RubricOnEvaluationPy />
 
-中间件在每次[评分器遍历](#grader-pass-events)后用 `RubricEvaluation` 字典调用你的函数。`RubricEvaluation` 字典包含：
+中间件在每次 `RubricEvaluation` 评分遍次 [后使用](#grader-pass-events)字典调用你的函数。 `RubricEvaluation` 该
 
 | 字段 | 类型 | 描述 |
 | --- | --- | --- |
-| `grading_run_id` | `str` | 在一次评分标准尝试中所有评估共享的标识符。当调用者提供不同的 `rubric` 时，或在得到最终判决后再次使用相同的 `rubric` 调用时，新的运行开始。 |
-| `iteration` | `int` | 该运行中当前评分器遍历的从零开始的索引。 |
-| `result` | `str` | 本次遍历的评分器判决：`satisfied`、`needs_revision`、`failed` 或 `grader_error`。 |
-| `explanation` | `str` | 评分器的自由格式摘要。在基础设施故障时，包含异常类型和消息。 |
-| `criteria` | `list` | 每项标准的判决。每个条目为 `{name, passed: true}` 或 `{name, passed: false, gap}`，其中 `gap` 是针对未通过标准的可操作反馈。 |
+| `grading_run_id` | `str` | 在一次评分标准尝试中每次评估的共享标识符。当调用者提供不同的 `rubric`时，或当同一个 `rubric` 在得到最终裁决后再次被调用时，会开始新的运行。 |
+| `iteration` | `int` | 在该运行中当前评分遍次的从零开始的索引。 |
+| `result` | `str` | 此次遍次的评分器裁决： `satisfied`, `needs_revision`, `failed`, or `grader_error`. |
+| `explanation` | `str` | 来自评分器的自由格式摘要。基础设施故障时，包括异常类型和消息。 |
+| `criteria` | `list` | 每个标准的裁决。每个条目为 `{name, passed: true}` or `{name, passed: false, gap}` ，其中 `gap` 是针对未通过标准的可操作反馈。 |
 
-### 评分器遍历事件
+### 评分遍次事件
 
 | 事件 | 描述 |
 | ----- | ------------- |
-| **成功评分** | 每次遍历触发一次，包括中间的 `needs_revision` 判决和最终的 `satisfied` 或 `failed` 判决。<br /><br /> 当评分器返回 `needs_revision` 但已达到 `max_iterations` 时，回调仍然接收 `result: "needs_revision"`（评分器的判决）。运行的最终状态是私有状态 `_rubric_status` 上的 `max_iterations_reached`，而不是评估记录上的。在 `invoke` 完成后检查 `_rubric_status`，或者同时读取 `_rubric_evaluations` 的最后一条和 `_rubric_iterations`，以在达到上限时进行分支处理。 |
-| **评分器异常** | 使用 `result: "grader_error"`、从异常派生的解释和空的 `criteria` 列表触发。 |
-| **回调中的错误** | 异常被记录并抑制。评分循环继续。不要使用 `on_evaluation` 来强制控制流（例如，抛出异常来停止代理）。 |
+| **成功评分** | 每次遍次触发一次，包括中间 `needs_revision` 裁决和最终 `satisfied` or `failed` verdict. <br /><br /> 当评分器返回时 `needs_revision` 但 `max_iterations` 已达到时，回调仍会收到 `result: "needs_revision"` （评判者的裁决）。运行的最终状态是 `max_iterations_reached` 基于私有状态 `_rubric_status`，而非评估记录。请检查 `_rubric_status` 之后 `invoke` 完成后，或读取 `_rubric_evaluations` 与 `_rubric_iterations`，以在达到上限时进行分支。|
+| **评判者异常** | 触发时返回 `result: "grader_error"`，一个从异常派生的解释，以及一个空的 `criteria` 列表。|
+| **回调中的错误** | 异常会被记录并抑制。评分循环继续。请勿使用 `on_evaluation` 来强制控制流（例如，抛出异常以停止代理）。|
 
-## 在调用之间持久化评分标准
+## 在多次调用中保持评分标准
 
-单个 `agent.invoke()` 或 `agent.stream_events()` 调用会运行评分标准循环直到完成，并以最终判决结束：`satisfied`、`failed` 或 `max_iterations_reached`。
+单个 `agent.invoke()` or `agent.stream_events()` 调用运行评分标准循环直到完成，并以最终裁决结束： `satisfied`, `failed`, or `max_iterations_reached`.
 
-要将评分标准延续到后续调用，请附加一个[检查点保存器](/oss/langgraph/checkpointers#checkpoints)，并在调用时传递相同的 `thread_id`。在这些情况下，相同的 `rubric` 会在未来的 `invoke()` 或 `stream_events()` 调用中保持有效，直到你在输入中传入新的 `rubric`。
+要将评分标准延续到后续调用，请附加一个 [检查点器](/oss/langgraph/checkpointers#checkpoints) 并传递相同的 `thread_id` 与调用一起。在这些情况下，相同的 `rubric` 会持续存在于未来的 `invoke()` or `stream_events()` 调用中，直到你传入新的为止。
 
-中断（`KeyboardInterrupt`、`asyncio.CancelledError`）会从 `agent.invoke()` 和 `agent.stream_events()` 中未捕获地传播。在检查点保存的线程上，下次使用相同 `rubric` 的调用会恢复进行中的评分运行。
+中断（`KeyboardInterrupt`, `asyncio.CancelledError`）会从 `agent.invoke()` 和 `agent.stream_events()` 中未捕获地传播出去。在已检查点的线程上，下次使用相同评分标准调用会恢复正在进行的评分运行。
 
 ## 示例：生成经过验证的 Python 代码
 
-以下示例构建一个编写 `find_duplicates` 函数的深度代理。它定义一次 `RubricMiddleware`，将其附加到代理，然后在调用时传递 `rubric` 字符串。
+以下示例构建了一个深度代理，用于编写 `find_duplicates` 函数。它定义 `RubricMiddleware` 一次，将其附加到代理，然后在调用时传递一个 `rubric` 字符串。
 
-示例不是要求评分器抽象地推理正确性，而是提供 `run_test_suite` 工具来直接验证行为。评分器在做出判决前调用此工具获取额外信息，当没有提供工具时则回退到根据对话记录进行推理。
+该示例不是让评判者抽象地推理正确性，而是为它提供了一个 `run_test_suite` 工具来直接验证行为。评判者在做出裁决前会调用此工具获取额外信息，当未提供工具时会回退到从对话记录中推理。
 
 <Steps>
-    <Step title="定义 RubricMiddleware">
+<Step title="Define RubricMiddleware">
 
-        此中间件在基础代理之上添加 LLM-as-a-judge 评分循环。配置评分器模型、可选的自定义提示词、用于收集证据的工具，以及最大迭代次数上限。
+此中间件在基础代理之上添加了一个 LLM 即评判者的评分循环。配置评判者模型、可选的自定义提示、用于收集证据的工具以及最大迭代次数上限。
 
-        <RubricCodeGenerationMiddlewarePy />
+<RubricCodeGenerationMiddlewarePy />
 
-    </Step>
-    <Step title="将其传递给深度代理">
+</Step>
+<Step title="Pass it to a deep agent">
 
-        代理的 `system_prompt` 告诉它如何完成工作，而评分标准告诉评分器如何评判工作。
+代理的 `system_prompt` 告诉它如何完成工作，而评分标准告诉评判者如何评判工作。
 
-        <RubricCodeGenerationAgentPy />
+<RubricCodeGenerationAgentPy />
 
-    </Step>
-    <Step title="使用用户消息和评分标准调用">
+</Step>
+<Step title="Invoke with a human message and rubric">
 
-        在调用时，在 `messages` 中提供用户请求，在 `rubric` 中提供换行分隔的检查列表，评分器必须标记为满足。当输入状态中未提供 `rubric` 时，中间件不会运行。
+在调用时，在 `messages` 中提供用户请求，在 `rubric` 中提供换行分隔的检查清单，评判者必须标记为已满足。当输入状态中未提供 `rubric` 时，中间件不会运行。
 
-        <RubricCodeGenerationInvokePy />
+<RubricCodeGenerationInvokePy />
 
-    </Step>
+</Step>
 </Steps>
 
-代理生成输出后，评分器接管并检查每项标准的输出：例如，`test_unhashable` 在输入包含不可哈希类型时是否因 `TypeError` 而失败。如果有任何问题，评分器会提供反馈，然后代理修改其实现并返回给评分器。
+代理产生输出后，评判者接管并检查每个标准的输出：例如，当输入包含不可哈希类型时 `test_unhashable` 会因 `TypeError` 而失败。如果有问题，评判者会提供反馈，然后代理修改其实现并将其返回给评判者。

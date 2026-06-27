@@ -3,17 +3,15 @@ title: Monorepo 支持
 sidebarTitle: Monorepo 支持
 ---
 
-LangSmith 支持从 monorepo 设置中部署智能体（agents），您的智能体代码可能依赖于位于代码库其他位置的共享包。本指南展示了如何构建 monorepo 结构并配置您的 `langgraph.json` 文件以使用共享依赖项。
+LangSmith 支持从 monorepo 环境中部署智能体，您的智能体代码可能依赖于位于仓库其他位置的共享包。本指南展示了如何构建 monorepo 结构并配置您的 `langgraph.json` 文件以使用共享依赖项。
 
-## 代码库结构
+## 仓库结构
 
 完整的可运行示例，请参阅：
 - [Python monorepo 示例](https://github.com/langchain-ai/python-langraph-monorepo-example)
 - [JS monorepo 示例](https://github.com/langchain-ai/js-langgraph-monorepo-example)
 
 <CodeGroup>
-
-</fragment>
 ```plaintext Python
 my-monorepo/
 ├── shared-utils/           # Shared Python package
@@ -54,7 +52,7 @@ my-monorepo/
 
 ## LangGraph.json 配置
 
-将 langgraph.json 文件放在代理的目录中（而不是 monorepo 根目录）。确保文件遵循所需的结构：
+将 langgraph.json 文件放在您的智能体目录中（而不是 monorepo 根目录）。确保文件遵循所需的结构：
 
 <CodeGroup>
 ```json Python
@@ -80,18 +78,16 @@ my-monorepo/
 ```
 </CodeGroup>
 
-Python 实现自动处理父目录中的包，通过以下方式：
-
-- 检测以 `"."` 开头的相对路径。
-- 根据需要将父目录添加到 Docker 构建上下文中。
-- 同时支持真正的包（包含 `pyproject.toml`/`setup.py`）和简单的 Python 模块。
+Python 实现通过以下方式自动处理父目录中的包：
+- 检测以 `"."`.
+- 开头的相对路径，根据需要将父目录添加到 Docker 构建上下文中。
+- 支持真正的包（带有 `pyproject.toml`/`setup.py`）和简单的 Python 模块。
 
 对于 JavaScript monorepo：
+- 共享工作区依赖项由您的包管理器自动解析。
+- 您的 `package.json` 应使用工作区语法引用共享包。
 
-- 共享的工作区依赖项由您的包管理器自动解析。
-- 您的 `package.json` 应该使用 workspace 语法来引用共享包。
-
-代理目录中的 `package.json` 示例：
+示例 `package.json` 在智能体目录中：
 ```json
 {
   "name": "customer-support-agent",
@@ -104,7 +100,7 @@ Python 实现自动处理父目录中的包，通过以下方式：
 
 ## 构建应用程序
 
-运行 `langgraph build`：
+运行 `langgraph build`:
 
 <CodeGroup>
 ```bash Python
@@ -123,22 +119,22 @@ Python 构建流程：
 3. 按正确顺序安装所有依赖项。
 4. 无需特殊标志或命令。
 
-JavaScript 构建流程：
-1. 使用你调用 `langgraph build` 的目录（在本例中为 monorepo 根目录）作为构建上下文。
+JavaScript 构建过程：
+1. 使用你调用的目录 `langgraph build` （本例中为 monorepo 根目录）作为构建上下文。
 2. 自动检测你的包管理器（yarn、npm、pnpm、bun）
-3. 运行相应的安装命令。
-    - 如果你有一个或两个自定义构建/安装命令，它将从你调用 `langgraph build` 的目录运行。
+3. 运行适当的安装命令。
+    - If you have one or both of a custom build/install command it will run from the directory you called `langgraph build` from.
     - 否则，它将从 `langgraph.json` 文件所在的目录运行。
-4. 可选地从 `langgraph.json` 文件所在的目录运行自定义构建命令（仅在你传递 `--build-command` 标志时）。
+4. 可选地从文件所在目录运行自定义构建命令（仅当你传递 `langgraph.json` 标志时）。 `--build-command` 
 
 ## 提示和最佳实践
 
-1. **将 agent 配置放在 agent 目录中**：将 `langgraph.json` 文件放在特定的 agent 目录中，而不是 monorepo 根目录。这允许你在同一个 monorepo 中支持多个 agent，而无需将它们全部部署在同一个 LangSmith 部署中。
+1. **将智能体配置保留在智能体目录中**：将 `langgraph.json` 文件放在特定的智能体目录中，而不是 monorepo 根目录。这样你可以在同一个 monorepo 中支持多个智能体，而无需将它们全部部署在同一个 LangSmith 部署中。
 
-2. **Python 使用相对路径**：对于 Python monorepo，在 `dependencies` 数组中使用相对路径，如 `"../../shared-package"`。
+2. **对 Python 使用相对路径**：对于 Python monorepo，使用类似 `"../../shared-package"` 的路径，在 `dependencies` array.
 
-3. **JS 利用 workspace 功能**：对于 JavaScript/TypeScript，使用你的包管理器的 workspace 功能来管理包之间的依赖关系。
+3. **利用 JS 的工作区功能**: For JavaScript/TypeScript, use your package manager's workspace features to manage dependencies between packages.
 
-4. **首先在本地测试**：在部署之前，始终在本地测试构建以确保所有依赖项都正确解析。
+4. **先在本地测试**：在部署前始终在本地测试你的构建，以确保所有依赖项都被正确解析。
 
-5. **环境变量**：将环境文件（`.env`）放在 agent 目录中用于环境特定配置。
+5. **环境变量**：请将环境文件 (`.env`) 保留在您的代理目录中，用于环境特定配置。

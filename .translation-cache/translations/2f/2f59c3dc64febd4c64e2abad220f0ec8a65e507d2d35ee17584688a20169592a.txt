@@ -29,35 +29,35 @@ import SqlAgentHitlResumeJs from '/snippets/code-samples/sql-agent-hitl-resume-j
 
 ## 概述
 
-在本教程中，您将学习如何使用 LangChain [代理](/oss/langchain/agents) 构建一个能够回答 SQL 数据库相关问题的智能体。
+在本教程中，您将学习如何使用 LangChain 构建一个能够回答有关 SQL 数据库问题的代理 [代理](/oss/langchain/agents).
 
-从高层次来看，智能体将：
+从高层次来看，代理将：
 
 1. 从数据库中获取可用的表和模式
-2. 确定哪些表与问题相关
-3. 获取相关表的模式
-4. 根据问题以及模式信息生成查询
-5. 使用 LLM 双重检查查询中的常见错误
-6. 执行查询并返回结果
-7. 修正数据库引擎暴露的错误，直到查询成功
-8. 根据结果制定响应
+1. 确定哪些表与问题相关
+1. 获取相关表的模式
+1. 根据问题和模式信息生成查询
+1. 使用 LLM 仔细检查查询中的常见错误
+1. 执行查询并返回结果
+1. 修正数据库引擎发现的错误，直到查询成功
+1. 根据结果制定响应
 
 <Warning>
-构建 SQL 数据库的问答系统需要执行模型生成的 SQL 查询。这存在固有的风险。请确保您的数据库连接权限始终尽可能狭窄地限定在智能体需要的范围内。这将减轻（但不能消除）构建模型驱动系统的风险。
+构建 SQL 数据库的问答系统需要执行模型生成的 SQL 查询。这样做存在固有风险。请确保您的数据库连接权限始终尽可能窄地限制在代理的需求范围内。这将减轻（但不能消除）构建模型驱动系统的风险。
 </Warning>
 
 ### 概念
 
 以下教程涵盖以下概念：
 
-- 用于从 SQL 数据库读取数据的[工具](/oss/langchain/tools)
+- [工具](/oss/langchain/tools) 用于从 SQL 数据库读取数据
 - LangChain [代理](/oss/langchain/agents)
-- [人机交互](/oss/langchain/human-in-the-loop)流程
+- [Human-in-the-loop](/oss/langchain/human-in-the-loop) 流程
 
 ## 设置
 
 <Steps>
-<Step title="安装依赖">
+<Step title="Install dependencies">
 
 :::python
 <CodeGroup>
@@ -81,11 +81,9 @@ pnpm add langchain @langchain/core sqlite3 zod
 :::
 
 </Step>
-<Step title="设置 LangSmith">
+<Step title="Set up LangSmith">
 
-设置 [LangSmith](https://smith.langchain.com) 来检查链或代理内部发生的情况。然后设置以下环境变量：
-
-</Step>
+设置 [LangSmith](https://smith.langchain.com) 来检查链或代理内部发生了什么。然后设置以下环境变量：
 
 ```shell
 export LANGSMITH_TRACING="true"
@@ -98,27 +96,27 @@ export LANGSMITH_API_KEY="..."
 ## 构建您的 SQL 代理
 
 <Steps>
-<Step title="选择 LLM">
+<Step title="Select an LLM">
 
 :::python
-选择支持[工具调用](/oss/integrations/providers/overview)的模型：
+选择一个支持 [tool-calling](/oss/integrations/providers/overview):
 
 <ChatModelTabsPy />
 :::
 :::js
 
-选择支持[工具调用](/oss/integrations/providers/overview)的模型：
+选择一个支持 [tool-calling](/oss/integrations/providers/overview):
 <ChatModelTabsJS />
 :::
 
-下面示例中的输出使用的是 OpenAI。
+下面示例中的输出使用了 OpenAI。
 
 </Step>
-<Step title="配置数据库">
+<Step title="Configure the database">
 
-您将在本教程中创建一个 [SQLite 数据库](https://www.sqlitetutorial.net/sqlite-sample-database/)。SQLite 是一个轻量级数据库，易于设置和使用。我们将加载 `chinook` 数据库，这是一个代表数字媒体商店的示例数据库。
+您将创建一个 [SQLite 数据库](https://www.sqlitetutorial.net/sqlite-sample-database/) 用于本教程。SQLite 是一个轻量级数据库，易于设置和使用。我们将加载 `chinook` 数据库，这是一个代表数字媒体商店的示例数据库。
 
-为方便起见，我们已将数据库（`Chinook.db`）托管在一个公共 GCS 存储桶中。
+为方便起见，我们已将数据库（`Chinook.db`）托管在公共 GCS 存储桶上。
 
 :::python
 
@@ -131,7 +129,7 @@ export LANGSMITH_API_KEY="..."
 
 :::
 :::python
-我们将使用 Python 内置的 `sqlite3` 模块与数据库进行交互：
+我们将使用 Python 的内置 `sqlite3` 模块来与数据库交互：
 
 <SqlAgentExploreDatabasePy />
 ```
@@ -139,19 +137,19 @@ Dialect: sqlite
 Available tables: ['Album', 'Artist', 'Customer', 'Employee', 'Genre', 'Invoice', 'InvoiceLine', 'MediaType', 'Playlist', 'PlaylistTrack', 'Track']
 Sample output: [(1, 'AC/DC'), (2, 'Accept'), (3, 'Aerosmith'), (4, 'Alanis Morissette'), (5, 'Alice In Chains')]
 ```
+:::
+
 </Step>
-<Step title="添加数据库交互工具">
+<Step title="Add tools for database interactions">
 
 <Warning>
-以下数据库工具仅为演示目的的最小化封装。它们不打算用于安全目的或生产环境。在执行模型生成的 SQL 之前，请使用范围严格限定的数据库权限，并添加特定于应用程序的验证。
+以下数据库工具仅为演示目的的最小包装器。它们不旨在用于安全目的或生产环境。在执行模型生成的 SQL 之前，请使用范围狭窄的数据库权限并添加特定于应用程序的验证。
 </Warning>
 
 :::python
-我们可以使用 `langchain.tools` 中的 `@tool` 装饰器将数据库工具实现为轻量级封装：
+我们可以将数据库 [工具](/oss/langchain/tools) 实现为使用 `@tool` 装饰器的轻量包装 `langchain.tools`:
 
 <SqlAgentToolsPy />
-
-</fragment>
 ```
 sql_db_query: Input to this tool is a detailed and correct SQL query, output is a result from the database.
     If the query is not correct, an error message will be returned.
@@ -167,56 +165,55 @@ sql_db_list_tables: Input is an empty string, output is a comma-separated list o
 sql_db_query_checker: Use this tool to double check if your query is correct before executing it.
     Always use this tool before executing a query with sql_db_query!
 ```
-<fragment>
 :::
 :::js
 
-我们将使用 `sqlite3` 库来查询数据库并获取模式：
+我们将使用 `sqlite3` 库来查询数据库和获取模式：
 
 <SqlAgentRunQueryJs />
 
 :::
 
 </Step>
-<Step title="创建智能体">
+<Step title="Create the agent">
 
 :::python
-使用 @[`create_agent`] 以最少的代码构建一个 [ReAct 智能体](https://arxiv.org/pdf/2210.03629)。智能体会解释请求并生成 SQL 命令，工具将执行该命令。如果命令有错误，错误信息将返回给模型。然后模型可以检查原始请求和新的错误信息，并生成新的命令。这可以一直持续到 LLM 成功生成命令或达到结束计数。这种向模型提供反馈的模式——在这种情况下是错误信息——非常强大。
+使用 @[`create_agent`] 构建一个 [ReAct 代理](https://arxiv.org/pdf/2210.03629) 只需最少的代码。代理将解析请求并生成SQL命令，工具将执行该命令。如果命令有错误，错误信息将返回给模型。模型可以查看原始请求和新的错误信息，然后生成新的命令。这个过程可以持续进行，直到LLM成功生成命令或达到结束计数。这种为模型提供反馈（在本例中是错误信息）的模式非常强大。
 
-使用描述性系统提示词初始化智能体来自定义其行为：
+使用描述性的系统提示初始化代理以自定义其行为：
 
 <SqlAgentSystemPromptPy />
 
-现在，使用模型、工具和提示词创建智能体：
+现在，使用模型、工具和提示创建代理：
 
 <SqlAgentCreateAgentPy />
 
 :::
 :::js
-在运行命令之前，检查 LLM 生成的命令，检查 `_safe_sql` 中的内容：
+在运行命令之前，先检查LLM生成的命令 ` _safe_sql`:
 
 <SqlAgentSanitizeSqlJs />
 
-然后，使用 `execute_sql` 工具执行命令：
+然后，使用以下方式执行命令 `execute_sql` tool:
 
 <SqlAgentExecuteSqlJs />
 
-使用 `createAgent` 以最少的代码构建一个 [ReAct agent](https://arxiv.org/pdf/2210.03629)。智能体会解释请求并生成 SQL 命令。工具将检查命令的安全性，然后尝试执行该命令。如果命令有错误，错误信息将返回给模型。然后模型可以检查原始请求和新的错误信息，并生成新的命令。这可以一直持续到 LLM 成功生成命令或达到结束计数。这种向模型提供反馈的模式——在这种情况下是错误信息——非常强大。
+使用 `createAgent` 构建一个 [ReAct代理](https://arxiv.org/pdf/2210.03629) 只需最少的代码。代理将解析请求并生成SQL命令。工具将检查命令的安全性，然后尝试执行该命令。如果命令有错误，错误信息将返回给模型。模型可以查看原始请求和新的错误信息，然后生成新的命令。这个过程可以持续进行，直到LLM成功生成命令或达到结束计数。这种为模型提供反馈（在本例中是错误信息）的模式非常强大。
 
-使用描述性系统提示词初始化智能体来自定义其行为：
+使用描述性的系统提示初始化代理以自定义其行为：
 
 <SqlAgentSystemPromptJs />
 
-现在，使用模型、工具和提示词创建智能体：
+现在，使用模型、工具和提示创建代理：
 
 <SqlAgentCreateAgentJs />
 :::
 
 </Step>
-<Step title="运行智能体">
+<Step title="Run the agent">
 
 :::python
-在示例查询上运行智能体并观察其行为：
+在示例查询上运行代理并观察其行为：
 
 <SqlAgentRunAgentPy />
 
@@ -306,20 +303,18 @@ Name: sql_db_query
 On average, the genre with the longest tracks is "Sci Fi & Fantasy" with an average track length of approximately 2,911,783 milliseconds. This is followed by "Science Fiction," "Drama," "TV Shows," and "Comedy."
 ```
 
-代理正确地编写了查询、检查了查询，并运行它以生成最终响应。
+代理正确地编写了查询、检查了查询并运行了查询以得出最终响应。
 
 <Note>
-    您可以检查上述运行的各个方面，包括所采取的步骤、调用的工具、LLM 看到的提示等，请访问 [LangSmith 追踪](https://smith.langchain.com/public/cd2ce887-388a-4bb1-a29d-48208ce50d15/r)。
+    您可以检查上述运行的所有方面，包括所采取的步骤、调用的工具、LLM看到的提示等，请查看 [LangSmith跟踪](https://smith.langchain.com/public/cd2ce887-388a-4bb1-a29d-48208ce50d15/r).
 </Note>
 
 :::
 
 :::js
-运行代理处理示例查询并观察其行为：
+在示例查询上运行代理并观察其行为：
 
 <SqlAgentRunAgentJs />
-
-</fragment>
 
 ```
 human: Which genre, on average, has the longest tracks?
@@ -328,31 +323,28 @@ tool: [{"Genre":"Sci Fi & Fantasy","AvgMilliseconds":2911783.0384615385}]
 ai: Sci Fi & Fantasy — average track length ≈ 48.5 minutes (about 2,911,783 ms).
 ```
 
-代理正确地编写了查询、检查了查询，并运行了查询以提供最终响应。
+代理正确地编写了查询、检查了查询并运行了查询以得出最终响应。
 
 <Note>
-    您可以检查上述运行的各个方面，包括所采取的步骤、调用的工具、LLM 所看到的提示等，请访问 [LangSmith trace](https://smith.langchain.com/public/653d218b-af67-4854-95ca-6abecb9b2520/r)。
+    您可以检查上述运行的所有方面，包括所采取的步骤、调用的工具、LLM看到的提示等，请查看 [LangSmith跟踪](https://smith.langchain.com/public/653d218b-af67-4854-95ca-6abecb9b2520/r).
 </Note>
 
 :::
 
 </Step>
-<Step title="(可选) 使用 Studio">
+<Step title="(Optional) Use Studio">
 
 :::python
-[Studio](/langsmith/studio) 还提供了一个"客户端"循环和内存功能，使您可以将其作为聊天界面运行并查询数据库。您可以提出诸如"告诉我数据库的模式"或"显示前5位客户的发票"之类的问题。您将看到生成的 SQL 命令及相应的输出。以下是启动方法的详细说明。
-<Accordion title="在 Studio 中运行您的代理">
+[Studio](/langsmith/studio) 提供了一个"客户端"循环和内存功能，您可以将此作为聊天界面运行并查询数据库。您可以问诸如"告诉我数据库的架构"或"显示5个最高客户的发票"之类的问题。您将看到生成的SQL命令及结果输出。以下是有关如何开始使用的详细信息。
+<Accordion title="Run your agent in Studio">
 
 除了前面提到的包之外，您还需要：
-
-
-</fragment>
 
 ```shell
 pip install -U langgraph-cli[inmem]>=0.4.0
 ```
 
-在你运行的目录中，需要有一个包含以下内容的 `langgraph.json` 文件：
+在您要运行的目录中，您需要一个 `langgraph.json` 文件，内容如下：
 
 ```json
 {
@@ -365,25 +357,23 @@ pip install -U langgraph-cli[inmem]>=0.4.0
 }
 ```
 
-创建文件 `sql_agent.py` 并插入以下内容：
+创建一个文件 `sql_agent.py` 并插入以下内容：
 
 <SqlAgentStudioPy />
 </Accordion>
 :::
 
 :::js
-[Studio](/langsmith/studio) 提供了一个"客户端"循环以及内存功能，因此您可以作为聊天界面运行它并查询数据库。您可以问诸如"告诉我数据库的结构"或"显示前5位客户的发票"之类的问题。您将看到生成的 SQL 命令及结果输出。以下是有关如何开始使用的详细信息。
+[Studio](/langsmith/studio) 提供了一个"客户端"循环和内存功能，您可以将此作为聊天界面运行并查询数据库。您可以问诸如"告诉我数据库的架构"或"显示5个最高客户的发票"之类的问题。您将看到生成的SQL命令及结果输出。以下是有关如何开始使用的详细信息。
 <Accordion title="Run your agent in Studio">
 
 除了前面提到的包之外，您还需要：
-
-</fragment>
 
 ```shell
 npm i -g @langchain/langgraph-cli@latest
 ```
 
-在你将要运行的目录中，你需要创建一个包含以下内容的 `langgraph.json` 文件：
+在您要运行的目录中，您需要一个 `langgraph.json` 文件，内容如下：
 
 ```json
 {
@@ -396,30 +386,28 @@ npm i -g @langchain/langgraph-cli@latest
 }
 ```
 
-创建文件 `sqlAgent.ts` 并插入以下内容：
+创建一个文件 `sqlAgent.ts` 并插入以下内容：
 
 <SqlAgentStudioJs />
 </Accordion>
 :::
 
 </Step>
-<Step title="实现人工审核">
+<Step title="Implement human-in-the-loop review">
 
 :::python
-在执行代理的 SQL 查询之前对其进行审查以防止意外操作或低效问题是明智之举。
+在执行代理的SQL查询之前进行检查，以防止任何意外操作或低效行为是明智的做法。
 
-LangChain 代理支持内置的[人工审核中间件](/oss/langchain/human-in-the-loop)以增加对代理工具调用的监督。让我们配置代理在调用 `sql_db_query` 工具时暂停等待人工审核：
+LangChain 代理支持内置 [人工介入中间件](/oss/langchain/human-in-the-loop) 来添加工具调用的监督功能。让我们配置代理，使其在调用后暂停以供人工审核。 `sql_db_query` tool:
 
 <SqlAgentHitlMiddlewarePy />
 <Note>
-我们已向代理添加了[检查点](/oss/langchain/short-term-memory)以允许暂停和恢复执行。请参阅[人工审核指南](/oss/langchain/human-in-the-loop)了解详情以及可用的中间件配置。
+我们添加了一个 [检查点组件](/oss/langchain/short-term-memory) 到我们的代理中以允许暂停和恢复执行。参见 [人工介入指南](/oss/langchain/human-in-the-loop) 了解详细信息以及可用的中间件配置。
 </Note>
 
-运行代理时，它现在会在执行 `sql_db_query` 工具之前暂停等待审核：
+运行代理时，它现在会在执行前暂停以供审核。 `sql_db_query` tool:
 
 <SqlAgentHitlRunPy />
-
-</Step>
 ```
 ...
 
@@ -429,7 +417,7 @@ Tool execution pending approval
 Tool: sql_db_query
 Args: {'query': 'SELECT g.Name AS Genre, AVG(t.Milliseconds) AS AvgTrackLength FROM Track t JOIN Genre g ON t.GenreId = g.GenreId GROUP BY g.Name ORDER BY AvgTrackLength DESC LIMIT 1;'}
 ```
-我们可以恢复执行，在这种情况下接受查询，使用 [Command](/oss/langgraph/use-graph-api#combine-control-flow-and-state-updates-with-command)：
+我们可以使用恢复执行（本例中接受查询），使用 [Command](/oss/langgraph/use-graph-api#combine-control-flow-and-state-updates-with-command):
 
 <SqlAgentHitlResumePy />
 ```
@@ -448,24 +436,22 @@ Name: sql_db_query
 The genre with the longest average track length is "Sci Fi & Fantasy" with an average duration of about 2,911,783 milliseconds, followed by "Science Fiction" and "Drama."
 ```
 
-请参阅[人工介入指南](/oss/langchain/human-in-the-loop)了解详情。
+参见 [人工介入指南](/oss/langchain/human-in-the-loop) 了解更多详情。
 :::
 
 :::js
-在执行代理的 SQL 查询之前进行检查，以避免意外操作或低效率，这是明智之举。
+在执行之前检查代理的 SQL 查询以防止任何意外操作或低效问题是明智的做法。
 
-LangChain 代理支持内置的[人工介入中间件](/oss/langchain/human-in-the-loop)，用于对代理的工具调用添加监督。让我们配置代理，使其在调用 `execute_sql` 工具时暂停以等待人工审核：
+LangChain 代理支持内置 [人工介入中间件](/oss/langchain/human-in-the-loop) 来添加工具调用的监督功能。让我们配置代理，使其在调用后暂停以供人工审核。 `execute_sql` tool:
 
 <SqlAgentHitlMiddlewareJs />
 <Note>
-我们为代理添加了一个[检查点器](/oss/langchain/short-term-memory)，以允许暂停和恢复执行。有关此功能以及可用中间件配置的详细信息，请参阅[人工介入指南](/oss/langchain/human-in-the-loop)。
+我们添加了一个 [检查点组件](/oss/langchain/short-term-memory) 到我们的代理中以允许暂停和恢复执行。参见 [人工介入指南](/oss/langchain/human-in-the-loop) 了解详细信息以及可用的中间件配置。
 </Note>
 
-运行代理时，它现在会在执行 `execute_sql` 工具之前暂停以等待审核：
+运行代理时，它现在会在执行前暂停以供审核。 `execute_sql` tool:
 
 <SqlAgentHitlRunJs />
-
-</fragment>
 ```
 ...
 
@@ -475,7 +461,7 @@ Tool execution pending approval
 Tool: execute_sql
 Args: {'query': 'SELECT g.Name AS Genre, AVG(t.Milliseconds) AS AvgTrackLength FROM Track t JOIN Genre g ON t.GenreId = g.GenreId GROUP BY g.Name ORDER BY AvgTrackLength DESC LIMIT 1;'}
 ```
-我们可以恢复执行，在这种情况下接受查询，使用 [Command](/oss/langgraph/use-graph-api#combine-control-flow-and-state-updates-with-command)：
+我们可以使用恢复执行（本例中接受查询），使用 [Command](/oss/langgraph/use-graph-api#combine-control-flow-and-state-updates-with-command):
 
 <SqlAgentHitlResumeJs />
 ```
@@ -494,12 +480,12 @@ Name: execute_sql
 The genre with the longest average track length is "Sci Fi & Fantasy" with an average duration of about 2,911,783 milliseconds, followed by "Science Fiction" and "Drama."
 ```
 
-请参阅[人在环中指南](/oss/langchain/human-in-the-loop)了解详情。
+参见 [人工介入指南](/oss/langchain/human-in-the-loop) 了解更多详情。
 :::
 
 </Step>
 </Steps>
 
-## 下一步
+## 后续步骤
 
-如需进一步自定义，请参阅[本教程](/oss/langgraph/sql-agent)了解如何使用 LangGraph 基元直接实现 SQL 代理。
+要获得更深入的定制，请查看 [本教程](/oss/langgraph/sql-agent) 了解如何直接使用 LangGraph 原语实现 SQL 代理。

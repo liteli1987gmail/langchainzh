@@ -3,55 +3,55 @@ title: 为安装创建 Ingress（Kubernetes）
 sidebarTitle: 为安装创建 Ingress（Kubernetes）
 ---
 
-默认情况下，LangSmith 会为 `langsmith-frontend` 配置一个 LoadBalancer 服务。根据您的云提供商，这可能会导致服务被分配一个公网 IP 地址。如果您想使用自定义域名或更好地控制流向 LangSmith 安装的流量路由，您可以配置 Ingress、Gateway API 或 Istio Gateway。
+默认情况下，LangSmith 会配置一个 LoadBalancer 服务用于 `langsmith-frontend`。根据您的云服务商，这可能会为服务分配一个公网 IP 地址。如果您想使用自定义域名或更好地控制 LangSmith 安装的流量路由，您可以配置 Ingress、Gateway API 或 Istio Gateway。
 
 ## 前提条件
 
-* 现有的 Kubernetes 集群
-* 您的 Kubernetes 集群中已安装以下之一：
+* 一个现有的 Kubernetes 集群
+* 在您的 Kubernetes 集群中安装以下之一：
   * Ingress Controller（用于标准 Ingress）
   * Gateway API CRD 和 Gateway 资源（用于 Gateway API）
   * Istio（用于 Istio Gateway）
 
 ## 参数
 
-您可能需要为 LangSmith 安装提供某些参数来配置 Ingress。此外，我们需要将 `langsmith-frontend` 服务转换为 ClusterIP 服务。
+您可能需要向 LangSmith 安装提供某些参数来配置 Ingress。另外，我们还需要将 `langsmith-frontend` 服务转换为 ClusterIP 服务。
 
-* *主机名（可选）*: 您希望用于 LangSmith 安装的主机名。例如 `"langsmith.example.com"`。如果留空，ingress 将为 LangSmith 安装提供所有流量。
+* *Hostname（可选）*：您希望用于 LangSmith 安装的主机名。例如 `"langsmith.example.com"`。如果留空，ingress 将为 LangSmith 安装服务所有流量。
 
-* *BasePath（可选）*: 如果您想在一个 URL basePath 下提供 LangSmith 服务，可以在此处指定。例如，添加 `"langsmith"` 将使应用程序位于 `"example.hostname.com/langsmith"`。这将适用于 UI 路径以及 API 端点。
+* *BasePath（可选）*：如果您想在 URL basePath 下提供 LangSmith，可以在此处指定。例如，添加 `"langsmith"` 将在以下地址提供应用程序服务 `"example.hostname.com/langsmith"`。这将适用于 UI 路径以及 API 端点。
 
-* *IngressClassName（可选）*: 您希望使用的 Ingress 类的名称。如果未设置，将使用默认 Ingress 类。
+* *IngressClassName（可选）*：您希望使用的 Ingress 类的名称。如果未设置，将使用默认的 Ingress 类。
 
-* *Annotations（可选）*: 要添加到 Ingress 的其他注解。某些提供商（如 AWS）可能使用注解来控制 TLS 终止等事项。
+* *Annotations（可选）*：要添加到 Ingress 的其他注解。某些提供商（如 AWS）可能使用注解来控制 TLS 终止等事项。
 
-  例如，您可以使用 AWS ALB Ingress Controller 添加以下注解来将 ACM 证书附加到 Ingress：
+  例如，您可以使用 AWS ALB Ingress Controller 添加以下注解来为 Ingress 附加 ACM 证书：
 
   ```yaml
   annotations:
     alb.ingress.kubernetes.io/certificate-arn: "<your-certificate-arn>"
   ```
 
-* *Labels（可选）*：要添加到 Ingress 的额外标签。
+* *Labels（可选）*：要添加到 Ingress 的其他标签。
 
-* *TLS（可选）*：如果您想通过 HTTPS 提供 LangSmith 服务，可以在此处添加 TLS 配置（许多 Ingress 控制器可能有其他方式控制 TLS，因此通常不需要此配置）。这应该是 TLS 配置的数组。每个 TLS 配置应具有以下字段：
+* *TLS（可选）*：如果您想通过 HTTPS 提供 LangSmith，可以在此处添加 TLS 配置（许多 Ingress 控制器可能有其他控制 TLS 的方式，因此通常不需要此配置）。这应该是 TLS 配置的数组。每个 TLS 配置应包含以下字段：
 
-  * hosts：证书应有效的主机数组。例如 \["langsmith.example.com"]
+  * hosts: An array of hosts that the certificate should be valid for. E.g \["langsmith.example.com"]
 
-  * secretName：包含证书和私钥的 Kubernetes Secret 的名称。此 Secret 应具有以下键：
+  * secretName：包含证书和私钥的 Kubernetes Secret 的名称。此 Secret 应包含以下键：
 
     * tls.crt：证书
     * tls.key：私钥
 
-  * 有关更多信息，请参阅[创建 TLS Secret](https://kubernetes.io/do/langsmith/observability-concepts/services-networking/ingress/#tls)。
+  * 更多信息，请参阅 [创建 TLS Secret](https://kubernetes.io/do/langsmith/observability-concepts/services-networking/ingress/#tls).
 
 ## 配置
 
-您可以将 LangSmith 实例配置为使用三种路由选项之一：标准 Ingress、Gateway API 或 Istio Gateway。选择最适合您基础架构的选项。
+您可以将 LangSmith 实例配置为使用三种路由选项之一：标准 Ingress、Gateway API 或 Istio Gateway。选择最适合您的基础设施的选项。
 
 ### 选项 1：标准 Ingress
 
-掌握这些参数后，您可以配置 LangSmith 实例使用 Ingress。您可以通过修改 LangSmith Helm Chart 安装的 `config.yaml` 文件来实现此目的。
+有了这些参数，您就可以配置 LangSmith 实例使用 Ingress。您可以通过修改 LangSmith Helm Chart 安装的 `config.yaml` 文件来做到这一点。
 
 ```yaml
 config:
@@ -76,7 +76,7 @@ frontend:
 kubectl get ingress
 ```
 
-您应该会看到类似这样的输出：
+您应该在输出中看到类似的内容：
 
 ```
 NAME                         CLASS   HOSTS    ADDRESS          PORTS     AGE
@@ -90,20 +90,20 @@ langsmith-ingress            nginx   <host>   35.227.243.203   80, 443   95d
 ### 选项 2：Gateway API
 
 <Note>
-Gateway API 支持从 LangSmith v0.12.0 开始可用
+LangSmith v0.12.0 起支持 Gateway API
 </Note>
 
-如果您的集群使用 [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/)，则可以配置 LangSmith 来配置 HTTPRoute 资源。这将为 LangSmith 创建一个 HTTPRoute，并为每个[代理部署](/langsmith/deployment)创建一个 HTTPRoute。
+如果您的集群使用 [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/)，您可以配置 LangSmith 来配置 HTTPRoute 资源。这将为 LangSmith 创建一个 HTTPRoute，并为每个 [代理部署](/langsmith/deployment).
 
 #### 参数
 
-* *name (必填)*: 要引用的 Gateway 资源的名称
-* *namespace (必填)*: Gateway 资源所在的命名空间
-* *hostname (可选)*: 您希望用于 LangSmith 安装的主机名。例如 `"langsmith.example.com"`
-* *basePath (可选)*: 如果您希望在基础路径下提供 LangSmith 服务，可以在此处指定。例如 "example.com/langsmith"
-* *sectionName (可选)*: Gateway 中要使用的特定监听器部分的名称
-* *annotations (可选)*: 要添加到 HTTPRoute 资源的其他注解
-* *labels (可选)*: 要添加到 HTTPRoute 资源的其他标签
+* *name（必填）*：要引用的 Gateway 资源的名称
+* *namespace（必填）*：Gateway 资源所在的命名空间
+* *hostname（可选）*：您希望用于 LangSmith 安装的主机名。例如 `"langsmith.example.com"`
+* *basePath（可选）*: If you would like to serve LangSmith under a base path, you can specify it here. E.g "example.com/langsmith"
+* *sectionName（可选）*：Gateway 中要使用的特定监听器部分的名称
+* *annotations（可选）*：要添加到 HTTPRoute 资源的其他注解
+* *labels（可选）*：要添加到 HTTPRoute 资源的其他标签
 
 #### 配置
 
@@ -123,7 +123,7 @@ frontend:
     type: ClusterIP
 ```
 
-配置完成后，您可以查看 HTTPRoutes 的状态：
+配置完成后，您可以检查 HTTPRoutes 的状态：
 
 ```bash
 kubectl get httproute
@@ -132,17 +132,17 @@ kubectl get httproute
 ### 选项 3：Istio Gateway
 
 <Note>
-Istio Gateway 支持从 LangSmith v0.12.0 开始可用
+LangSmith v0.12.0 起支持 Istio Gateway
 </Note>
 
-如果您的集群使用 [Istio](https://istio.io/)，则可以配置 LangSmith 来预置 VirtualService 资源。这将为 LangSmith 创建一个 VirtualService，并为每个 [代理部署](/langsmith/deployment) 创建一个 VirtualService。
+如果您的集群使用 [Istio](https://istio.io/)，您可以配置 LangSmith 来配置 VirtualService 资源。这将为 LangSmith 创建一个 VirtualService，并为每个 [代理部署](/langsmith/deployment).
 
 #### 参数
 
 * *name（可选）*：要引用的 Istio Gateway 资源的名称。默认为 `"istio-gateway"`
 * *namespace（可选）*：Istio Gateway 资源所在的命名空间。默认为 `"istio-system"`
 * *hostname（可选）*：您希望用于 LangSmith 安装的主机名。例如 `"langsmith.example.com"`
-* *basePath（可选）*：如果您希望在基础路径下提供 LangSmith 服务，可以在此处指定。例如 `"example.com/langsmith"`
+* *basePath（可选）*: If you would like to serve LangSmith under a base path, you can specify it here. E.g "example.com/langsmith"
 * *annotations（可选）*：要添加到 VirtualService 资源的其他注解
 * *labels（可选）*：要添加到 VirtualService 资源的其他标签
 
@@ -163,7 +163,7 @@ frontend:
     type: ClusterIP
 ```
 
-配置完成后，您可以查看 VirtualServices 的状态：
+配置完成后，您可以检查 VirtualServices 的状态：
 
 ```bash
 kubectl get virtualservice

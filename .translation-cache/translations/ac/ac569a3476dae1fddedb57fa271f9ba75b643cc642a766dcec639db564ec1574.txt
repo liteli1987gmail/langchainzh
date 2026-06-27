@@ -1,18 +1,18 @@
 ---
 title: 使用 SvelteKit 部署
 sidebarTitle: SvelteKit
-description: 在 Cloudflare Workers 上部署 LangChain deep agent，集成流式聊天和线程历史功能。
+description: 在 Cloudflare Workers 上的 SvelteKit 项目中部署 LangChain 深度智能体，并支持流式聊天和线程历史记录。
 ---
 
-以下页面详细描述了一个示例应用，该应用在 [SvelteKit](https://svelte.dev/docs/kit/introduction) 项目内部署 LangChain **deep agent**，为 [Cloudflare Workers](https://svelte.dev/docs/kit/adapter-cloudflare) 构建，使用 [`@sveltejs/adapter-cloudflare`](https://www.npmjs.com/package/@sveltejs/adapter-cloudflare)：流式聊天 UI、子代理详情视图、线程历史，以及暴露在 `/api/threads/...` 下的 [Agent Streaming Protocol](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)。无需单独的后端进程。
+以下页面详细说明了一个部署 LangChain **深度智能体** 的示例应用，在 [SvelteKit](https://svelte.dev/docs/kit/introduction) 项目中构建，适配 [Cloudflare Workers](https://svelte.dev/docs/kit/adapter-cloudflare) ，具有 [`@sveltejs/adapter-cloudflare`](https://www.npmjs.com/package/@sveltejs/adapter-cloudflare)：流式聊天 UI、子智能体详情视图、线程历史记录，以及 [Agent Streaming Protocol](https://github.com/langchain-ai/agent-protocol/tree/main/streaming) 在 `/api/threads/...`下暴露。无需单独的后端进程。
 
-Source: 部署 cookbook 中的 [`js-sveltekit`](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-sveltekit)。
+Source: [`js-sveltekit`](https://github.com/langchain-ai/deployment-cookbook/tree/main/js-sveltekit) 部署指南中。
 
 ## 部署到 Cloudflare
 
 <Steps>
 
-<Step title="安装和构建">
+<Step title="Install and build">
 
 ```bash
 cd js-sveltekit
@@ -23,9 +23,7 @@ pnpm build
 
 </Step>
 
-<Step title="配置密钥">
-
-</fragment>
+<Step title="Configure secrets">
 
 ```bash
 npx wrangler login
@@ -34,9 +32,7 @@ npx wrangler secret put OPENAI_API_KEY
 
 </Step>
 
-<Step title="部署">
-
-</Step>
+<Step title="Deploy">
 
 ```bash
 pnpm run deploy
@@ -46,54 +42,54 @@ pnpm run deploy
 
 </Steps>
 
-`svelte.config.js` 使用 `adapter-cloudflare()`。`wrangler.jsonc` 指向 Wrangler 的 `.svelte-kit/cloudflare/_worker.js` 并从 `.svelte-kit/cloudflare` 提供静态资源，与 SvelteKit Cloudflare 适配器文档匹配。构建脚本将 `ThreadSession` Durable Object 导出追加到生成的 Worker 入口，因为 Durable Object 类必须由 Worker 模块导出。
+`svelte.config.js` 使用 `adapter-cloudflare()`. `wrangler.jsonc` 将 Wrangler 指向 `.svelte-kit/cloudflare/_worker.js` 并从 `.svelte-kit/cloudflare`提供资源，与 SvelteKit Cloudflare 适配器文档一致。构建脚本将 `ThreadSession` Durable Object 导出追加到生成的 Worker 入口，因为 Durable Object 类必须由 Worker 模块导出。
 
-`nodejs_compat` 和 `nodejs_compat_populate_process_env` 已启用，因为 LangChain 运行时和追踪集成需要 Node 兼容的 API 和环境访问权限。
+`nodejs_compat` 和 `nodejs_compat_populate_process_env` 已启用，因为 LangChain 运行时和追踪集成需要 Node 兼容的 API 和环境访问。
 
-可以选择启用 LangSmith 追踪，只需将 [`.env.example`](https://github.com/langchain-ai/deployment-cookbook/blob/main/js-sveltekit/.env.example) 中的变量添加为 Worker secrets 或 vars 即可。
+可选：添加 [`.env.example`](https://github.com/langchain-ai/deployment-cookbook/blob/main/js-sveltekit/.env.example) 中的变量作为 Worker secrets 或 vars 来启用 LangSmith 追踪。
 
 ## 必需的 API 端点
 
-应用在 `/api/threads/...` 下公开了 Agent Streaming Protocol。SvelteKit 路由处理器位于 `src/routes/api/threads/`。
+该应用在 `/api/threads/...`下暴露 Agent Streaming Protocol。SvelteKit 路由处理器位于 `src/routes/api/threads/`.
 
-### 最小集（流式聊天）
+### 最小配置（流式聊天）
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| `POST` | `/api/threads/:threadId/commands` | 接受协议命令（`run.start`、…）并启动代理运行 |
-| `POST` | `/api/threads/:threadId/stream` | 运行的 SSE 事件流 |
-| `GET` / `POST` | `/api/threads/:threadId/state` | 读取和引导检查点线程状态 |
+| `POST` | `/api/threads/:threadId/commands` | 接收协议命令（`run.start`、…）并启动智能体运行 |
+| `POST` | `/api/threads/:threadId/stream` | 运行的 SSE 协议事件流 |
+| `GET` / `POST` | `/api/threads/:threadId/state` | 读取并引导检查点线程状态 |
 
 ### 可选（侧边栏）
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| `GET` | `/api/threads` | 列出检查点已知的所有线程 |
+| `GET` | `/api/threads` | 列出检查点已知的线程 |
 | `DELETE` | `/api/threads/:threadId` | 删除线程的会话和检查点 |
-| `POST` | `/api/threads/:threadId/history` | 分页检查点历史记录 |
+| `POST` | `/api/threads/:threadId/history` | 分页检查点历史 |
 
 ## Cloudflare 后端设计
 
 | 关注点 | 实现 |
 | --- | --- |
 | 前端 | SvelteKit 客户端路由和组件 |
-| API 层 | `src/routes/api/threads/` 中的 SvelteKit 服务端点 |
+| API 层 | SvelteKit 服务端点位于 `src/routes/api/threads/` |
 | 运行时 | Workers V8 + `nodejs_compat` |
-| SSE 重放 | 每个线程的 Durable Object（`ThreadSession`） |
-| 代理运行 | Worker 隔离体；协议事件 POST 到 DO |
-| 静态资产 | Workers Static Assets 通过 `adapter-cloudflare` |
-| 密钥 | `wrangler secret` / 本地 `.env` |
+| SSE 回放 | 每个线程一个 Durable Object（`ThreadSession`) |
+| 智能体运行 | Worker 隔离；协议事件 POST 到 DO |
+| 静态资源 | 通过 Workers Static Assets `adapter-cloudflare` |
+| 密钥 | `wrangler secret` / local `.env` |
 
 ## 生产环境持久化
 
-开箱即用，代理使用内存中的 `MemorySaver` 检查点（`src/lib/server/agent/index.ts`）。每个线程的 SSE 重放/会话日志存储在 [Durable Object](https://developers.cloudflare.com/durable-objects/) 中，这样流式客户端可以重新连接到同一个协调点，而不是进程本地的 map。
+开箱即用，智能体使用内存中的 `MemorySaver` 检查点（`src/lib/server/agent/index.ts`). The per-thread SSE replay/session log lives in a [Durable Object](https://developers.cloudflare.com/durable-objects/) 因此流式客户端重新连接到单个协调点，而不是进程本地映射。
 
-检查点仍然是隔离体本地的演示状态。Cloudflare 隔离体是临时的，可能水平扩展，因此在部署、冷启动或隔离体之间检查点的对话状态**不会持久化**。
+检查点仍然使用隔离本地演示状态。Cloudflare隔离是临时的，可以水平扩展，因此检查点的对话状态 **不是持久化的** 在部署、冷启动或隔离之间不能保持。
 
 对于生产环境：
 
-1. 换用持久化检查点（例如 [通过 Hyperdrive 的 Postgres](https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/)，或[自定义 Durable Object 支持的存储](https://developers.cloudflare.com/agents/model-context-protocol/apis/client-api/#custom-storage-backend)）。
-2. 如果客户端需要在 Durable Object 从内存中逐出后重新连接，则持久化长时间的重放/历史记录。
+1. 换成持久化的检查点（例如 [通过 Hyperdrive 连接 Postgres](https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/), or a [自定义 Durable Object 支持的存储](https://developers.cloudflare.com/agents/model-context-protocol/apis/client-api/#custom-storage-backend)).
+2. Persist long-lived replay/history if clients need to reconnect after the Durable Object has been evicted from memory.
 
 ## 本地开发
 
@@ -103,7 +99,7 @@ pnpm install
 pnpm dev
 ```
 
-打开 [http://localhost:5173](http://localhost:5173)。
+打开 [http://localhost:5173](http://localhost:5173).
 
 ```bash
 pnpm build      # production build for Cloudflare
@@ -111,7 +107,7 @@ pnpm preview    # preview the production build locally
 pnpm typecheck  # svelte-check over the project
 ```
 
-如需构建后进行 Cloudflare 风格本地测试，请运行：
+对于构建后类似 Cloudflare 的本地测试，运行：
 
 ```bash
 npx wrangler dev .svelte-kit/cloudflare/_worker.js
@@ -121,16 +117,16 @@ npx wrangler dev .svelte-kit/cloudflare/_worker.js
 
 <AccordionGroup>
 
-<Accordion title="项目结构">
+<Accordion title="Project structure">
 
-- `src/lib/server/agent/` — 深度智能体（`createDeepAgent`），包含 `researcher` 和 `math-whiz` 子智能体以及模拟工具。
+- `src/lib/server/agent/` — 深度代理 (`createDeepAgent`) 包含 `researcher` 和 `math-whiz` 子代理和模拟工具。
 - `src/lib/server/durable-objects/thread-session.ts` — 每个线程的 Durable Object 事件日志，用于 SSE 重放。
-- `src/lib/server/protocol/` — Agent Streaming Protocol 辅助工具：基于 checkpoint 的状态/历史、运行发布、序列化和注册表。
+- `src/lib/server/protocol/` — Agent Streaming Protocol helpers: checkpointer-backed state/history, run publishing, serialization, and registry.
 - `src/routes/api/threads/` — SvelteKit 路由处理器，用于协议端点。
-- `src/lib/chat/threads-client.ts` — 浏览器线程启动和侧边栏辅助工具。
-- `src/lib/components/` — 使用 `@langchain/svelte` 的 Svelte 聊天界面。
-- `svelte.config.js` — 使用 `@sveltejs/adapter-cloudflare` 配置的 SvelteKit。
-- `scripts/export-durable-objects.mjs` — 构建后补丁，从生成的 Worker 入口点重新导出 Durable Object 类。
+- `src/lib/chat/threads-client.ts` — 浏览器线程引导和侧边栏助手。
+- `src/lib/components/` — 使用 Svelte 的聊天界面 `@langchain/svelte`.
+- `svelte.config.js` — 使用配置 SvelteKit `@sveltejs/adapter-cloudflare`.
+- `scripts/export-durable-objects.mjs` — 构建后补丁，从生成的 Worker 入口重新导出 Durable Object 类。
 - `wrangler.jsonc` — Cloudflare Workers 静态资源和 Durable Object 配置。
 
 </Accordion>
@@ -141,5 +137,5 @@ npx wrangler dev .svelte-kit/cloudflare/_worker.js
 
 - [框架和平台概述](/langsmith/deploy-frameworks-and-platforms)
 - [SvelteKit Cloudflare 适配器](https://svelte.dev/docs/kit/adapter-cloudflare)
-- [Agent Streaming Protocol](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)
+- [代理流协议](https://github.com/langchain-ai/agent-protocol/tree/main/streaming)
 - [`@langchain/svelte`](https://reference.langchain.com/javascript/langchain-svelte/getting-started)

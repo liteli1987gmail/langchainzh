@@ -1,20 +1,18 @@
 ---
-title: 回滚并发
+title: 并发回滚
 sidebarTitle: 回滚
 ---
 
-本指南假设您已了解什么是双重文本发送，您可以在[双重文本发送概念指南](/langsmith/double-texting)中了解相关内容。
+本指南假定您了解双重文本发送的含义，您可以在 [双重文本发送概念指南](/langsmith/double-texting).
 
-本指南介绍双重文本发送的 `rollback` 选项，它会中断之前的图运行，并使用双重文本启动新的运行。此选项与 `interrupt` 选项非常相似，但在此情况下，第一次运行会从数据库中完全删除，无法重新启动。下面是使用 `rollback` 选项的快速示例。
+中了解相关内容。本指南涵盖了 `rollback` 双重文本发送选项，该选项会中断之前运行的图并启动一个新的图来处理双重文本。此选项与 `interrupt` 选项非常相似，但在这种情况下，第一次运行会从数据库中完全删除，无法重新启动。以下是使用 `rollback` option.
 
 ## 设置
 
-首先，我们将定义一个快速辅助函数来打印 JS 和 CURL 模型输出（如果使用 Python，可以跳过此步骤）：
+首先，我们将定义一个快速辅助函数来打印 JS 和 CURL 模型输出（如果您使用 Python，可以跳过此步骤）：
 
 <Tabs>
-    <Tab title="JavaScript">
-
-</Tabs>
+    <Tab title="Javascript">
     ```js
     function prettyPrint(m) {
       const padded = " " + m['type'] + " ";
@@ -27,10 +25,8 @@ sidebarTitle: 回滚
       console.log(m.content);
     }
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
-
-</fragment>
     ```bash
     # PLACE THIS IN A FILE CALLED pretty_print.sh
     pretty_print() {
@@ -50,10 +46,10 @@ sidebarTitle: 回滚
       echo "$content"
     }
     ```
-</Tab>
+    </Tab>
 </Tabs>
 
-现在，让我们导入所需的包，并实例化我们的客户端、助手和线程。
+现在，让我们导入所需的包并实例化客户端、助手和线程。
 
 <Tabs>
     <Tab title="Python">
@@ -69,8 +65,8 @@ sidebarTitle: 回滚
     assistant_id = "agent"
     thread = await client.threads.create()
     ```
-</Tab>
-    <Tab title="JavaScript">
+    </Tab>
+    <Tab title="Javascript">
     ```js
     import { Client } from "@langchain/langgraph-sdk";
 
@@ -79,7 +75,7 @@ sidebarTitle: 回滚
     const assistantId = "agent";
     const thread = await client.threads.create();
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
     ```bash
     curl --request POST \
@@ -87,9 +83,12 @@ sidebarTitle: 回滚
       --header 'Content-Type: application/json' \
       --data '{}'
     ```
+    </Tab>
+</Tabs>
+
 ## 创建运行
 
-现在让我们运行一个线程，并将多任务参数设置为 "rollback"：
+现在让我们运行一个将多任务参数设置为 "rollback" 的线程：
 
 <Tabs>
     <Tab title="Python">
@@ -109,10 +108,8 @@ sidebarTitle: 回滚
     # wait until the second run completes
     await client.runs.join(thread["thread_id"], run["run_id"])
     ```
-</Tab>
+    </Tab>
     <Tab title="Javascript">
-
-</fragment>
     ```js
     // the first run will be interrupted
     let rolledBackRun = await client.runs.create(
@@ -133,10 +130,8 @@ sidebarTitle: 回滚
     // wait until the second run completes
     await client.runs.join(thread["thread_id"], run["run_id"]);
     ```
-</Tab>
-<Tab title="CURL">
-
-</fragment>
+    </Tab>
+    <Tab title="CURL">
     ```bash
     curl --request POST \
     --url <DEPLOY<ENT_URL>>/threads/<THREAD_ID>/runs \
@@ -154,12 +149,12 @@ sidebarTitle: 回滚
     }" && curl --request GET \
     --url <DEPLOYMENT_URL>/threads/<THREAD_ID>/runs/<RUN_ID>/join
     ```
-</Tab>
+    </Tab>
 </Tabs>
 
 ## 查看运行结果
 
-我们可以看到，线程只有第二次运行的数据
+我们可以看到该线程只有第二次运行的数据
 
 <Tabs>
     <Tab title="Python">
@@ -169,10 +164,8 @@ sidebarTitle: 回滚
     for m in convert_to_messages(state["values"]["messages"]):
         m.pretty_print()
     ```
-</Tab>
-<Tab title="JavaScript">
-
-</Tab>
+    </Tab>
+    <Tab title="Javascript">
     ```js
     const state = await client.threads.getState(thread["thread_id"]);
 
@@ -180,7 +173,7 @@ sidebarTitle: 回滚
       prettyPrint(m);
     }
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
     ```bash
     source pretty_print.sh && curl --request GET \
@@ -191,8 +184,10 @@ sidebarTitle: 回滚
         pretty_print "$type" "$content"
     done
     ```
-</Tab>
+    </Tab>
 </Tabs>
+
+Output:
 
 ```
 ================================ Human Message =================================
@@ -215,21 +210,17 @@ Name: tavily_search_results_json
 The weather API results show that the current weather in New York City is sunny with a temperature of around 85°F (29°C). The wind is light at around 2-3 mph from the south-southeast. Overall it looks like a nice sunny summer day in NYC.
 ```
 
-<fragment>
-
-验证原始回滚的运行已被删除
+验证原始的回滚运行已被删除
 
 <Tabs>
     <Tab title="Python">
-
-</fragment>
     ```python
     try:
         await client.runs.get(thread["thread_id"], rolled_back_run["run_id"])
     except httpx.HTTPStatusError as _:
         print("Original run was correctly deleted")
     ```
-</Tab>
+    </Tab>
     <Tab title="Javascript">
     ```js
     try {
@@ -238,8 +229,10 @@ The weather API results show that the current weather in New York City is sunny 
       console.log("Original run was correctly deleted");
     }
     ```
-</Tab>
+    </Tab>
 </Tabs>
+
+Output:
 
 ```
 Original run was correctly deleted

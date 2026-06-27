@@ -3,31 +3,31 @@ title: 如何在本地读取实验结果
 sidebarTitle: 在本地读取实验结果
 ---
 
-运行[评估](/langsmith/evaluation-concepts)时，您可能希望在脚本中以编程方式处理结果，而不是在 [LangSmith UI](https://smith.langchain.com) 中查看。这适用于以下场景：
+运行 [评估](/langsmith/evaluation-concepts)，您可能希望在脚本中以编程方式处理结果，而不是在 [LangSmith UI](https://smith.langchain.com)中查看。这对于以下场景很有用：
 
-- **CI/CD 流水线**：实现质量门禁，如果评估分数低于阈值则使构建失败。
-- **本地调试**：无需 API 调用即可检查和分析结果。
+- **CI/CD pipelines**：实现质量门控，如果评估分数低于阈值则使构建失败。
+- **本地调试**：在不调用API的情况下检查和分析结果。
 - **自定义聚合**：使用您自己的逻辑计算指标和统计信息。
 - **集成测试**：使用评估结果来控制合并或部署。
 
-本指南展示了如何迭代和处理由 @[`Client.evaluate()`][Client.evaluate] 返回的 @[`ExperimentResults`][ExperimentResults] 对象中的[实验](/langsmith/evaluation-concepts#experiment)结果。
+本指南向您展示如何遍历和处理 [实验](/langsmith/evaluation-concepts#experiment) 来自 @[`ExperimentResults`][ExperimentResults] 对象的结果，该对象由 @[`Client.evaluate()`][Client.evaluate] 返回。
 
 <Note>
-本页面重点介绍如何以编程方式处理结果，同时仍然将其上传到 LangSmith。
+本页面重点介绍如何以编程方式处理结果，同时仍将结果上传到 LangSmith。
 
-如果您想在本地运行评估而**不**向 LangSmith 记录任何内容（用于快速测试或验证），请参阅使用 `upload_results=False` 的[本地运行评估](/langsmith/local)。
+如果您想在本地运行评估 **不** 记录任何内容到 LangSmith（用于快速测试或验证），请参阅 [在本地运行评估](/langsmith/local) 它使用 `upload_results=False`.
 </Note>
 
-## 迭代评估结果
+## 遍历评估结果
 
-@[`evaluate()`][Client.evaluate] 函数返回一个 @[`ExperimentResults`][ExperimentResults] 对象，您可以对其进行迭代。`blocking` 参数控制结果何时可用：
+@[`evaluate()`][Client.evaluate] 函数返回一个 @[`ExperimentResults`][ExperimentResults] 对象，您可以遍历它。 `blocking` 参数控制何时可以获取结果：
 
-- `blocking=False`：立即返回一个迭代器，在结果生成时产生结果。这允许您在评估运行时实时处理结果。
-- `blocking=True`（默认）：阻塞直到所有评估完成后再返回。当您迭代结果时，所有数据已经可用。
+- `blocking=False`：立即返回一个迭代器，在生成结果时产生结果。这允许您在评估运行时实时处理结果。
+- `blocking=True` （默认）：在返回前阻塞直到所有评估完成。当您遍历结果时，所有数据都已可用。
 
-两种模式返回相同的 `ExperimentResults` 类型；区别在于函数是否在返回前等待完成。将 `blocking=False` 用于流式处理和实时调试，或将 `blocking=True` 用于需要完整数据集的批处理。
+两种模式返回相同的 `ExperimentResults` 类型；区别在于函数是否等待完成后再返回。使用 `blocking=False` 进行流式处理和实时调试，或使用 `blocking=True` 进行批处理，当您需要完整数据集时。
 
-以下示例演示了 `blocking=False`。它在结果流入时进行迭代，将结果收集到列表中，然后在单独的循环中处理它们：
+以下示例演示 `blocking=False`。它在结果流入时遍历它们，将其收集到列表中，然后在单独的循环中处理：
 
 ```python
 from langsmith import Client
@@ -64,7 +64,7 @@ for result in aggregated_results:
     print("--------------------------------")
 ```
 
-这将产生如下输出：
+这会产生如下输出：
 
 ```
 Input: {'input': 'MY INPUT'}
@@ -78,25 +78,25 @@ Evaluation Results: [EvaluationResult(key='randomness', score=1, value=None, com
 迭代器中的每个结果包含：
 
 - `result["run"]`：目标函数的执行。
-  - `result["run"].inputs`：来自您的[数据集](/langsmith/evaluation-concepts#datasets)示例的输入。
-  - `result["run"].outputs`：目标函数生成的输出。
-  - `result["run"].id`：此运行的唯一 ID。
+  - `result["run"].inputs`：来自您的 [数据集](/langsmith/evaluation-concepts#datasets) example.
+  - `result["run"].outputs`的输入：目标函数生成的输出。
+  - `result["run"].id`：此运行的唯一ID。
 
-- `result["evaluation_results"]["results"]`：`EvaluationResult` 对象的列表，每个评估器一个。
-  - `key`：指标名称（来自评估器的返回值）。
-  - `score`：数值分数（通常为 0-1 或布尔值）。
-  - `comment`：可选的解释性文本。
-  - `source_run_id`：评估器运行的 ID。
+- `result["evaluation_results"]["results"]`：一个 `EvaluationResult` 对象列表，每个评估器一个。
+  - `key`: 指标名称（来自评估器的返回值）。
+  - `score`: 数值分数（通常为 0-1 或布尔值）。
+  - `comment`: 可选的解释性文本。
+  - `source_run_id`: 评估运行的 ID。
 
-- `result["example"]`：被评估的数据集示例。
-  - `result["example"].inputs`：输入值。
-  - `result["example"].outputs`：参考输出（如果有）。
+- `result["example"]`: 被评估的数据集样本。
+  - `result["example"].inputs`: 输入值。
+  - `result["example"].outputs`: 参考输出（如有）。
 
 ## 示例
 
-### 实现质量门禁
+### 实现质量门控
 
-此示例使用评估结果根据质量阈值自动通过或失败 CI/CD 构建。脚本遍历结果，计算平均准确率分数，如果准确率低于 85% 则以非零状态码退出。这确保了您可以部署满足质量标准的代码更改。
+This example uses evaluation results to pass or fail a CI/CD build automatically based on quality thresholds. The script iterates through results, calculates an average accuracy score, and exits with a non-zero status code if the accuracy falls below 85%. This ensures that you can deploy code changes that meet quality standards.
 
 ```python
 from langsmith import Client
@@ -142,9 +142,9 @@ if average_accuracy < 0.85:
 print("✅ Evaluation passed!")
 ```
 
-### 使用 blocking=True 进行批量处理
+### 使用 blocking=True 进行批处理
 
-当您需要执行需要完整数据集的操作（如计算百分位数、按分数排序或生成汇总报告）时，使用 `blocking=True` 等待所有评估完成后再处理：
+当需要执行需要完整数据集的操作时（如计算百分位数、按分数排序或生成汇总报告），请使用 `blocking=True` 等待所有评估完成后再处理：
 
 ```python
 # Run evaluation and wait for all results
@@ -165,12 +165,12 @@ for result in results:
         print(f"  {eval_result.key}: {eval_result.score}")
 ```
 
-使用 `blocking=True` 时，您的处理代码仅在所有评估完成后运行，从而避免评估日志与输出混合。
+使用 `blocking=True`，您的处理代码仅在所有评估完成后才运行，避免输出与评估日志混合。
 
-有关在不上传结果的情况下运行评估的更多信息，请参阅[在本地运行评估](/langsmith/local)。
+有关在不上传结果的情况下运行评估的更多信息，请参阅 [本地运行评估](/langsmith/local).
 
-## 相关内容
+## 相关
 
-- [评估您的 LLM 应用](/langsmith/evaluate-llm-application)
-- [在本地运行评估](/langsmith/local)
-- [从实验中获取性能指标](/langsmith/fetch-perf-metrics-experiment)
+- [评估您的 LLM 应用程序](/langsmith/evaluate-llm-application)
+- [本地运行评估](/langsmith/local)
+- [从实验获取性能指标](/langsmith/fetch-perf-metrics-experiment)

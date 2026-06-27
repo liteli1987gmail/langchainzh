@@ -5,7 +5,9 @@ description: "使用 LangChain Python 与 Astra DB 向量存储集成。"
 
 本页提供使用 Astra DB 作为向量存储的快速入门指南。
 
-> [DataStax Astra DB](https://docs.datastax.com/en/astra-db-serverless/index.html) 是一个基于 `Apache Cassandra®` 构建的无服务器 AI 就绪数据库，通过易于使用的 JSON API 方便地提供。
+> [DataStax Astra DB](https://docs.datastax.com/en/astra-db-serverless/index.html) 是一个无服务器的
+> AI 就绪数据库，构建于 `Apache Cassandra®` 并通过便捷的方式提供
+> 通过易于使用的 JSON API。
 
 ## 设置
 
@@ -20,16 +22,16 @@ description: "使用 LangChain Python 与 Astra DB 向量存储集成。"
     "langchain-astradb>=0.6,<0.7"
 ```
 
-### 凭证
+### 凭据
 
-要使用 AstraDB 向量存储，您必须首先访问 [AstraDB 网站](https://astra.datastax.com)，创建一个账户，然后创建一个新数据库 - 初始化可能需要几分钟时间。
+要使用 AstraDB 向量存储，您必须首先访问 [AstraDB 网站](https://astra.datastax.com)，创建一个账户，然后创建新数据库——初始化可能需要几分钟。
 
-数据库初始化完成后，获取您的[连接密钥](https://docs.datastax.com/en/astra-db-serverless/get-started/quickstart.html#create-a-database-and-store-your-credentials)，您稍后需要用到。这些是：
+数据库初始化完成后，获取您的 [连接密钥](https://docs.datastax.com/en/astra-db-serverless/get-started/quickstart.html#create-a-database-and-store-your-credentials)，您稍后会用到。这些是：
 
-- 一个 **`API Endpoint`**（API 端点），例如 `"https://01234567-89ab-cdef-0123-456789abcdef-us-east1.apps.astra.datastax.com/"`
-- 以及一个 **`Database Token`**（数据库令牌），例如 `"AstraCS:aBcD123......"`
+- an **`API Endpoint`**，例如 `"https://01234567-89ab-cdef-0123-456789abcdef-us-east1.apps.astra.datastax.com/"`
+- 和一个 **`Database Token`**, e.g. `"AstraCS:aBcD123......"`
 
-您还可以选择提供 **`keyspace`**（在 LangChain 组件中称为 "namespace"（命名空间）），您可以从数据库仪表板的 `Data Explorer` 选项卡中进行管理。如果需要，您可以在下面的提示中留空，回退到默认的 keyspace。
+您可以选择提供 **`keyspace`** （在 LangChain 组件中称为 "namespace"），您可以在其中管理 `Data Explorer` 数据库仪表板的选项卡。如果您愿意，可以在下面的提示中留空，然后回退到默认的 keyspace。
 
 ```python
 import getpass
@@ -50,7 +52,7 @@ ASTRA_DB_APPLICATION_TOKEN =  ········
 (optional) ASTRA_DB_KEYSPACE =
 ```
 
-如果你想获得一流的对模型调用的自动化追踪功能，你也可以通过取消下面的注释来设置你的 [LangSmith](/langsmith/observability) API 密钥：
+如果您想获得最佳级别的模型调用自动追踪，您还可以设置您的 [LangSmith](/langsmith/observability) API 密钥，方法是取消下方注释：
 
 ```python
 os.environ["LANGSMITH_API_KEY"] = getpass.getpass("Enter your LangSmith API key: ")
@@ -59,27 +61,27 @@ os.environ["LANGSMITH_TRACING"] = "true"
 
 ## 初始化
 
-Astra DB 向量存储有多种创建方式：
+创建 Astra DB 向量存储有多种方式：
 
 #### 方法 1：显式嵌入
 
-您可以单独实例化一个 `langchain_core.embeddings.Embeddings` 类并将其传递给 `AstraDBVectorStore` 构造函数，就像使用其他大多数 LangChain 向量存储一样。
+您可以分别实例化一个 `langchain_core.embeddings.Embeddings` 类并将其传递给 `AstraDBVectorStore` 构造函数，就像大多数其他 LangChain 向量存储一样。
 
 #### 方法 2：服务端嵌入（'vectorize'）
 
-或者，您可以使用 Astra DB 的[服务端嵌入计算](https://docs.datastax.com/en/astra-db-serverless/databases/embedding-generation.html)功能（'vectorize'），在创建存储的服务端基础设施时直接指定一个嵌入模型。嵌入计算将在后续的读写操作中完全由数据库处理。（要使用此方法，您必须已为数据库启用所需的嵌入集成，如[文档](https://docs.datastax.com/en/astra-db-serverless/databases/embedding-generation.html)中所述。）
+或者，您可以使用 [服务端嵌入计算](https://docs.datastax.com/en/astra-db-serverless/databases/embedding-generation.html) Astra DB 的特性（'vectorize'），在创建存储服务器基础设施时只需指定一个嵌入模型。后续的读取和写入操作将完全由数据库内部处理嵌入计算。（要使用此方法，您必须为数据库启用所需的嵌入集成，如文档中所述 [在文档中](https://docs.datastax.com/en/astra-db-serverless/databases/embedding-generation.html).)
 
 #### 方法 3：从现有集合自动检测
 
-您可能已经在 Astra DB 中有一个[集合](https://docs.datastax.com/en/astra-db-serverless/api-reference/collections.html)，可能是通过其他方式（如通过 Astra UI 或第三方应用程序）预填充了数据，现在只想在 LangChain 中开始查询它。在这种情况下，正确的方法是在向量存储构造函数中启用 `autodetect_collection` 模式，让类自动确定细节。（当然，如果您的集合没有 'vectorize'，您仍然需要提供一个 @[`Embeddings`] 对象）。
+您可能已有 [集合](https://docs.datastax.com/en/astra-db-serverless/api-reference/collections.html) 在您的 Astra DB 中，可能通过其他方式预先填充了数据（例如通过 Astra UI 或第三方应用程序），而您只想在 LangChain 中开始查询它。在这种情况下，正确的方法是启用 `autodetect_collection` 向量存储构造函数中的模式，让类来弄清楚细节。（当然，如果您的集合没有 'vectorize'，您仍然需要提供一个 @[`Embeddings`] 对象）。
 
 #### 关于"混合搜索"的说明
 
-Astra DB 向量存储在向量搜索中支持元数据搜索；此外，0.6 版本引入了通过 [findAndRerank](https://docs.datastax.com/en/astra-db-serverless/api-reference/document-methods/find-and-rerank.html) 数据库原语对_混合搜索_的完整支持：文档通过向量相似度_和_基于关键词（"词法"）搜索两种方式检索，然后通过重排模型合并。这种完全在服务端处理的搜索策略可以提高结果的准确性，从而改善您的 RAG 应用程序的质量。只要可用，混合搜索会被向量存储自动使用（不过如果您愿意，也可以对其进行手动控制）。
+Astra DB 向量存储支持向量搜索中的元数据搜索；此外，0.6 版本引入了完整支持 _混合搜索_ 通过 [findAndRerank](https://docs.datastax.com/en/astra-db-serverless/api-reference/document-methods/find-and-rerank.html) 数据库原语：文档从向量相似度中检索 _和_ 基于关键词（"词法"）搜索中检索，然后通过重排序模型合并。这种完全在服务器端处理的搜索策略可以提高结果的准确性，从而改善您的 RAG 应用程序的质量。只要可用，向量存储会自动使用混合搜索（如果您愿意，也可以手动控制）。
 
-#### 更多信息
+#### 附加信息
 
-`AstraDBVectorStore` 可以通过多种方式进行配置；请参阅 @[API 参考][AstraDBVectorStore] 获取完整指南，涵盖例如异步初始化；非 Astra DB 数据库；自定义索引允许/拒绝列表；手动混合搜索控制；以及更多内容。
+本 `AstraDBVectorStore` can be configured in many ways; see the @[API reference][AstraDBVectorStore] for a full guide covering e.g. asynchronous initialization; non-Astra-DB databases; custom indexing allow-/deny-lists; manual hybrid-search control; and much more.
 
 ### 显式嵌入初始化（方法 1）
 
@@ -107,14 +109,14 @@ vector_store_explicit_embeddings = AstraDBVectorStore(
 )
 ```
 
-### 服务端嵌入初始化（"vectorize"，方法 2）
+### 服务器端嵌入初始化（"vectorize"，方法 2）
 
-在此示例代码中，假定您已
+在此示例代码中，假设您已经
 
-- 已在您的 Astra DB 组织中启用 OpenAI 集成，
-- 已将名为 `"OPENAI_API_KEY"` 的 API Key 添加到该集成中，并将其作用域限定为您正在使用的数据库。
+- 在您的 Astra DB 组织中启用了 OpenAI 集成，
+- 已将一个 API 密钥添加到 `"OPENAI_API_KEY"` 集成，并将其作用域设置为您正在使用的数据库。
 
-更多详细信息，包括切换提供商/模型的说明，请参阅[文档](https://docs.datastax.com/en/astra-db-serverless/databases/embedding-generation.html)。
+For more details, including instructions to switch provider/model, please consult the [文档](https://docs.datastax.com/en/astra-db-serverless/databases/embedding-generation.html).
 
 ```python
 from astrapy.info import VectorServiceOptions
@@ -138,13 +140,13 @@ vector_store_integrated_embeddings = AstraDBVectorStore(
 
 ### 自动检测初始化（方法 3）
 
-如果集合已存在于数据库中，并且您的 `AstraDBVectorStore` 需要使用它（用于读取和写入），则可以使用此模式。LangChain 组件将检查集合并确定其详情。
+如果集合已存在于数据库中且您的 `AstraDBVectorStore` 需要使用它（用于读取和写入），可以使用此模式。LangChain 组件将检查集合并确定详细信息。
 
-如果集合已由 LangChain 以外的工具创建并且——最重要的是——已填充数据，则推荐使用此方法，例如，如果数据是通过 Astra DB Web 界面摄取的。
+如果集合已由 LangChain 以外的其他工具创建，并且最重要的是——已被填充，则推荐使用此方法，例如如果数据是通过 Astra DB Web 界面摄入的。
 
-自动检测模式不能与_集合_设置（如相似度度量等）共存；另一方面，如果未使用服务端嵌入，则仍需要向构造函数传递一个 @[`Embeddings`] 对象。
+自动检测模式不能与 _集合_ 设置（如相似度度量等）共存；另一方面，如果没有使用服务器端嵌入，仍然需要向构造函数传递一个 @[`Embeddings`] 对象。
 
-在以下示例代码中，我们将"自动检测"与方法 2 上面创建的完全相同的集合（"向量化"）。因此，不需要提供 @[`Embeddings`] 对象。
+在以下示例代码中，我们将 "自动检测" 与方法 2（"vectorize"）创建的完全相同的集合。因此，不需要提供 @[`Embeddings`] 对象。
 
 ```python
 vector_store_autodetected = AstraDBVectorStore(
@@ -158,9 +160,9 @@ vector_store_autodetected = AstraDBVectorStore(
 
 ## 管理向量存储
 
-创建向量存储后，您可以通过添加和删除不同的项目来与其进行交互。
+创建向量存储后，通过添加和删除不同的项目来与之交互。
 
-无论初始化方法如何，所有与向量存储的交互都将继续进行：请**根据需要调整下面的单元格**，以选择您已创建并想要测试的向量存储。
+与向量存储的所有交互都遵循初始化方法：请 **调整以下单元格**，如果您愿意，可以选择一个已创建并想要测试的向量存储。
 
 ```python
 # If desired, uncomment a different line here:
@@ -170,11 +172,11 @@ vector_store = vector_store_integrated_embeddings
 # vector_store = vector_store_autodetected
 ```
 
-### 添加项目到向量存储
+### 向向量存储添加项目
 
-使用 `add_documents` 方法向向量存储添加文档。
+使用以下方式将文档添加到向量存储 `add_documents` method.
 
-_"id" 字段可以单独提供，作为 `add_documents` 中匹配的 `ids=[...]` 参数，甚至可以完全省略由存储自动生成 ID。_
+_"id" 字段可以单独提供，放在匹配的 `ids=[...]` 参数中 `add_documents`，甚至完全省略以让存储生成 ID。_
 
 ```python
 from langchain_core.documents import Document
@@ -261,9 +263,9 @@ vector_store.add_documents(documents=documents_to_insert)
  'entry_10']
 ```
 
-### 从向量存储中删除项
+### 从向量存储中删除项目
 
-使用 `delete` 函数按 ID 删除项。
+使用以下方式通过 ID 删除项目 `delete` function.
 
 ```python
 vector_store.delete(ids=["entry_10", "entry_02"])
@@ -275,13 +277,13 @@ True
 
 ## 查询向量存储
 
-一旦向量存储被创建并填充，你就可以查询它（例如，作为你的链或代理的一部分）。
+创建并填充向量存储后，您可以查询它（例如作为链或代理的一部分）。
 
 ### 直接查询
 
 #### 相似性搜索
 
-搜索与提供的文本相似的文档，如果需要，还可以添加额外的元数据过滤器：
+搜索与提供的文本相似的文档，如有需要可添加额外的元数据过滤条件：
 
 ```python
 results = vector_store.similarity_search(
@@ -319,13 +321,13 @@ for res, score in results:
 * [SIM=0.61] "Thanks to her sophisticated language skills, the agent managed to extract strategic information all right.", metadata={'source': 'tweet'}
 ```
 
-#### 指定不同的关键词查询（需要混合搜索）
+#### 指定不同的关键字查询（需要混合搜索）
 
-> 注意：此单元格只能在集合支持 [find-and-rerank](https://docs.datastax.com/en/astra-db-serverless/api-reference/document-methods/find-and-rerank.html) 命令且向量存储知道这一事实时才能运行。
+> 注意：此单元只能在集合支持 [find-and-rerank](https://docs.datastax.com/en/astra-db-serverless/api-reference/document-methods/find-and-rerank.html) 命令且向量存储知道这一事实的情况下运行。
 
-如果向量存储正在使用启用了混合搜索的集合，并且已检测到这一事实，则默认情况下，它会在运行搜索时使用该功能。
+如果向量存储使用支持混合功能的集合并已检测到这一事实，默认情况下它会在运行搜索时使用该功能。
 
-在这种情况下，相同的查询文本将用于 find-and-rerank 过程中的向量相似性和基于词法的检索步骤，_除非你明确为后者提供不同的查询_：
+在这种情况下，在查找和重新排序过程中，向量相似性和基于词汇的检索步骤会使用相同的查询文本， _除非您明确为后者提供不同的查询_:
 
 ```python
 results = vector_store_autodetected.similarity_search(
@@ -344,17 +346,17 @@ for res in results:
 * "ZYX, just another tool in the world, is actually my agent-based superhero", metadata={'source': 'tweet'}
 ```
 
-上面的示例硬编码了 "autodetected" 向量存储，它应该已经检查了集合并确定了混合搜索是否可用。另一个选项是显式地向构造函数提供混合搜索参数（请参阅 API 参考了解更多信息/示例）。
+_The above example hardcodes the "autodetected" vector store, which has surely inspected the collection and figured out if hybrid is available. Another option is to explicitly supply hybrid-search parameters to the constructor (refer to the API Reference for more details/examples)._
 
 #### 其他搜索方法
 
-本笔记本未涵盖多种其他搜索方法，例如 MMR 搜索和按向量搜索。
+本笔记本未涵盖其他多种搜索方法，如MMR搜索和向量搜索。
 
-要获取 `AstraDBVectorStore` 中可用的搜索模式完整列表，请参阅 @[API 参考][AstraDBVectorStore]。
+有关 `AstraDBVectorStore` 请参阅@[API参考][AstraDBVectorStore]。
 
-### 通过转换为检索器进行查询
+### 转换为检索器后查询
 
-你也可以将向量存储转换为检索器，以便在链中更方便地使用。
+您还可以将向量存储转换为检索器，以便在链中更方便地使用。
 
 将向量存储转换为检索器，并使用简单查询 + 元数据过滤器调用它：
 
@@ -372,17 +374,17 @@ retriever.invoke("Stealing from the bank is a crime", filter={"source": "news"})
 
 ## 用于检索增强生成
 
-有关如何使用此向量存储进行检索增强生成 (RAG) 的指南，请参阅以下部分：
+有关如何使用此向量存储进行检索增强生成（RAG）的指南，请参阅以下部分：
 
 - [检索文档](/oss/langchain/retrieval)
-- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
-- [代理式 RAG](/oss/langgraph/agentic-rag)
+- [使用LangChain构建RAG应用](/oss/langchain/rag)
+- [智能体RAG](/oss/langgraph/agentic-rag)
 
-更多内容，请查看使用 Astra DB 的[完整 RAG 模板](https://github.com/langchain-ai/langchain/tree/master/templates/rag-astradb)。
+更多内容，请参阅 [使用Astra DB的完整RAG模板](https://github.com/langchain-ai/langchain/tree/master/templates/rag-astradb).
 
 ## 清理向量存储
 
-如果您想从 Astra DB 实例中完全删除集合，请运行以下命令。
+如果您想从Astra DB实例中完全删除集合，请运行此命令。
 
 _（您将丢失存储在其中的数据。）_
 
@@ -392,6 +394,6 @@ vector_store.delete_collection()
 
 ---
 
-## API 参考
+## API参考
 
-有关所有 `AstraDBVectorStore` 功能和配置的详细文档，请参阅 @[API reference][AstraDBVectorStore]。
+有关所有 `AstraDBVectorStore` 功能和配置的详细文档，请参阅@[API参考][AstraDBVectorStore]。

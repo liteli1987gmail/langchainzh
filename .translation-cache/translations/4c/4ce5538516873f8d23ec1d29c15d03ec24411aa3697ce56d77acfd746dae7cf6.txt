@@ -1,35 +1,35 @@
 ---
-title: 容错机制
+title: 容错
 description: 在 LangGraph 中配置每个节点的超时、重试和错误处理程序。
 ---
 
-当节点失败时——无论是外部 API 响应缓慢、临时网络故障还是未捕获的异常——LangGraph 提供了三种可组合的机制来响应：
+当节点失败时——无论是外部 API 响应缓慢、瞬时网络错误还是未处理的异常——LangGraph 为您提供了三种可组合的响应机制：
 
 - [**重试**](#retries) — 根据异常类型和退避设置自动重新运行失败的尝试
-- [**超时**](#timeouts) — 限制单次尝试可以运行的时间
+- [**超时**](#timeouts) — 限制单次尝试的最长运行时间
 - [**错误处理**](#error-handling) — 在所有重试耗尽后运行恢复函数
 
 :::python
-使用 [**`set_node_defaults`**](#graph-defaults) 一次性为所有节点配置这些机制，而无需在每次 `add_node` 调用时重复配置。
+使用 [**`set_node_defaults`**](#graph-defaults) 来一次性为所有节点配置这些机制，而不是在每个 `add_node` call.
 :::
 
 :::js
-使用 [**`setNodeDefaults`**](#graph-defaults) 一次性为所有节点配置这些机制，而无需在每次 `addNode` 调用时重复配置。
+使用 [**`setNodeDefaults`**](#graph-defaults) 来一次性为所有节点配置这些机制，而不是在每个 `addNode` call.
 :::
 
-这些机制按固定顺序组合：当节点尝试抛出任何异常（包括来自超时的 @[`NodeTimeoutError`]）时，重试策略决定是否重试。只有在重试耗尽后，错误处理程序才会运行。
+这些机制按固定顺序组合：当节点尝试引发任何异常（包括超时导致的 @[`NodeTimeoutError`]）时，重试策略决定是否重试。只有在重试耗尽后，错误处理程序才会运行。
 
-有关在超级步边界干净地停止运行并在稍后恢复，请参阅[优雅关闭](#graceful-shutdown)。
+如需在超级步骤边界干净地停止运行并稍后恢复，请参阅 [优雅关闭](#graceful-shutdown).
 
 :::python
 <Note>
-每个节点的超时和节点级错误处理程序需要 `langgraph>=1.2`。
+每个节点的超时和节点级错误处理程序需要 `langgraph>=1.2`.
 </Note>
 :::
 
 :::js
 <Note>
-每个节点的超时和节点级错误处理程序需要 `@langchain/langgraph>=1.4.0`。
+每个节点的超时和节点级错误处理程序需要 `@langchain/langgraph>=1.4.0`.
 </Note>
 :::
 
@@ -61,9 +61,7 @@ flowchart LR
 重试策略会根据异常类型和退避设置自动重新运行失败的节点尝试。
 
 :::python
-Pass `retry_policy=` to @[`add_node`]:
-
-:::
+传入 `retry_policy=` to @[`add_node`]:
 
 ```python
 from langgraph.types import RetryPolicy
@@ -75,8 +73,9 @@ builder.add_node(
 )
 ```
 :::
+
 :::js
-将 `retryPolicy` 传递给 @[`addNode`]：
+传入 `retryPolicy` to @[`addNode`]:
 
 ```typescript
 import { StateGraph } from "@langchain/langgraph";
@@ -85,10 +84,12 @@ const graph = new StateGraph(State)
   .addNode("callApi", callApi, { retryPolicy: { maxAttempts: 3 } })
   .compile();
 ```
+:::
+
 ### 默认行为
 
 :::python
-默认情况下，`retry_on` 使用 `default_retry_on`，它会重试**任何**异常，除了以下异常（及其子类）：
+默认情况下， `retry_on` 使用 `default_retry_on`，它在 **任何** 异常上重试，以下异常（及其子类）除外：
 
 - `ValueError`
 - `TypeError`
@@ -103,23 +104,23 @@ const graph = new StateGraph(State)
 - `StopAsyncIteration`
 - `OSError`
 
-对于流行 HTTP 库（如 `requests` 和 `httpx`）中的异常，它仅重试 5xx 状态码。@[`NodeTimeoutError`] 默认情况下可重试。
+对于流行 HTTP 库（如 `requests` 和 `httpx`）引发的异常，它仅在 5xx 状态码上重试。@[`NodeTimeoutError`] 默认情况下可重试。
 :::
 
 :::js
-重试是可选的。节点仅在配置了 `retryPolicy` 时才会重试，无论是直接配置还是通过图默认值配置（使用 [`setNodeDefaults`](#graph-defaults)）。空策略（`{}`）就足够了。如果没有策略，第一次失败就会结束尝试，LangGraph 不会调用 `retryOn`。
+重试是可选的。节点仅在具有 `retryPolicy` 配置时重试，可以直接配置或通过图形默认值使用 [`setNodeDefaults`](#graph-defaults)配置。一个空策略（`{}`）就足够了。如果没有策略，第一次失败将结束尝试，LangGraph 不会调用 `retryOn`.
 
-如果策略省略了 `retryOn`，LangGraph 使用内置处理器来重试抛出的错误，除了以下情况：
+如果策略省略了 `retryOn`，LangGraph 使用内置处理器重试抛出的错误，但以下情况除外：
 
-- 中止和取消错误：`error.name === "AbortError"`，或 `error.message` 以 `"Cancel"` 或 `"AbortError"` 开头
-- `GraphValueError`，通过 `error.name` 匹配
-- 中止的连接：`error.code === "ECONNABORTED"`
-- HTTP 客户端错误，状态码为 400、401、402、403、404、405、406、407 或 409，从 `error.response?.status` 或 `error.status` 读取（适用于 `fetch`、Axios 等客户端）
-- OpenAI 风格的配额错误：`error.error?.code === "insufficient_quota"`
+- 中止和取消错误： `error.name === "AbortError"`, or `error.message` 以 `"Cancel"` or `"AbortError"`
+- `GraphValueError`开头，由 `error.name`
+- 中止的连接： `error.code === "ECONNABORTED"`
+- HTTP 客户端错误，状态码为 400、401、402、403、404、405、406、407 或 409，从 `error.response?.status` or `error.status` 对于客户端（如 `fetch`、Axios 及类似客户端
+- OpenAI 风格的配额错误： `error.error?.code === "insufficient_quota"`
 
-其他 HTTP 状态码（包括 408 和 5xx 响应）都是可重试的，除非你覆盖了 `retryOn`。@[`NodeTimeoutError`] 不在上面的排除列表中，因此当配置了重试策略时，它是可重试的。
+其他 HTTP 状态码（包括 408 和 5xx 响应）都是可重试的，除非您覆盖 `retryOn`. @[`NodeTimeoutError`不在此黑名单中，因此在配置了重试策略时可重试。
 
-某些失败会绕过 `retryOn`。图控制流错误（如 `GraphInterrupt` 和 `Command` 路由）会直接向上抛出而不会重试。中止的运行信号也会停止重试循环，即使 `retryOn` 返回 `true`。
+某些失败会绕过 `retryOn`。图形控制流错误，例如 `GraphInterrupt` 和 `Command` 路由，会向上冒泡而不重试。已中止的运行信号也会停止重试循环，即使 `retryOn` 会返回 `true`.
 :::
 
 ### 参数
@@ -127,30 +128,30 @@ const graph = new StateGraph(State)
 :::python
 | 参数 | 类型 | 默认值 | 描述 |
 | --------- | ---- | ------- | ----------- |
-| `max_attempts` | `int` | `3` | 最大尝试次数，包括第一次。 |
-| `initial_interval` | `float` | `0.5` | 第一次重试前的秒数。 |
+| `max_attempts` | `int` | `3` | 最大尝试次数，包括首次。 |
+| `initial_interval` | `float` | `0.5` | 首次重试前的秒数。 |
 | `backoff_factor` | `float` | `2.0` | 每次重试后应用于间隔的乘数。 |
 | `max_interval` | `float` | `128.0` | 重试之间的最大秒数。 |
-| `jitter` | `bool` | `True` | 是否向间隔添加随机抖动。 |
-| `retry_on` | `type[Exception] \| Sequence[type[Exception]] \| Callable[[Exception], bool]` | `default_retry_on` | 要重试的异常类型，或返回可重试异常 `True` 的可调用对象。 |
+| `jitter` | `bool` | `True` | 向间隔添加随机抖动。 |
+| `retry_on` | `type[Exception] \| Sequence[type[Exception]] \| Callable[[Exception], bool]` | `default_retry_on` | 要重试的异常，或返回的可调用对象 `True` 用于可重试异常。 |
 :::
 
 :::js
 | 参数 | 类型 | 默认值 | 描述 |
 | --------- | ---- | ------- | ----------- |
-| `maxAttempts` | `number` | `3` | 最大尝试次数，包括第一次。 |
-| `initialInterval` | `number` | `500` | 第一次重试前的毫秒数。 |
+| `maxAttempts` | `number` | `3` | 最大尝试次数，包括首次。 |
+| `initialInterval` | `number` | `500` | 首次重试前的毫秒数。 |
 | `backoffFactor` | `number` | `2.0` | 每次重试后应用于间隔的乘数。 |
 | `maxInterval` | `number` | `128000` | 重试之间的最大毫秒数。 |
-| `jitter` | `boolean` | `true` | 是否向间隔添加随机抖动。 |
-| `retryOn` | `(error: unknown) => boolean` | 内置处理器（当策略配置时） | 返回可重试异常 `true` 的可调用对象。仅在配置了 `retryPolicy` 时使用。 |
-| `logWarning` | `boolean` | `true` | 是否在尝试重试时记录警告。 |
+| `jitter` | `boolean` | `true` | 向间隔添加随机抖动。 |
+| `retryOn` | `(error: unknown) => boolean` | 内置处理器（当策略设置时） | 返回值的可调用对象 `true` 用于可重试异常。仅在以下情况下使用 `retryPolicy` 已配置。 |
+| `logWarning` | `boolean` | `true` | 尝试重试时是否记录警告。 |
 :::
 
 ### 自定义重试逻辑
 
 :::python
-将可调用对象或异常类型传递给 `retry_on`。导入 `default_retry_on` 以扩展默认行为：
+传递可调用对象或异常类型到 `retry_on`。导入 `default_retry_on` 以扩展默认行为：
 
 ```python
 from langgraph.types import RetryPolicy, default_retry_on
@@ -167,8 +168,9 @@ builder.add_node(
 )
 ```
 :::
+
 :::js
-向 `retryOn` 传递一个可调用对象。与 Python 不同，没有导出的 `defaultRetryOn` 辅助函数——请自行实现你的谓词函数：
+传递可调用对象到 `retryOn`。与 Python 不同，没有导出的 `defaultRetryOn` 辅助函数——实现你自己的谓词：
 
 ```typescript
 import { StateGraph } from "@langchain/langgraph";
@@ -192,11 +194,9 @@ const graph = new StateGraph(State)
 
 ### 检查重试状态
 
-使用节点内的执行信息来检查当前尝试次数。这对于在主调用持续失败时切换到备用方案非常有用：
+在节点内使用执行信息来检查当前尝试次数。当主调用持续失败时，这有助于切换到备用方案：
 
 :::python
-
-:::
 ```python
 from langgraph.graph import StateGraph, START, END
 from langgraph.runtime import Runtime
@@ -217,18 +217,18 @@ builder.add_edge(START, "my_node")
 builder.add_edge("my_node", END)
 ```
 
-`execution_info` 暴露以下字段：
+`execution_info` 公开以下字段：
 
 | 属性 | 类型 | 描述 |
 | --------- | ---- | ----------- |
-| `node_attempt` | `int` | 当前尝试次数（从 1 开始）。首次执行为 `1`，首次重试为 `2`，依此类推。 |
-| `node_first_attempt_time` | `float \| None` | 首次尝试开始的 Unix 时间戳。重试时保持不变。 |
-| `thread_id` | `str \| None` | 当前执行的线程 ID。无检查点时为 `None`。 |
-| `run_id` | `str \| None` | 当前执行的运行 ID。配置中未提供时为 `None`。 |
+| `node_attempt` | `int` | 当前尝试次数（从 1 开始索引）。 `1` 首次尝试时， `2` 首次重试时，依此类推。 |
+| `node_first_attempt_time` | `float \| None` | 首次尝试开始时的 Unix 时间戳。重试时保持不变。 |
+| `thread_id` | `str \| None` | 当前执行的线程 ID。 `None` 没有检查点时。 |
+| `run_id` | `str \| None` | 当前执行的运行 ID。 `None` 配置中未提供时。 |
 | `checkpoint_id` | `str` | 当前执行的检查点 ID。 |
 | `task_id` | `str` | 当前执行的任务 ID。 |
 
-即使在没有重试策略的情况下，`execution_info` 也是可用的——`node_attempt` 默认为 `1`。
+`execution_info` 即使没有重试策略也可用——`node_attempt` 默认为 `1`.
 :::
 
 :::js
@@ -258,25 +258,25 @@ const graph = new StateGraph(State)
 
 | 属性 | 类型 | 描述 |
 | --------- | ---- | ----------- |
-| `nodeAttempt` | `number` | 当前尝试次数（从 1 开始计数）。第一次尝试时为 `1`，第一次重试时为 `2`，以此类推。 |
-| `nodeFirstAttemptTime` | `number \| undefined` | 第一次尝试开始时的 Unix 时间戳（毫秒）。在重试过程中保持不变。 |
-| `threadId` | `string \| undefined` | 当前执行的线程 ID。没有检查点器时为 `undefined`。 |
-| `runId` | `string \| undefined` | 当前执行的运行 ID。配置中未提供时为 `undefined`。 |
-| `checkpointId` | `string` | 当前执行的检查点 ID。 |
-| `checkpointNs` | `string` | 当前执行的检查点命名空间。 |
-| `taskId` | `string` | 当前执行的 Task ID。 |
+| `nodeAttempt` | `number` | 当前尝试次数（从 1 开始计数）。 `1` 在第一次尝试时， `2` 在第一次重试时，依此类推。|
+| `nodeFirstAttemptTime` | `number \| undefined` | 第一次尝试开始时的 Unix 时间戳（毫秒）。在重试时保持不变。|
+| `threadId` | `string \| undefined` | 当前执行的线程 ID。 `undefined` 没有检查点程序的情况下。|
+| `runId` | `string \| undefined` | 当前执行的运行 ID。 `undefined` 当配置中未提供时。|
+| `checkpointId` | `string` | 当前执行的检查点 ID。|
+| `checkpointNs` | `string` | 当前执行的检查点命名空间。|
+| `taskId` | `string` | 当前执行的任务 ID。|
 
-即使没有重试策略，`executionInfo` 也是可用的——`nodeAttempt` 默认为 `1`。
+`executionInfo` 即使没有重试策略也可用——`nodeAttempt` 默认为 `1`.
 :::
 
 ## 超时
 
 :::python
 <Note>
-需要 `langgraph>=1.2`。
+需要 `langgraph>=1.2`.
 </Note>
 
-@[`add_node`] 上的 `timeout=` 参数限制单个节点尝试可以运行的时间。传入数字（秒）、`timedelta`，或 @[`TimeoutPolicy`] 以分别设置运行和空闲限制：
+ `timeout=` ] 上的 @[`add_node`] 参数限制了单个节点尝试的运行时间。可以传递一个数字（秒），或 `timedelta`, or a @[`TimeoutPolicy`] 来分别设置运行和空闲限制：
 
 ```python
 from datetime import timedelta
@@ -295,16 +295,16 @@ builder.add_node(
 ```
 
 <Warning>
-节点超时仅适用于**异步**节点。带有 `timeout` 的同步节点会在编译时被拒绝。要包装阻塞 I/O，请在异步节点内使用 `asyncio.to_thread`。
+节点超时仅适用于 **异步** 节点。在异步节点内包含 `timeout` are rejected at compile time. To wrap blocking I/O, use `asyncio.to_thread` 的同步节点。
 </Warning>
 :::
 
 :::js
 <Note>
-需要 `@langchain/langgraph>=1.4.0`。
+需要 `@langchain/langgraph>=1.4.0`.
 </Note>
 
-@[`addNode`] 上的 `timeout` 参数限制单个节点尝试可以运行的最长时间。传入一个数字（毫秒）或一个 @[`TimeoutPolicy`] 来分别设置运行超时和空闲超时限制：
+ `timeout` 参数 @[`addNode`] 限制单个节点尝试可以运行的时间。传递一个数字（毫秒）或 @[`TimeoutPolicy`] 用于分别设置运行和空闲限制：
 
 ```typescript
 import { StateGraph, type TimeoutPolicy } from "@langchain/langgraph";
@@ -322,10 +322,7 @@ new StateGraph(State).addNode("callModel", callModel, {
 ### 运行超时
 
 :::python
-`run_timeout` 是单次尝试的硬性实时上限。无论节点活动如何，它都不会被刷新：
-
-
-</fragment>
+`run_timeout` 是单个尝试的硬性挂钟上限。无论节点活动如何，它都不会被刷新：
 
 ```python
 from langgraph.types import TimeoutPolicy
@@ -339,10 +336,7 @@ builder.add_node(
 :::
 
 :::js
-`runTimeout` 是单个尝试的硬性挂钟时间限制。无论节点活动如何，它永远不会刷新：
-
-
-</fragment>
+`runTimeout` 是单个尝试的硬性挂钟上限。无论节点活动如何，它都不会被刷新：
 
 ```typescript
 const graph = new StateGraph(State)
@@ -351,12 +345,14 @@ const graph = new StateGraph(State)
   })
   .compile();
 ```
-当超过限制时，LangGraph 会引发 @[`NodeTimeoutError`]，清除失败尝试中的所有写入，并让重试策略决定是否重试。
+:::
+
+当超过限制时，LangGraph 会抛出 @[`NodeTimeoutError`]，清除失败尝试的任何写入，并让重试策略决定是否重试。
 
 ### 空闲超时
 
 :::python
-`idle_timeout` 是一个重置进度的上限。它只在节点在指定时间内停止取得可观察的进展时触发——与 `run_timeout` 不同的是，只要节点产生进度信号，时钟就会重置：
+`idle_timeout` 是一个进度重置上限。它仅在节点在指定时间内停止产生可观察的进度时触发——与 `run_timeout`不同，只要节点产生进度信号，时钟就会重置：
 
 ```python
 builder.add_node(
@@ -368,10 +364,7 @@ builder.add_node(
 :::
 
 :::js
-`idleTimeout` 是一个重置进度的上限值。它仅在节点在指定时长内停止产生可观测进度时触发——与 `runTimeout` 不同，时钟会在节点产生进度信号时重置：
-
-
-</fragment>
+`idleTimeout` 是一个进度重置上限。它仅在节点在指定时间内停止产生可观察的进度时触发——与 `runTimeout`不同，只要节点产生进度信号，时钟就会重置：
 
 ```typescript
 const graph = new StateGraph(State)
@@ -383,40 +376,38 @@ const graph = new StateGraph(State)
 :::
 
 :::python
-可以同时设置 `run_timeout` 和 `idle_timeout`。任何一个先触发都会取消该尝试。
+你可以设置 `run_timeout` 和 `idle_timeout` 一起使用。先触发的那个会取消尝试。
 :::
 
 :::js
-可以同时设置 `runTimeout` 和 `idleTimeout`。任何一个先触发都会取消该尝试。
+你可以设置 `runTimeout` 和 `idleTimeout` 一起使用。先触发的那个会取消尝试。
 :::
 
 #### 进度信号
 
 :::python
-在默认的 `refresh_on="auto"` 下，空闲计时器会在以下任一情况下重置：
+在默认情况下 `refresh_on="auto"`，空闲时钟会在以下任一情况下重置：
 
-- 通过 `CONFIG_KEY_SEND` 进行的状态写入
-- 流输出（yield 的异步流块）
+- 通过以下方式进行状态写入 `CONFIG_KEY_SEND`
+- 流输出（yielded async stream chunks）
 - 子任务调度
 - 运行时流写入器调用
-- 来自该节点或其后代节点的任何 LangChain 回调事件（LLM tokens、工具调用、链开始/结束等。）
+- Any LangChain callback event from the node or its descendants (LLM tokens, tool calls, chain start/end, etc.)
 :::
 
 :::js
-在默认的 `refreshOn: "auto"` 下，空闲计时器会在以下任一情况下重置：
+在默认情况下 `refreshOn: "auto"`，空闲时钟会在以下任一情况下重置：
 
-- 通过图写入路径进行的状态写入
-- 通过 `runtime.writer` 的自定义流输出
+- 通过图形写入路径进行的State写入
+- 通过以下方式进行的自定义流输出 `runtime.writer`
 - 子任务调度
-- 来自该节点或其后代节点的任何 LangChain 回调事件（LLM tokens、工具调用、链开始/结束等。）
+- Any LangChain callback event from the node or its descendants (LLM tokens, tool calls, chain start/end, etc.)
 :::
 
 #### 心跳模式
 
 :::python
-设置 `refresh_on="heartbeat"` 可以将刷新源缩小到仅显式的 `runtime.heartbeat()` 调用。当需要严格定义空闲且不被频繁的下属操作重置时，这会很有用：
-
-:::
+设置 `refresh_on="heartbeat"` 以将刷新源收窄到显式 `runtime.heartbeat()` 调用。这在你需要严格定义空闲且不被话多的子级重置时很有用：
 
 ```python
 builder.add_node(
@@ -425,7 +416,10 @@ builder.add_node(
     timeout=TimeoutPolicy(idle_timeout=30, refresh_on="heartbeat"),
 )
 ```
-设置 `refreshOn: "heartbeat"` 以将刷新源缩小至仅限显式的 `runtime.heartbeat()` 调用。这在您想要一个不会被频繁通信的子级重置的严格空闲定义时非常有用：
+:::
+
+:::js
+设置 `refreshOn: "heartbeat"` 以将刷新源收窄到显式 `runtime.heartbeat()` 调用。这在你需要严格定义空闲且不被话多的子级重置时很有用：
 
 ```typescript
 const graph = new StateGraph(State)
@@ -438,15 +432,9 @@ const graph = new StateGraph(State)
 
 #### 手动心跳
 
-对于不会自然发出进度信号的长时运行任务，调用 `runtime.heartbeat()` 来手动重置空闲计时器：
+对于不会自然发出进度信号的长时运行任务，请调用 `runtime.heartbeat()` 以手动重置空闲时钟：
 
 :::python
-
-```python
-runtime.heartbeat()
-```
-
-:::
 ```python
 from langgraph.graph import StateGraph, START, END
 from langgraph.runtime import Runtime
@@ -509,36 +497,36 @@ const graph = new StateGraph(State)
 ```
 :::
 
-`runtime.heartbeat()` 在空闲计时尝试之外是一个空操作，因此您可以无条件调用它。
+`runtime.heartbeat()` 在空闲计时尝试之外是空操作，因此你可以无条件调用它。
 
 ### NodeTimeoutError
 
-当超时触发时，LangGraph 会抛出 @[`NodeTimeoutError`]，并附带关于哪个限制被触发的结构化上下文：
+当超时触发时，LangGraph会抛出@【`NodeTimeoutError`】并附带关于哪个限制被触发的结构化上下文：
 
 :::python
-| Attribute | Type | Description |
+| 属性 | 类型 | 描述 |
 | --------- | ---- | ----------- |
-| `node` | `str` | 执行超时的节点名称。 |
-| `elapsed` | `float` | 在超时触发前已消耗的秒数。 |
+| `node` | `str` | 超时执行的节点名称。 |
+| `elapsed` | `float` | 超时触发前经过的秒数。 |
 | `kind` | `Literal["idle", "run"]` | 触发的超时类型。 |
 | `idle_timeout` | `float \| None` | 配置的空闲超时时间（秒），如果有的话。 |
-| `run_timeout` | `float \| None` | 配置的执行超时时间（秒），如果有的话。 |
+| `run_timeout` | `float \| None` | 配置的运行超时时间（秒），如果有的话。 |
 :::
 
 :::js
-| Attribute | Type | Description |
+| 属性 | 类型 | 描述 |
 | --------- | ---- | ----------- |
-| `node` | `string` | 执行超时的节点名称。 |
-| `elapsed` | `number` | 在超时触发前已消耗的毫秒数。 |
+| `node` | `string` | 超时执行的节点名称。 |
+| `elapsed` | `number` | 超时触发前经过的毫秒数。 |
 | `kind` | `"idle" \| "run"` | 触发的超时类型。 |
 | `timeout` | `number` | 触发的超时的值（毫秒）。 |
 | `idleTimeout` | `number \| undefined` | 配置的空闲超时时间（毫秒），如果有的话。 |
-| `runTimeout` | `number \| undefined` | 配置的执行超时时间（毫秒），如果有的话。 |
+| `runTimeout` | `number \| undefined` | 配置的运行超时时间（毫秒），如果有的话。 |
 
-使用 `isNodeTimeoutError(error)` 在 TypeScript 中缩小捕获的错误类型。
+使用 `isNodeTimeoutError(error)` 以在TypeScript中收窄捕获的错误。
 :::
 
-`NodeTimeoutError` 默认可重试。将 `timeout` 与重试策略结合使用可以无缝运行——每次新尝试时超时计时器都会重置，超时的尝试中的写入会在下一次重试前被清除：
+`NodeTimeoutError` 默认可重试。结合 `timeout` 与重试策略可开箱即用——每次新尝试时超时时钟会重置，并且超时尝试中的写入会在下一次重试前清除：
 
 :::python
 ```python
@@ -562,9 +550,11 @@ const graph = new StateGraph(State)
   })
   .compile();
 ```
-### 使用 Send 的动态超时
+:::
 
-当使用 @[`Send`] 动态调度节点时（例如在 map-reduce 模式中），你可以在 `Send` 上直接传递超时参数，以覆盖目标节点针对该特定推送的静态超时设置：
+### 使用Send的动态超时
+
+当使用@【`Send`】来动态调度节点（例如，在map-reduce模式中）时，你可以直接在 `Send` 上传递超时以覆盖该特定推送的目标节点静态超时：
 
 :::python
 ```python
@@ -591,33 +581,31 @@ const fanOut = (state: typeof State.State) =>
 :::
 
 :::python
-如果 `Send` 上省略了超时时间，则使用目标节点的超时时间（在 @[`add_node`] 时设置）。这允许您在节点上设置默认超时，并为单个调用收紧超时时间。
+如果省略了 `Send`上的超时，则使用目标节点的超时（在该@【`add_node`】时设置）。这样你可以在节点上设置默认超时，并为单个调用收紧超时。
 :::
 
 :::js
-如果 `Send` 上省略了超时时间，则使用目标节点的超时时间（在 @[`addNode`] 时设置）。这允许您在节点上设置默认超时，并为单个调用收紧超时时间。
+如果省略了 `Send`上的超时，则使用目标节点的超时（在该@【`addNode`】时设置）。这样你可以在节点上设置默认超时，并为单个调用收紧超时。
 :::
 
 ## 错误处理
 
 :::python
 <Note>
-需要 `langgraph>=1.2`。
+需要 `langgraph>=1.2`.
 </Note>
 :::
 
 :::js
 <Note>
-需要 `@langchain/langgraph>=1.4.0`。
+需要 `@langchain/langgraph>=1.4.0`.
 </Note>
 :::
 
-错误处理器在节点失败且所有重试耗尽后运行。它接收当前状态并可以更新它或使用 @[`Command`] 路由到不同的节点。这对于补偿流（Saga 模式）很有用，您希望优雅地恢复而不是中止整个图。
+错误处理器在节点失败且所有重试耗尽后运行。它接收当前状态，可以更新状态或使用 @[`Command`] 进行路由。这对于补偿流（Saga 模式）很有用，您希望优雅地恢复而不是中止整个图。
 
 :::python
-将 `error_handler=` 传递给 @[`add_node`]：
-
-:::
+传递 `error_handler=` to @[`add_node`]:
 
 ```python
 from langgraph.errors import NodeError
@@ -654,10 +642,9 @@ graph = (
 )
 ```
 :::
-:::js
-仅在 @[`StateGraph`] 上将 `errorHandler` 传递给 @[`addNode`]（而不是基类 `Graph`）：
 
-:::
+:::js
+传递 `errorHandler` to @[`addNode`] on @[`StateGraph`] 仅（而非基 `Graph` 类）：
 
 ```typescript
 import {
@@ -704,12 +691,12 @@ const graph = new StateGraph(State)
 ```
 :::
 
-处理器仅在重试策略耗尽后触发，或者如果没有配置重试策略则立即触发。重试策略和错误处理程序保持解耦：独立配置何时重试以及何时补偿。
+处理器仅在重试策略耗尽后触发，或者如果未配置重试策略则立即触发。重试策略和错误处理器保持解耦：独立配置何时重试以及何时补偿。
 
 ### NodeError
 
 :::python
-错误处理程序通过类型化 `error: NodeError` 参数接收失败上下文，通过类型注解注入（与 `runtime: Runtime` 相同的模式）：
+错误处理器通过类型化 `error: NodeError` 参数接收失败上下文，通过类型注解注入（与 `runtime: Runtime`):
 
 ```python
 from langgraph.errors import NodeError
@@ -719,21 +706,18 @@ def my_handler(state: State, error: NodeError) -> Command:
     return Command(update={"status": "recovered"}, goto="next_step")
 ```
 
-@[`NodeError`] 是一个冻结的数据类，包含两个字段：
+@[`NodeError`] 是一个冻结数据类，有两个字段：
 
 | 属性 | 类型 | 描述 |
 | --------- | ---- | ----------- |
 | `node` | `str` | 执行失败的节点名称。 |
 | `error` | `BaseException` | 失败节点引发的异常。 |
 
-`error: NodeError` 参数是可选的。不需要失败上下文的处理器可以使用更简单的签名，如 `(state)` 或 `(state, runtime)`。
+该 `error: NodeError` 参数是可选的。不需要失败上下文的处理器可以使用更简单的签名，如 `(state)` or `(state, runtime)`.
 :::
 
 :::js
-错误处理器通过类型化参数 `error: NodeError` 接收失败上下文信息：
-
-
-:::
+错误处理器通过类型化 `error: NodeError` parameter:
 
 ```typescript
 import { Command, NodeError } from "@langchain/langgraph";
@@ -747,19 +731,19 @@ const myHandler = (state: typeof State.State, error: NodeError) => {
 };
 ```
 
-@[`NodeError`] 是一个包含两个字段的类：
+@[`NodeError`] 是一个有两个字段的类：
 
 | 属性 | 类型 | 描述 |
 | --------- | ---- | ----------- |
 | `node` | `string` | 执行失败的节点名称。 |
 | `error` | `Error` | 失败节点抛出的异常。 |
 
-`error: NodeError` 参数是可选的。不需要失败上下文的处理器可以省略第二个参数，只接受 `state`。
+该 `error: NodeError` 参数是可选的。不需要失败上下文的处理器可以省略第二个参数，仅接受 `state`.
 :::
 
-### 路由与命令
+### 使用 Command 路由
 
-错误处理器可以返回一个 @[`Command`] 来更新状态并将路由定向到特定节点，从而启用 Saga / 补偿模式：
+错误处理器可以返回 @[`Command`] to update state and route to a specific node, enabling Saga / compensation patterns:
 
 :::python
 ```python
@@ -802,8 +786,9 @@ graph = (
 )
 ```
 
-`charge_payment` 在遇到 `ConnectionError` 时最多重试 3 次。如果重试耗尽（或者错误不是 `ConnectionError`），处理器会通过更新状态并路由到 `finalize` 来补偿，而不是中止图。
+`charge_payment` 重试 `ConnectionError` 最多 3 次。如果重试耗尽（或错误不是 `ConnectionError`），则处理器通过更新状态并路由到 `finalize` 来补偿，而不是中止图。
 :::
+
 :::js
 ```typescript
 import {
@@ -855,34 +840,34 @@ const graph = new StateGraph(State)
   .compile();
 ```
 
-`chargePayment` 在 `ConnectionError` 上重试最多 3 次。如果重试次数耗尽（或者错误不是 `ConnectionError`），处理程序会通过更新状态并路由到 `finalize` 来补偿，而不是中止图。
+`chargePayment` 重试 `ConnectionError` 最多 3 次。如果重试耗尽（或错误不是 `ConnectionError`），则处理器通过更新状态并路由到 `finalize` 来补偿，而不是中止图。
 :::
 
-### Resume-safe failures
+### 可恢复的失败
 
 <Note>
-失败溯源会被检查点化。如果图在节点失败后但处理程序完成前被中断或进程崩溃，当图从其检查点恢复时，处理程序会看到相同的 `NodeError` 上下文。
+失败来源会被检查点化。如果节点失败后但在处理器完成前图被中断或进程崩溃，处理器在从检查点恢复时会看到相同的 `NodeError` 上下文。
 </Note>
 
-### Behavior with `interrupt()`
+### 行为 `interrupt()`
 
 <Warning>
-在节点内引发的 `interrupt()` **不会**被路由到错误处理程序。中断使用 `GraphBubbleUp` 机制来暂停图执行以进行人工干预工作流，绕过重试策略和错误处理程序。图按常规暂停。
+`interrupt()` 在节点内引发 **不会** 路由到错误处理器。中断使用 `GraphBubbleUp` 机制来暂停图执行以进行人工介入工作流，跳过重试策略和错误处理器。图照常暂停。
 </Warning>
 
-### Subgraph failures
+### 子图失败
 
-如果节点包装了子图且子图抛出未处理的异常，该异常会浮出到父节点。如果父节点有错误处理程序，处理程序会用子图的异常触发 `error.error`。
+如果节点包装了子图且子图引发未处理的异常，该异常会浮出到父节点。如果父节点有错误处理器，处理器会用子图的异常触发 `error.error`.
 
 :::python
 
-## Graph defaults
+## 图默认值
 
 <Note>
-需要 `langgraph>=1.2`。
+需要 `langgraph>=1.2`.
 </Note>
 
-无需在每次 `add_node` 调用中重复相同的 `retry_policy=`、`error_handler=`、`timeout=` 或 `cache_policy=`，可以使用 `set_node_defaults()` 在一个地方配置图级默认值：
+不要重复相同的 `retry_policy=`, `error_handler=`, `timeout=`, or `cache_policy=` 在每次 `add_node` 调用中使用 `set_node_defaults()` 来在一处配置图级默认值：
 
 ```python
 from langgraph.errors import NodeError
@@ -910,11 +895,11 @@ graph = (
 )
 ```
 
-`step_a` 和 `step_b` 现在共享相同的重试策略、错误处理程序和超时设置，无需任何重复。
+两者 `step_a` 和 `step_b` 现在共享相同的重试策略、错误处理器和超时，无需任何重复。
 
 ### 优先级
 
-直接传递给 `add_node()` 的每节点值始终覆盖由 `set_node_defaults()` 设置的默认值。默认值在 `compile()` 时解析，因此你可以按任意顺序在 `add_node()` 之前或之后调用 `set_node_defaults()`：
+直接传递给 `add_node()` 的每节点值总是覆盖由 `set_node_defaults()`设置的默认值。默认值在 `compile()` 时解析，因此你可以按任意顺序调用 `set_node_defaults()` 之前或之后 `add_node()` ：
 
 ```python
 graph = (
@@ -929,7 +914,7 @@ graph = (
 
 ### 默认错误处理器
 
-当您希望为任何没有自己处理程序的失败节点提供单一统一恢复函数时，`error_handler` 默认值特别有价值。处理程序接受与 [错误处理](#error-handling) 中描述的相同的 `(state, error: NodeError)` 签名：
+当 `error_handler` 默认值在你希望为任何没有自己处理器的失败节点提供一个统一的恢复函数时特别有用。处理器接受相同的 `(state, error: NodeError)` 中描述的签名 [错误处理](#error-handling):
 
 ```python
 from langgraph.errors import NodeError
@@ -958,7 +943,7 @@ graph = (
 )
 ```
 
-节点会重试两次，然后 `default_handler` 运行。默认处理器还接受 `RunnableConfig` 作为可选的第三个参数，如果你需要访问 `thread_id` 等配置值：
+节点会重试两次，然后 `default_handler` 运行。默认处理器还接受 `RunnableConfig` 作为可选的第三个参数，如果你需要访问配置值（如 `thread_id`:
 
 ```python
 from langchain_core.runnables import RunnableConfig
@@ -970,18 +955,18 @@ def default_handler(state: State, error: NodeError, config: RunnableConfig) -> S
 
 ### 适用性矩阵
 
-并非所有默认值都适用于所有节点类型。错误处理节点（通过 `add_node(error_handler=...)` 注册的节点）被排除在某些默认值之外，以防止不安全的行为：
+并非所有默认值都适用于所有节点类型。通过 `add_node(error_handler=...)`注册的错误处理器节点被排除在某些默认值之外，以防止不安全的行为：
 
-| `set_node_defaults` 参数 | 适用于常规节点 | 适用于错误处理节点 | 原因 |
+| `set_node_defaults` 参数 | 适用于常规节点 | 适用于错误处理器节点 | 原因 |
 | ----------------------------- | ------------------------ | ------------------------------ | ------ |
-| `retry_policy` | ✅ | ✅ | 处理程序应在临时故障时重试 |
-| `timeout` | ✅ | ✅ | 卡住的处理程序应该像卡住的常规节点一样被取消 |
-| `error_handler` | ✅ | ❌ | 处理程序绝不能捕获自身 |
-| `cache_policy` | ✅ | ❌ | 缓存处理程序结果是不安全的 |
+| `retry_policy` | ✅ | ✅ | 处理器应在临时故障时重试 |
+| `timeout` | ✅ | ✅ | 卡住的处理器应像卡住的常规节点一样被取消 |
+| `error_handler` | ✅ | ❌ | 处理器绝不能捕获自身 |
+| `cache_policy` | ✅ | ❌ | 缓存处理器结果是不安全的 |
 
 ### 作用域
 
-在父图上设置的默认值**不会**被子图继承。每个图维护自己的默认值。
+在父图上设置的默认值 **不会** 被子图继承。每个图维护自己的默认值。
 
 :::
 
@@ -990,10 +975,10 @@ def default_handler(state: State, error: NodeError, config: RunnableConfig) -> S
 ## 图默认值
 
 <Note>
-需要 `@langchain/langgraph>=1.4.0`。
+需要 `@langchain/langgraph>=1.4.0`.
 </Note>
 
-与其在每次 `addNode` 调用时重复相同的 `retryPolicy`、`errorHandler`、`timeout` 或 `cachePolicy`，不如使用 [`setNodeDefaults`](https://reference.langchain.com/javascript/langchain-langgraph/index/StateGraph#member-setNodeDefaults) 在一个地方配置图范围的默认值：
+不要重复相同的 `retryPolicy`, `errorHandler`, `timeout`, or `cachePolicy` 在每次 `addNode` 调用中使用 [`setNodeDefaults`](https://reference.langchain.com/javascript/langchain-langgraph/index/StateGraph#member-setNodeDefaults) 来在一处配置图级默认值：
 
 ```typescript
 import { StateGraph, START, NodeError } from "@langchain/langgraph";
@@ -1016,11 +1001,11 @@ const graph = new StateGraph(State)
   .compile();
 ```
 
-两个 `stepA` 和 `stepB` 现在共享相同的重试策略、错误处理器、超时和缓存策略，无需任何重复。
+两者 `stepA` 和 `stepB` 现在共享相同的重试策略、错误处理器、超时和缓存策略，无需任何重复。
 
 ### 优先级
 
-直接传递给 `addNode()` 的每个节点的值始终覆盖由 `setNodeDefaults()` 设置的默认值。默认值在 `compile()` 时解析，因此您可以按任意顺序在 `addNode()` 之前或之后调用 `setNodeDefaults()`：
+直接传递给 `addNode()` 的每节点值总是覆盖由 `setNodeDefaults()`设置的默认值。默认值在 `compile()` 时解析，因此你可以按任意顺序调用 `setNodeDefaults()` 之前或之后 `addNode()` ：
 
 ```typescript
 import { StateGraph, START } from "@langchain/langgraph";
@@ -1035,27 +1020,25 @@ const graph = new StateGraph(State)
 
 ### 适用性矩阵
 
-并非所有默认值都适用于所有节点类型。通过 `addNode(..., { errorHandler })` 注册的错误处理节点会被排除在某些默认值之外，以防止不安全的行为：
+并非所有默认值都适用于所有节点类型。通过 `addNode(..., { errorHandler })`）从某些默认值中排除，以防止不安全行为：
 
-| `setNodeDefaults` 参数 | 适用于常规节点 | 适用于错误处理节点 | 原因 |
+| `setNodeDefaults` 参数 | 适用于常规节点 | 适用于错误处理器节点 | 原因 |
 | ----------------------------- | ------------------------ | ------------------------------ | ------ |
-| `retryPolicy` | ✅ | ✅ | 处理程序应在线瞬态故障时重试 |
-| `timeout` | ✅ | ✅ | 卡住的处理程序应像卡住的常规节点一样被取消 |
-| `errorHandler` | ✅ | ❌ | 处理程序绝不能捕获自身 |
-| `cachePolicy` | ✅ | ❌ | 缓存处理程序结果是不安全的 |
+| `retryPolicy` | ✅ | ✅ | 处理器应在临时故障时重试 |
+| `timeout` | ✅ | ✅ | 卡住的处理器应像卡住的常规节点一样被取消 |
+| `errorHandler` | ✅ | ❌ | 处理器绝不能捕获自身 |
+| `cachePolicy` | ✅ | ❌ | 缓存处理器结果是不安全的 |
 
 ### 作用域
 
-在父图上设置的默认值**不会**被子图继承。每个图维护自己的默认值。
+在父图上设置的默认值会 **不** 被子图继承。每个图维护自己的默认值。
 
 :::
 
 ## 函数式 API
 
 :::python
-The same `timeout=` and `retry_policy=` parameters are available on `@task` and `@entrypoint` in the functional API:
-
-</:::
+相同的 `timeout=` 和 `retry_policy=` 参数在 `@task` 和 `@entrypoint` 的函数式 API 中可用：
 
 ```python
 from langgraph.func import entrypoint, task
@@ -1075,13 +1058,11 @@ async def my_workflow(inputs: dict) -> str:
     return result
 ```
 
-行为与 `add_node` 相同：超时时会引发 `NodeTimeoutError`，清除缓冲的写入，重试策略决定是否重试。
+行为与 `add_node`: `NodeTimeoutError` 超时时会引发，清空缓冲写入，重试策略决定是否重试。
 :::
 
 :::js
-`timeout` 选项在 `task` 和 `entrypoint` 上可用；`task` 还接受 `retry` 选项（不是 `retryPolicy`）：
-
-</fragment>
+这个 `timeout` 选项在 `task` 和 `entrypoint`; `task` 上也接受一个 `retry` 选项（不是 `retryPolicy`):
 
 ```typescript
 import { entrypoint, task } from "@langchain/langgraph";
@@ -1106,19 +1087,19 @@ const myWorkflow = entrypoint(
 );
 ```
 
-行为与 `addNode` 一致：超时时会抛出 `NodeTimeoutError`，缓冲区写入会被清除，重试策略决定是否重试。JavaScript/TypeScript SDK 中的 `task` / `entrypoint` 不提供错误处理器——请使用 `StateGraph.addNode(..., { errorHandler })`。
+行为匹配 `addNode`: `NodeTimeoutError` 超时时抛出，缓冲区写入被清除，重试策略决定是否重试。错误处理器在以下情况不可用 `task` / `entrypoint` in the JavaScript/TypeScript SDK—use `StateGraph.addNode(..., { errorHandler })` instead.
 :::
 
 ## 优雅关闭
 
-协作关闭允许你在当前超级步骤完成后停止正在运行的图运行，并保存可恢复的检查点。这对于处理 SIGTERM 信号或任何需要回收资源而不丢失工作的外部监管器非常有用。
+协作关闭允许您在当前超级步骤完成后停止正在运行的图，并保存可恢复的检查点。这对于处理 SIGTERM 信号或任何需要回收资源而不会丢失工作的外部监督程序很有用。
 
 :::python
 <Note>
-需要 `langgraph>=1.2`。
+需要 `langgraph>=1.2`.
 </Note>
 
-创建 @[`RunControl`] 并将其作为 `control=` 传递给 `invoke` 或 `stream`。从任何线程调用 `request_drain()` 以发信号通知运行应该停止：
+创建一个 @[`RunControl`] 并将其作为 `control=` to `invoke` or `stream`。调用 `request_drain()` 从任何线程发送信号以指示运行应该停止：
 
 ```python
 from langgraph.runtime import RunControl
@@ -1140,10 +1121,10 @@ except GraphDrained as e:
 
 :::js
 <Note>
-需要 `@langchain/langgraph>=1.4.0`。
+需要 `@langchain/langgraph>=1.4.0`.
 </Note>
 
-创建一个 @[`RunControl`] 并将其作为 `control` 传递给 `invoke` 或 `stream`。从任何上下文调用 `requestDrain()` 以发出运行应该停止的信号：
+创建一个 @[`RunControl`] 并将其作为 `control` to `invoke` or `stream`。调用 `requestDrain()` 从任何上下文发送信号以指示运行应该停止：
 
 ```typescript
 import { RunControl, GraphDrained } from "@langchain/langgraph";
@@ -1169,35 +1150,32 @@ try {
 
 ### 语义
 
-Drain 是协作性的，在超级步骤之间运行，绝不会抢占正在运行的工作：
+排空是协作性的，在超级步骤之间运行，不会抢占已经在运行的工作：
 
 :::python
 | 场景 | 行为 |
-| ---- | ---- |
-| 节点正在执行中 | 运行至完成。Drain 在下一个超级步骤生效。 |
-| 节点具有重试策略且正在重试 | 重试循环运行至耗尽或成功。Drain 在之后生效。 |
-| 图在同一 tick 内自然完成并触发 drain | 正常返回。检查 `control.drain_requested` 以区分正常运行。 |
-| 还有更多超级步骤 | 抛出 `GraphDrained(reason)`。检查点已保存且可恢复。 |
-| 子图请求 drain | `GraphDrained` 向上冒泡至父图，并在其下一个超级步骤边界处停止。 |
+| -------- | -------- |
+| 执行中的节点 | 运行至完成。排空在下一个超级步骤生效。 |
+| 具有重试策略且当前正在重试的节点 | 重试循环运行至耗尽或成功。排空在此之后生效。 |
+| 图在排空的同一刻自然完成 | 正常返回。检查 `control.drain_requested` 以区分正常运行。 |
+| 剩余更多超级步骤 | 抛出 `GraphDrained(reason)`。检查点已保存且可恢复。 |
+| 子图请求排空 | `GraphDrained` 通过父级冒泡，并在其自身的下一个超级步骤边界停止。 |
 :::
 
 :::js
 | 场景 | 行为 |
-| ---- | ---- |
-| 节点正在执行中 | 运行至完成。Drain 在下一个超级步骤生效。 |
-| 节点具有重试策略且正在重试 | 重试循环运行至耗尽或成功。Drain 在之后生效。 |
-| 图在同一 tick 内自然完成并触发 drain | 正常返回。检查 `control.drainRequested` 以区分正常运行。 |
-| 还有更多超级步骤 | 抛出 `GraphDrained(reason)`。检查点已保存且可恢复。 |
-| 子图请求 drain | `GraphDrained` 向上冒泡至父图，并在其下一个超级步骤边界处停止。 |
+| -------- | -------- |
+| 节点执行中 | 运行至完成。引流在下一个超级步骤生效。 |
+| 正在重试的带有重试策略的节点 | 重试循环运行至耗尽或成功。引流之后生效。 |
+| 图在引流的同一 tick 自然结束 | 正常返回。请检查 `control.drainRequested` 以与正常运行区分。 |
+| 仍有更多超级步骤 | 抛出 `GraphDrained(reason)`。检查点已保存且可恢复。 |
+| 子图请求引流 | `GraphDrained` 向上冒泡至父级，并在其下一个超级步骤边界停止。 |
 :::
 
-### 排空后恢复
+### 引流后恢复
 
 :::python
-使用相同的 `thread_id` 通过 `invoke(None, config)` 恢复已排空的运行：
-
-
-:::
+使用以下方式恢复已引流的运行 `invoke(None, config)` 使用相同的 `thread_id`:
 
 ```python
 result = graph.invoke(None, config)
@@ -1205,16 +1183,16 @@ result = graph.invoke(None, config)
 :::
 
 :::js
-使用 `invoke(null, config)` 恢复已耗尽的运行，使用相同的 `thread_id`：
+使用以下方式恢复已引流的运行 `invoke(null, config)` 使用相同的 `thread_id`:
 
 ```typescript
 const result = await graph.invoke(null, config);
 ```
 :::
 
-### 在节点内读取排放状态
+### 在节点内读取引流状态
 
-通过 `runtime` 参数访问排放状态，以在超步边界到达之前调整节点行为：
+通过以下方式访问引流状态 `runtime` 参数在达到超级步骤边界之前调整节点行为：
 
 :::python
 ```python
@@ -1263,7 +1241,7 @@ except GraphDrained as e:
 ```
 
 <Note>
-`request_drain()` 不会取消正在运行的 asyncio 任务或终止线程。若要设置硬性上限，请将 drain 与优雅超时和任务取消结合使用。
+`request_drain()` 不会取消正在运行的 asyncio 任务或终止线程。对于硬性上限，请将引流与优雅超时和任务取消配对。
 </Note>
 :::
 
@@ -1290,22 +1268,22 @@ try {
 
 :::js
 <Note>
-`requestDrain()` 不会取消进行中的异步工作。要获得硬性上限，请将 drain 与优雅超时和 `AbortSignal` 配对。
+`requestDrain()` 不会取消进行中的异步工作。对于硬性上限，请将引流与优雅超时和 `AbortSignal`.
 </Note>
 :::
 
 ## 限制
 
 :::python
-- **超时仅适用于异步**：带有超时的同步节点会在编译时被拒绝。
-- **每个节点只能有一个处理器**：每个节点最多只能有一个 `error_handler`。
-- **处理器失败会向上冒泡**：如果错误处理器本身抛出异常，该异常会像节点没有处理器一样传播。
+- **超时仅适用于异步**：带有 `timeout` 的同步节点在编译时被拒绝。
+- **每个节点一个处理器**：每个节点最多可以有一个 `error_handler`.
+- **处理器失败向上冒泡**：如果错误处理器本身抛出异常，该异常会传播，就好像该节点没有处理器一样。
 - **`set_node_defaults` 不会被子图继承**：每个图独立管理自己的默认值。
 :::
 
 :::js
 - **`setNodeDefaults` 不会被子图继承**：每个图独立管理自己的默认值。
-- **错误处理器仅在 `StateGraph` 中可用**：将 `errorHandler` 传递给 `StateGraph.addNode`，而不是基础的 `Graph` 类。错误处理器在 `task` / `entrypoint` 上不可用。
-- **每个节点只能有一个处理器**：每个节点最多只能有一个 `errorHandler`。
-- **处理器失败会向上冒泡**：如果错误处理器本身抛出异常，该异常会像节点没有处理器一样传播。
+- **错误处理器是 `StateGraph`-only**：传递 `errorHandler` to `StateGraph.addNode`，而不是基类 `Graph` 类。错误处理器在 `task` / `entrypoint`.
+- **每个节点一个处理器**：每个节点最多可以有一个 `errorHandler`.
+- **处理器失败向上冒泡**：如果错误处理器本身抛出异常，该异常会传播，就好像该节点没有处理器一样。
 :::

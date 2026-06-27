@@ -1,49 +1,47 @@
 ---
-title: 记忆
-description: 为使用 Deep Agents 构建的智能体添加持久化记忆，使其能够在对话中学习和改进
+title: 内存
+description: 为使用 Deep Agents 构建的智能体添加持久化内存，使其能够在对话中学习和改进
 ---
 
-记忆让你的智能体能够在对话中学习和改进。Deep Agents 将记忆作为一等公民，提供文件系统支持的记忆功能：智能体像读写文件一样读写记忆，而你可以通过[后端](/oss/deepagents/backends)来控制这些文件的存储位置。
+内存使您的智能体能够在对话中学习和改进。Deep Agents 将内存作为一等公民，通过文件系统支持的内存实现：智能体将内存作为文件进行读写，您可以通过以下方式控制这些文件的存储位置 [后端](/oss/deepagents/backends).
 
 <Note>
-本页面介绍**长期记忆**：在对话之间持续存在的记忆。关于短期记忆（单次会话中的对话历史和临时文件），请参阅[上下文工程](/oss/deepagents/context-engineering)指南。短期记忆由智能体的[状态](/oss/langgraph/graph-api#state)自动管理。
+本页涵盖 **长期记忆**：跨对话持久化的记忆。对于短期记忆（单次会话中的对话历史和临时文件），请参阅 [上下文工程](/oss/deepagents/context-engineering) 指南。短期记忆作为智能体的一部分自动管理 [状态](/oss/langgraph/graph-api#state).
 
-![短期记忆通过检查点限制在单个线程中；长期记忆通过存储在多个线程间持续存在](/oss/images/deepagents/production/memory.png)
+![短期记忆通过检查点限定在单个线程中；长期记忆通过存储在多个线程间持久化](/oss/images/deepagents/production/memory.png)
 </Note>
 
-## 记忆的工作原理
+## 内存工作原理
 
-1. **将智能体指向记忆文件。** 创建智能体时通过 `memory=` 传递文件路径。你还可以通过 `skills=` 传递[技能](/oss/deepagents/skills)以实现过程记忆（可重用的指令，告诉智能体*如何*执行任务）。[后端](/oss/deepagents/backends)控制文件的存储位置和访问权限。
-2. **智能体读取记忆。** 智能体可以在启动时将记忆文件加载到系统提示词中，也可以在对话中按需读取。例如，[技能](/oss/deepagents/skills)使用按需加载：智能体在启动时只读取技能描述，然后在匹配任务时才读取完整的技能文件。这使上下文保持精简，直到需要某个能力时才加载。
-3. **智能体更新记忆（可选）。** 当智能体学到新信息时，它可以使用内置的 `edit_file` 工具来更新记忆文件。更新可以在对话期间进行（默认），也可以通过[后台整合](#后台整合)在对话之间后台进行。更改会被持久化，并在下一次对话中可用。并非所有记忆都可写：开发者定义的[技能](/oss/deepagents/skills)和[组织策略](#组织级记忆)通常是只读的。详见[只读与可写记忆](#只读与可写记忆)。
+1. **指向智能体的内存文件。** 创建智能体时将文件路径传递给 `memory=` 。您还可以通过以下方式传递 [技能](/oss/deepagents/skills) 通过 `skills=` 用于过程记忆（可重用的指令，告诉智能体 *如何* 执行任务）。 [后端](/oss/deepagents/backends) 控制文件的存储位置和访问权限。
+2. **智能体读取内存。** 智能体可以在启动时将内存文件加载到系统提示中，也可以在对话期间按需读取。例如， [技能](/oss/deepagents/skills) 使用按需加载：智能体在启动时仅读取技能描述，然后在匹配任务时才读取完整的技能文件。这样可以保持上下文精简，直到需要某个功能时才加载。
+3. **智能体更新内存（可选）。** 当智能体学习到新信息时，它可以使用内置 `edit_file` 工具更新内存文件。更新可以在对话期间进行（默认设置），也可以通过以下方式在对话之间的后台进行 [后台整合](#background-consolidation)。更改会被持久化，并在下次对话中可用。并非所有内存都是可写的：开发者定义的 [技能](/oss/deepagents/skills) 和 [组织策略](#organization-level-memory) 通常是只读的。详见 [只读与可写内存](#read-only-vs-writable-memory) 。
 
-两种最常见的模式是[智能体范围记忆](#智能体范围记忆)（在所有用户之间共享）和[用户范围记忆](#用户范围记忆)（按用户隔离）。
+两种最常见的模式是 [智能体作用域内存](#agent-scoped-memory) （所有用户共享）和 [用户作用域内存](#user-scoped-memory) （每个用户隔离）。
 
-## 范围记忆
+## 作用域内存
 
-智能体记忆可以设置范围，使相同的记忆文件可被所有使用该智能体的用户访问，或者记忆文件可以是每个用户独有的。
+智能体内存可以设置作用域，使相同的内存文件可被所有使用该智能体的用户访问，或者使内存文件每个用户独立。
 
-### 智能体范围记忆
+### 智能体作用域内存
 
-赋予智能体一个随时间演变的持久身份。智能体范围记忆在所有用户之间共享，因此智能体通过每次对话积累自己的角色特征、累积知识和学习偏好。当它与用户互动时，会发展专业知识、改进方法，并记住有效的做法。当拥有写权限时，它还可以学习和更新[技能](/oss/deepagents/skills)。
+为代理赋予其自身的持久身份，随时间演变。代理作用域的记忆在所有用户之间共享，因此代理通过每次对话建立自己的角色、积累的知识和学到的偏好。当它与用户交互时，会发展专业知识、完善方法并记住有效的内容。它还可以学习和更新 [技能](/oss/deepagents/skills) 当拥有写权限时。
 
-关键在于后端命名空间：将其设置为 `(assistant_id,)` 意味着此智能体的每次对话都读写同一个记忆文件。
+关键在于后端命名空间：将其设置为 `(assistant_id,)` 意味着此代理的每次对话都读取和写入同一记忆文件。
 
 :::python
 <Note>
-访问 `rt.server_info` 需要 `deepagents>=0.5.0`。在旧版本中，请改为从 `get_config()["metadata"]["assistant_id"]` 读取助手 ID。
+访问 `rt.server_info` 需要 `deepagents>=0.5.0`。在旧版本中，从 `get_config()["metadata"]["assistant_id"]` instead.
 </Note>
 :::
 
 :::js
 <Note>
-访问 `rt.serverInfo` 需要 `deepagents>=1.9.0`。在旧版本中，请改为从 `getConfig().metadata.assistantId` 读取助手 ID。
+访问 `rt.serverInfo` 需要 `deepagents>=1.9.0`。在旧版本中，从 `getConfig().metadata.assistantId` instead.
 </Note>
 :::
 
 :::python
-
-:::
 ```python
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
@@ -93,9 +91,9 @@ const agent = createDeepAgent({
 ```
 :::
 
-<Accordion title="完整示例：植入记忆并调用">
+<Accordion title="Full example: seed memory and invoke">
 
-使用初始记忆填充存储，然后跨两个线程调用代理，以查看它如何记忆和更新所学内容。
+用初始记忆填充存储，然后跨两个线程调用代理以查看它记住并更新所学内容。
 
 :::python
 ```python
@@ -230,14 +228,13 @@ await agent.invoke({
 ```
 :::
 
-
 </Accordion>
 
-### 用户作用域内存
+### 用户作用域记忆
 
-为每个用户提供独立的内存文件。代理会记住每个用户的偏好、上下文和历史记录，而核心代理指令保持不变。如果存储在用户作用域的后端中，用户也可以拥有各自的[技能](/oss/deepagents/skills)。
+为每个用户提供自己的记忆文件。代理记住每个用户的偏好、上下文和历史，而核心代理指令保持不变。如果存储在用户作用域的后端中，用户也可以拥有用户特有的 [技能](/oss/deepagents/skills) 如果存储在用户作用域的后端中。
 
-命名空间使用`(user_id,)`，因此每个用户获得内存文件的独立副本。用户 A 的偏好永远不会泄露到用户 B 的对话中。
+命名空间使用 `(user_id,)` 因此每个用户获得记忆文件的独立副本。用户 A 的偏好永远不会泄漏到用户 B 的对话中。
 
 :::python
 ```python
@@ -285,9 +282,9 @@ const agent = createDeepAgent({
 ```
 :::
 
-<Accordion title="完整示例：跨用户的隔离内存">
+<Accordion title="Full example: isolated memory across users">
 
-为每个用户播种独立的记忆，并作为两个不同的用户调用智能体。每个用户只能看到自己的偏好设置。
+为每个用户预先填充记忆，并以两个不同的用户身份调用代理。每个用户只能看到自己的偏好。
 
 :::python
 ```python
@@ -435,24 +432,24 @@ await agent.invoke(
 
 ## 高级用法
 
-除了内存路径和作用域的基本配置选项外，您还可以为内存配置更高级的参数：
+除了记忆路径和作用域的基本配置选项外，你还可以为记忆配置更高级的参数：
 
-| 维度 | 问题 | 选项 |
+| 维度 | 它回答的问题 | 选项 |
 |---|---|---|
-| **持续时间** | 持续多长时间？ | [短期](/oss/deepagents/context-engineering)（单次对话）或[长期](#scoped-memory)（跨对话） |
-| **信息类型** | 它是什么类型的信息？ | [情景记忆](#episodic-memory)（过去的经验）、[程序记忆](/oss/deepagents/skills)（指令和技能）或[语义记忆](/oss/concepts/memory#semantic-memory)（事实） |
-| **作用域** | 谁可以查看和修改它？ | [用户](#user-scoped-memory)、[代理](#agent-scoped-memory)或[组织](#organization-level-memory) |
-| **更新策略** | 何时写入记忆？ | 对话期间（默认）或[对话之间](#background-consolidation) |
-| **检索** | 如何读取记忆？ | 加载到提示词中（默认）或按需（例如[技能](/oss/deepagents/skills)） |
-| **代理权限** | 代理可以写入内存吗？ | [读写](#read-only-vs-writable-memory)（默认）或[只读](#read-only-vs-writable-memory)（用于共享策略） |
+| **持续时间** | 它持续多久？ | [Short-term](/oss/deepagents/context-engineering) （单次对话）或 [long-term](#scoped-memory) （跨对话）|
+| **信息类型** | 它是什么类型的信息？ | [情景记忆](#episodic-memory) （过去的经历）， [程序性](/oss/deepagents/skills) （指令和技能），或 [语义性](/oss/concepts/memory#semantic-memory) （事实）|
+| **作用域** | 谁可以查看和修改它？ | [用户](#user-scoped-memory), [代理](#agent-scoped-memory), or [组织](#organization-level-memory) |
+| **更新策略** | 何时写入记忆？ | 对话期间（默认）或 [对话之间](#background-consolidation) |
+| **检索** | 如何读取记忆？ | 加载到提示词中（默认）或按需（例如， [技能](/oss/deepagents/skills)) |
+| **代理权限** | 代理是否可以写入记忆？ | [Read-write](#read-only-vs-writable-memory) （默认）或 [read-only](#read-only-vs-writable-memory) （用于共享策略）|
 
 ### 情景记忆
 
-情景记忆存储过去经验的记录：发生了什么、按什么顺序发生、以及结果如何。与语义记忆（存储在 `AGENTS.md` 等文件中的事实和偏好）不同，情景记忆保留了完整的对话上下文，使代理能够回忆问题是如何解决的，而不仅仅是学到了什么。
+情景记忆存储过去经历的记录：发生了什么、按什么顺序发生、以及结果如何。与语义记忆（存储在文件中的事实和偏好，如 `AGENTS.md`）不同，情景记忆保留了完整的对话上下文，使智能体能够回想起 *问题是如何解决的，而不仅仅是* 从中 *学到了什么* 。
 
-Deep Agents 已经使用[检查点器](/oss/langgraph/checkpointers#checkpoints)，这是支持情景记忆的机制：每次对话都作为检查点化的线程被持久化。
+深度智能体已经使用 [检查点](/oss/langgraph/checkpointers#checkpoints) ，这是支持情景记忆的机制：每次对话都作为检查点线程持久化保存。
 
-为了让过去的对话可搜索，请将线程搜索包装在工具中。`user_id` 从运行时上下文中获取，而不是作为参数传递：
+为了让过去的对话可搜索，请将线程搜索包装在一个工具中。 `user_id` 是从运行时上下文而不是作为参数传递的：
 
 :::python
 ```python
@@ -505,7 +502,9 @@ const searchPastConversations = tool(
   }
 );
 ```
-您可以通过调整元数据过滤器来按用户或组织限定线程搜索范围：
+:::
+
+你可以通过调整元数据过滤器来按用户或组织范围限定线程搜索：
 
 :::python
 ```python
@@ -539,13 +538,13 @@ const orgThreads = await client.threads.search({
 ```
 :::
 
-这对于执行复杂多步骤任务的智能体很有用。例如，编码智能体可以回顾过去的调试会话，直接跳到可能的根本原因。
+这对于执行复杂多步骤任务的智能体很有用。例如，一个编码智能体可以回顾过去的调试会话，直接跳到可能的根本原因。
 
-### 组织级内存
+### 组织级记忆
 
-组织级内存遵循与用户级内存相同的模式，但使用的是组织级命名空间而非用户级命名空间。将其用于应在组织内所有用户和智能体中应用的策略或知识。
+组织级记忆遵循与用户级记忆相同的模式，但使用组织级命名空间而不是用户级命名空间。用于跨组织内所有用户和智能体都应适用的策略或知识。
 
-组织内存通常是 **只读** 的，以防止通过共享状态进行提示注入。详见[只读与可写内存](#read-only-vs-writable-memory)。
+组织记忆通常是 **read-only** 的，以防止通过共享状态进行提示注入。参见 [只读记忆与可写记忆](#read-only-vs-writable-memory) 了解详情。
 
 :::python
 ```python
@@ -597,7 +596,7 @@ const agent = createDeepAgent({
 ```
 :::
 
-使用应用程序代码填充组织记忆：
+从你的应用程序代码中填充组织记忆：
 
 :::python
 ```python
@@ -633,24 +632,26 @@ await client.store.putItem(
 `),
 );
 ```
-使用[权限](/oss/deepagents/permissions)强制组织级内存为只读，或使用[策略钩子](/oss/deepagents/backends#add-policy-hooks)进行自定义验证逻辑。
+:::
+
+使用 [权限](/oss/deepagents/permissions) 来强制组织级记忆为只读，或使用 [策略钩子](/oss/deepagents/backends#add-policy-hooks) 进行自定义验证逻辑。
 
 ### 后台整合
 
-默认情况下，代理在对话期间写入记忆（热路径）。另一种方式是将记忆作为后台任务在**对话之间**处理，有时称为**休眠计算**。一个单独的深度代理会审查最近的对话，提取关键事实，并将其与现有记忆合并。
+默认情况下，智能体在对话期间写入记忆（热路径）。另一种方式是将记忆 **在对话之间** 作为后台任务处理，这有时称为 **休眠时间计算**。一个单独的深度智能体会审查最近的对话，提取关键事实，并将其与现有记忆合并。
 
-| 方式 | 优点 | 缺点 |
+| 方法 | 优点 | 缺点 |
 |---|---|---|
-| **热路径**（对话期间）| 记忆立即可用，对用户透明 | 增加延迟，代理需要处理多个任务 |
-| **后台**（对话之间）| 无用户面延迟，可以跨多个对话综合 | 记忆直到下次对话才可用，需要第二个代理 |
+| **热路径** （对话期间）| 记忆立即可用，对用户透明 | 增加延迟，智能体必须多任务处理 |
+| **后台** （对话之间）| 无用户-facing延迟，可跨多个对话综合 | 记忆在下次对话前不可用，需要第二个智能体 |
 
-对于大多数应用，热路径已足够。当您需要减少延迟或提高跨多个对话的记忆质量时，添加后台整合。
+对于大多数应用，热路径已足够。在需要减少延迟或提高跨多个对话的记忆质量时，添加后台整合。
 
-推荐模式是部署一个**整合代理**与您的主代理并行——一个读取最近对话历史、提取关键事实并将其合并到记忆存储中的深度代理——并通过 [cron 计划](#cron) 触发它。选择一个反映用户实际与代理交互频率的节奏：每日流量稳定的聊天产品可能每隔几小时整合一次，而每周只使用几次的工具只需要每天或每周运行一次。整合频率比用户对话频率高出太多只会浪费令牌在无操作运行上。
+推荐模式是部署一个 **整合智能体** 与主智能体并行运行——一个读取最近对话历史、提取关键事实并将其合并到记忆存储中的深度智能体——并按 [定时计划](#cron)选择一个能反映用户实际与智能体交互频率的节奏：每天流量稳定的聊天产品可能每几小时合并一次，而每周只使用几次的工具只需要每天或每周运行一次。合并频率远超用户对话频率只会白白消耗 token 进行空操作。
 
-#### 整合代理
+#### 合并智能体
 
-整合代理读取最近的对话历史并合并关键事实到记忆存储中。在 `langgraph.json` 中将其与您的主代理一起注册：
+合并智能体会读取最近的对话历史，并将关键事实合并到记忆存储中。将其与主智能体一起注册在 `langgraph.json`:
 
 :::python
 ```python consolidation_agent.py
@@ -733,9 +734,8 @@ Merge new facts, remove outdated information, and keep it concise.`,
 export { agent };
 ```
 :::
-:::python
 
-</fragment>
+:::python
 ```json langgraph.json
 {
   "dependencies": ["."],
@@ -759,9 +759,11 @@ export { agent };
   "env": ".env"
 }
 ```
+:::
+
 #### Cron
 
-[cron job](/langsmith/cron-jobs) 按固定计划运行整合代理。该代理搜索最近的对话并将其综合到记忆中。将计划与您的使用模式相匹配，使整合运行大致跟踪真实活动。
+A [cron 任务](/langsmith/cron-jobs) 按固定计划运行合并智能体。智能体会搜索最近的对话并将其合成到记忆中。让计划与使用模式相匹配，使合并运行大致跟踪实际活动。
 
 ```mermaid
 graph LR
@@ -781,7 +783,7 @@ graph LR
     class Cron schedule
 ```
 
-使用 cron 作业调度合并代理：
+使用 cron 任务安排合并智能体：
 
 :::python
 ```python
@@ -814,41 +816,41 @@ const cronJob = await client.crons.create(
 :::
 
 <Note>
-所有 cron 计划都在 **UTC** 时间内解释。详见 [cron 作业](/langsmith/cron-jobs) 了解管理和删除 cron 作业的详情。
+所有 cron 计划都在 **UTC**中解释。请参阅 [cron 任务](/langsmith/cron-jobs) 了解管理和删除 cron 任务的详细信息。
 </Note>
 
 <Warning>
-cron 间隔必须与整合代理内的回看窗口相匹配。上面的示例每 6 小时运行一次（`0 */6 * * *`），代理的 `search_recent_conversations` 工具回看 `timedelta(hours=6)`——请保持同步。如果 cron 运行频率超过回看频率，您将重复处理相同的对话；如果运行频率低于回看频率，您将丢失落在窗口外的记忆。
+cron 间隔必须与合并智能体内部的回溯窗口相匹配。上面的示例每 6 小时运行一次（`0 */6 * * *`），智能体的 `search_recent_conversations` 工具回溯 `timedelta(hours=6)` ——保持这些同步。如果 cron 运行频率高于回溯频率，您将重复处理相同的对话；如果运行频率较低，您将丢失超出窗口的记忆。
 </Warning>
 
-有关使用后台流程部署代理的更多信息，请参阅 [投入生产](/oss/deepagents/going-to-production)。
+有关使用后台进程部署智能体的更多信息，请参阅 [投入生产](/oss/deepagents/going-to-production).
 
-### 只读与可写内存
+### 只读内存与可写内存
 
-默认情况下，代理可以读取和写入内存文件。对于组织策略或合规规则等共享状态，您可能希望将内存设为 **只读**，以便代理可以引用但不能修改。这样可以防止通过共享内存进行提示注入，并确保只有您的应用程序代码控制文件内容。
+默认情况下，智能体可以读取和写入内存文件。对于组织策略或合规规则等共享状态，您可能希望将内存设为 **read-only** ，以便智能体可以引用它但不能修改它。这可以防止通过共享内存进行提示注入，并确保只有您的应用程序代码控制文件中的内容。
 
 | 权限 | 用例 | 工作原理 |
 |---|---|---|
-| **读写**（默认） | 用户偏好、代理自我改进、学习的 [技能](/oss/deepagents/skills) | 代理通过 `edit_file` 工具更新文件 |
-| **只读** | 组织策略、合规规则、共享知识库、开发者定义的 [技能](/oss/deepagents/skills) | 通过应用程序代码或 [Store API](/langsmith/custom-store) 填充。使用 [权限](/oss/deepagents/permissions) 拒绝写入特定路径，或使用 [策略钩子](/oss/deepagents/backends#add-policy-hooks) 进行自定义验证逻辑。 |
+| **Read-write** （默认）| 用户偏好、智能体自我改进、习得的 [技能](/oss/deepagents/skills) | 智能体通过 `edit_file` 工具更新文件 |
+| **Read-only** | 组织策略、合规规则、共享知识库、开发者定义的 [技能](/oss/deepagents/skills) | 通过应用程序代码或 [Store API](/langsmith/custom-store)填充。使用 [权限](/oss/deepagents/permissions) 拒绝写入特定路径，或 [策略钩子](/oss/deepagents/backends#add-policy-hooks) 进行自定义验证逻辑。 |
 
-**安全注意事项：** 如果一个用户可以写入另一个用户读取的内存，恶意用户可能会向共享状态注入指令。为缓解此问题：
+**安全注意事项：** 如果一个用户可以写入另一个用户读取的内存，恶意用户可能会将指令注入共享状态。要缓解此问题：
 
-- **默认为用户范围** `(user_id)`，除非您有特定原因需要共享
-- 对共享策略使用 **只读内存**（通过应用程序代码填充，而非代理）
-- 在代理写入共享内存之前添加 **人工介入** 验证。使用 [中断](/oss/langgraph/interrupts) 要求对敏感路径的写入进行人工批准。
+- **默认使用用户范围** `(user_id)` 除非您有特定原因需要共享
+- 使用 **只读内存** 处理共享策略（通过应用程序代码填充，而非智能体）
+- 添加 **human-in-the-loop** 在智能体写入共享内存之前进行验证。使用 [中断](/oss/langgraph/interrupts) 要求对敏感路径的写入进行人工审批。
 
-要强制只读内存，请使用 [权限](/oss/deepagents/permissions) 以声明方式拒绝写入特定路径。对于自定义验证逻辑（速率限制、审计日志、内容检查），请使用 [后端策略钩子](/oss/deepagents/backends#add-policy-hooks)。
+要强制只读内存，请使用 [权限](/oss/deepagents/permissions) 来声明性地拒绝对特定路径的写入。对于自定义验证逻辑（速率限制、审计日志、内容检查），请使用 [后端策略钩子](/oss/deepagents/backends#add-policy-hooks).
 
 ### 并发写入
 
-多个线程可以并行写入内存，但对 **同一文件** 的并发写入可能导致后写入者获胜的冲突。对于用户范围的内存，这种情况很少见，因为用户通常一次只有一个活跃对话。对于代理范围或组织范围的内存，请考虑使用 [后台整合](#background-consolidation) 来序列化写入，或将内存结构化为每个主题的单独文件以减少争用。
+多个线程可以并行写入内存，但对 **同一文件** 的并发写入可能导致后写者胜出的冲突。对于用户范围的内存，这种情况很少见，因为用户通常一次只有一个活跃的对话。对于代理范围或组织范围的内存，请考虑使用 [后台合并](#background-consolidation) 来序列化写入，或将内存结构化为每个主题的独立文件以减少争用。
 
-实际上，如果写入因冲突而失败，LLM 通常足够智能来重试或优雅地恢复，因此丢失一次写入不是灾难性的。
+实际上，如果写入因冲突而失败，LLM 通常足够智能，能够重试或优雅地恢复，因此单次丢失的写入不会是灾难性的。
 
 ### 同一部署中的多个代理
 
-要在共享部署中为每个代理提供自己的内存，请将 `assistant_id` 添加到命名空间：
+要在共享部署中为每个代理提供独立的内存，请添加 `assistant_id` 到命名空间：
 
 :::python
 ```python
@@ -872,8 +874,8 @@ new StoreBackend({
 ```
 :::
 
-如果您只需要按智能体隔离，而不需要按用户进行作用域划分，请单独使用 `assistant_id`。
+使用 `assistant_id` 单独使用，如果您只需要代理级隔离而无需用户级作用域。
 
 <Tip>
-使用 [LangSmith 追踪](/langsmith/trace-with-langgraph) 来审计您的智能体写入内存的内容。每次文件写入都会在追踪中显示为工具调用。
+使用 [LangSmith 追踪](/langsmith/trace-with-langgraph) 来审计您的代理写入内存的内容。每个文件写入都会作为追踪中的工具调用出现。
 </Tip>

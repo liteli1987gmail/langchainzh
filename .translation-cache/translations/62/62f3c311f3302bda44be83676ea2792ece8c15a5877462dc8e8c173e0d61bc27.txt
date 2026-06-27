@@ -1,13 +1,13 @@
 ---
 title: "Google Cloud SQL for PostgreSQL 集成"
-description: "使用 LangChain Python 与 Google Cloud SQL for PostgreSQL 向量存储集成。"
+description: "使用 LangChain Python 与 Google Cloud SQL for PostgreSQL 向量存储进行集成。"
 ---
 
-> [Cloud SQL](https://cloud.google.com/sql) 是一个完全托管的关系型数据库服务，提供高性能、无缝集成和出色的可扩展性。它提供 PostgreSQL、PostgreSQL 和 SQL Server 数据库引擎。扩展您的数据库应用程序，利用 Cloud SQL 的 LangChain 集成构建 AI 驱动的体验。
+> [Cloud SQL](https://cloud.google.com/sql) 是一个完全托管的关系型数据库服务，提供高性能、无缝集成和出色的可扩展性。它提供 PostgreSQL、PostgreSQL 和 SQL Server 数据库引擎。通过 Cloud SQL 的 LangChain 集成扩展您的数据库应用程序，以构建 AI 驱动的体验。
 
-本笔记本介绍如何使用 `Cloud SQL for PostgreSQL` 通过 `PostgresVectorStore` 类存储向量嵌入。
+本笔记本介绍如何使用 `Cloud SQL for PostgreSQL` 使用 `PostgresVectorStore` class.
 
-在 [GitHub](https://github.com/googleapis/langchain-google-cloud-sql-pg-python/) 上了解更多关于该包的信息。
+了解更多关于该包的信息，请访问 [GitHub](https://github.com/googleapis/langchain-google-cloud-sql-pg-python/).
 
 [![在 Colab 中打开](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/googleapis/langchain-google-cloud-sql-pg-python/blob/main/docs/vector_store.ipynb)
 
@@ -23,7 +23,7 @@ description: "使用 LangChain Python 与 Google Cloud SQL for PostgreSQL 向量
 
 ### 🦜🔗 库安装
 
-安装集成库 `langchain-google-cloud-sql-pg` 和用于嵌入服务的库 `langchain-google-vertexai`。
+安装集成库， `langchain-google-cloud-sql-pg`，以及嵌入服务的库， `langchain-google-vertexai`.
 
 ```python
 pip install -qU  langchain-google-cloud-sql-pg langchain-google-vertexai
@@ -41,10 +41,10 @@ pip install -qU  langchain-google-cloud-sql-pg langchain-google-vertexai
 
 ### 🔐 身份验证
 
-作为登录到此笔记本的 IAM 用户向 Google Cloud 进行身份验证，以便访问您的 Google Cloud Project。
+使用已登录此笔记本的 IAM 用户向 Google Cloud 进行身份验证，以访问您的 Google Cloud 项目。
 
-* 如果您使用 Colab 运行此笔记本，请使用下面的单元格并继续。
-* 如果您使用 Vertex AI Workbench，请查看 [Vertex AI Workbench 设置说明](https://github.com/GoogleCloudPlatform/generative-ai/tree/main/setup-env)。
+* 如果您使用 Colab 运行此笔记本，请使用下面的代码单元并继续。
+* 如果您使用 Vertex AI Workbench，请查看 [Vertex AI Workbench 设置说明](https://github.com/GoogleCloudPlatform/generative-ai/tree/main/setup-env).
 
 ```python
 from google.colab import auth
@@ -56,11 +56,11 @@ auth.authenticate_user()
 
 设置您的 Google Cloud 项目，以便您可以在此笔记本中利用 Google Cloud 资源。
 
-如果您不知道项目 ID，请尝试以下操作：
+如果您不知道项目 ID，请尝试以下方法：
 
-- 运行 `gcloud config list`。
-- 运行 `gcloud projects list`。
-- 查看支持页面：[定位项目 ID](https://support.google.com/googleapi/answer/7014113)。
+* 运行 `gcloud config list`.
+* 运行 `gcloud projects list`.
+* 请参阅支持页面： [查找项目 ID](https://support.google.com/googleapi/answer/7014113).
 
 ```python
 # @markdown Please fill in the value below with your Google Cloud project ID and then run the cell.
@@ -71,11 +71,11 @@ PROJECT_ID = "my-project-id"  # @param {type:"string"}
 !gcloud config set project {PROJECT_ID}
 ```
 
-## 基础用法
+## 基本用法
 
 ### 设置 Cloud SQL 数据库值
 
-找到您的数据库值，请访问 [Cloud SQL 实例页面](https://console.cloud.google.com/sql?_ga=2.223735448.2062268965.1707700487-2088871159.1707257687)。
+在 [Cloud SQL 实例页面](https://console.cloud.google.com/sql?_ga=2.223735448.2062268965.1707700487-2088871159.1707257687).
 
 ```python
 # @title Set Your Values Here { display-mode: "form" }
@@ -87,28 +87,28 @@ TABLE_NAME = "vector_store"  # @param {type: "string"}
 
 ### PostgresEngine 连接池
 
-将 Cloud SQL 作为向量存储建立的要求和参数之一是 `PostgresEngine` 对象。`PostgresEngine` 会配置一个连接到您的 Cloud SQL 数据库的连接池，使您的应用能够成功连接，并遵循行业最佳实践。
+将 Cloud SQL 作为向量存储建立连接的要求和参数之一是 `PostgresEngine` 对象。该 `PostgresEngine`  会为您的 Cloud SQL 数据库配置一个连接池，使应用程序能够成功连接并遵循行业最佳实践。
 
-要使用 `PostgresEngine.from_instance()` 创建 `PostgresEngine`，您只需提供 4 项内容：
+要创建一个 `PostgresEngine` 使用 `PostgresEngine.from_instance()` 您只需提供 4 个内容：
 
-1. `project_id` ：Cloud SQL 实例所在的 Google Cloud 项目的项目 ID。
+1. `project_id` ：Cloud SQL 实例所在 Google Cloud 项目的项目 ID。
 1. `region` ：Cloud SQL 实例所在的区域。
 1. `instance` ：Cloud SQL 实例的名称。
-1. `database` ：要连接到 Cloud SQL 实例上的数据库名称。
+1. `database` ：Cloud SQL 实例上要连接的数据库名称。
 
-默认情况下，将使用 [IAM 数据库身份验证](https://cloud.google.com/sql/docs/postgres/iam-authentication#iam-db-auth) 作为数据库身份验证方法。此库使用来自环境的 [应用默认凭据 (ADC)](https://cloud.google.com/docs/authentication/application-default-credentials) 所关联的 IAM 主体。
+默认情况下， [IAM 数据库身份验证](https://cloud.google.com/sql/docs/postgres/iam-authentication#iam-db-auth) 将用作数据库身份验证方法。此库使用来自 [应用默认凭据（ADC）](https://cloud.google.com/docs/authentication/application-default-credentials) 环境中获取的 IAM 主体。
 
 有关 IAM 数据库身份验证的更多信息，请参阅：
 
-* [为 IAM 数据库身份验证配置实例](https://cloud.google.com/sql/docs/postgres/create-edit-iam-instances)
+* [配置实例以进行 IAM 数据库身份验证](https://cloud.google.com/sql/docs/postgres/create-edit-iam-instances)
 * [使用 IAM 数据库身份验证管理用户](https://cloud.google.com/sql/docs/postgres/add-manage-iam-users)
 
-您也可以选择使用用户名和密码的 [内置数据库身份验证](https://cloud.google.com/sql/docs/postgres/built-in-authentication) 来访问 Cloud SQL 数据库。只需向 `PostgresEngine.from_instance()` 提供可选的 `user` 和 `password` 参数：
+可选地， [内置数据库身份验证](https://cloud.google.com/sql/docs/postgres/built-in-authentication) 也可以使用用户名和密码访问 Cloud SQL 数据库。只需提供可选的 `user` 和 `password` 参数即可。 `PostgresEngine.from_instance()`:
 
 * `user` ：用于内置数据库身份验证和登录的数据库用户
 * `password` ：用于内置数据库身份验证和登录的数据库密码。
 
-"**注意**：本教程演示异步接口。所有异步方法都有对应的同步方法。"
+"**注意**：本教程演示了异步接口。所有异步方法都有对应的同步方法。"
 
 ```python
 from langchain_google_cloud_sql_pg import PostgresEngine
@@ -120,7 +120,7 @@ engine = await PostgresEngine.afrom_instance(
 
 ### 初始化表
 
-`PostgresVectorStore` 类需要一个数据库表。`PostgresEngine` 引擎提供了一个辅助方法 `init_vectorstore_table()`，可用于为您创建具有正确架构的表。
+该 `PostgresVectorStore` 类需要一个数据库表。该 `PostgresEngine` 引擎有一个辅助方法 `init_vectorstore_table()` 可用于为您创建具有正确架构的表。
 
 ```python
 from langchain_google_cloud_sql_pg import PostgresEngine
@@ -131,10 +131,10 @@ await engine.ainit_vectorstore_table(
 )
 ```
 
-### 创建 embedding 类实例
+### 创建嵌入类实例
 
-您可以使用任意 [LangChain embedding 模型](/oss/integrations/embeddings/)。
-您可能需要启用 Vertex AI API 才能使用 `VertexAIEmbeddings`。我们建议设置 embedding 模型的版本用于生产环境，了解更多关于 [Text embeddings models](https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/text-embeddings)。
+您可以使用任何 [LangChain 嵌入模型](/oss/integrations/embeddings/).
+您可能需要启用 Vertex AI API 才能使用 `VertexAIEmbeddings`。我们建议为生产环境设置嵌入模型的版本，详细了解 [文本嵌入模型](https://cloud.google.com/vertex-ai/docs/generative-ai/model-reference/text-embeddings).
 
 ```python
 # enable Vertex AI API
@@ -187,7 +187,7 @@ docs = await store.asimilarity_search(query)
 print(docs)
 ```
 
-### 通过向量搜索文档
+### 按向量搜索文档
 
 ```python
 query_vector = embedding.embed_query(query)
@@ -197,7 +197,7 @@ print(docs)
 
 ## 添加索引
 
-通过应用向量索引来加速向量搜索查询。详细了解[向量索引](https://cloud.google.com/blog/products/databases/faster-similarity-search-performance-with-pgvector-indexes)。
+通过应用向量索引来加速向量搜索查询。了解更多关于 [向量索引](https://cloud.google.com/blog/products/databases/faster-similarity-search-performance-with-pgvector-indexes).
 
 ```python
 from langchain_google_cloud_sql_pg.indexes import IVFFlatIndex
@@ -206,13 +206,13 @@ index = IVFFlatIndex()
 await store.aapply_vector_index(index)
 ```
 
-### 重新索引
+### Re-index
 
 ```python
 await store.areindex()  # Re-index using default index name
 ```
 
-### 删除索引
+### 移除索引
 
 ```python
 await store.aadrop_vector_index()  # Delete index using default name
@@ -222,7 +222,7 @@ await store.aadrop_vector_index()  # Delete index using default name
 
 向量存储可以利用关系数据来过滤相似性搜索。
 
-创建包含自定义元数据列的表。
+创建带有自定义元数据列的表。
 
 ```python
 from langchain_google_cloud_sql_pg import Column

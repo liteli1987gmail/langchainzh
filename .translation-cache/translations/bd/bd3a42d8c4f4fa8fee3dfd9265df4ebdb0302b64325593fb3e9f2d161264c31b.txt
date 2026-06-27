@@ -3,18 +3,16 @@ title: 中断并发
 sidebarTitle: 中断
 ---
 
-本指南假设您已了解什么是双文本（double-texting），您可以在[双文本概念指南](/langsmith/double-texting)中了解相关内容。
+本指南假设您了解什么是双重消息（double-texting），您可以在以下内容中了解相关信息 [双重消息概念指南](/langsmith/double-texting).
 
-本指南介绍双文本的 `interrupt` 选项，它会中断之前的图运行，并使用双文本启动新的运行。此选项不会删除第一次运行，而是将其保留在数据库中，但将其状态设置为 `interrupted`。以下是使用 `interrupt` 选项的快速示例。
+本指南涵盖了 `interrupt` 双重消息选项，该选项会中断图之前的运行并使用双重消息启动新的运行。此选项不会删除第一次运行，而是将其保留在数据库中但将其状态设置为 `interrupted`。以下是使用该功能的快速示例 `interrupt` option.
 
 ## 设置
 
-首先，我们将定义一个快速辅助函数，用于打印 JS 和 CURL 模型输出（如果使用 Python，可以跳过此步骤）：
+首先，我们将定义一个快速辅助函数来打印 JS 和 CURL 模型输出（如果您使用 Python，可以跳过此步骤）：
 
 <Tabs>
     <Tab title="Javascript">
-
-</fragment>
     ```js
     function prettyPrint(m) {
       const padded = " " + m['type'] + " ";
@@ -27,10 +25,8 @@ sidebarTitle: 中断
       console.log(m.content);
     }
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
-
-</Tab>
     ```bash
     # PLACE THIS IN A FILE CALLED pretty_print.sh
     pretty_print() {
@@ -50,10 +46,10 @@ sidebarTitle: 中断
       echo "$content"
     }
     ```
-</Tab>
+    </Tab>
 </Tabs>
 
-现在，让我们导入所需的包，并实例化客户端、助手和线程。
+现在，让我们导入所需的包并实例化客户端、助手和线程。
 
 <Tabs>
     <Tab title="Python">
@@ -68,10 +64,8 @@ sidebarTitle: 中断
     assistant_id = "agent"
     thread = await client.threads.create()
     ```
-</Tab>
+    </Tab>
     <Tab title="Javascript">
-
-</fragment>
     ```js
     import { Client } from "@langchain/langgraph-sdk";
 
@@ -80,22 +74,20 @@ sidebarTitle: 中断
     const assistantId = "agent";
     const thread = await client.threads.create();
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
-
-</fragment>
     ```bash
     curl --request POST \
       --url <DEPLOYMENT_URL>/threads \
       --header 'Content-Type: application/json' \
       --data '{}'
     ```
-</Tab>
+    </Tab>
 </Tabs>
 
 ## 创建运行
 
-现在我们可以启动两个运行，并等待第二个运行完成：
+现在我们可以启动两个运行并等待第二个运行完成：
 
 <Tabs>
     <Tab title="Python">
@@ -117,10 +109,8 @@ sidebarTitle: 中断
     # wait until the second run completes
     await client.runs.join(thread["thread_id"], run["run_id"])
     ```
-</Tab>
-<Tab title="Javascript">
-
-</fragment>
+    </Tab>
+    <Tab title="Javascript">
     ```js
     // the first run will be interrupted
     let interruptedRun = await client.runs.create(
@@ -143,7 +133,7 @@ sidebarTitle: 中断
     // wait until the second run completes
     await client.runs.join(thread["thread_id"], run["run_id"]);
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
     ```bash
     curl --request POST \
@@ -162,12 +152,12 @@ sidebarTitle: 中断
     }" && curl --request GET \
     --url <DEPLOYMENT_URL>/threads/<THREAD_ID>/runs/<RUN_ID>/join
     ```
-</Tab>
+    </Tab>
 </Tabs>
 
 ## 查看运行结果
 
-我们可以看到，线程包含第一次运行的部分数据 + 第二次运行的数据
+我们可以看到线程包含第一次运行的部分数据 + 第二次运行的数据
 
 <Tabs>
     <Tab title="Python">
@@ -177,10 +167,8 @@ sidebarTitle: 中断
     for m in convert_to_messages(state["values"]["messages"]):
         m.pretty_print()
     ```
-</Tab>
+    </Tab>
     <Tab title="Javascript">
-
-</fragment>
     ```js
     const state = await client.threads.getState(thread["thread_id"]);
 
@@ -188,7 +176,7 @@ sidebarTitle: 中断
       prettyPrint(m);
     }
     ```
-</Tab>
+    </Tab>
     <Tab title="CURL">
     ```bash
     source pretty_print.sh && curl --request GET \
@@ -199,8 +187,10 @@ sidebarTitle: 中断
         pretty_print "$type" "$content"
     done
     ```
-</Tab>
+    </Tab>
 </Tabs>
+
+Output:
 
 ```
 ================================ Human Message =================================
@@ -245,20 +235,22 @@ The search results provide weather forecasts and information for New York City. 
 In summary, the search provides a convenient overview of the expected weather conditions in New York City over the next month to give you an idea of what to prepare for if traveling or making plans there. Let me know if you need any other details!
 ```
 
-验证原始中断的运行确实被中断了
+验证原始的、已中断的运行已被中断
 
 <Tabs>
     <Tab title="Python">
     ```python
     print((await client.runs.get(thread["thread_id"], interrupted_run["run_id"]))["status"])
     ```
-</Tab>
-    <Tab title="JavaScript">
+    </Tab>
+    <Tab title="Javascript">
     ```js
     console.log((await client.runs.get(thread['thread_id'], interruptedRun["run_id"]))["status"])
     ```
-</Tab>
+    </Tab>
 </Tabs>
+
+Output:
 
 ```
 'interrupted'

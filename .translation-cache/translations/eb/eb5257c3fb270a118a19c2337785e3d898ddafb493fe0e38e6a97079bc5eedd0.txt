@@ -3,23 +3,23 @@ title: "Google Firestore（原生模式）集成"
 description: "使用 LangChain Python 与 Google Firestore（原生模式）文档加载器集成。"
 ---
 
-> [Firestore](https://cloud.google.com/firestore) 是一个无服务器文档导向型数据库，可扩展以满足任何需求。利用 Firestore 的 LangChain 集成扩展您的数据库应用程序，构建由 AI 驱动的体验。
+> [Firestore](https://cloud.google.com/firestore) 是一种无服务器文档数据库，可扩展以满足任何需求。通过 Firestore 的 LangChain 集成扩展您的数据库应用程序，以构建由 AI 驱动的体验。
 
-本笔记本介绍如何使用 [Firestore](https://cloud.google.com/firestore) 通过 `FirestoreLoader` 和 `FirestoreSaver` [保存、加载和删除 LangChain 文档](/oss/integrations/document_loaders)。
+本笔记本介绍如何使用 [Firestore](https://cloud.google.com/firestore) to [保存、加载和删除 LangChain 文档](/oss/integrations/document_loaders) 与 `FirestoreLoader` 和 `FirestoreSaver`.
 
-在 [GitHub](https://github.com/googleapis/langchain-google-firestore-python/) 上了解更多关于该包的信息。
+了解更多关于该包的信息请访问 [GitHub](https://github.com/googleapis/langchain-google-firestore-python/).
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/googleapis/langchain-google-firestore-python/blob/main/docs/document_loader.ipynb)
+[![在 Colab 中打开](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/googleapis/langchain-google-firestore-python/blob/main/docs/document_loader.ipynb)
 
-## 开始之前
+## 准备工作
 
-要运行此笔记本，您需要完成以下操作：
+要运行本笔记本，您需要执行以下操作：
 
 * [创建 Google Cloud 项目](https://developers.google.com/workspace/guides/create-project)
 * [启用 Firestore API](https://console.cloud.google.com/flows/enableapi?apiid=firestore.googleapis.com)
 * [创建 Firestore 数据库](https://cloud.google.com/firestore/docs/manage-databases)
 
-确认可以访问笔记本运行时环境中的数据库后，填写以下值并运行单元格，然后再运行示例脚本。
+确认可以访问笔记本运行时的数据库后，填写以下值并运行单元格，然后再运行示例脚本。
 
 ```python
 # @markdown Please specify a source for demo purpose.
@@ -28,13 +28,13 @@ SOURCE = "test"  # @param {type:"Query"|"CollectionGroup"|"DocumentReference"|"s
 
 ### 🦜🔗 库安装
 
-该集成位于其自己的 `langchain-google-firestore` 包中，因此我们需要安装它。
+该集成位于其自有的 `langchain-google-firestore` 包中，因此我们需要安装它。
 
 ```python
 pip install -qU langchain-google-firestore
 ```
 
-**仅限 Colab**：取消注释以下单元格以重启内核，或使用按钮重启内核。对于 Vertex AI Workbench，您可以使用顶部的按钮重启终端。
+**仅限 Colab**：取消注释以下单元格以重启内核或使用按钮重启内核。对于 Vertex AI Workbench，您可以使用顶部的按钮重启终端。
 
 ```python
 # # Automatically restart kernel after installs so that your environment can access the new packages
@@ -44,15 +44,15 @@ pip install -qU langchain-google-firestore
 # app.kernel.do_shutdown(True)
 ```
 
-### ☁ 设置您的 Google cloud 项目
+### ☁ 设置您的 Google Cloud 项目
 
-设置您的 Google Cloud 项目，以便您可以在此笔记本中利用 Google Cloud 资源。
+设置您的 Google Cloud 项目，以便您可以在本笔记本中利用 Google Cloud 资源。
 
-如果您不知道项目 ID，请尝试以下方法：
+如果您不知道您的项目 ID，请尝试以下操作：
 
-- 运行 `gcloud config list`。
-- 运行 `gcloud projects list`。
-- 请参阅支持页面：[定位项目 ID](https://support.google.com/googleapi/answer/7014113)。
+* 运行 `gcloud config list`.
+* 运行 `gcloud projects list`.
+* 查看支持页面： [查找项目 ID](https://support.google.com/googleapi/answer/7014113).
 
 ```python
 # @markdown Please fill in the value below with your Google Cloud project ID and then run the cell.
@@ -65,10 +65,10 @@ PROJECT_ID = "my-project-id"  # @param {type:"string"}
 
 ### 🔐 身份验证
 
-以此笔记本中登录的 IAM 用户身份向 Google Cloud 进行身份验证，以便访问您的 Google Cloud 项目。
+作为登录本笔记本的 IAM 用户向 Google Cloud 进行身份验证，以访问您的 Google Cloud 项目。
 
-- 如果您使用 Colab 运行此笔记本，请使用下面的单元格并继续。
-- 如果您使用的是 Vertex AI Workbench，请查看 [Vertex AI Workbench 设置说明](https://github.com/GoogleCloudPlatform/generative-ai/tree/main/setup-env)。
+* 如果您使用 Colab 运行本笔记本，请使用下面的单元格并继续。
+* 如果您使用 Vertex AI Workbench，请查看 [Vertex AI Workbench 设置说明](https://github.com/GoogleCloudPlatform/generative-ai/tree/main/setup-env).
 
 ```python
 from google.colab import auth
@@ -80,9 +80,9 @@ auth.authenticate_user()
 
 ### 保存文档
 
-`FirestoreSaver` 可以将 Document 存储到 Firestore。默认情况下，它会尝试从元数据中提取 Document 引用。
+`FirestoreSaver` 可以将文档存储到 Firestore。默认情况下，它会尝试从元数据中提取文档引用
 
-使用 `FirestoreSaver.upsert_documents(<documents>)` 保存 langchain 文档。
+使用以下方式保存 LangChain 文档 `FirestoreSaver.upsert_documents(<documents>)`.
 
 ```python
 from langchain_core.documents import Document
@@ -95,9 +95,9 @@ data = [Document(page_content="Hello, World!")]
 saver.upsert_documents(data)
 ```
 
-#### 保存无引用的文档
+#### 保存不带引用的文档
 
-如果指定了集合，文档将使用自动生成的 ID 进行存储。
+如果指定了集合，文档将以自动生成的 ID 进行存储。
 
 ```python
 saver = FirestoreSaver("Collection")
@@ -114,11 +114,11 @@ saver = FirestoreSaver()
 saver.upsert_documents(documents=data, document_ids=doc_ids)
 ```
 
-### 从 collection 或 SubCollection 加载
+### 从集合或子集合加载
 
-使用 `FirestoreLoader.load()` 或 `Firestore.lazy_load()` 加载 langchain 文档。`lazy_load` 返回一个生成器，仅在迭代时查询数据库。要初始化 `FirestoreLoader` 类，你需要提供：
+使用以下方式加载 LangChain 文档 `FirestoreLoader.load()` or `Firestore.lazy_load()`. `lazy_load` 返回一个生成器，仅在迭代期间查询数据库。要初始化 `FirestoreLoader` 类，您需要提供：
 
-1. `source` - Query、CollectionGroup、DocumentReference 的实例，或 Firestore collection 的单个 `/` 分隔路径。
+1. `source` - Query、CollectionGroup、DocumentReference 或单一 `\`到 Firestore 集合的 - 分隔路径。
 
 ```python
 from langchain_google_firestore import FirestoreLoader
@@ -162,9 +162,9 @@ loader_query = FirestoreLoader(query)
 
 ### 删除文档
 
-使用 `FirestoreSaver.delete_documents(<documents>)` 从 Firestore 集合中删除一系列 langchain 文档。
+从 Firestore 集合中删除 langchain 文档列表，使用 `FirestoreSaver.delete_documents(<documents>)`.
 
-如果提供了文档 ID，文档将被忽略。
+如果提供了文档 ids，Documents 将被忽略。
 
 ```python
 saver = FirestoreSaver()
@@ -177,9 +177,9 @@ saver.delete_documents(data, doc_ids)
 
 ## 高级用法
 
-### 加载文档时自定义文档页面内容及元数据
+### 加载带有自定义文档页面内容和元数据的文档
 
-`page_content_fields` 和 `metadata_fields` 参数将指定要写入 LangChain Document `page_content` 和 `metadata` 的 Firestore Document 字段。
+参数 `page_content_fields` 和 `metadata_fields` 将指定要写入 LangChain Document 的 Firestore Document 字段 `page_content` 和 `metadata`.
 
 ```python
 loader = FirestoreLoader(
@@ -193,9 +193,9 @@ data = loader.load()
 
 #### 自定义页面内容格式
 
-当 `page_content` 仅包含一个字段时，信息仅为该字段值。否则 `page_content` 将采用 JSON 格式。
+当 `page_content` 只包含一个字段时，信息将仅为字段值。否则 `page_content` 将为 JSON 格式。
 
-### 自定义连接与身份验证
+### 自定义连接和身份验证
 
 ```python
 from google.auth import compute_engine

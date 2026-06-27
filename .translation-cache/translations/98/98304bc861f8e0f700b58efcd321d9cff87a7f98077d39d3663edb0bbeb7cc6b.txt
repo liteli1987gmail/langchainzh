@@ -6,18 +6,18 @@ sidebarTitle: "交接：客户支持"
 import ChatModelTabsPy from '/snippets/chat-model-tabs.mdx';
 import ChatModelTabsJs from '/snippets/chat-model-tabs-js.mdx';
 
-[状态机模式](/oss/langchain/multi-agent/handoffs) 描述了工作流，其中代理的行为随着其通过任务的不同状态而变化。本教程展示如何通过使用工具调用来动态更改单个代理的配置——根据当前状态更新其可用的工具和指令。状态可以从多个来源确定：代理过去的操作（工具调用）、外部状态（例如 API 调用结果），甚至是初始用户输入（例如，通过运行分类器来确定用户意图）。
+The [状态机模式](/oss/langchain/multi-agent/handoffs) 状态机模式描述了工作流，其中代理的行为随着任务在不同状态之间的移动而变化。本教程展示如何通过使用工具调用来实现状态机，从而动态更改单个代理的配置——根据当前状态更新其可用工具和指令。状态可以来自多个来源：代理过去的行为（工具调用）、外部状态（例如 API 调用结果），甚至是初始用户输入（例如，通过运行分类器来确定用户意图）。
 
-在本教程中，你将构建一个客户支持代理，具有以下功能：
+在本教程中，您将构建一个具有以下功能的客户支持代理：
 
 - 在继续之前收集保修信息。
-- 将问题分类为硬件或软件问题。
-- 提供解决方案或升级至人工支持。
+- 将问题分类为硬件或软件。
+- 提供解决方案或升级到人工支持。
 - 在多个轮次中保持对话状态。
 
-与[子代理模式](/oss/langchain/multi-agent/subagents-personal-assistant)（其中子代理作为工具被调用）不同，**状态机模式**使用单个代理，其配置根据工作流进度而变化。每个"步骤"只是同一底层代理的不同配置（系统提示词 + 工具），根据状态动态选择。
+Unlike the [子代理模式](/oss/langchain/multi-agent/subagents-personal-assistant) 其中子代理被作为工具调用，而 **状态机模式** 使用单个代理，其配置根据工作流进度而变化。每个"步骤"只是同一底层代理的不同配置（系统提示 + 工具），根据状态动态选择。
 
-以下是我们将构建的工作流：
+这是我们将构建的工作流：
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#E5F4FF','primaryTextColor':'#030710','primaryBorderColor':'#006DDD','lineColor':'#40668D','secondaryColor':'#F6FFDB','tertiaryColor':'#FDF3FF'}}}%%
@@ -58,7 +58,7 @@ flowchart TD
 
 ### 安装
 
-本教程需要 `langchain` 包：
+本教程需要 `langchain` package:
 
 :::python
 <CodeGroup>
@@ -88,7 +88,7 @@ pnpm add langchain
 </CodeGroup>
 :::
 
-更多详细信息，请参阅我们的[安装指南](/oss/langchain/install)。
+更多详情，请参阅我们的 [安装指南](/oss/langchain/install).
 
 ### LangSmith
 
@@ -173,13 +173,15 @@ const SupportState = new StateSchema({  // [!code highlight]
   issueType: IssueTypeSchema.optional(),
 });
 ```
-`current_step` 字段是状态机模式的核心——它决定了在每个回合中加载哪个配置（提示词 + 工具）。
+:::
+
+The `current_step` 字段是状态机模式的核心——它决定每个轮次加载哪个配置（提示 + 工具）。
 
 ## 2. 创建管理工作流状态的工具
 
-创建用于更新工作流状态的工具。这些工具允许智能体记录信息并转换到下一步。
+创建更新工作流状态的工具。这些工具允许代理记录信息并过渡到下一步。
 
-关键是使用 `Command` 来更新状态，包括 `current_step` 字段：
+关键是使用 `Command` 来更新状态，包括 `current_step` field:
 
 :::python
 ```python
@@ -326,17 +328,15 @@ const provideSolution = tool(
 ```
 :::
 
-注意 `record_warranty_status` 和 `record_issue_type` 如何返回 `Command` 对象，这些对象同时更新数据（`warranty_status`、`issue_type`）和 `current_step`。这就是状态机的工作原理——工具控制工作流进度。
+注意 `record_warranty_status` 和 `record_issue_type` 如何返回 `Command` 对象，这些对象同时更新数据（`warranty_status`, `issue_type`）和 `current_step`。这就是状态机的工作方式——工具控制工作流进度。
 
 ## 3. 定义步骤配置
 
-为每个步骤定义提示词和工具。首先，定义每个步骤的提示词：
+为每个步骤定义提示和工具。首先，为每个步骤定义提示：
 
-<Accordion title="查看完整的提示词定义">
+<Accordion title="View complete prompt definitions">
 
 :::python
-
-</fragment>
 ```python
 # Define prompts as constants for easy reference
 WARRANTY_COLLECTOR_PROMPT = """You are a customer support agent helping with device issues.
@@ -420,7 +420,7 @@ Be specific and helpful in your solutions.`;
 
 </Accordion>
 
-然后使用字典将步骤名称映射到它们的配置：
+然后使用字典将步骤名称映射到其配置：
 
 :::python
 ```python
@@ -468,16 +468,15 @@ const STEP_CONFIG = {
 ```
 :::
 
-这种基于字典的配置使您可以轻松：
-
+这种基于字典的配置使以下操作变得容易：
 - 一目了然地查看所有步骤
 - 添加新步骤（只需添加另一个条目）
-- 理解工作流依赖关系（`requires` 字段）
-- 使用带有状态变量的提示模板（例如 `{warranty_status}`）
+- 了解工作流依赖关系（`requires` 字段）
+- 使用带状态变量的提示模板（例如， `{warranty_status}`)
 
 ## 4. 创建基于步骤的中间件
 
-创建从状态中读取 `current_step` 并应用相应配置的中间件。我们将使用 `@wrap_model_call` 装饰器来实现简洁的实现：
+创建读取 `current_step` 从状态并应用适当配置的中间件。我们将使用 `@wrap_model_call` 装饰器以获得干净的实现：
 
 :::python
 ```python
@@ -551,21 +550,21 @@ const applyStepMiddleware = createMiddleware({
   },
 });
 ```
-:::：
+:::
 
 此中间件：
 
-1. **读取当前步骤**：从 state 中获取 `current_step`（默认为 "warranty_collector"）。
-2. **查找配置**：在 `STEP_CONFIG` 中找到匹配的条目。
-3. **验证依赖项**：确保所需的 state 字段存在。
-4. **格式化提示词**：将 state 值注入到提示词模板中。
-5. **应用配置**：覆盖系统提示词和可用工具。
+1. **读取当前步骤**：获取 `current_step` 从状态（默认为"warranty_收集器"）。
+2. **查找配置**：在 `STEP_CONFIG`.
+3. **验证依赖项**：确保所需的状态字段存在。
+4. **格式化提示**：将状态值注入提示模板。
+5. **应用配置**：覆盖系统提示和可用工具。
 
-`request.override()` 方法是关键——它允许我们根据 state 动态更改代理的行为，而无需创建单独的代理实例。
+方法是关键——它允许我们根据状态动态更改代理的行为，而无需创建单独的代理实例。 `request.override()` 
 
 ## 5. 创建代理
 
-现在使用基于步骤的中间件和检查点程序创建代理，以实现 state 持久化：
+现在创建带有基于步骤的中间件和检查点的代理，以实现状态持久化：
 
 :::python
 ```python
@@ -623,12 +622,12 @@ const agent = createAgent({
 :::
 
 <Note>
-**为什么需要检查点？** 检查点在不同对话轮次之间维护状态。如果没有它，`current_step` 状态将在用户消息之间丢失，从而破坏工作流程。
+**为什么需要检查点？** 检查点程序在对话轮次之间维护状态。没有它， `current_step` 状态将在用户消息之间丢失，从而破坏工作流。
 </Note>
 
-## 6. 测试工作流程
+## 6. 测试工作流
 
-测试完整的工作流程：
+测试完整的工作流：
 
 :::python
 ```python
@@ -734,18 +733,16 @@ for (const msg of result.messages) {
 
 预期流程：
 1. **保修验证步骤**：询问保修状态
-2. **问题分类步骤**：询问问题所在，确定是硬件问题
+2. **问题分类步骤**：询问问题，确定是硬件问题
 3. **解决步骤**：提供保修维修说明
 
 ## 7. 理解状态转换
 
-让我们追踪每轮对话中发生的事情：
+让我们追踪每轮发生的情况：
 
 ### 第1轮：初始消息
 
 :::python
-
-</fragment>
 ```python
 {
     "messages": [HumanMessage("Hi, my phone screen is cracked")],
@@ -764,15 +761,13 @@ for (const msg of result.messages) {
 :::
 
 中间件应用：
-- 系统提示词：`WARRANTY_COLLECTOR_PROMPT`
-- 工具：`[record_warranty_status]`
+- 系统提示： `WARRANTY_COLLECTOR_PROMPT`
+- Tools: `[record_warranty_status]`
 
-### 回合 2：保修记录后
+### 第2轮：记录保修后
 
 :::python
-工具调用：`record_warranty_status("in_warranty")` 返回：
-
-:::
+工具调用： `record_warranty_status("in_warranty")` returns:
 ```python
 Command(update={
     "warranty_status": "in_warranty",
@@ -782,9 +777,7 @@ Command(update={
 :::
 
 :::js
-工具调用：`recordWarrantyStatus("in_warranty")` 返回：
-
-:::
+工具调用： `recordWarrantyStatus("in_warranty")` returns:
 ```typescript
 new Command({
   update: {
@@ -796,15 +789,13 @@ new Command({
 :::
 
 下一轮，中间件应用：
-- 系统提示词：`ISSUE_CLASSIFIER_PROMPT`（使用 `warranty_status="in_warranty"` 格式化）
-- 工具：`[record_issue_type]`
+- 系统提示： `ISSUE_CLASSIFIER_PROMPT` （格式化 `warranty_status="in_warranty"`)
+- Tools: `[record_issue_type]`
 
-### 第三轮：问题分类后
+### 第3轮：问题分类后
 
 :::python
-工具调用：`record_issue_type("hardware")` 返回：
-
-:::
+工具调用： `record_issue_type("hardware")` returns:
 ```python
 Command(update={
     "issue_type": "hardware",
@@ -814,9 +805,7 @@ Command(update={
 :::
 
 :::js
-工具调用：`recordIssueType("hardware")` 返回：
-
-:::
+工具调用： `recordIssueType("hardware")` returns:
 ```typescript
 new Command({
   update: {
@@ -828,14 +817,14 @@ new Command({
 :::
 
 下一轮，中间件应用：
-- 系统提示词：`RESOLUTION_SPECIALIST_PROMPT`（使用 `warranty_status` 和 `issue_type` 进行格式化）
-- 工具：`[provide_solution, escalate_to_human]`
+- 系统提示： `RESOLUTION_SPECIALIST_PROMPT` （格式化使用 `warranty_status` 和 `issue_type`)
+- Tools: `[provide_solution, escalate_to_human]`
 
-关键洞察：**工具通过更新 `current_step` 来驱动工作流**，而**中间件通过在下一轮应用适当的配置来响应**。
+关键洞察： **工具驱动工作流** 通过更新 `current_step`，而 **中间件响应** 通过在下一轮应用适当的配置。
 
 ## 8. 管理消息历史
 
-随着代理逐步推进，消息历史会不断增长。使用[摘要中间件](/oss/langchain/short-term-memory#summarize-messages)压缩早期消息，同时保留对话上下文：
+随着代理在步骤中推进，消息历史会不断增长。使用 [摘要中间件](/oss/langchain/short-term-memory#summarize-messages) 来压缩早期消息，同时保留对话上下文：
 
 :::python
 ```python
@@ -880,15 +869,17 @@ const agent = createAgent({
   checkpointer: new MemorySaver(),
 });
 ```
-请参阅[短期记忆指南](/oss/langchain/short-term-memory)了解其他记忆管理技术。
+:::
+
+参见 [短期记忆指南](/oss/langchain/short-term-memory) 了解其他内存管理技术。
 
 ## 9. 增加灵活性：返回
 
-某些工作流需要允许用户返回上一步以更正信息（例如更改保修状态或问题分类）。然而，并非所有转换都有意义——例如，一旦退款处理完成，您通常无法返回。对于此支持工作流，我们将添加工具以返回保修验证和问题分类步骤。
+某些工作流需要允许用户返回到上一步来更正信息（例如，更改保修状态或问题分类）。然而，并非所有转换都有意义——例如，一旦退款处理完成，你通常就无法返回。对于这个支持工作流，我们将添加工具以返回到保修验证和问题分类步骤。
 
-<提示>
-如果您的工作流需要大多数步骤之间的任意转换，请考虑是否真的需要结构化工作流。此模式最适合步骤遵循清晰的顺序进行，偶尔向后转换以进行更正的情况。
-</提示>
+<Tip>
+如果你的工作流需要在大多数步骤之间进行任意转换，请考虑你是否真的需要一个结构化工作流。这种模式最适合步骤遵循清晰顺序进展，偶尔需要返回进行更正的情况。
+</Tip>
 
 在解决步骤中添加"返回"工具：
 
@@ -948,7 +939,9 @@ STEP_CONFIG.resolution_specialist.tools.push(
   goBackToClassification
 );
 ```
-::: 更新解决专家的提示词以提及这些工具：
+:::
+
+更新解决专家的提示词以提及这些工具：
 
 :::python
 ```python
@@ -1016,9 +1009,9 @@ const result = await agent.invoke(
 
 ## 完整示例
 
-下面是完整的可运行脚本：
+以下是整合在一起的可运行脚本：
 
-<Expandable title="完整代码" defaultOpen={false}>
+<Expandable title="Complete code" defaultOpen={false}>
 :::python
 ```python
 """
@@ -1523,7 +1516,7 @@ for (const msg of result.messages) {
 
 ## 后续步骤
 
-- 了解[子代理模式](/oss/langchain/multi-agent/subagents-personal-assistant)以实现集中式编排
-- 探索[中间件](/oss/langchain/middleware)以获取更动态的行为
-- 阅读[多代理概述](/oss/langchain/multi-agent)以比较不同的模式
+- 了解 [子代理模式](/oss/langchain/multi-agent/subagents-personal-assistant) 实现集中式编排
+- 探索 [中间件](/oss/langchain/middleware) 了解更多动态行为
+- 阅读 [多代理概述](/oss/langchain/multi-agent) 以比较各种模式
 - 使用 [LangSmith](https://smith.langchain.com) 来调试和监控你的多代理系统

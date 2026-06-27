@@ -1,5 +1,5 @@
 ---
-title: 人在循环中
+title: Human-in-the-loop
 description: 了解如何为敏感工具操作配置人工审批
 ---
 
@@ -8,7 +8,7 @@ import HitlBasicConfigJs from '/snippets/code-samples/hitl-basic-config-js.mdx';
 import HitlConditionalInterruptsPy from '/snippets/code-samples/hitl-conditional-interrupts-py.mdx';
 import HitlDecisionTypesTable from '/snippets/oss/hitl-decision-types-table.mdx';
 
-某些工具操作可能涉及敏感操作，需要在执行前获得人工批准。Deep Agents 通过 LangGraph 的中断功能支持人工介入工作流。您可以使用 `interrupt_on` 参数配置哪些工具需要批准。设置 `interrupt_on` 后，`HumanInTheLoopMiddleware` 将被添加到[默认中间件栈](/oss/deepagents/customization#default-stack-main-agent)中。如果运行在工具返回结果之前被取消或中断，同一栈中的 @[`PatchToolCallsMiddleware`] 会自动修复消息历史。
+某些工具操作可能涉及敏感操作，需要在执行前获得人工审批。Deep Agents 通过 LangGraph 的中断功能支持人在环工作流。您可以使用以下方式配置需要审批的工具 `interrupt_on` 参数。当 `interrupt_on` 被设置时， `HumanInTheLoopMiddleware` 被添加到 [默认中间件堆栈](/oss/deepagents/customization#default-stack-main-agent)。如果运行在工具返回结果之前被取消或中断，则 @[`PatchToolCallsMiddleware`] 同一堆栈中的会自动修复消息历史。
 
 ```mermaid
 graph LR
@@ -35,15 +35,15 @@ graph LR
     class ToolMessage process
 ```
 
-## 基础配置
+## 基本配置
 
-`interrupt_on` 参数接受一个字典，将工具名称映射到中断配置。每个工具可以配置为：
+该 `interrupt_on` 参数接受一个将工具名称映射到中断配置的字典。每个工具可以配置：
 
-- **`True`**：启用中断，使用默认行为（允许批准、编辑、拒绝、响应）
+- **`True`**：启用中断，具有默认行为（允许批准、编辑、拒绝、响应）
 - **`False`**：禁用此工具的中断
-- **`InterruptOnConfig`**：自定义配置。设置 `allowed_decisions` 来控制审核选项。
+- **`InterruptOnConfig`**：自定义配置。设置 `allowed_decisions` 来控制审查选项。
   :::python
-  在 Python 中，添加可选的 `when` 谓词以仅中断特定调用（参见[条件中断](#conditional-interrupts)）。
+  在 Python 中，添加一个可选的 `when` 谓词以仅中断特定调用（参见 [条件中断](#conditional-interrupts)).
   :::
 
 :::python
@@ -56,21 +56,19 @@ graph LR
 
 ## 决策类型
 
-`allowed_decisions` 列表控制在审核工具调用时人类可以采取的操作：
+该 `allowed_decisions` 列表控制人类在审查工具调用时可以采取的操作：
 
 <HitlDecisionTypesTable />
 
-当人类拒绝提议的操作时使用 `reject`。仅当人类作为工具行事时使用 `respond`，例如回答 `ask_user` 提示。不要使用 `respond` 来拒绝有副作用的工具，因为其消息可能会被模型视为成功的工具结果。
+当人类拒绝提议的操作时使用 `reject` 当人类拒绝提议的操作时使用 `respond` 仅当人类作为工具行事时使用，例如回答 `ask_user` 提示。不要使用 `respond` 来拒绝有副作用的工具，因为模型可能会将其消息视为成功的工具结果。
 
 <Tip>
-当**编辑**工具参数时，请保守地进行更改。对原始参数的显著修改可能导致模型重新评估其方法，并可能多次执行该工具或采取意外操作。
+当 **编辑** 工具参数时，请保守地进行更改。对原始参数的重大修改可能导致模型重新评估其方法，并可能多次执行工具或采取意外行动。
 </Tip>
 
-您可以自定义每个工具可用的决策：
+您可以为每个工具自定义可用的决策：
 
 :::python
-
-</:::
 ```python
 interrupt_on = {
     # Sensitive operations: allow all options
@@ -101,28 +99,26 @@ const interruptOn = {
 :::
 
 :::python
-## 条件性中断
+## 条件中断
 
-默认情况下，`interrupt_on` 中列出的每个工具调用都会暂停等待审查。若只需暂停部分调用，请为工具的 `InterruptOnConfig` 添加 `when` 谓词。该谓词接收 @[ToolCallRequest]，返回 `True` 以中断或返回 `False` 以自动批准，这样您就可以根据工具的参数进行条件控制。
+默认情况下，列为 `interrupt_on` 的每个工具调用都会暂停以供审核。若仅暂停部分调用，请添加 `when` 到工具的 `InterruptOnConfig`。谓词接收 @[ToolCallRequest] 并返回 `True` 以中断，或 `False` 以自动批准，这样您可以根据工具的参数进行筛选。
 
 <Note>
-条件性中断需要 `langchain>=1.3.3`。
+条件中断需要 `langchain>=1.3.3`.
 </Note>
 
 <HitlConditionalInterruptsPy />
 
-当 `when` 谓词返回 `False` 时，调用将正常运行而不中断。当它返回 `True`，或您省略 `when` 时，调用会像往常一样暂停。评估为 `False` 的调用永远不会添加到中断批次中，因此审核者只会看到需要决策的操作。
+当 `when` 谓词返回 `False`时，调用会继续运行而不会中断。当它返回 `True`时，或者当您省略 `when`时，调用会照常暂停。计算结果为 `False` 的操作不会被添加到中断批次中，因此审核者只会看到需要做出决策的操作。
 
-有关更多配置选项和示例，请参阅 [LangChain 人在环文档](/oss/langchain/human-in-the-loop#conditional-interrupts)。
+请参阅 [LangChain 人工介入文档](/oss/langchain/human-in-the-loop#conditional-interrupts) 以获取更多配置选项和示例。
 :::
 
 ## 处理中断
 
-当触发中断时，代理会暂停执行并返回控制权。检查结果中的中断并相应处理。如果用户拒绝某个操作，请包含一条清晰的 `message`，告知代理该工具未被执行以及下一步应该做什么。
+当触发中断时，代理会暂停执行并返回控制权。检查结果中的中断并相应处理。如果用户拒绝某个操作，请包含一条清晰的 `message` 消息，告知代理该工具未被执行以及下一步该怎么做。
 
 :::python
-
-:::
 ```python
 from langchain_core.utils.uuid import uuid7
 from langgraph.types import Command
@@ -229,7 +225,7 @@ console.log(result.messages[result.messages.length - 1].content);
 
 ## 多次工具调用
 
-当代理调用多个需要批准的工俱时，所有中断会被批量到一个中断中。您必须按顺序为每个中断提供决策。
+当代理调用多个需要审批的工具时，所有中断都会被合并到单个中断中。您必须按顺序为每个中断提供决策。
 
 :::python
 ```python
@@ -301,11 +297,13 @@ if (result.__interrupt__) {
   );
 }
 ```
+:::
+
 ## 拒绝消息
 
-当审核者返回 `reject` 决策时，Deep Agents 会跳过工具调用，并将拒绝反馈发送回 agent。如果省略 `message`，默认反馈会告知模型该工具未执行，且除非用户要求，否则不要重试相同的工具调用。
+当审阅者返回 `reject` 决策时，Deep Agents会跳过工具调用并向代理发送拒绝反馈。如果省略 `message`，默认反馈会告诉模型该工具未被执行，并且除非用户要求，否则不要重试相同的工具调用。
 
-对于敏感或有副作用的工具，请在决策时传递一个特定领域的 `message`。明确说明 agent 是否应该放弃该操作、提出后续问题，或尝试更安全的替代方案。
+对于敏感或有副作用的工具，请传递一个特定领域的 `message` 以及决策。请明确说明代理应该放弃该操作、提出后续问题，还是尝试更安全的替代方案。
 
 :::python
 ```python
@@ -387,11 +385,11 @@ if (result.__interrupt__) {
 
 ## 子代理中断
 
-使用子代理时，您可以使用[工具调用上的中断](#interrupts-on-tool-calls)和[工具调用内部的中断](#interrupts-within-tool-calls)。
+使用子代理时，您可以在工具调用上使用中断 [和](#interrupts-on-tool-calls) 工具调用内部 [工具调用上的中断](#interrupts-within-tool-calls).
 
-### 工具调用上的中断
+### 每个子代理可以有自己的
 
-每个子代理都可以有自己的 `interrupt_on` 配置，用于覆盖主代理的设置：
+配置来覆盖主代理的设置： `interrupt_on` 当子代理触发中断时，处理方式相同——检查结果中的
 
 :::python
 ```python
@@ -440,15 +438,15 @@ const agent = createDeepAgent({
   checkpointer
 });
 ```
-当子代理触发中断时，处理方式相同——检查结果上的 `interrupts` 并使用 `Command` 恢复执行。
+:::
 
-### 工具调用中的中断
+并使用 `interrupts` 恢复执行 `Command`.
 
-子代理工具可以直接调用 `interrupt()` 来暂停执行并等待批准：
+### 工具调用内部的中断
+
+子代理工具可以直接调用 `interrupt()` 来暂停执行并等待审批：
 
 :::python
-
-:::
 
 ```python
 from langchain.agents import create_agent
@@ -552,7 +550,7 @@ if __name__ == "__main__":
     main()
 ```
 
-运行后，会生成如下输出：
+运行后，会产生以下输出：
 
 ```text
 Invoking agent - sub-agent will use request_approval tool...
@@ -686,7 +684,7 @@ async function main() {
 main().catch(console.error);
 ```
 
-## 运行后，生成以下输出：
+运行后，会产生以下输出：
 
 ```text
 Invoking agent - sub-agent will use request_approval tool...
@@ -709,10 +707,10 @@ Execution completed!
 ## 文件系统权限中断
 
 <Note>
-文件系统权限中断需要 `deepagents>=0.6.8`。
+文件系统权限中断需要 `deepagents>=0.6.8`.
 </Note>
 
-除了 `interrupt_on`，您还可以通过将[权限规则](/oss/deepagents/permissions)标记为 `mode="interrupt"` 来暂停内置的文件系统工具。当智能体在匹配的路径上调用 `write_file` 或 `edit_file` 时，`create_deep_agent` 会抛出与已配置工具相同的人机交互中断，并使用文件系统工具的名称作为操作名称。
+除了 `interrupt_on`之外，您还可以通过将 [权限规则](/oss/deepagents/permissions) 标记为 `mode="interrupt"`来暂停内置文件系统工具。当代理在匹配的路径上调用 `write_file` or `edit_file` 时，如果路径匹配中断模式规则， `create_deep_agent` 会引发与已配置工具相同的人机交互中断，并使用文件系统工具的名称作为操作名称。
 
 ```python
 from deepagents import FilesystemPermission, create_deep_agent
@@ -732,7 +730,7 @@ agent = create_deep_agent(
 )
 ```
 
-处理并恢复中断的方式与工具调用中断相同：运行直到暂停，检查请求，然后带着决定恢复。
+以与工具调用中断相同的方式处理和恢复中断：运行直到暂停，检查请求，然后使用决策恢复执行。
 
 ```python
 from langgraph.types import Command
@@ -757,7 +755,7 @@ if result.interrupts:
     )
 ```
 
-文件系统权限中断与您传递的任何 `interrupt_on` 合并，因此单个审查步骤可以同时覆盖自定义工具和受保护的文件系统路径。
+文件系统权限中断会与您传递的任何 `interrupt_on` 合并，这样单个审查步骤可以同时覆盖自定义工具和受保护的文件系统路径。
 
 :::
 
@@ -766,7 +764,7 @@ if result.interrupts:
 
 ### 始终使用检查点
 
-人在环需要检查点来在中断和恢复之间持久化代理状态：
+人机交互需要检查点在中断和恢复之间持久化代理状态：
 
 ```python
 from langgraph.checkpoint.memory import MemorySaver
@@ -780,9 +778,9 @@ agent = create_deep_agent(
 )
 ```
 
-### 使用相同的 thread ID
+### 使用相同的线程ID
 
-恢复时，您必须使用相同的配置和相同的 `thread_id`：
+恢复时，您必须使用包含相同 `thread_id`:
 
 ```python
 # First call
@@ -793,9 +791,9 @@ result = agent.invoke(input, config=config, version="v2")
 result = agent.invoke(Command(resume={...}), config=config, version="v2")
 ```
 
-### 将决策顺序与操作匹配
+### 使决策顺序与操作相匹配
 
-决策列表必须与 `action_requests` 的顺序匹配：
+决策列表必须与以下顺序相匹配 `action_requests`:
 
 ```python
 if result.interrupts:  # [!code highlight]
@@ -815,9 +813,9 @@ if result.interrupts:  # [!code highlight]
     )
 ```
 
-### 按风险级别定制配置
+### 按风险定制配置
 
-根据风险级别配置不同的工具：
+根据不同工具的风险级别进行配置：
 
 ```python
 interrupt_on = {

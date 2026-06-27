@@ -4,19 +4,19 @@ sidebarTitle: 配置检查点后端
 description: 配置 Agent Server 使用 PostgreSQL、MongoDB 或自定义实现来存储检查点。
 ---
 
-[Agent Server](/langsmith/agent-server) 使用检查点后端持久化图状态。默认情况下，LangSmith 将检查点与服务器其他数据一起存储在 PostgreSQL 中。您可以切换到 MongoDB 或提供自定义实现。
+[Agent Server](/langsmith/agent-server) 使用检查点后端持久化图状态。默认情况下，LangSmith 将检查点存储在 PostgreSQL 中，与其他服务器数据一起存储。您可以切换到 MongoDB 或提供自定义实现。
 
 <Note>
-无论检查点后端是什么，LangSmith 始终需要 PostgreSQL 来存储线程、运行、助手、计划任务和[内存存储](/oss/langgraph/stores)。检查点后端仅控制检查点数据的存储位置。
+无论使用哪种检查点后端，LangSmith 始终需要 PostgreSQL 来存储 threads、runs、assistants、crons 和 [内存存储](/oss/langgraph/stores)。检查点后端仅控制检查点数据的存储位置。
 </Note>
 
 ## 可用的后端
 
 | 后端 | 存储 | 配置 | 使用场景 |
 |---------|---------|---------------|----------|
-| `default` | PostgreSQL | 无（内置） | 标准部署 |
-| `mongo` | MongoDB | `langgraph.json` 或 `LS_DEFAULT_CHECKPOINTER_BACKEND` 环境变量 | 已有 MongoDB 基础设施的团队 |
-| `custom` | 用户提供 | `langgraph.json` | 自定义存储后端（请参阅[自定义检查点](/langsmith/custom-checkpointer)） |
+| `default` | PostgreSQL | 无（内置）| 标准部署 |
+| `mongo` | MongoDB | `langgraph.json` or `LS_DEFAULT_CHECKPOINTER_BACKEND` 环境变量 | 拥有现有 MongoDB 基础设施的团队 |
+| `custom` | 用户提供 | `langgraph.json` | 自定义存储后端（参见 [自定义检查点](/langsmith/custom-checkpointer)) |
 
 ## 默认（PostgreSQL）
 
@@ -28,16 +28,16 @@ PostgreSQL 是默认的检查点后端。无需配置。若要使用自定义 Po
 需要 Agent Server v0.7.64 或更高版本。
 </Info>
 
-### 前置条件
+### 前提条件
 
-- MongoDB **副本集**（独立 `mongod` 不支持）。可以是自管理的副本集、`mongos` 路由器或托管服务（如 MongoDB Atlas）。
-- 连接 URI 需要在路径中包含数据库名称（例如 `/langgraph`）。
+- MongoDB **副本集** （独立部署 `mongod` 不受支持）。这可以是自管理的副本集， `mongos` 路由器，或 MongoDB Atlas 等托管服务。
+- 连接 URI 必须在路径中包含数据库名称（例如， `/langgraph`).
 
 ### 选择后端
 
-使用以下方法之一将后端设置为 `"mongo"`：
+将后端设置为 `"mongo"` 使用以下方法之一：
 
-**在 `langgraph.json` 中**（应用级别——与您的应用程序代码打包在一起）：
+**In `langgraph.json`** （应用级——与您的应用程序代码捆绑）：
 
 ```json
 {
@@ -56,13 +56,13 @@ PostgreSQL 是默认的检查点后端。无需配置。若要使用自定义 Po
 }
 ```
 
-**通过环境变量**（平台级——适用于管理独立部署的运维人员）：
+**通过环境变量** （平台级——供管理独立部署的运营商使用）：
 
 ```shell
 LS_DEFAULT_CHECKPOINTER_BACKEND=mongo
 ```
 
-环境变量为未在 `langgraph.json` 中指定后端的代理服务器设置默认后端。如果 `langgraph.json` 包含 `backend` 值，则优先使用。
+环境变量为未指定 `langgraph.json`. If `langgraph.json` 包含 `backend` 值的 agent servers 设置默认后端。
 
 ### 提供 MongoDB URI
 
@@ -91,12 +91,9 @@ mongodb+srv://user:password@cluster.example.net/langgraph
 
 <Tabs>
   <Tab title="Standalone (Kubernetes)">
-  [langgraph-cloud Helm chart](https://github.com/langchain-ai/helm/blob/main/charts/langgraph-cloud/README.md)（v0.2.6+）内置了 MongoDB 支持。在您的 values 文件中启用它：
+   [langgraph-cloud Helm chart](https://github.com/langchain-ai/helm/blob/main/charts/langgraph-cloud/README.md) （v0.2.6+）内置 MongoDB 支持。在 values 文件中启用：
 
-  **Bundled MongoDB**（开发和测试）：
-
-</Tab>
-</Tabs>
+  **捆绑版 MongoDB** （开发和测试）：
 
   ```yaml
   mongo:
@@ -109,9 +106,9 @@ mongodb+srv://user:password@cluster.example.net/langgraph
       size: 8Gi
   ```
 
-该 chart 部署了一个单节点 MongoDB 副本集，并自动配置服务器使用它。
+  该 chart 部署单节点 MongoDB 副本集并自动配置服务器使用它。
 
-**外部 MongoDB**（生产环境）：
+  **外部 MongoDB** （生产环境）：
 
   ```yaml
   mongo:
@@ -121,7 +118,7 @@ mongodb+srv://user:password@cluster.example.net/langgraph
       connectionUrl: "mongodb://user:password@mongo.example.net:27017/langgraph?replicaSet=rs0"
   ```
 
-或引用现有的 Kubernetes secret：
+  或引用现有的 Kubernetes secret：
 
   ```yaml
   mongo:
@@ -131,10 +128,10 @@ mongodb+srv://user:password@cluster.example.net/langgraph
       existingSecretName: "my-mongo-secret"
   ```
 
-密钥必须包含一个 `mongodb_connection_url` 键。
+  密钥必须包含 `mongodb_connection_url` key.
   </Tab>
-  <Tab title="单机部署 (Docker)">
-  如果你的 `langgraph.json` 已经将 `backend` 设置为 `"mongo"`，则只需提供 URI。否则，需要设置两个环境变量：
+  <Tab title="Standalone (Docker)">
+  如果你的 `langgraph.json` 已设置 `backend` to `"mongo"`，你只需提供 URI。否则，请设置两个环境变量：
 
   ```shell
   docker run \
@@ -148,25 +145,24 @@ mongodb+srv://user:password@cluster.example.net/langgraph
       my-image
   ```
 
-<Tab title="Docker">
-查看[独立服务器指南](/langsmith/deploy-standalone-server)了解使用 MongoDB 的完整 Docker Compose 示例。
-</Tab>
-<Tab title="Cloud">
-在 `langgraph.json` 中将 `backend` 设置为 `"mongo"`，然后在 LangSmith UI 的部署设置中添加 `LS_MONGODB_URI` 作为环境变量。
+  请参阅 [独立服务器指南](/langsmith/deploy-standalone-server) ，获取包含 MongoDB 的完整 Docker Compose 示例。
+  </Tab>
+  <Tab title="Cloud">
+  设置 `backend` to `"mongo"` 在您的 `langgraph.json`中，然后添加 `LS_MONGODB_URI` 作为环境变量添加到 LangSmith UI 中的部署设置中。
 
-你的 MongoDB 实例必须可从 Cloud 数据平面访问。[MongoDB Atlas](https://www.mongodb.com/atlas) 等托管服务非常适合此用途。
+  你的 MongoDB 实例必须能够从云数据平面访问。像 [MongoDB Atlas](https://www.mongodb.com/atlas) 这样的托管服务非常适合此用途。
 
-PostgreSQL 仍会为非检查点数据自动配置。
-</Tab>
+  非检查点数据仍会自动配置 PostgreSQL。
+  </Tab>
 </Tabs>
 
-## 自定义检查点保存器
+## 自定义检查pointer
 
-若要使用 PostgreSQL 或 MongoDB 以外的存储后端，请实现自定义 @[BaseCheckpointSaver]。有关详细信息，请参阅[添加自定义检查点保存器](/langsmith/custom-checkpointer)。
+要使用 PostgreSQL 或 MongoDB 以外的存储后端，请实现自定义 @[BaseCheckpointSaver]。请参阅 [添加自定义检查pointer](/langsmith/custom-checkpointer) 了解更多详情。
 
-## 相关内容
+## 相关
 
-- 参阅[配置 TTL](/langsmith/configure-ttl)了解检查点和存储项过期设置
-- LangGraph 中的[持久化概念](/oss/langgraph/persistence)
-- [数据平面](/langsmith/data-plane)架构
-- [环境变量](/langsmith/env-var-cloud)参考
+- [配置 TTL](/langsmith/configure-ttl) 用于检查点和存储项过期
+- [LangGraph 中的持久化概念](/oss/langgraph/persistence) 数据平面
+- [架构](/langsmith/data-plane) 环境变量
+- [参考](/langsmith/env-var-cloud) 文档

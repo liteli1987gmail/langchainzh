@@ -1,19 +1,19 @@
 ---
 title: 异步子代理
-description: 启动在后台并行运行的子代理，主管可以继续与用户交互
+description: 启动在后台并行运行的子代理，同时监督者继续与用户交互
 ---
 
-异步子代理允许主管代理启动立即返回的后台任务，这样主管可以在子代理并行工作的同时继续与用户交互。主管可以随时检查进度、发送后续指令或取消任务。
+异步子代理允许监督者代理启动立即返回的后台任务，从而使监督者能够在子代理并行工作的同时继续与用户交互。监督者可以随时检查进度、发送后续指令或取消任务。
 
-这是基于[子代理](/oss/deepagents/subagents)构建的，子代理同步运行并阻塞主管直到完成。当任务运行时间长、可并行化或需要中途调整时，请使用异步子代理。
+这建立在 [子代理](/oss/deepagents/subagents)，它们同步运行并阻塞监督者直到完成。当任务运行时间长、可并行化或需要中途调整时，使用异步子代理。
 
 <Note>
 :::python
-Async subagents are a preview feature available in `deepagents` 0.5.0. Preview features are under active development and APIs may change.
+异步子代理是预览功能，在 `deepagents` 0.5.0 版本中可用。预览功能正在积极开发中，API 可能会更改。
 :::
 
 :::js
-Async subagents are a preview feature available in `deepagents` 1.9.0. Preview features are under active development and APIs may change.
+异步子代理是预览功能，在 `deepagents` 1.9.0 版本中可用。预览功能正在积极开发中，API 可能会更改。
 :::
 </Note>
 
@@ -29,23 +29,23 @@ graph TB
 ```
 
 <Note>
-异步子代理与任何实现 [Agent Protocol](https://github.com/langchain-ai/agent-protocol) 的服务器通信。您可以使用 [LangSmith Deployments](/langsmith/deployment)，或自行托管任何兼容 Agent Protocol 的服务器。每个子代理独立于主管运行，主管通过 SDK 控制它们来启动、检查、更新和取消任务。
+异步子代理与实现 [代理协议](https://github.com/langchain-ai/agent-protocol)的任何服务器通信。您可以使用 [LangSmith 部署](/langsmith/deployment)，或自托管任何兼容代理协议的服务器。每个子代理独立于监督者运行，监督者通过 SDK 控制它们来启动、检查、更新和取消。
 </Note>
 
-## When to use async subagents
+## 何时使用异步子代理
 
-| 维度               | 同步子代理                                                       | 异步子代理                                                       |
-|--------------------|-----------------------------------------------------------------|-----------------------------------------------------------------|
-| **执行模型**        | 主管阻塞直到子代理完成                                           | 立即返回任务 ID；主管继续执行                                     |
-| **并发性**          | 并行但阻塞                                                       | 并行且非阻塞                                                     |
-| **任务中更新**      | 不支持                                                           | 通过 `update_async_task` 发送后续指令                            |
-| **取消**            | 不支持                                                           | 通过 `cancel_async_task` 取消运行中的任务                         |
-| **有状态性**        | 无状态 —— 调用之间无持久状态                                      | 有状态 —— 在其自己的线程上维护跨交互的状态                         |
-| **适用场景**        | 代理需要等待结果后再继续的任务                                    | 需要在聊天中交互管理的长时间运行复杂任务                           |
+| 维度              | 同步子代理                                                      | 异步子代理                                                       |
+|----------------------|-----------------------------------------------------------------|-------------------------------------------------------------------|
+| **执行模型**  | 监督者阻塞直到子代理完成                          | 立即返回任务 ID；监督者继续执行                      |
+| **并发**      | 并行但阻塞                                              | 并行且非阻塞                                          |
+| **中途更新** | 不可能                                                      | 通过 `update_async_task`           |
+| **取消**     | 不可能                                                      | 通过 `cancel_async_task`                  |
+| **状态持久性**     | 无状态 - 调用之间无持久状态                          | 有状态 - 在其自己的线程中维护跨交互的状态      |
+| **最佳使用场景**         | 代理需要在继续之前等待结果的任务             | 在聊天中交互管理的长时间运行、复杂任务      |
 
-## Configure async subagents
+## 配置异步子代理
 
-将异步子代理定义为 @[`AsyncSubAgent`] 规范列表，每个规范指向一个 Agent Protocol 服务器：
+将异步子代理定义为 @[`AsyncSubAgent`] 规范的列表，每个规范指向一个代理协议服务器：
 
 :::python
 ```python
@@ -73,13 +73,15 @@ agent = create_deep_agent(
 ```
 
 | 字段 | 类型 | 描述 |
-|------|------|------|
-| `name` | `str` | 必填。唯一标识符。监督者在启动任务时使用此字段。 |
-| `description` | `str` | 必填。此子代理的功能。监督者使用此字段来决定委托给哪个代理。 |
-| `graph_id` | `str` | 必填。Agent Protocol 服务器上的图 ID（或 assistant ID）。对于基于 LangGraph 的部署，此 ID 必须与 `langgraph.json` 中注册的图匹配。 |
-| `url` | `str` | 可选。省略时，使用 ASGI 传输（进程内）。设置后，使用 HTTP 传输到远程 Agent Protocol 服务器。 |
-| `headers` | `dict[str, str]` | 可选。发送到远程服务器的请求的其他头信息。用于自托管 Agent Protocol 服务器的自定义身份验证。 |
+|-------|------|-------------|
+| `name` | `str` | 必填。唯一标识符。监督者在启动任务时使用此标识符。 |
+| `description` | `str` | 必填。此子代理的用途。监督者使用此字段来决定委托给哪个代理。 |
+| `graph_id` | `str` | 必填。代理协议服务器上的图形 ID（或助手 ID）。对于基于 LangGraph 的部署，必须与在 `langgraph.json`. |
+| `url` | `str` | 可选。省略时使用 ASGI 传输（进程内）。设置后，使用 HTTP 传输到远程代理协议服务器。 |
+| `headers` | `dict[str, str]` | 可选。发送到远程服务器的请求的额外头部。用于自托管代理协议服务器的自定义身份验证。 |
 :::
+
+:::js
 ```typescript
 import { createDeepAgent, AsyncSubAgent } from "deepagents";
 
@@ -105,15 +107,15 @@ const agent = createDeepAgent({
 ```
 
 | 字段 | 类型 | 描述 |
-|------|------|------|
-| `name` | `string` | 必填。唯一标识符。主管在启动任务时使用此字段。 |
-| `description` | `string` | 必填。此子代理的功能描述。主管使用此字段来决定委托给哪个代理。 |
-| `graphId` | `string` | 必填。Agent Protocol 服务器上的图 ID（或助手 ID）。对于基于 LangGraph 的部署，此字段必须与 `langgraph.json` 中注册的图匹配。 |
-| `url` | `string` | 可选。省略时使用 ASGI 传输（进程内）。设置后使用 HTTP 传输连接到远程 Agent Protocol 服务器。 |
-| `headers` | `Record<string, string>` | 可选。用于远程服务器请求的附加头信息。用于自托管 Agent Protocol 服务器的自定义身份验证。 |
+|-------|------|-------------|
+| `name` | `string` | 必填。唯一标识符。主管在启动任务时使用此标识。|
+| `description` | `string` | 必填。此子代理的功能描述。主管使用此字段来决定委托给哪个代理。|
+| `graphId` | `string` | 必填。Agent Protocol 服务器上的图 ID（或助手 ID）。对于基于 LangGraph 的部署，此 ID 必须与在中注册的图相匹配 `langgraph.json`. |
+| `url` | `string` | 可选。省略时使用 ASGI 传输（进程内）。设置后，使用 HTTP 传输到远程 Agent Protocol 服务器。|
+| `headers` | `Record<string, string>` | 可选。向远程服务器请求时的附加头信息。用于自托管 Agent Protocol 服务器的自定义身份验证。|
 :::
 
-对于基于 LangGraph 的部署，请在同一 `langgraph.json` 中注册所有图，以便协同部署：
+对于基于 LangGraph 的部署，请在同一个 `langgraph.json` 中注册所有图，用于协同部署场景：
 
 ```json
 {
@@ -127,17 +129,17 @@ const agent = createDeepAgent({
 
 ## 使用异步子代理工具
 
-当配置了异步子代理时，包含在[默认中间件栈](/oss/deepagents/customization#default-stack-main-agent)中的 @[`AsyncSubAgentMiddleware`] 为监督者提供五个工具：
+[@[`AsyncSubAgentMiddleware`]]，包含在 [默认中间件栈中](/oss/deepagents/customization#default-stack-main-agent) 配置异步子代理时，会为主管提供五个工具：
 
 | 工具 | 用途 | 返回值 |
 |------|---------|---------|
-| `start_async_task` | 启动一个新的后台任务 | 任务 ID（立即返回） |
+| `start_async_task` | 启动新的后台任务 | 任务 ID（立即返回） |
 | `check_async_task` | 获取任务的当前状态和结果 | 状态 + 结果（如果完成） |
-| `update_async_task` | 向正在运行的任务发送新指令 | 确认 + 更新后的状态 |
-| `cancel_async_task` | 停止正在运行的任务 | 确认 |
-| `list_async_tasks` | 列出所有已跟踪任务的实时状态 | 所有任务摘要 |
+| `update_async_task` | 向运行中的任务发送新指令 | 确认 + 更新后的状态 |
+| `cancel_async_task` | 停止运行中的任务 | 确认 |
+| `list_async_tasks` | 列出所有跟踪的任务及其实时状态 | 所有任务的摘要 |
 
-监督者的 LLM 像调用其他工具一样调用这些工具。中间件自动处理线程创建、运行管理和状态持久化。
+主管的 LLM 像调用其他工具一样调用这些工具。中间件自动处理线程创建、运行管理和状态持久化。
 
 ### 了解生命周期
 
@@ -165,37 +167,37 @@ sequenceDiagram
     Supervisor-->>User: "Here are the results"
 ```
 
-- **Launch** 在服务器上创建一个新线程，使用任务描述作为输入启动一个运行，并将线程 ID 作为任务 ID 返回。主管将此 ID 报告给用户，且不轮询完成状态。
-- **Check** 获取当前运行状态。如果运行成功，它会检索线程状态以提取子代理的最终输出。如果仍在运行，则向用户报告。
-- **Update** 使用 interrupt multitask 策略在同一线程上创建一个新运行。之前的运行被中断，子代理随完整对话历史和新指令一起重新启动。任务 ID 保持不变。
-- **Cancel** 调用服务器上的 `runs.cancel()` 并将任务标记为 `"cancelled"`。
-- **List** 迭代所有跟踪的任务。对于非终止任务，它并行从服务器获取实时状态。终止状态（`success`、`error`、`cancelled`）从缓存返回。
+- **启动** 在服务器上创建新线程，使用任务描述作为输入启动运行，并返回线程 ID 作为任务 ID。主管将此 ID 报告给用户，不轮询完成状态。
+- **检查** 获取当前运行状态。如果运行成功，则检索线程状态以提取子代理的最终输出。如果仍在运行，则向用户报告。
+- **更新** 使用中断多任务策略在同一线程上创建新运行。之前的运行被中断，子代理在完整对话历史加上新指令的情况下重新启动。任务 ID 保持不变。
+- **取消** 调用服务器上的 `runs.cancel()` 并将任务标记为 `"cancelled"`.
+- **列表** 遍历所有跟踪的任务。对于非终止状态的任务，并行从服务器获取实时状态。终止状态（`success`, `error`, `cancelled`）从缓存返回。
 
-## 理解状态管理
+## 了解状态管理
 
 :::python
-任务元数据存储在主管图上专用状态通道（`async_tasks`）中，与消息历史分开。这很关键，因为深度代理在上下文窗口填满时会压缩消息历史。如果任务 ID 仅在工具消息中，它们会在压缩过程中丢失。专用通道确保主管即使在多轮压缩后也能通过 `list_async_tasks` 回忆其任务。
+任务元数据存储在主管图上的专用状态通道（`async_tasks`）中，与消息历史分开。这一点至关重要，因为深度代理 [在上下文窗口填满时会压缩消息历史](/oss/deepagents/context-engineering#summarization) 。如果任务 ID 仅存在于工具消息中，它们会在压缩过程中丢失。专用通道确保主管始终可以通过 `list_async_tasks`召回其任务，即使经过多轮摘要之后。
 
-每个跟踪的任务记录任务 ID、代理名称、线程 ID、运行 ID、状态和时间戳（`created_at`、`last_checked_at`、`last_updated_at`）。
+每个跟踪的任务记录任务 ID、代理名称、线程 ID、运行 ID、状态和时间戳（`created_at`, `last_checked_at`, `last_updated_at`).
 :::
 
 :::js
-任务元数据存储在主管图上专用状态通道（`asyncTasks`）中，与消息历史分开。这很关键，因为深度代理在上下文窗口填满时会压缩消息历史/如果任务 ID 仅在工具消息中，它们会在压缩过程中丢失。专用通道确保主管即使在多轮压缩后也能通过 `list_async_tasks` 回忆其任务。
+任务元数据存储在专用状态通道中 (`asyncTasks`) 在监督者的图上，与消息历史分开。这很关键，因为深度代理 [会压缩其消息历史](/oss/deepagents/context-engineering#summarization) when the context window fills up/ If task IDs were only in tool messages, they would be lost during compaction. The dedicated channel ensures the supervisor can always recall its tasks through `list_async_tasks`，即使经过多轮摘要处理后。
 
-每个跟踪的任务记录任务 ID、代理名称、线程 ID、运行 ID、状态和时间戳（`createdAt`、`checkedAt`、`updatedAt`）。
+每个跟踪的任务记录任务 ID、代理名称、线程 ID、运行 ID、状态和时间戳 (`createdAt`, `checkedAt`, `updatedAt`).
 :::
 
 ## 选择传输方式
 
-### ASGI 传输（协同部署）
+### ASGI 传输（共同部署）
 
-当子代理规范省略 `url` 字段时，LangGraph SDK 使用 ASGI 传输——SDK 调用通过进程内函数调用而不是 HTTP 路由。对于基于 LangGraph 的部署，这要求两个图都注册在同一个 `langgraph.json` 中。
+当子代理规范省略 `url` 字段时，LangGraph SDK 使用 ASGI 传输 -- SDK 调用通过进程内函数调用路由而非 HTTP。对于基于 LangGraph 的部署，这需要两个图都注册在同一个 `langgraph.json`.
 
-ASGI 传输消除了网络延迟，无需额外的身份验证配置。子代理仍作为单独的线程运行，拥有自己的状态。这是推荐的默认选项。
+ASGI 传输消除了网络延迟，无需额外认证配置。子代理仍作为独立线程运行并保持自己的状态。这是推荐的默认设置。
 
 ### HTTP 传输（远程）
 
-添加 `url` 字段以切换到 HTTP 传输，SDK 调用通过网络发送到远程 Agent Protocol 服务器：
+添加 `url` 字段以切换到 HTTP 传输，SDK 调用通过网络安全送至远程代理协议服务器：
 
 :::python
 ```python
@@ -217,23 +219,25 @@ AsyncSubAgent(
   url: "https://my-research-deployment.langsmith.dev",
 }
 ```
-对于 LangGraph 部署，身份验证由 LangGraph SDK 使用环境变量中的 `LANGSMITH_API_KEY`（或 `LANGGRAPH_API_KEY`）处理。自托管的 Agent Protocol 服务器可能使用不同的身份验证机制。
+:::
 
-当子代理需要独立扩展、不同的资源配置或由不同团队维护时，请使用 HTTP 传输。
+对于 LangGraph 部署，认证由 LangGraph SDK 使用 `LANGSMITH_API_KEY` (or `LANGGRAPH_API_KEY`) 从环境变量处理。自托管的代理协议服务器可能使用不同的认证机制。
+
+当子代理需要独立扩展、不同资源配置或由不同团队维护时，使用 HTTP 传输。
 
 ## 选择部署拓扑
 
-### 单体部署
+### 单一部署
 
-单体部署意味着所有代理都使用 ASGI 传输共同部署在同一服务器上。对于基于 LangGraph 的部署，请在一个 `langgraph.json` 中注册所有图。这是一个推荐的起点——只需管理一个服务器，代理之间零网络延迟。
+单一部署意味着所有代理使用 ASGI 传输共同部署在同一服务器上。对于基于 LangGraph 的部署，将所有图注册在一个 `langgraph.json`中。这是推荐的起点 -- 一台服务器管理，代理之间零网络延迟。
 
-### 分离部署
+### 分裂部署
 
-主管在一个服务器上，子代理通过 HTTP 传输在另一个服务器上。当子代理需要不同的计算配置文件或独立扩展时使用。
+Supervisor 在一台服务器上，子代理通过 HTTP 传输在另一台服务器上。当子代理需要不同的计算配置或独立扩展时使用。
 
-### 混合部署
+### 混合
 
-在混合部署中，某些子代理通过 ASGI 共同部署，其他通过 HTTP 远程部署：
+在混合部署中，某些子代理通过 ASGI 共同部署，其他则通过 HTTP 远程部署：
 
 :::python
 ```python
@@ -277,9 +281,9 @@ const asyncSubagents: AsyncSubAgent[] = [
 
 ## 最佳实践
 
-### 调整本地开发的 worker pool 大小
+### 为本地开发调整工作池大小
 
-使用 `langgraph dev` 在本地运行时，请增大 worker pool 以容纳并发子代理运行。每个活跃运行占用一个 worker 槽位。带有 3 个并发子任务的主管需要 4 个槽位（1 个主管 + 3 个子代理）。资源不足会导致启动排队。
+本地运行时使用 `langgraph dev`时，增加工作池以容纳并发子代理运行。每个活动运行占用一个工作槽。带有 3 个并发子代理任务的 Supervisor 需要 4 个槽（1 个 Supervisor + 3 个子代理）。资源配置不足会导致启动排队。
 
 ```bash
 langgraph dev --n-jobs-per-worker 10
@@ -287,7 +291,7 @@ langgraph dev --n-jobs-per-worker 10
 
 ### 编写清晰的子代理描述
 
-主管使用描述来决定启动哪个子代理。要具体且以动作为导向：
+Supervisor 使用描述来决定启动哪个子代理。要具体且以行动为导向：
 
 :::python
 ```python
@@ -327,15 +331,15 @@ AsyncSubAgent(
 
 ### 使用线程 ID 进行追踪
 
-使用基于 LangGraph 的部署时，每个异步子代理运行都是标准 LangGraph 运行，在 LangSmith 中完全可见。监督者的追踪显示 `launch`、`check`、`update`、`cancel` 和 `list` 的工具调用。每个子代理运行都显示为单独的追踪，通过线程 ID 链接。使用线程 ID（任务 ID）将监督者编排追踪与子代理执行追踪关联起来。
+使用基于 LangGraph 的部署时，每个异步子代理运行都是标准 LangGraph 运行，在 LangSmith 中完全可见。Supervisor 的追踪显示工具调用用于 `launch`, `check`, `update`, `cancel`和 `list`。每个子代理运行显示为单独的追踪，通过线程 ID 关联。使用线程 ID（任务 ID）来关联 Supervisor 编排追踪和子代理执行追踪。
 
 ## 故障排除
 
-### 监督者在启动后立即轮询
+### Supervisor 在启动后立即轮询
 
-**问题**：监督者在启动后立即在循环中调用 `check`，将异步执行变为阻塞执行。
+**问题**：Supervisor 调用 `check` 后立即进入循环，将异步执行转变为阻塞。
 
-**解决方案**：中间件注入系统提示规则来防止这种情况。如果轮询仍然存在，请在监督者的系统提示中加强此行为：
+**解决方案**：中间件注入系统提示规则以防止此问题。如果轮询仍然存在，请在监督者的系统提示中强化此行为：
 
 :::python
 ```python
@@ -363,24 +367,24 @@ const agent = createDeepAgent({
 ```
 :::
 
-### 监督器报告过期状态
+### 监督者报告过时的状态
 
-**问题**: 监督器引用了对话历史中早期的任务状态，而不是发起新的 `check` 调用。
+**问题**：监督者引用对话历史中较早的任务状态，而不是获取新的 `check` call.
 
-**解决方案**: 中间件提示指示模型"对话历史中的任务状态始终是过期的"。如果问题仍然存在，请添加明确的指令，要求在报告状态前始终调用 `check` 或 `list`。
+**解决方案**：中间件提示指示模型"对话历史中的任务状态始终是过时的"。如果仍然发生，请添加明确的指示，要求始终调用 `check` or `list` 在报告状态之前。
 
-### 任务 ID 查找失败
+### 任务 ID 查询失败
 
-**问题**: 监督器截断或重新格式化了任务 ID，导致 `check` 或 `cancel` 失败。
+**问题**：监督者截断或重新格式化任务 ID，导致 `check` or `cancel` 失败。
 
-**解决方案**: 中间件提示指示模型始终使用完整的任务 ID。如果截断问题持续存在，这通常是模型特定的问题——请尝试不同的模型，或将"始终显示完整的 task_id，不要截断或缩写"添加到系统提示中。
+**解决方案**：中间件提示指示模型始终使用完整的任务 ID。如果截断仍然存在，这通常是模型特定的问题——请尝试不同的模型或添加"始终显示完整的任务_id，绝不截断或缩写"到您的系统提示中。
 
 ### 子代理启动队列而不是运行
 
-**问题**: 启动子代理时挂起或需要很长时间才能启动。
+**问题**：启动子代理挂起或需要很长时间才能启动。
 
-**解决方案**: 工作线程池可能已耗尽。使用 `--n-jobs-per-worker` 增加池大小。请参阅[调整工作线程池大小](#size-the-worker-pool-for-local-development)。
+**解决方案**：工作池可能已耗尽。使用以下方式增加池大小 `--n-jobs-per-worker`。请参阅 [调整工作池大小](#size-the-worker-pool-for-local-development).
 
 ## 参考实现
 
-[async-deep-agents](https://github.com/langchain-ai/async-deep-agents) 代码库包含 Python 和 TypeScript 的工作示例，可部署到 LangSmith Deployments。它演示了带有研究者和编码器子代理的监督器作为后台任务运行。
+该 [async-deep-agents](https://github.com/langchain-ai/async-deep-agents) 仓库包含 Python 和 TypeScript 的工作示例，可部署到 LangSmith Deployments。它展示了一个监督者与研究者和编码器子代理作为后台任务运行的示例。

@@ -1,15 +1,54 @@
+---
+title: LangSmith Engine Webhook 事件
+sidebarTitle: Engine Webhook 事件
+description: LangSmith Engine 创建问题或将新追踪链接到现有问题时发送的 Webhook 事件参考。
+---
 
+将 LangSmith 检测到的代理问题转发到您的事件管理、寻呼或聊天工具中。 [LangSmith Engine](/langsmith/engine) 在打开新问题或将新追踪链接到已打开的问题时，向您的端点发送 Webhook 事件。
+
+要配置 Webhook 订阅，请打开 **Engine 设置** 面板，在 **Engine** 标签页。参见 [配置 LangSmith Engine](/langsmith/engine#configure-langsmith-engine).
+
+<Note>
+目标可以传递到 Webhook URL 或 **Slack 频道**。两者使用相同的 [事件类型](#event-types) 和 [最低优先级过滤](#severity-filtering) ，如本页所述。Slack 目标通过 LangSmith 托管的 Slack 应用发布，而不是发送 [JSON 载荷](#event-envelope) ，因此 [签名密钥](#signing-secret) 和 [自定义标头](#custom-headers) 不适用。
+
+要设置 Slack 传递，请参见 [通知 Slack 频道](/langsmith/engine#notify-a-slack-channel)。本页的其余部分记录了 **Webhook URL** destinations.
+</Note>
+
+## 传递
+
+LangSmith 发送一个 `POST` 请求，带有 JSON 正文，发送到您的 Webhook URL。该请求使用 `Content-Type: application/json` 并包含您附加到订阅的任何自定义标头。
+
+| 属性 | 值 |
+| --- | --- |
+| 方法 | `POST` |
+| 正文 | JSON， [通用信封](#event-envelope) 见下文 |
+| 方案 | `http://` 和 `https://` 均被接受。 `https://` 强烈推荐 |
+| 签名 | `X-LangSmith-Signature` 标头，使用订阅的签名密钥签名 |
+| 超时 | 每次尝试 20 秒 |
+| 尝试次数 | 最多 4 次尝试（1 次初始加 3 次指数退避重试），针对传输错误、HTTP `408`, `425`, `429`和任何 HTTP `5xx`。其他 `4xx` 响应被视为永久性的，不会重试 |
+| 响应 | 成功仅由状态码决定。响应正文被忽略。 |
+
+<Note>
+重试传递字节完全相同的载荷，包括相同的 `id`。在 `id` 上进行去重，以便重试传递不会产生重复的下游影响。
+</Note>
+
+### 自定义请求头
+
+您可以为每个订阅附加任意请求头（例如， `Authorization: Bearer …`）用于在您的端点验证调用者身份。 `Content-Type` 由 LangSmith 设置，无法被覆盖。
+
+### 签名密钥
+
+每个订阅都有一个签名密钥。LangSmith 使用此密钥对原始 webhook 请求体进行签名，并将结果放在 `X-LangSmith-Signature` header.
+
+请求头值的格式如下：
 
 ```text
 sha256=<hex-encoded HMAC-SHA256 digest>
 ```
 
-在解析或处理负载之前，请先验证签名。HMAC 输入是精确的原始请求体字节，HMAC 密钥是订阅的签名密钥。在验证之前，不要解析并重新序列化 JSON 体。
+在解析或处理负载之前验证签名。HMAC 输入是精确的原始请求体字节，HMAC 密钥是订阅的签名密钥。请勿在验证前解析并重新序列化 JSON 体。
 
 <CodeGroup>
-
-
-</CodeGroup>
 
 ```python Python
 import hashlib
@@ -65,100 +104,102 @@ export function verifyLangSmithSignature({
 }
 ```
 
-### 滚动签名密钥
+</CodeGroup>
 
-当签名密钥可能已泄露时，或当组织的凭证轮换策略要求使用新密钥时，请滚动签名密钥。
+### 轮换签名密钥
 
-要滚动密钥，请在 **Engine Settings** 中打开订阅行，点击 **Roll signing secret**，然后确认。LangSmith 会生成一个新的签名密钥，并立即将其用于后续的 webhook 投递。滚动完成后，旧密钥将立即停止对投递进行签名。
+当签名密钥可能已泄露时，或当您组织的凭证轮换策略需要新密钥时，请轮换签名密钥。
 
-滚动密钥后，请使用新值更新每个验证 `X-LangSmith-Signature` 的消费者。
+要轮换密钥，请在 **引擎设置**中打开订阅行，然后点击 **轮换签名密钥**，然后确认。LangSmith 会生成新的签名密钥并立即用于后续 webhook 投递。前一个密钥在轮换完成后立即停止为投递进行签名。
 
-### 严重性过滤
+轮换密钥后，更新每个验证 `X-LangSmith-Signature` 的消费者以使用新值。
 
-每个订阅都有一个从 `0` 到 `3` 的 `severity_threshold`。对于问题事件，只有当问题的 `severity` 小于或等于阈值时，事件才会被投递。数字越小越紧急。
+### 严重程度过滤
 
-| 严重性 | 含义 |
+每个订阅都有一个 `severity_threshold` 阈值。对于问题事件，只有当问题的 `0` to `3`小于或等于阈值时才会投递事件。数字越小越紧急。 `severity` | 严重程度 | 含义 |
+
+| 紧急 |
 | --- | --- |
-| `0` | 紧急 |
-| `1` | 高 |
-| `2` | 中 |
-| `3` | 低 |
+| `0` | 高 |
+| `1` | 中 |
+| `2` | 低 |
+| `3` 例如，具有
 
-例如，`severity_threshold: 1` 的订阅仅接收 `URGENT`（0）和 `HIGH`（1）问题的事件。
+的订阅仅接收 `severity_threshold: 1` （0）和 `URGENT` （1）问题的相关事件。 `HIGH` 严重程度阈值不适用于
 
-严重性阈值不适用于 [`issue.agent_run.failed`](#issue-agent_run-failed)，因为运行失败事件的作用域是 Engine 会话而不是特定问题。
+，因为运行失败事件的作用域是引擎会话而非特定问题。 [`issue.agent_run.failed`](#issue-agent_run-failed)事件类型过滤
 
-### 事件类型过滤
+### 每个订阅都指定要接收的
 
-每个订阅都指定了它想要接收的[事件类型](#event-types)。未指定明确列表的订阅默认为 `["issue.created"]`。
+事件类型 [。未指定明确列表的订阅默认接收](#event-types) 事件包装 `["issue.created"]`.
 
-## 事件信封
-
-投递到端点的每个事件都使用相同的外层 JSON 结构。
+## 投递到您端点的每个事件都使用相同的外层 JSON 结构。
 
 | 字段 | 类型 | 描述 |
+
+| UUID | 本次投递的唯一标识符。在重试时保持稳定，用于去重。 |
 | --- | --- | --- |
-| `id` | UUID | 此次投递的唯一标识符。在重试时保持稳定。用于去重。 |
-| `type` | string | 事件类型。值为 [`issue.created`](#issue-created)、[`issue.trace.added`](#issue-trace-added) 或 [`issue.agent_run.failed`](#issue-agent_run-failed) 之一。 |
-| `created` | integer | 事件入队时的 Unix 秒数（UTC）。 |
-| `request_id` | UUID | 同一上游操作触发的所有事件共享此 ID。请参阅[批量合并](#batch-coalescing)。 |
-| `data` | object | 事件载荷。始终包含 `data.object`。仅在 [`issue.trace.added`](#issue-trace-added) 事件上包含 [`data.trace`](#data-trace)。 |
+| `id` | string | 事件类型。值为
+| `type` | integer | 事件入队时的 Unix 秒数（UTC）。 | [`issue.created`](#issue-created), [`issue.trace.added`](#issue-trace-added), or [`issue.agent_run.failed`](#issue-agent_run-failed). |
+| `created` | UUID | 由同一上游操作触发的所有事件共享。请参阅
+| `request_id` 批量合并 [| object | 事件负载。始终包含](#batch-coalescing). |
+| `data` 。仅在 `data.object`时包含 [`data.trace`](#data-trace) 事件上。 [`issue.trace.added`](#issue-trace-added) events. |
 
 ### 问题 `data.object`
 
-对于 [`issue.created`](#issue-created) 和 [`issue.trace.added`](#issue-trace-added)，`data.object` 是问题的快照。请将其视为事件生成时问题的权威状态。
+对于 [`issue.created`](#issue-created) 和 [`issue.trace.added`](#issue-trace-added), `data.object` 是问题的快照。请将其视为事件生成时问题的权威状态。
 
-| 字段 | 类型 | 描述 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `id` | UUID | 问题 ID。 |
-| `name` | string | 问题简短标题。 |
-| `description` | string | 人类可读的描述。 |
-| `severity` | integer | `0`（紧急）到 `3`（低）。请参阅[严重性过滤](#severity-filtering)。 |
-| `tenant_id` | UUID | 问题所属的工作区。 |
-| `tenant_name` | string | 工作区显示名称。 |
-| `session_id` | UUID | 问题所属的追踪项目。 |
-| `session_name` | string | 追踪项目名称。 |
-| `url` | string | LangSmith UI 中问题的深度链接。 |
+| `id` | UUID | 问题 ID。|
+| `name` | string | 问题的简短标题。|
+| `description` | string | 人类可读的描述。|
+| `severity` | integer | `0` (紧急) 到 `3` (低)。参见 [严重程度过滤](#severity-filtering). |
+| `tenant_id` | UUID | 问题所属的工作空间。|
+| `tenant_name` | string | 工作空间显示名称。|
+| `session_id` | UUID | 问题所属的追踪项目。|
+| `session_name` | string | 追踪项目名称。|
+| `url` | string | LangSmith UI 中问题的深度链接。|
 
 ### 运行失败 `data.object`
 
-对于 [`issue.agent_run.failed`](#issue-agent_run-failed)，`data.object` 描述失败的 Engine 运行。
+对于 [`issue.agent_run.failed`](#issue-agent_run-failed), `data.object` 描述失败的 Engine 运行。
 
-| 字段 | 类型 | 描述 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `tenant_id` | UUID | 运行所属的工作区。 |
-| `tenant_name` | string | 工作区显示名称。 |
-| `session_id` | UUID | 运行所属的追踪项目。 |
-| `session_name` | string | 追踪项目名称。 |
-| `url` | string | UI 中 LangSmith 项目的深度链接。 |
-| `thread_id` | string | Engine 线程 ID。 |
-| `run_id` | string | Engine 运行 ID。不可用时省略。 |
-| `status` | string | 最终运行状态。 |
-| `error_message` | string | 失败运行的错误文本。不可用时省略。 |
-| `occurred_at` | string | 失败发生时间的 RFC 3339 时间戳。 |
+| `tenant_id` | UUID | 运行所属的工作空间。|
+| `tenant_name` | string | 工作空间显示名称。|
+| `session_id` | UUID | 运行所属的追踪项目。|
+| `session_name` | string | 追踪项目名称。|
+| `url` | string | UI 中 LangSmith 项目的深度链接。|
+| `thread_id` | string | Engine 线程 ID。|
+| `run_id` | string | Engine 运行 ID。不可用时省略。|
+| `status` | string | 最终运行状态。|
+| `error_message` | string | 失败运行的错误文本。不可用时省略。|
+| `occurred_at` | string | 失败发生时间的 RFC 3339 时间戳。|
 
 ### `data.trace`
 
-`data.trace` 仅包含在 [`issue.trace.added`](#issue-trace-added) 事件上。
+`data.trace` 仅在 [`issue.trace.added`](#issue-trace-added) events.
 
-| 字段 | 类型 | 描述 |
+| Field | Type | Description |
 | --- | --- | --- |
-| `run_id` | UUID | 链接到问题的运行 ID。 |
-| `trace_id` | UUID | 包含该运行的追踪 ID。 |
-| `start_time` | string | 运行开始时间的 RFC 3339 时间戳。 |
-| `comment` | string \| null | 链接追踪时记录的可选备注。为空时省略。 |
+| `run_id` | UUID | 链接到问题的运行 ID。|
+| `trace_id` | UUID | 包含该运行的追踪 ID。|
+| `start_time` | string | 运行开始时间的 RFC 3339 时间戳。|
+| `comment` | string \| null | Optional note recorded when the trace was linked. Omitted when empty. |
 
 ### 批量合并
 
-单个上游操作可以产生多个 webhook 事件。当 Engine 打开一个新问题并向其附加五个追踪时，您会收到一个 [`issue.created`](#issue-created) 事件和五个 [`issue.trace.added`](#issue-trace-added) 事件，它们都共享相同的 `request_id`。使用 `request_id` 将这些事件分组为一个下游通知。
+单个上游操作可以产生多个 webhook 事件。当 Engine 打开一个新问题并附加五个追踪到它时，您会收到一个 [`issue.created`](#issue-created) 事件和五个 [`issue.trace.added`](#issue-trace-added) 事件，它们都共享相同的 `request_id`。使用 `request_id` 将这些分组为单个下游通知。
 
 ## 事件类型
 
-以下是 LangSmith Engine 当前发送的完整事件类型集。未来可能会添加新类型，因此处理程序应该忽略未知的 `type` 值而不是失败。
+以下事件类型是 LangSmith Engine 今天发送的完整集合。未来可能会添加新类型，因此处理程序应该忽略未知的 `type` 值而不是失败。
 
 ### `issue.created`
 
-当 LangSmith Engine 创建新问题时发送。`data.trace` 被省略。
+当 LangSmith Engine 创建新问题时发送。 `data.trace` 被省略。
 
 ```json
 {
@@ -184,7 +225,7 @@ export function verifyLangSmithSignature({
 
 ### `issue.trace.added`
 
-当新的追踪记录链接到现有问题时发送。`data.trace` 描述链接的追踪记录。
+当新追踪链接到现有问题时发送。 `data.trace` 描述链接的追踪。
 
 ```json
 {
@@ -216,7 +257,7 @@ export function verifyLangSmithSignature({
 
 ### `issue.agent_run.failed`
 
-当 LangSmith Engine 未能完成运行时报送。此事件是会话作用域的，因此它不包含 `data.trace` 且不使用严重级别过滤。
+当 LangSmith Engine 运行失败时发送。此事件是会话范围的，因此不包含 `data.trace` 并且不使用严重性过滤。
 
 ```json
 {
@@ -243,7 +284,7 @@ export function verifyLangSmithSignature({
 
 ## 测试您的端点
 
-在将真实订阅指向您的端点之前，请发送一个示例负载以验证它在 20 秒超时内接受并确认请求：
+在将真实订阅指向您的端点之前，发送示例负载以验证它在 20 秒超时内接受并确认：
 
 ```bash
 curl -X POST https://your-endpoint.example.com/webhook \
@@ -252,21 +293,21 @@ curl -X POST https://your-endpoint.example.com/webhook \
   -d @sample-issue-created.json
 ```
 
-使用 [`issue.created`](#issue-created) 中的示例 body 作为 `sample-issue-created.json`。验证以下内容：
+使用来自的示例正文 [`issue.created`](#issue-created) as `sample-issue-created.json`。验证以下内容：
 
-- 自定义的 `Authorization` 请求头已到达，并与您在订阅上配置的密钥匹配。
-- 处理程序通过 `id` 对事件进行持久化，以便对重试进行去重。
-- 处理程序在启动缓慢的下游工作之前返回 `2xx`。
+- 自定义 `Authorization` 标头到达并与您在订阅上配置的密钥匹配。
+- 处理程序通过其键持久保存事件 `id` 以便重试被去重。
+- 处理程序返回 `2xx` 在启动缓慢的下游工作之前。
 
 ## 安全
 
-- 在订阅创建时和交付时都会验证 Webhook URL。私有 IP 范围和元数据 IP 范围在 SaaS 中被阻止。`http://` 和 `https://` 都被接受；使用 `https://` 以便有效负载和任何自定义请求头不以明文形式发送。
-- LangSmith 使用订阅的签名密钥对 Webhook body 进行签名。在处理有效负载之前验证 `X-LangSmith-Signature`。
-- 您还可以在订阅上设置自定义请求头，例如 `Authorization: Bearer …`，用于路由或在您的端点进行额外身份验证。
-- 根据事件的 `id` 进行去重，以便重试的交付不会导致重复通知。
+- Webhook URL 在订阅创建时和交付时都会被验证。私有和元数据 IP 范围在 SaaS 中被阻止。两者都 `http://` 和 `https://` 都被接受；使用 `https://` 以便负载和任何自定义标头不会以明文形式发送。
+- LangSmith 使用订阅的签名密钥对 webhook 正文进行签名。在处理负载之前验证 `X-LangSmith-Signature` 。
+- 您还可以在订阅上设置自定义标头，例如 `Authorization: Bearer …`，用于在您的端点进行路由或额外身份验证。
+- 根据事件进行去重 `id` 以便重试交付不会导致重复通知。
 
 ## 最佳实践
 
-- **快速确认。** 一旦您已持久化了事件，就立即返回 `2xx`。将慢速工作（扇出、分页、下游 API 调用）转移到队列上，以便您的处理程序保持在 20 秒的超时限制内。
-- **容忍未知的事件类型。** 忽略您的处理程序无法识别的 `type` 值。新的事件类型可能会在未经通知的情况下添加。
-- **容忍新字段。** 使用宽松的 schema 解析有效负载。新字段可能会在未经通知的情况下添加到现有事件类型中。
+- **快速确认。** 在您已持久保存事件后立即响应 `2xx` 。将缓慢工作（扇出、分页、下游 API 调用）移至队列，以便您的处理程序保持在 20 秒超时范围内。
+- **容忍未知的事件类型。** 忽略 `type` 您的处理程序无法识别的值。新事件类型可能会在未事先通知的情况下添加。
+- **容忍新字段。** 使用宽松的模式解析负载。新字段可能会在未事先通知的情况下添加到现有事件类型中。

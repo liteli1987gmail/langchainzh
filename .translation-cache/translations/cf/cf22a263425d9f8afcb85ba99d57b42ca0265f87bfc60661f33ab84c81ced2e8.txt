@@ -3,21 +3,21 @@ title: "AWS 中间件集成"
 description: "使用 LangChain JavaScript 与 AWS 中间件集成。"
 ---
 
-专门为托管在 AWS Bedrock 上的模型设计的中间件。了解更多关于[中间件](/oss/langchain/middleware/overview)的信息。
+专为托管在 AWS Bedrock 上的模型设计的中间件。了解更多关于 [中间件](/oss/langchain/middleware/overview).
 
 | 中间件 | 描述 |
 |------------|-------------|
-| [提示词缓存](#提示词缓存) | 通过缓存重复的提示词前缀来降低成本 |
+| [提示词缓存](#prompt-caching) | 通过缓存重复的提示词前缀来降低成本 |
 
 ## 提示词缓存
 
-通过在 Amazon Bedrock 上缓存频繁重用的提示词前缀来减少推理延迟和输入 token 成本。`bedrockPromptCachingMiddleware` 通过 `modelSettings` 启用缓存。然后 `ChatBedrockConverse` 在请求时将其转换为正确的 AWS 线格式。缓存检查点被放置在系统提示词、工具定义以及最近的支持消息之后，以便模型可以在后续请求中跳过先前已看到内容的重新计算。缓存放置因模型系列而异：例如，Nova 跳过某些工具定义和工具结果案例。
+通过在 Amazon Bedrock 上缓存经常重用的提示词前缀来降低推理延迟和输入 token 成本。 `bedrockPromptCachingMiddleware` 通过以下方式启用缓存 `modelSettings`. `ChatBedrockConverse` 然后在请求时将其转换为正确的 AWS 线路格式。缓存检查点被放置在系统提示词、函数定义以及最新消息之后（在支持的范围内），以便模型可以在后续请求中跳过先前已处理内容的重新计算。缓存放置因模型系列而异：例如，Nova 会跳过某些函数定义和函数结果的情况。
 
-提示词缓存在以下场景中很有用：
+提示词缓存适用于以下场景：
 
 - 具有长且一致的系统提示词的多轮对话
-- 具有许多在调用中保持不变的工具定义的代理
-- 基于文档的问答，用户在同一上传上下文中提出多个问题
+- 具有多个在调用之间保持不变的函数定义的代理
+- 基于文档的问答，用户在相同的上传上下文中提出多个问题
 - 具有重复静态内容的批处理工作负载
 
 支持的模型：
@@ -26,7 +26,7 @@ description: "使用 LangChain JavaScript 与 AWS 中间件集成。"
 - **Amazon Nova**
 
 <Info>
-    了解更多关于 [AWS Bedrock 提示词缓存](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html) 策略和限制。缓存内容必须超过 1,024 个 token 才能使缓存检查点生效，有时根据模型可能需要更多。查看[支持的模型、区域和限制](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models)。
+    了解更多关于 [AWS Bedrock 提示词缓存](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html) 策略和限制。缓存内容必须超过 1,024 个 token 缓存检查点才能生效，有时根据模型不同可能需要更多。请参阅 [支持的模型、区域和限制](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models).
 </Info>
 
 **API 参考：** @[`BedrockPromptCachingMiddleware`]
@@ -52,14 +52,14 @@ const agent = createAgent({
 });
 ```
 
-<Accordion title="配置选项">
+<Accordion title="Configuration options">
 
 <ParamField body="enableCaching" type="boolean" default="true">
     是否应用提示词缓存。
 </ParamField>
 
 <ParamField body="ttl" type="string" default="5m">
-    缓存内容的生存时间。有效值：`'5m'` 或 `'1h'`。请注意，Amazon Nova 模型仅支持 `'5m'`。
+    缓存内容的生存时间。有效值： `'5m'` or `'1h'`。请注意，Amazon Nova 模型仅支持 `'5m'`.
 </ParamField>
 
 <ParamField body="minMessagesToCache" type="number" default="1">
@@ -67,25 +67,23 @@ const agent = createAgent({
 </ParamField>
 
 <ParamField body="unsupportedModelBehavior" type="string" default="warn">
-    使用不支持的模型时的行为。选项：`'ignore'`、`'warn'` 或 `'raise'`。
+    使用不支持的模型时的行为。选项： `'ignore'`, `'warn'`, or `'raise'`.
 </ParamField>
 
 </Accordion>
 
-<Accordion title="完整示例">
+<Accordion title="Full example">
 
-中间件会缓存每个请求中包含的最新消息及其之前的内容。在 TTL 窗口（5 分钟或 1 小时）内的后续请求中，之前见过的内容会从缓存中检索，而非重新处理，从而降低成本和延迟。
+中间件将每个请求中的内容缓存至并包括最新消息。在 TTL 窗口内（5 分钟或 1 小时）的后续请求中，先前已处理的内容会从缓存中检索，而非重新处理，从而降低成本和延迟。
 
 **工作原理：**
-1. 首次请求：系统提示词、工具和用户消息会发送到 API 并被缓存
-2. 第二次请求：从缓存中检索已缓存的内容。只需处理新消息
-3. 每个轮次都会重复此模式，每个请求都会复用已缓存的对话历史
+1. 第一个请求：系统提示词、函数和用户消息被发送到 API 并缓存
+2. 第二个请求：从缓存中检索已缓存的内容。只需处理新消息
+3. 每一轮都遵循此模式，每个请求都会重用缓存的对话历史
 
 <Note>
-    提示词缓存通过缓存 token 来降低 API 成本，但**不会**提供对话记忆功能。如需在调用之间持久化对话历史，请使用 [检查点器](/oss/langgraph/persistence#checkpointer-libraries)（如 `MemorySaver`）。
+    提示词缓存通过缓存 token 来降低 API 成本，但 **不会** 提供对话记忆功能。要在调用之间保持对话历史，请使用 [检查点工具](/oss/langgraph/persistence#checkpointer-libraries) 例如 `MemorySaver`.
 </Note>
-
-</Accordion>
 
 ```typescript
 import { createAgent, bedrockPromptCachingMiddleware, AIMessage, HumanMessage, tool } from "langchain";
@@ -139,13 +137,13 @@ console.log(response.messages.at(-1)?.content);
 
 </Accordion>
 
-### 特定模型行为
+### 模型特定行为
 
-中间件自动处理不同模型系列之间的差异：
+中间件会自动处理模型系列之间的差异：
 
 | 功能 | ChatBedrockConverse (Anthropic) | ChatBedrockConverse (Nova) |
 |---------|:-------------------------------:|:--------------------------:|
 | 系统提示词缓存 | ✅ | ✅ |
 | 工具定义缓存 | ✅ | ❌ |
-| 消息缓存 | ✅ | ✅（排除工具结果消息） |
-| 延长 TTL（`1h`） | ✅ | ❌ |
+| 消息缓存 | ✅ | ✅ (不包括工具结果消息) |
+| 延长 TTL (`1h`) | ✅ | ❌ |

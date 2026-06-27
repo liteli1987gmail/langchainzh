@@ -5,79 +5,75 @@ description: "使用 LangChain Python 与 SingleStoreVectorStore 集成。"
 
 import LangchainExperimentalUnmaintained from '/snippets/oss/langchain-experimental-unmaintained.mdx';
 
-<fragment>
+> [SingleStore](https://singlestore.com/) 是一个分布式 SQL 数据库，用于事务性和分析性工作负载。您可以在 [云](https://www.singlestore.com/cloud/) 或本地运行。
 
-> [SingleStore](https://singlestore.com/) 是一个分布式SQL数据库，用于事务性和分析性工作负载。您可以在[云端](https://www.singlestore.com/cloud/)或本地运行它。
+SingleStore 支持向量存储和基于 SQL 的相似性搜索。它包含向量函数，例如 [点积_](https://docs.singlestore.com/managed-service/en/reference/sql-reference/vector-functions/dot_product.html) 和 [欧几里得_距离](https://docs.singlestore.com/managed-service/en/reference/sql-reference/vector-functions/euclidean_distance.html)。有关表设计、索引和查询模式，请参阅 [使用向量数据](https://docs.singlestore.com/managed-service/en/developer-resources/functional-extensions/working-with-vector-data.html) ，请参阅 SingleStore 文档。
 
-SingleStore支持向量存储和相似性搜索以及SQL。它包括向量函数，如[dot_product](https://docs.singlestore.com/managed-service/en/reference/sql-reference/vector-functions/dot_product.html)和[euclidean_distance](https://docs.singlestore.com/managed-service/en/reference/sql-reference/vector-functions/euclidean_distance.html)。有关表设计、索引和查询模式，请参阅SingleStore文档中的[使用向量数据](https://docs.singlestore.com/managed-service/en/developer-resources/functional-extensions/working-with-vector-data.html)。
+您还可以将向量搜索与 [基于 Lucene 的全文索引](https://docs.singlestore.com/cloud/developer-resources/functional-extensions/working-with-full-text-search/) 和文档元数据过滤相结合。根据您的工作负载，您可以预过滤文本或向量，或组合分数（例如，使用加权求和）。
 
-您还可以将向量搜索与[基于Lucene的全文索引](https://docs.singlestore.com/cloud/developer-resources/functional-extensions/working-with-full-text-search/)结合使用，并按文档元数据进行筛选。根据您的工作负载，您可以预先筛选文本或向量，或组合分数（例如，使用加权求和）。
+使用以下部分将 SingleStore 连接到 LangChain。
 
-使用以下部分将SingleStore连接到LangChain。
-
-| 类 | 包 | JS支持 |
+| 类 | 包 | JS 支持 |
 | :--- | :--- |  :---: |
 | `SingleStoreVectorStore` | `langchain_singlestore` | ✅ |
 
 ## 设置
 
-要访问SingleStore向量存储，您需要安装`langchain-singlestore`集成包。
+要访问 SingleStore 向量存储，您需要安装 `langchain-singlestore` 集成包。
 pip install -qU "langchain-singlestore"
 
 ## 初始化
 
-要初始化`SingleStoreVectorStore`，您需要一个@[`Embeddings`]对象和SingleStore数据库的连接参数。
+要初始化 `SingleStoreVectorStore`，您需要一个 @[`Embeddings`] 对象和 SingleStore 数据库的连接参数。
 
 ### 必需参数
 
-- **embedding** (`Embeddings`): 文本嵌入模型。
+- **嵌入** (`Embeddings`）：文本嵌入模型。
 
 ### 可选参数
 
-- **distance_strategy** (`DistanceStrategy`): 计算向量距离的策略。默认为`DOT_PRODUCT`。选项：
-  - `DOT_PRODUCT`: 计算两个向量的标量积。
-  - `EUCLIDEAN_DISTANCE`: 计算两个向量之间的欧几里得距离。
+- **距离_策略** (`DistanceStrategy`）：计算向量距离的策略。默认为 `DOT_PRODUCT`。选项：
+  - `DOT_PRODUCT`：计算两个向量的标量积。
+  - `EUCLIDEAN_DISTANCE`：计算两个向量之间的欧几里得距离。
 
-- **table_name** (`str`): 表名。默认为`embeddings`。
-- **content_field** (`str`): 存储内容的字段。默认为`content`。
-- **metadata_field** (`str`): 存储元数据的字段。默认为`metadata`。
-- **vector_field** (`str`): 存储向量的字段。默认为`vector`。
-- **id_field** (`str`): 存储ID的字段。默认为`id`。
+- **表_名称** (`str`）：表的名称。默认为 `embeddings`.
+- **内容_字段** (`str`）：存储内容的字段。默认为 `content`.
+- **元数据_字段** (`str`）：存储元数据的字段。默认为 `metadata`.
+- **向量_字段** (`str`）：存储向量的字段。默认为 `vector`.
+- **id_字段** (`str`）：存储 ID 的字段。默认为 `id`.
 
-- **use_vector_index** (`bool`): 启用向量索引（需要SingleStore 8.5+）。默认为`False`。
-- **vector_index_name** (`str`): 向量索引的名称。如果`use_vector_index`为`False`则忽略。
-- **vector_index_options** (`dict`): 向量索引的选项。如果`use_vector_index`为`False`则忽略。
-- **vector_size** (`int`): 向量大小。如果`use_vector_index`为`True`则为必需。
+- **使用_向量_索引** (`bool`)：启用向量索引（需要 SingleStore 8.5+）。默认为 `False`.
+- **向量_索引_名称** (`str`)：向量索引的名称。如果 `use_vector_index` is `False`.
+- **向量_索引_选项** (`dict`)：向量索引的选项。如果 `use_vector_index` is `False`.
+- **向量_大小** (`int`)：向量的大小。如果 `use_vector_index` is `True`.
 
-- **use_full_text_search** (`bool`): 在内容上启用全文索引。默认为`False`。
+- **使用_完整_文本_搜索** (`bool`)：启用内容全文索引。默认为 `False`.
 
 ### 连接池参数
 
-- **pool_size** (`int`): 连接池中活动连接的数量。默认为`5`。
-- **max_overflow** (`int`): 超过`pool_size`的最大连接数。默认为`10`。
-- **timeout** (`float`): 连接超时时间（秒）。默认为`30`。
+- **池_大小** (`int`)：池中活动连接数。默认为 `5`.
+- **最大_溢出** (`int`)：超出 `pool_size`的最大连接数。默认为 `10`.
+- **超时** (`float`)：连接超时时间（秒）。默认为 `30`.
 
 ### 数据库连接参数
 
-- **host** (`str`): 数据库的主机名、IP或URL。
-- **user** (`str`): 数据库用户名。
-- **password** (`str`): 数据库密码。
-- **port** (`int`): 数据库端口。默认为`3306`。
-- **database** (`str`): 数据库名称。
+- **主机** (`str`)：数据库的主机名、IP 或 URL。
+- **用户** (`str`)：数据库用户名。
+- **密码** (`str`)：数据库密码。
+- **端口** (`int`)：数据库端口。默认为 `3306`.
+- **数据库** (`str`)：数据库名称。
 
 ### 其他选项
 
-- **pure_python** (`bool`): 启用纯Python模式。
-- **local_infile** (`bool`): 允许本地文件上传。
-- **charset** (`str`): 字符串值的字符集。
-- **ssl_key**、**ssl_cert**、**ssl_ca** (`str`): SSL文件路径。
-- **ssl_disabled** (`bool`): 禁用SSL。
-- **ssl_verify_cert** (`bool`): 验证服务器的证书。
-- **ssl_verify_identity** (`bool`): 验证服务器的身份。
+- **纯_python** (`bool`)：启用纯 Python 模式。
+- **本地_输入文件** (`bool`)：允许本地文件上传。
+- **字符集** (`str`)：字符串值的字符集。
+- **ssl_密钥**, **ssl_证书**, **ssl_ca** (`str`)：SSL 文件路径。
+- **ssl_禁用** (`bool`)：禁用 SSL。
+- **ssl_验证_证书** (`bool`)：验证服务器证书。
+- **ssl_验证_身份** (`bool`): 验证服务器身份。
 - **autocommit** (`bool`): 启用自动提交。
-- **results_type** (`str`): 查询结果的结构（例如，`tuples`、`dicts`）。
-
-</fragment>
+- **results_type** (`str`): 查询结果结构（例如， `tuples`, `dicts`).
 
 ```python
 import os
@@ -91,11 +87,11 @@ vector_store = SingleStoreVectorStore(embeddings=embeddings)
 
 ## 管理向量存储
 
-`SingleStoreVectorStore` 假设文档的 ID 是一个整数。以下是管理向量存储的示例。
+该 `SingleStoreVectorStore` 假设文档的ID是一个整数。以下是管理向量存储的示例。
 
 ### 向向量存储添加项目
 
-您可以按如下方式向向量存储添加文档：
+您可以按以下方式向向量存储添加文档：
 
 ```python
 pip install -qU langchain-core
@@ -162,7 +158,7 @@ updated_document = Document(
 vector_store.update_documents(document_id="1", document=updated_document)
 ```
 
-### 从向量存储中删除项目
+### 从向量存储删除项目
 
 要从向量存储中删除文档，请使用以下代码：
 
@@ -172,11 +168,11 @@ vector_store.delete(ids=["3"])
 
 ## 查询向量存储
 
-一旦您创建了向量存储并添加了相关文档，您很可能希望在链或代理运行时对其进行查询。
+一旦您的向量存储已创建并且相关文档已添加，您很可能希望在运行链或代理时对其进行查询。
 
 ### 直接查询
 
-执行简单的相似性搜索可以按如下方式进行：
+执行简单的相似性搜索可以按如下方式完成：
 
 ```python
 results = vector_store.similarity_search(query="trees in the snow", k=1)
@@ -184,9 +180,9 @@ for doc in results:
     print(f"* {doc.page_content} [{doc.metadata}]")
 ```
 
-如果你想执行相似性搜索并接收相应的分数，可以运行：
+如果您想执行相似性搜索并接收相应的分数，可以运行：
 
-- TODO: 编辑并运行代码单元以生成输出
+- 待办事项：编辑并运行代码单元以生成输出
 
 ```python
 results = vector_store.similarity_search_with_score(query="trees in the snow", k=1)
@@ -196,13 +192,13 @@ for doc, score in results:
 
 ### 元数据过滤
 
-SingleStoreDB 通过支持用户基于元数据字段进行预过滤来增强和优化搜索结果，从而提升了搜索能力。此功能使开发者和数据分析师能够微调查询，确保搜索结果精确匹配其需求。通过使用特定的元数据属性过滤搜索结果，用户可以缩小查询范围，仅关注相关的数据子集。
+SingleStoreDB通过基于元数据字段进行预过滤，使用户能够增强和优化搜索结果，从而提升搜索能力。这项功能使开发者和数据分析师能够微调查询，确保搜索结果精确符合其需求。通过使用特定元数据属性过滤搜索结果，用户可以缩小查询范围，仅关注相关的数据子集。
 
-SingleStoreVectorStore 支持使用强大查询操作符的简单和高级元数据过滤。
+SingleStoreVectorStore支持使用强大的查询运算符进行简单和高级的元数据过滤。
 
 #### 简单元数据过滤
 
-使用简单的字典式语法进行精确匹配并保持向后兼容：
+使用简单的字典式语法进行精确匹配和向后兼容：
 
 ```python
 # Filter by a single field
@@ -218,9 +214,9 @@ docs = vector_store.similarity_search(
 )
 ```
 
-#### 高级元数据筛选
+#### 高级元数据过滤
 
-使用高级筛选器，结合 `$eq`、`$gt`、`$in`、`$and`、`$or` 等运算符进行复杂查询：
+使用带有运算符的高级过滤器，例如 `$eq`, `$gt`, `$in`, `$and`, `$or`，以及更多用于复杂查询：
 
 **比较运算符：**
 
@@ -319,11 +315,11 @@ results = vector_store.similarity_search(
 
 ### 向量索引
 
-通过利用 [ANN 向量索引](https://docs.singlestore.com/cloud/reference/sql-reference/vector-functions/vector-indexing/)，使用 SingleStore DB 8.5 或更高版本提升搜索效率。通过在创建向量存储对象时设置 `use_vector_index=True`，可以激活此功能。此外，如果您的向量维度与默认的 OpenAI 嵌入大小 1536 不同，请务必相应地指定 `vector_size` 参数。
+通过利用 [ANN向量索引](https://docs.singlestore.com/cloud/reference/sql-reference/vector-functions/vector-indexing/)来提升您的搜索效率，适用于SingleStore DB 8.5或更高版本。通过在创建向量存储对象时设置 `use_vector_index=True` ，您可以激活此功能。此外，如果您的向量维度与默认的OpenAI嵌入大小1536不同，请确保相应地指定 `vector_size` 参数。
 
 ### 搜索策略
 
-SingleStoreDB 提供了多种搜索策略，每种策略都经过精心设计，以满足特定用例和用户偏好。默认的 `VECTOR_ONLY` 策略利用 `dot_product` 或 `euclidean_distance` 等向量运算直接在向量之间计算相似度分数，而 `TEXT_ONLY` 采用基于 Lucene 的全文搜索，对以文本为中心的应用特别有利。对于寻求平衡方法的用户，`FILTER_BY_TEXT` 首先根据文本相似度优化结果，然后再进行向量比较，而 `FILTER_BY_VECTOR` 则优先考虑向量相似度，在评估文本相似度之前过滤结果以获得最佳匹配。值得注意的是，`FILTER_BY_TEXT` 和 `FILTER_BY_VECTOR` 都需要全文索引才能运行。此外，`WEIGHTED_SUM` 是一种复杂的策略，通过加权向量和文本相似度来计算最终相似度分数，但仅使用 `dot_product` 距离计算，同样需要全文索引。这些多功能的策略使用户能够根据其独特需求微调搜索，促进高效和精确的数据检索与分析。此外，SingleStoreDB 的混合方法（如 `FILTER_BY_TEXT`、`FILTER_BY_VECTOR` 和 `WEIGHTED_SUM` 策略）无缝结合了向量和基于文本的搜索，以最大限度地提高效率和准确性，确保用户能够充分利用该平台的功能来应对各种应用场景。
+SingleStoreDB提供了多种搜索策略，每种都经过精心设计以满足特定的用例和用户偏好。默认的 `VECTOR_ONLY` 策略利用向量操作（如 `dot_product` or `euclidean_distance` ）在向量之间直接计算相似度分数，而 `TEXT_ONLY` 采用基于Lucene的全文本搜索，对以文本为中心的应用特别有利。对于寻求平衡方案的用户， `FILTER_BY_TEXT` 首先根据文本相似性优化结果，然后进行向量比较，而 `FILTER_BY_VECTOR` 优先考虑向量相似性，在评估文本相似性之前先筛选结果以获得最佳匹配。值得注意的是，两者 `FILTER_BY_TEXT` 和 `FILTER_BY_VECTOR` 都需要全文索引才能运行。此外， `WEIGHTED_SUM` 作为一种复杂的策略应运而生，通过权衡向量相似性和文本相似性来计算最终相似度分数，但仅使用点积_距离计算，并且也需要全文索引。这些多功能的策略使用户能够根据其独特需求微调搜索，促进高效和精确的数据检索与分析。此外，SingleStoreDB的混合方法，以 `FILTER_BY_TEXT`, `FILTER_BY_VECTOR`和 `WEIGHTED_SUM` 策略为代表，无缝融合向量和基于文本的搜索，以最大化效率和准确性，确保用户能够充分利用平台的强大功能处理各种应用场景。
 
 ```python
 from langchain_singlestore.vectorstores import DistanceStrategy
@@ -377,7 +373,7 @@ weightedSumResults = docsearch.similarity_search(
 print(weightedSumResults[0].page_content)
 ```
 
-### 通过转换为检索器进行查询
+### 通过转换实现检索器功能
 
 您还可以将向量存储转换为检索器，以便在链中更方便地使用。
 
@@ -386,11 +382,11 @@ retriever = vector_store.as_retriever(search_kwargs={"k": 1})
 retriever.invoke("trees in the snow")
 ```
 
-## 多模态示例：利用 CLIP 和 OpenClip 嵌入
+## 多模态示例：利用CLIP和OpenClip嵌入
 
-在多模态数据分析领域，集成图像和文本等不同信息类型已变得越来越重要。促进这种集成的一个强大工具是 [CLIP](https://openai.com/research/clip)，这是一个前沿模型，能够将图像和文本嵌入到共享的语义空间中。通过这种方式，CLIP 使得通过相似性搜索检索不同模态的相关内容成为可能。
+在多模态数据分析领域，集成图像和文本等不同信息类型变得越来越重要。促进这种集成的一个强大工具是 [CLIP](https://openai.com/research/clip)，这是一个尖端的模型，能够将图像和文本嵌入到共享的语义空间中。通过这样做，CLIP能够通过相似性搜索检索跨不同模态的相关内容。
 
-为了说明这一点，让我们考虑一个应用程序场景，在该场景中我们旨在有效分析多模态数据。在这个示例中，我们利用 OpenClip 多模态嵌入的功能，它利用了 CLIP 的框架。通过 OpenClip，我们可以将文本描述与相应的图像无缝嵌入，实现全面的分析和检索任务。无论是根据文本查询识别视觉上相似的图像，还是查找与特定视觉内容相关的文本段落，OpenClip 都能让用户以卓越的效率和准确性从多模态数据中探索和提取洞察。
+例如，让我们考虑一个应用场景，我们的目标是有效分析多模态数据。在这个例子中，我们利用OpenClip多模态嵌入的功能，它利用了CLIP的框架。通过OpenClip，我们可以将文本描述与相应的图像无缝嵌入，从而实现全面的分析和检索任务。无论是根据文本查询识别视觉相似的图像，还是查找与特定视觉内容相关的文本段落，OpenClip都能让用户以卓越的效率和准确性探索多模态数据并从中提取洞察。
 
 ```python
 pip install -U langchain openai lanchain-singlestore langchain-experimental
@@ -422,16 +418,16 @@ image_uris = sorted(
 docsearch.add_images(uris=image_uris)
 ```
 
-## 用于检索增强生成的用法
+## 用于检索增强生成的示例
 
-如需了解如何使用此向量存储进行检索增强生成 (RAG)，请参阅以下部分：
+有关如何使用此向量存储进行检索增强生成（RAG）的指南，请参阅以下部分：
 
 - [检索文档](/oss/langchain/retrieval)
-- [使用 LangChain 构建 RAG 应用](/oss/langchain/rag)
-- [代理式 RAG](/oss/langgraph/agentic-rag)
+- [使用LangChain构建RAG应用](/oss/langchain/rag)
+- [代理式RAG](/oss/langgraph/agentic-rag)
 
 ---
 
-## API 参考
+## API参考
 
-有关 SingleStore Document Loader 所有功能配置的详细文档，请访问 GitHub 页面：[https://github.com/singlestore-labs/langchain-singlestore/](https://github.com/singlestore-labs/langchain-singlestore/)
+有关所有SingleStore文档加载器功能和配置的详细文档，请访问github页面： [https://github.com/singlestore-labs/langchain-singlestore/](https://github.com/singlestore-labs/langchain-singlestore/)

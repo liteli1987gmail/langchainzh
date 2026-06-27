@@ -1,59 +1,59 @@
 ---
 title: 解释器
-description: 在深度智能体内部运行轻量级代码，用于组合工具、编排子智能体和转换结构化数据
+description: 在 Deep Agents 内部运行轻量级代码，以组合工具、协调子代理并转换结构化数据
 tag: "Beta"
 ---
 
-解释器为智能体提供了一个可编程的工作空间，在其中可以探索数据、协调工具调用，并将中间工作保持在模型上下文之外。智能体编写代码来表达其意图，然后一个**内存中**的运行时执行该代码并返回相关结果。
+解释器为代理提供了一个可编程的工作空间，让他们可以探索数据、协调工具调用，并将中间工作保持在模型上下文之外。代理编写代码来表达其意图，然后 **in-memory** 运行时执行该代码并返回相关结果。
 
-[沙箱](/oss/deepagents/sandboxes)是一种代码优先的方式，用于对环境进行操作（如运行命令、安装依赖和编辑文件），而解释器是一种代码优先的方式，用于在智能体循环内部进行操作：组合工具、保持状态，以及决定哪些信息应返回给模型。
+其中 [沙箱](/oss/deepagents/sandboxes) 是一种以代码优先的方式对环境进行操作（如运行命令、安装依赖和编辑文件），而解释器是一种以代码优先的方式在代理循环内部进行操作：组合工具、保存状态，以及决定哪些信息应该返回给模型。
 
 <Warning>
-    解释器处于[**测试阶段**](/oss/versioning)。API 和生命周期行为可能在版本之间发生变化。
+    解释器处于 [**测试阶段**](/oss/versioning)。API 和生命周期行为可能在不同版本之间发生变化。
 </Warning>
 
 :::python
 <Note>
-    解释器需要 `langchain-quickjs>=0.1.0` 和 Python `>=3.11`。
+    解释器需要 `langchain-quickjs>=0.1.0` 和 Python `>=3.11`.
 </Note>
 :::
 
-## 为什么使用解释器？
+## 为什么要使用解释器？
 
-大多数智能体工作交替进行模型推理和工具调用。模型可以在一次轮次中触发多个工具调用，但该批次在发出时就已固定。没有任何东西可以循环、根据结果分支、重试失败或将一个调用的输出反馈到下一个调用中，除非再进行一次模型轮次，而且每个结果都会返回到模型的上下文。模型还决定发出多少调用，因此要求它分派跨数百个项目的任务是不可靠的，而且它倾向于覆盖样本而不是每一个。
+大多数代理工作交替进行模型推理和工具调用。模型可以一次触发多个工具调用，但该批处理在发出时是固定的。没有另一次模型轮次，什么都无法循环、无法根据结果分支、无法重试失败，也无法将一次调用的输出反馈到下一次调用，每个结果都返回到模型的上下文。模型还决定发出多少调用，因此要求它跨数百个项目分派工作是不可靠的，而且它倾向于覆盖一个样本而不是每一个。
 
-解释器为这类工作提供了一个运行时。每次迭代都会运行一个循环，工具从代码中调用，中间值保留在变量中，只有紧凑的结果返回给模型。
+解释器为代理提供运行时来完成这项工作。循环在每次迭代中运行，工具从代码中调用，中间值保存在变量中，只有紧凑的结果返回给模型。
 
 <CardGroup cols={2}>
-  <Card title="编程式工具调用 (PTC)" icon="tool" href="#programmatic-tool-calling-ptc">
-    从解释器代码中调用选定的工具，包括循环、重试、分支和并行批次。
+  <Card title="Programmatic tool calling (PTC)" icon="tool" href="#programmatic-tool-calling-ptc">
+    从解释器代码中调用选定的工具，包括循环、重试、分支和并行批处理。
   </Card>
-  <Card title="编程式子智能体" icon="arrows-split" href="/oss/deepagents/programmatic-subagents">
-    从代码中分派子智能体，用于大规模输入的扇出、验证和递归工作流。
+  <Card title="Programmatic subagents" icon="arrows-split" href="/oss/deepagents/programmatic-subagents">
+    从代码中分派子代理，用于大型输入的扇出、验证和递归工作流。
   </Card>
-  <Card title="有状态工作" icon="database" href="#how-interpreters-work">
-    将中间值保持在运行时状态中，而不会使模型上下文过载。
+  <Card title="Stateful work" icon="database" href="#how-interpreters-work">
+    将中间值保存在运行时状态中，避免使模型上下文过载。
   </Card>
-  <Card title="确定性转换" icon="code" href="#how-interpreters-work">
-    在代码中对结构化数据进行排序、分组、解析、验证、评分、聚合和探索。
+  <Card title="Deterministic transforms" icon="code" href="#how-interpreters-work">
+    在代码中对结构化数据进行排序、分组、解析、验证、打分、聚合和探索。
   </Card>
 </CardGroup>
 
-## 选择模式
+## 选择一种模式
 
-在智能体循环内部使用解释器进行代码操作：组合工具、保持状态以及控制返回给模型的内容。使用[沙箱](/oss/deepagents/sandboxes)对环境进行代码操作：shell 命令、包安装、测试、文件系统编辑和操作系统级执行。
+在代理循环内部使用解释器进行代码操作：组合工具、保存状态，以及控制返回给模型的内容。使用 [沙箱](/oss/deepagents/sandboxes) 对环境进行代码操作：shell 命令、包安装、测试、文件系统编辑和操作系统级执行。
 
 | 需求 | 使用 |
 | --- | --- |
-| 一到两个简单的外部调用 | 常规工具调用 |
-| 一个循环、分支、重试或聚合结果的小程序 | 解释器 |
-| 多个应从代码运行的选定工具调用 | 带[编程式工具调用 (PTC)](#programmatic-tool-calling-ptc)的解释器 |
-| 多个独立的工作单元、多个视角，或对大规模输入的递归分析 | 带[编程式子智能体](/oss/deepagents/programmatic-subagents)的解释器 |
-| Shell 命令、包安装、测试或完整的操作系统文件系统访问 | [沙箱](/oss/deepagents/sandboxes) |
+| 一到两个简单的外部调用 | 普通工具调用 |
+| 循环、分支、重试或聚合结果的小型程序 | 解释器 |
+| 多个应该从代码运行的选定工具调用 | 带 [程序化工具调用 (PTC) 的](#programmatic-tool-calling-ptc) |
+| 多个独立的工作单元、多个视角，或对大型输入的递归分析 | 带 [程序化子代理的](/oss/deepagents/programmatic-subagents) |
+| Shell 命令、包安装、测试，或完整的操作系统文件系统访问 | [沙箱](/oss/deepagents/sandboxes) |
 
 ## 快速入门
 
-安装 QuickJS 中间件包，然后使用 `create_deep_agent` 上的 `middleware` 参数传递解释器中间件。
+安装 QuickJS 中间件包，然后使用 `middleware` 参数在 `create_deep_agent`.
 
 :::python
 <CodeGroup>
@@ -64,8 +64,6 @@ pip install -U "deepagents[quickjs]"
 ```bash uv
 uv add "deepagents[quickjs]"
 ```
-<CodeGroup>
-
 </CodeGroup>
 
 ```python
@@ -107,9 +105,9 @@ const agent = createDeepAgent({
 
 ## 解释器的工作原理
 
-中间件为代理添加了一个 `eval` 工具。当需要时，代理会编写 JavaScript 并调用 `eval`；您不需要直接调用解释器。该工具在持久化上下文中运行代码，捕获 `console.log`，并返回最后一个表达式的结果。
+中间件添加了一个 `eval` 工具给代理。在需要时，代理编写 JavaScript 并调用 `eval`; 您不直接调用解释器。该工具在持久化上下文中运行代码，捕获 `console.log`，并返回最后一个表达式的结果。
 
-代理可以编写如下代码：
+代理可以像这样编写代码：
 
 ```javascript
 const rows = [
@@ -128,25 +126,25 @@ totals;
 ```
 
 :::python
-默认情况下，解释器状态也会通过在每次代理运行后对工作状态进行快照，并在下一次运行前恢复，从而在同一线程的不同轮次之间保持持久化。
+默认情况下，解释器状态也会通过在每次代理运行后对工作状态进行快照，并在下次运行前恢复它，从而在同一线程的多次交互中保持状态。
 :::
 
-代码在 [**QuickJS**](https://github.com/quickjs-ng/quickjs) 上运行，这是一个轻量级的 JavaScript 运行时。默认情况下，解释器代码无法访问主机文件系统、网络、shell、包管理器或时钟。它只能计算、保持状态和写入 `console.log`，仅此而已。
+代码在 [**QuickJS**](https://github.com/quickjs-ng/quickjs)上运行，这是一个轻量级的 JavaScript 运行时。默认情况下，解释器代码无法访问宿主机的文件系统、网络、shell、包管理器或时钟。它只能计算、保持状态并写入 `console.log`，仅此而已。
 
-两个明确的桥接机制扩展了这一范围：
+两个显式桥接扩展了这一范围：
 
-- **工具**，通过[编程工具调用（PTC）](#programmatic-tool-calling-ptc)。将允许列表中的工具作为 async 函数公开在 `tools` 命名空间下。这些可以是代理自己的工具，也可以是你定义并传入的独立工具。
-- **子代理**，通过[编程子代理](/oss/deepagents/programmatic-subagents)。从代码中调度已配置的子代理，并在纯 JavaScript 中编排它们。
+- **工具**，通过 [程序化工具调用 (PTC)](#programmatic-tool-calling-ptc)。将允许列表中的工具作为异步函数公开在 `tools` 命名空间下。这些可以是代理自己的工具，也可以是您定义并传入的独立工具。
+- **子代理**，通过 [程序化子代理](/oss/deepagents/programmatic-subagents)。从代码中调度已配置的子代理，并用纯 JavaScript 编排它们。
 
-编程工具调用默认关闭，你需要[启用它](#enable-ptc)。子代理调度在代理有子代理时默认开启，你可以将其关闭。除非你显式暴露，否则 QuickJS 边界不会有任何其他东西穿越。
+程序化工具调用默认关闭，直到您 [启用它](#enable-ptc)。只要代理拥有子代理，子代理调度默认开启，您也可以将其关闭。除非您显式暴露，否则其他任何东西都无法跨越 QuickJS 边界。
 
-## 编程工具调用（PTC）
+## 程序化工具调用 (PTC)
 
-编程工具调用（PTC）将选定的代理工具公开在解释器内的全局 `tools` 命名空间下。与其让模型发出一工具调用、等待结果、然后决定下一步调用，代理可以编写在循环、分支、重试或并行批次中调用工具的代码。
+程序化工具调用 (PTC) 在解释器内部的全局 `tools` 命名空间下暴露选定的代理工具。代理可以编写代码在循环、分支、重试或并行批处理中调用工具，而无需模型一次只发出一个工具调用并等待结果后决定下一步操作。
 
-这有助于当前面步骤的中间结果只是下一步的输入时：解释器在返回任何内容给模型之前过滤或聚合它们，从而保持多步骤工作流的 token 高效性。它与模型无关，通过中间件实现，而非提供商特定的工具调用 API。
+这在中间结果仅作为下一步输入的情况下很有帮助：解释器在返回模型前会过滤或聚合这些结果，保持多步骤工作流程的令牌效率。它是模型无关的，由中间件实现，而非特定提供商提供的工具调用 API。
 
-中间件将每个在允许列表中的工具公开为 `tools` 下的 async 函数。代理使用 `await` 调用它，在代码中处理结果，而模型只看到最终的解释器输出，而非每个中间值。工具名称会被转换为驼峰命名，而输入对象仍遵循工具的 schema，因此名为 `web_search` 的工具变为 `tools.webSearch(...)`：
+中间件在 `tools`下将每个允许列表中的工具作为异步函数公开。代理通过 `await`调用它，在代码中处理结果，模型只看到最终的解释器输出，而非每个中间值。工具名称会被转换为驼峰命名，而输入对象仍然遵循工具的模式，因此名为 `web_search` 的工具会变成 `tools.webSearch(...)`:
 
 ```typescript
 const result: string = await tools.webSearch({
@@ -156,7 +154,7 @@ const result: string = await tools.webSearch({
 
 ### 启用 PTC
 
-使用显式白名单启用 PTC：
+使用明确的允许列表启用 PTC：
 
 :::python
 ```python
@@ -182,7 +180,7 @@ const agent = createDeepAgent({
 ```
 :::
 
-启用 PTC 后，智能体可以从解释器代码中调用白名单工具。此示例并行搜索多个主题并整合结果，然后返回给模型：
+启用 PTC 后，代理可以从解释器代码中调用允许列表中的工具。此示例并行搜索多个主题，并在返回模型前合并结果：
 
 ```javascript
 const topics = ["retrieval", "memory", "evaluation"];
@@ -198,50 +196,48 @@ results.join("\n\n");
 
 :::python
 <Warning>
-    PTC 调用目前通过解释器桥接执行，不经过常规工具调用路径。因此，`interrupt_on` 审批工作流不会在每个 PTC 调用的工具中被强制执行。
+    PTC 调用目前通过解释器桥接执行，不经过正常的工具调用路径。因此， `interrupt_on` 不会对每个 PTC 调用的工具强制执行审批工作流程。
 </Warning>
 :::
 :::js
 <Warning>
-    PTC 调用目前通过解释器桥接执行，不经过常规工具调用路径。因此，`interruptOn` 审批工作流不会在每个 PTC 调用的工具中被强制执行。
+    PTC 调用目前通过解释器桥接执行，不经过正常的工具调用路径。因此， `interruptOn` 不会对每个 PTC 调用的工具强制执行审批工作流程。
 </Warning>
 :::
 
-## 编程式子代理
+## 程序化子代理
 
-编程式子代理允许解释器使用内置的 `task()` 全局函数从代码中调度配置好的[子代理](/oss/deepagents/subagents)。跨越多个独立单元的任务（如审查目录中的每个文件或分类一批工单）可以变成一个将工作向外展开并综合结果的工作循环。
+程序化子代理让解释器调度已配置的 [子代理](/oss/deepagents/subagents) 使用内置方式通过代码 `task()` 全局。一个跨多个独立单元的任务，例如审查目录中的每个文件或分类一批工单，变成一个将工作分散出去并综合结果的循环。
 
 使用编程式子代理的场景：
 
-- **扇出并综合**：跨多个项目并行运行同类工作，然后合并结果。
-- **验证**：将发现结果发送给独立的验证子代理，只保留已确认的结果。
-- **递归工作流**：在工作集中维护解释器变量，选择切片，调用子代理，并完善结果。
+- **扇出与综合**：并行对多个项目运行相同类型的工作，然后合并结果。
+- **验证**：将发现结果发送给独立的验证器子代理，只保留已确认的结果。
+- **递归工作流**：在解释器变量中维护工作集，选择切片，调用子代理，并精炼结果。
 
-有关配置、示例、编排模式和安全注意事项，请参阅[编程式子代理](/oss/deepagents/programmatic-subagents)。
+配置、示例、编排模式和安全注意事项，请参阅 [编程式子代理](/oss/deepagents/programmatic-subagents).
 
 :::python
 ## 持久化
 
-`CodeInterpreterMiddleware` 默认在每次代理运行后对解释器状态进行快照，并在下次运行前恢复。快照是解释器内存中 JavaScript 状态的序列化副本，包括代理运行代码完成时存在的全局变量、变量、函数和导入的模块。
+`CodeInterpreterMiddleware` 在每次代理运行后对解释器状态进行快照，并在下次运行前默认恢复。快照是解释器内存中 JavaScript 状态的序列化副本，包括全局变量、变量、函数以及代理完成代码运行时存在的导入模块。
 
 在对话轮次之间，生命周期如下：
 
-1. 轮次开始，`CodeInterpreterMiddleware` 为该线程恢复最新的解释器快照。
+1. 一轮开始， `CodeInterpreterMiddleware` 恢复该线程的最新解释器快照。
 2. 代理调用 `eval`，代码可以读取或修改解释器变量。
-3. 代理运行完成，中间件将更新的解释器状态快照到图状态中。
-4. 下一轮次从恢复的解释器状态开始，而非空运行时。
+3. 代理运行结束，中间件将更新后的解释器状态快照保存到图状态中。
+4. 下一轮从恢复的解释器状态开始，而不是从空的运行时开始。
 
-在单个代理运行内，重复的 `eval` 调用使用活动的解释器上下文对象。中间件不会在这些调用之间进行快照和恢复；它在运行完成时对上下文进行快照，以便在后续轮次或检查点重放时恢复。
+在单个代理运行中，重复 `eval` 调用使用活动的解释器上下文对象。中间件不会在这些调用之间进行快照和恢复；它会在运行完成时对上下文进行快照，以便在后续轮次或检查点回放时恢复。
 
 <Note>
-    在对话轮次之间，快照仅保留可合理序列化的值。将其用于数据，而非活动运行时对象。函数、类和其他不可序列化的值将作为不可访问的伪像恢复。如果解释器代码在恢复后访问其中一个，eval 工具将抛出类似 `Value for 'fn' was not restored because it is not serializable (type: function).` 的错误。
+    在对话轮次之间，快照仅保留可以合理序列化的值。将它们用于数据，而不是用于活动运行时对象。函数、类和其他不可序列化的值会作为不可访问的工件恢复。如果解释器代码在恢复后访问其中一个，eval 工具会抛出类似 `Value for 'fn' was not restored because it is not serializable (type: function).`
 </Note>
 
-快照保留的是解释器内存，而非外部世界的影响。如果解释器代码通过 PTC 调用工具，恢复之前的解释器快照不会撤销该工具调用的副作用。它仅恢复记录或处理结果的解释器变量。
+快照保留解释器内存，而不是外部世界的影响。如果解释器代码通过 PTC 调用工具，恢复之前的解释器快照不会撤销该工具调用的副作用。它只恢复记录或处理结果的解释器变量。
 
-当图使用检查指针时，这会与 [LangGraph 时间旅行](/oss/langgraph/use-time-travel) 配合使用。恢复图检查点可以恢复存储在图状态中的解释器快照，因此你可以在调试或重放时返回到早期的代理上下文和解释器状态。
-
-</fragment>
+当图使用检查点器时，这与 [LangGraph 时间旅行](/oss/langgraph/use-time-travel)配对使用。恢复图检查点可以恢复存储在图状态中的解释器快照，因此您可以在调试或回放时返回到更早的代理上下文和解释器状态。
 
 ```python
 from deepagents import create_deep_agent
@@ -261,47 +257,47 @@ agent = create_deep_agent(
 )
 ```
 
-你可以使用 `snapshot_between_turns=False` 来禁用跨轮次快照。
+您可以使用以下方式禁用跨轮次快照 `snapshot_between_turns=False`.
 :::
 
-## 安全性
+## 安全
 
-解释器使用 QuickJS 以严格的默认隔离方式运行不受信任的 JavaScript。请将其视为一个作用域化的解释器运行时，而不是完整的生产沙箱后端。
+解释器使用 QuickJS 运行不受信任的 JavaScript，并具有严格的默认隔离。将此视为作用域解释器运行时，而不是完整的生产沙箱后端。
 
-你通过 PTC 暴露的每个工具都是外部能力，解释器代码可以使用它。请将 PTC 允许列表视为权限边界：仅暴露代理所需的工具，避免桥接可以访问敏感系统、花费资金、修改数据或调用不受限制网络的广泛工具，除非该行为是有意为之。
+您通过 PTC 暴露的每个工具都是解释器代码可以使用的外部能力。将 PTC 允许列表视为权限边界：只暴露代理所需的工具，避免桥接可以访问敏感系统、花费资金、修改数据或调用无限制网络的大型工具，除非该行为是有意的。
 
 :::python
-| 能力 | 默认可用 | 如何暴露 |
+| 功能 | 默认可用 | 如何暴露 |
 | --- | --- | --- |
 | JavaScript 执行 | 是 | 添加解释器中间件 |
-| 顶层 `await` | 是 | 在解释器代码中使用 promises |
-| `console.log` 捕获 | 是 | 使用 `capture_console=False` 禁用 |
-| 代理工具 | 否 | 通过 PTC 允许列表添加 |
-| 文件系统访问 | 否 | 通过 PTC 允许列表添加[内置文件系统工具](/oss/deepagents/harness#virtual-filesystem-access) |
+| 顶级 `await` | 是 | 在解释器代码中使用 Promise |
+| `console.log` 捕获 | 是 | 禁用方式 `capture_console=False` |
+| Agent 工具 | 否 | 添加 PTC 白名单 |
+| 文件系统访问 | 否 | 添加 [内置文件系统工具](/oss/deepagents/harness#virtual-filesystem-access) 通过 PTC 白名单 |
 | 网络访问 | 否 | 通过 PTC 暴露特定网络工具 |
-| 挂钟时间或日期时间访问 | 否 | 如有需要，暴露明确的时间工具 |
-| Shell 命令、包安装、测试、操作系统级执行 | 否 | 使用[沙箱后端](/oss/deepagents/sandboxes) |
+| 挂钟时间或日期时间访问 | 否 | 需要时暴露显式时间工具 |
+| Shell 命令、包安装、测试、操作系统级执行 | 否 | 使用 [沙箱后端](/oss/deepagents/sandboxes) |
 :::
 :::js
 | 能力 | 默认可用 | 如何暴露 |
 | --- | --- | --- |
 | JavaScript 执行 | 是 | 添加解释器中间件 |
-| 顶层 `await` | 是 | 在解释器代码中使用 promises |
-| `console.log` 捕获 | 是 | 使用 `captureConsole: false` 禁用 |
-| 代理工具 | 否 | 通过 PTC 允许列表添加 |
-| 文件系统访问 | 否 | 通过 PTC 允许列表添加[内置文件系统工具](/oss/deepagents/harness#virtual-filesystem-access) |
+| 顶层 `await` | 是 | 在解释器代码中使用 Promise |
+| `console.log` 捕获 | 是 | 禁用方式 `captureConsole: false` |
+| Agent 工具 | 否 | 添加 PTC 白名单 |
+| 文件系统访问 | 否 | 添加 [内置文件系统工具](/oss/deepagents/harness#virtual-filesystem-access) 通过 PTC 白名单 |
 | 网络访问 | 否 | 通过 PTC 暴露特定网络工具 |
-| 挂钟时间或日期时间访问 | 否 | 如有需要，暴露明确的时间工具 |
-| Shell 命令、包安装、测试、操作系统级执行 | 否 | 使用[沙箱后端](/oss/deepagents/sandboxes) |
+| 挂钟时间或日期时间访问 | 否 | 需要时暴露显式时间工具 |
+| Shell 命令、包安装、测试、操作系统级执行 | 否 | 使用 [沙箱后端](/oss/deepagents/sandboxes) |
 :::
 
 :::python
 <Note>
     **代码执行的工作原理**
 
-    解释器代码在嵌入的 QuickJS 上下文中运行，而不是在单独的 VM 或进程中。在 Python 中，此运行时由 [`quickjs-rs`](https://github.com/langchain-ai/quickjs-rs) 提供，其[安全指南](https://github.com/langchain-ai/quickjs-rs#security)中记录了同一进程的执行边界。
+    解释器代码在嵌入式 QuickJS 上下文中运行，而非单独的 VM 或进程。在 Python 中，此运行时由 [`quickjs-rs`](https://github.com/langchain-ai/quickjs-rs)提供，其在 [安全指南](https://github.com/langchain-ai/quickjs-rs#security).
 
-    将解释器视为按能力作用域的执行层，而不是主机内存隔离边界。对于不受信任或半受信任的代码，请在隔离的工作进程或容器中运行代理，并保持 PTC 允许列表范围狭窄。
+    将解释器视为能力作用域的执行层，而非主机内存隔离边界。对于不受信任或半信任的代码，请在隔离的工作进程或容器中运行代理，并保持 PTC 白名单范围较窄。
 </Note>
 :::
 
@@ -312,31 +308,31 @@ agent = create_deep_agent(
 
 | Kwarg | 默认值 | 用途 |
 | --- | --- | --- |
-| `memory_limit` | `64 * 1024 * 1024` <br/>(64 MB) | QuickJS 堆内存限制（字节）。 |
-| `timeout` | `5.0` | 每次求值的超时时间（秒）。 |
-| `max_ptc_calls` | `256` | 每次求值的最大 `tools.*` 调用次数。仅在受信任环境中使用 `None`。 |
-| `tool_name` | `"eval"` | 暴露给模型的解释器工具名称。 |
-| `max_result_chars` | `4000` | 从结果和 stdout 块返回的最大字符数。 |
-| `capture_console` | `True` | 是否捕获 `console.log`、`console.warn` 和 `console.error` 输出。 |
-| `subagents` | `True` | 暴露内置的 `task()` 全局函数用于[编程式子代理](/oss/deepagents/programmatic-subagents)。设置为 `False` 以要求通过正常的 `task` 工具路径进行子代理调度。 |
-| `ptc` | `None` | PTC 允许列表：工具名称或 `BaseTool` 实例的列表。 |
-| `snapshot_between_turns` | `True` | 解释器状态快照是否跨代理轮次持久化。 |
-| `max_snapshot_bytes` | `None` | 最大序列化快照大小。默认为 `memory_limit`。 |
+| `memory_limit` | `64 * 1024 * 1024` <br/>(64 MB) | QuickJS 堆内存限制（字节）。|
+| `timeout` | `5.0` | 每次求值的超时时间（秒）。|
+| `max_ptc_calls` | `256` | 最大 `tools.*` 每次求值的调用次数。仅在 `None` 可信环境中使用。|
+| `tool_name` | `"eval"` | 暴露给模型的解释器工具名称。|
+| `max_result_chars` | `4000` | 从结果和 stdout 块返回的最大字符数。|
+| `capture_console` | `True` | 是否 `console.log`, `console.warn`和 `console.error` 输出被捕获。|
+| `subagents` | `True` | 暴露内置 `task()` 全局对象用于 [编程式子代理](/oss/deepagents/programmatic-subagents)。设为 `False` 以要求子代理通过正常的 `task` 工具路径进行调度。|
+| `ptc` | `None` | PTC 白名单：工具名称或 `BaseTool` 实例列表。|
+| `snapshot_between_turns` | `True` | 解释器状态快照是否在代理轮次之间保持。|
+| `max_snapshot_bytes` | `None` 最大序列化快照大小。默认为 `memory_limit`. |
 :::
 
 :::js
 `createCodeInterpreterMiddleware` 接受以下选项：
 
-| Option | 默认值 | 用途 |
+| 选项 | 默认值 | 用途 |
 | --- | --- | --- |
-| `ptc` | omitted | PTC 允许列表：工具名称或 `StructuredToolInterface` 实例的数组。 |
+| `ptc` | 省略时 | PTC 允许列表：工具名称或 `StructuredToolInterface` 实例数组。 |
 | `memoryLimitBytes` | `64 * 1024 * 1024` <br/>(64 MB) | QuickJS 内存限制（字节）。 |
-| `maxStackSizeBytes` | `320 * 1024` | QuickJS 堆栈大小限制（字节）。 |
-| `executionTimeoutMs` | `5000` | 每次求值的超时时间（毫秒）。负值将禁用超时。 |
-| `systemPrompt` | `null` | 覆盖内置的解释器系统提示。 |
-| `maxPtcCalls` | `256` | 每次求值的最大 `tools.*` 调用次数。仅在受信任环境中使用 `null`。 |
-| `maxResultChars` | `4000` | 从控制台输出、结果和错误字符串保留的最大字符数。 |
+| `maxStackSizeBytes` | `320 * 1024` | QuickJS 栈大小限制（字节）。 |
+| `executionTimeoutMs` | `5000` | 每次求值的超时时间（毫秒）。负值禁用超时。 |
+| `systemPrompt` | `null` | 覆盖内置解释器系统提示。 |
+| `maxPtcCalls` | `256` | 最大 `tools.*` 次调用每求值。仅在 `null` 可信环境中使用。 |
+| `maxResultChars` | `4000` | 保留自控制台输出、结果和错误字符串的最大字符数。 |
 | `toolName` | `"eval"` | 暴露给模型的解释器工具名称。 |
-| `captureConsole` | `true` | 是否捕获 `console.log`、`console.warn` 和 `console.error` 输出。 |
-| `subagents` | `true` | 暴露内置的 `task()` 全局函数用于[编程式子代理](/oss/deepagents/programmatic-subagents)。设置为 `false` 以要求通过正常的 `task` 工具路径进行子代理调度。 |
+| `captureConsole` | `true` | 是否 `console.log`, `console.warn`和 `console.error` 输出被捕获。 |
+| `subagents` | `true` | 暴露内置 `task()` 全局变量以 [实现编程式子代理](/oss/deepagents/programmatic-subagents)。设为 `false` 以要求子代理通过普通 `task` 工具路径进行调度。 |
 :::

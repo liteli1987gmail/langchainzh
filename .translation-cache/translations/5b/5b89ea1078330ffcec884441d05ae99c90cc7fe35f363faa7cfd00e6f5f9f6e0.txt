@@ -1,41 +1,39 @@
 ---
-title: Programmatically manage feedback & annotation queues
-sidebarTitle: Manage feedback & annotation queues
+title: 以编程方式管理反馈和标注队列
+sidebarTitle: 管理反馈和标注队列
 icon: "code"
 tag: "SDK"
 ---
 
-Use the LangSmith SDK to programmatically manage feedback configurations and [annotation queue](/langsmith/evaluation-concepts#human) rubrics. Define reusable feedback schemas at the organization level (such as accuracy scores or pass/fail judgments), then assign them to specific queues with custom instructions. This enables version control, automation across projects, and consistency—particularly useful for CI/CD pipelines or replicating evaluation setups across environments.
+使用 LangSmith SDK 管理反馈配置和 [标注队列](/langsmith/evaluation-concepts#human) rubrics programmatically. Define reusable feedback schemas at the organization level (like accuracy scores or pass/fail judgments), then assign them to specific queues with custom instructions. This enables version control, automation across projects, and consistency—particularly useful for CI/CD pipelines or replicating evaluation setups across environments.
 
 <Callout icon="code">
-This guide uses the Python and TypeScript SDKs. For installation and setup, refer to the [Python SDK documentation](https://reference.langchain.com/python/langsmith) and [TypeScript SDK documentation](https://reference.langchain.com/javascript/modules/langsmith.html).
+本指南使用 Python 和 TypeScript SDK。如需安装和设置，请参阅 [Python SDK 文档](https://reference.langchain.com/python/langsmith) 和 [TypeScript SDK 文档](https://reference.langchain.com/javascript/modules/langsmith.html).
 </Callout>
 
 <Note>
-To write free-form acceptance criteria on individual runs while reviewing in the [LangSmith UI](https://smith.langchain.com), refer to [Use assertions](/langsmith/assertions).
+如需在 [LangSmith UI](https://smith.langchain.com)中审查时在单个运行上编写自由格式的验收标准，请参阅 [使用断言](/langsmith/assertions).
 </Note>
 
-## Feedback layers
+## 反馈层
 
-LangSmith uses a three-layer architecture for structured human feedback:
+LangSmith 采用三层架构来处理结构化人工反馈：
 
-1. **Feedback configs**: Organization-wide definitions of feedback keys that establish the schema for evaluation metrics. For example, you might define "accuracy" as a continuous 0–1 score or "correctness" as a pass/fail categorical choice. These configs are reusable across all annotation queues in your organization.
-1. **Annotation queue rubric items**: Queue-specific assignments that determine which feedback configs annotators must fill out when reviewing [runs](/langsmith/observability-concepts#runs) in a particular queue. Each rubric item can include custom descriptions, guidance for specific score values, and whether the feedback is required or optional.
-1. **Feedback**: Individual scores and values that annotators submit on specific [runs](/langsmith/observability-concepts#runs). This is the actual evaluation data collected using the schemas you've defined. Learn more about [feedback in LangSmith](/langsmith/observability-concepts#feedback).
+1. **反馈配置**: Organization-wide definitions of feedback keys that establish the schema for evaluation metrics. For example, you might define "accuracy" as a continuous 0–1 score or "correctness" as a pass/fail categorical choice. These configs are reusable across all annotation queues in your organization.
+1. **标注队列评分项**：特定于队列的分配，用于确定标注员在审查 [运行](/langsmith/observability-concepts#runs) 特定队列中必须填写的反馈配置。每个评分项可以包含自定义描述、特定分数值的指导，以及反馈是必需还是可选的。
+1. **反馈**：标注员在特定 [运行](/langsmith/observability-concepts#runs)上提交的个人评分和值。这是使用您定义的架构收集的实际评估数据。详细了解 [LangSmith 中的反馈](/langsmith/observability-concepts#feedback).
 
-## Feedback configs
+## 反馈配置
 
-### Create a feedback config
+### 创建反馈配置
 
-Feedback configs define the schema for a feedback key—whether it's a continuous score, a categorical choice, or freeform text. A unique key identifies each config within your organization and specifies how annotators can submit feedback for that metric.
+反馈配置定义反馈键的架构——无论是连续分数、分类选择还是自由格式文本。唯一键在组织内标识每个配置，并指定标注员如何提交该指标的反馈。
 
 <Note>
-Calling @[`create_feedback_config`] with an identical config that already exists returns the existing config. If a different config already exists for the same key, the system raises a 400 error.
+调用 @[`create_feedback_config`] 并传入已存在的相同配置将返回现有配置。如果同一键已存在不同配置，系统将抛出 400 错误。
 </Note>
 
 <CodeGroup>
-
-</CodeGroup>
 ```python Python
 from langsmith import Client
 
@@ -102,13 +100,13 @@ await client.createFeedbackConfig({
 ```
 </CodeGroup>
 
-- **连续型** (`"accuracy"`)：定义从 0 到 1 的数值范围。`is_lower_score_better` 参数表示较低的值是否代表更好的性能。将连续型配置用于评分量表或基于百分比的指标。
-- **分类型** (`"correctness"`)：提供带有相关值的预定义选项。每个类别需要 `value`（用于评分和分析）和 `label`（显示给标注员）。将分类型配置用于二元选择或多类分类。
-- **自由文本型** (`"notes"`)：允许开放式的文本输入，没有预定义的结构。将自由文本型配置用于定性观察或说明。
+- **连续** (`"accuracy"`）：定义从 0 到 1 的数值范围。该 `is_lower_score_better` 参数指示较低值是否代表更好的性能。将连续配置用于评分量表或基于百分比的指标。
+- **分类** (`"correctness"`）：提供带有关联值的预定义选项。每个类别需要一个 `value` （用于评分和分析）和一个 `label` （显示给标注员）。将分类配置用于二元选择或多类分类。
+- **自由格式** (`"notes"`）：允许开放式的文本输入，没有预定义的结构。将自由格式配置用于定性观察或说明。
 
 ### 列出反馈配置
 
-使用 @[`list_feedback_configs`] 检索反馈配置，查看组织中可用的评估标准。可以列出所有配置或按特定键过滤。每个返回的配置对象包含键、类型、配置详情（如 `min`/`max` 或 `categories`）以及 `is_lower_score_better` 等元数据：
+使用 @[ 检索反馈配置以查看组织中可用的评估标准`list_feedback_configs`]。您可以列出所有配置或按特定键过滤。每个返回的配置对象包含键、类型、配置详情（如 `min`/`max` or `categories`）和元数据（如 `is_lower_score_better`:
 
 <CodeGroup>
 ```python Python
@@ -139,7 +137,7 @@ for await (const config of client.listFeedbackConfigs({
 
 ### 更新反馈配置
 
-使用 @[`update_feedback_config`] 修改现有反馈配置，只需更新特定字段。该方法仅更改您提供的字段——其余字段保持不变。这是一种保留其他配置设置的局部更新：
+使用 @[ 修改现有的反馈配置`update_feedback_config`]，方法是更新特定字段。该方法只更改你提供的字段——其余字段保持不变。这是一种保留其他配置设置的局部更新：
 
 <CodeGroup>
 ```python Python
@@ -153,9 +151,11 @@ await client.updateFeedbackConfig("accuracy", {
   isLowerScoreBetter: true,
 });
 ```
+</CodeGroup>
+
 ### 删除反馈配置
 
-使用 @[`delete_feedback_config`] 从您的组织中删除反馈配置。此操作执行软删除，会将配置标记为已删除，但不会从系统中永久删除。如果需要，您可以稍后使用相同的密钥重新创建配置：
+使用 @[ 从你的组织中移除反馈配置`delete_feedback_config`]。这是软删除，会将配置标记为已删除，但不会永久从系统中移除。如有需要，你可以稍后使用相同的密钥重新创建配置：
 
 <CodeGroup>
 ```python Python
@@ -166,15 +166,15 @@ await client.deleteFeedbackConfig("accuracy");
 ```
 </CodeGroup>
 
-## 标注队列评分项
+## 标注队列评分规则项
 
-评分项将反馈配置分配给特定的标注队列。它们控制标注人员在审阅该队列中的[运行](/langsmith/observability-concepts#runs)时看到的反馈表单，以及每个表单是必填还是可选。
+评分规则项将反馈配置分配给特定的标注队列。它们控制标注员在审阅 [该队列中的](/langsmith/observability-concepts#runs) 时看到哪些反馈表单，以及每个表单是必填还是可选。
 
-### 创建带有评分项的队列
+### 创建带有评分规则项的队列
 
-使用 @[`create_annotation_queue`] 创建标注队列，并通过评分项将反馈配置分配给它。每个评分项通过其键引用反馈配置，并自定义它在该特定队列中向标注人员的显示方式。
+使用 @[ 创建标注队列`create_annotation_queue`]并通过评分规则项为其分配反馈配置。每个评分规则项通过其密钥引用一个反馈配置，并自定义该队列中标注员看到的显示方式。
 
-该示例创建了一个包含三个评分项的队列。队列级别的 `rubric_instructions` 提供显示在标注界面顶部的通用指导：
+该示例创建了一个包含三个评分规则项的队列。队列级别的 `rubric_instructions` 提供显示在标注界面顶部的通用指导：
 
 <CodeGroup>
 ```python Python
@@ -237,19 +237,19 @@ const queue = await client.createAnnotationQueue({
 ```
 </CodeGroup>
 
-- `feedback_key`：现有反馈配置的键（请先创建此配置）。
-- `description`：针对此指标对标注者的队列特定指导。
-- `score_descriptions` / `value_descriptions`：用于解释具体值含义的可选标签（对连续配置使用 `score_descriptions`，对分类配置使用 `value_descriptions`）。
-- `is_required`：标注者在提交前是否必须完成此反馈。
+- `feedback_key`：现有反馈配置的密钥（先创建此配置）。
+- `description`：此指标的队列特定指导说明，供标注员参考。
+- `score_descriptions` / `value_descriptions`：可选标签，用于解释特定值的含义（连续型配置使用 `score_descriptions` ，分类型配置使用 `value_descriptions` ）。
+- `is_required`：标注员在提交前是否必须完成此反馈。
 
-### 更新现有队列中的评分标准项目
+### 更新现有队列的评分规则项
 
-使用 @[`update_annotation_queue`] 修改分配给标注队列的评分标准项目。此操作将替换整个评分标准项目列表，因此您必须包含所有要保留的项目——操作会删除您未包含的任何项目。
+使用 @[ 修改分配给标注队列的评分规则项`update_annotation_queue`]。此操作会替换整个评分规则项列表，因此你必须包含所有想要保留的项——不包含的项将被移除。
 
-您需要队列 ID，这可以在创建队列时获取，也可以通过列出队列获取：
+你需要队列 ID，可在创建队列时获取，或通过列出队列获取：
 
 <Note>
-更新评分标准项目会替换完整列表。请包含所有要保留的项目。
+更新评分规则项会替换整个列表。请包含所有想要保留的项。
 </Note>
 
 <CodeGroup>
@@ -282,7 +282,7 @@ await client.updateAnnotationQueue(queue.id, {
 
 ### 连续型
 
-连续型配置定义具有最小值和最大值的数值评分量表。标注者可以在范围内选择任意值，使其非常适合对准确性、质量或相关性等维度进行数值评分：
+连续型配置定义具有最小值和最大值的数字评分量表。标注员可以在范围内选择任意值，这使其非常适合准确性、质量或相关性等评分维度的数字评分：
 
 <CodeGroup>
 ```python Python
@@ -333,13 +333,13 @@ await client.createFeedbackConfig({
 ```
 </CodeGroup>
 
-第一个示例展示了一个不带标签的 0–1 刻度。第二个示例演示了如何添加带有刻度标注点的 `categories`（如"差"、"一般"、"优秀"），以帮助标注员理解不同值代表的含义。这些标签是可选的，但可以提高标注员对刻度理解的一致性。
+第一个示例展示了一个没有标签的 0-1 量表。第二个示例演示了添加 `categories` ，在量表上标注锚点（如"差"、"一般"、"优秀"），以帮助标注员理解不同值代表的含义。这些标签是可选的，但可以提高标注员对量表解释的一致性。
 
-### 分类
+### 分类型
 
-分类配置提供了一个离散的预定义选项集，供标注员选择。每个类别必须有一个 `value`（用于评分和分析的数字标识符）和一个 `label`（显示给标注员的文本）。您必须定义至少 2 个类别。
+分类型配置为标注员提供预定义的离散选项集。每个类别必须有一个 `value` （用于评分和分析的数值标识符）和一个 `label` （显示给标注员的文本）。你必须至少定义 2 个类别。
 
-使用分类配置进行二元决策（通过/失败，正确/错误）、多类分类（情感、主题类别）或任何具有固定离散选项集的评估。请勿为分类配置设置 `min` 或 `max`：
+Use categorical configs for binary decisions (pass/fail, correct/incorrect), multi-class classifications (sentiment, topic categories), or any evaluation with a fixed set of discrete options. Do not set `min` or `max` 分类型配置的示例：
 
 <CodeGroup>
 ```python Python
@@ -394,13 +394,13 @@ await client.createFeedbackConfig({
 ```
 </CodeGroup>
 
-第一个示例展示了一个二元通过/失败配置。第二个示例演示了一个包含三个选项的情感多类别配置。数值允许您即使对于分类反馈也能计算汇总分数。
+The first example shows a binary pass/fail config. The second example demonstrates a multi-class config for sentiment with three options. The numeric values allow you to compute aggregate scores even for categorical feedback.
 
-### Freeform
+### 自由文本型
 
-Freeform 配置允许标注者提供没有任何预定义结构或约束的开放式文本反馈。此类型没有 `min`、`max` 或 `categories` 字段——标注者可以输入任何他们想要的文本。
+自由文本型配置允许标注员提供没有任何预定义结构或约束的开放式文本反馈。此类型没有 `min`, `max`, or `categories` 字段——标注员可以输入任意文本。
 
-Freeform 反馈对于捕捉细微洞察很有价值，但与结构化反馈类型相比更难汇总和分析：
+自由格式反馈对于捕获细致入微的见解很有价值，但与结构化反馈类型相比，更难汇总和分析：
 
 <CodeGroup>
 ```python Python
@@ -419,11 +419,11 @@ await client.createFeedbackConfig({
 
 ## 验证规则
 
-| 类型 | min/max | 类别 | 约束条件 |
+| Type | min/max | categories | Constraints |
 |------|---------|-----------|-------------|
-| `continuous` | 可选 | 可选（带标签的刻度点） | `min < max`；类别值在 [`min`, `max`] 范围内 |
-| `categorical` | 不得设置 | 必需，最少 2 个 | 唯一值和标签 |
-| `freeform` | 不得设置 | 不得设置 | N/A |
+| `continuous` | 可选 | 可选（带标签的刻度点） | `min < max`]; 类别值在 [`min`, `max`] |
+| `categorical` | 不得设置 | 必填，最少2个 | 唯一值和标签 |
+| `freeform` | Must not be set | Must not be set | N/A |
 
 ## 参考
 
@@ -432,15 +432,15 @@ await client.createFeedbackConfig({
 | 类型 | 字段 | 描述 |
 |------|--------|-------------|
 | `continuous` | `min`, `max` | 范围内的数值分数 |
-| `categorical` | categories（`{value, label}` 的列表） | 从预定义选项中选择 |
+| `categorical` | categories（列表 `{value, label}`） | 从预定义选项中选择 |
 | `freeform` | 无 | 自由文本输入 |
 
 ### 评分项目字段
 
 | 字段 | 类型 | 描述 |
 |-------|------|-------------|
-| `feedback_key` | `string` | 必需。必须匹配现有的反馈配置键。 |
-| `description` | `string` | 显示标注员对此项目的指导。 |
+| `feedback_key` | `string` | 必填。必须与现有的反馈配置键匹配。 |
+| `description` | `string` | 显示此项目的标注指南。 |
 | `score_descriptions` | `Record<string, string>` | 特定分值的标签（连续型）。 |
 | `value_descriptions` | `Record<string, string>` | 特定类别值的标签（分类型）。 |
-| `is_required` | `boolean` | 标注员提交前是否必须完成此项目。默认为 false。 |
+| `is_required` | `boolean` | 标注者必须在提交前完成此项目。默认为 false。 |
