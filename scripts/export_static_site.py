@@ -27,6 +27,14 @@ class Page:
     body_text: str
 
 
+@dataclass(frozen=True)
+class NavItem:
+    kind: str
+    title: str
+    url: str = ""
+    level: int = 0
+
+
 def strip_frontmatter(text: str) -> tuple[dict[str, str], str]:
     if not text.startswith("---\n"):
         return {}, text
@@ -102,6 +110,116 @@ def load_nav_order(build_dir: Path) -> list[str]:
     return order
 
 
+def attrs_from_mdx(raw_attrs: str) -> dict[str, str]:
+    attrs: dict[str, str] = {}
+    for match in re.finditer(
+        r"([A-Za-z_:][-A-Za-z0-9_:]*)\s*=\s*(\"[^\"]*\"|'[^']*'|\{[^}]*\})",
+        raw_attrs,
+        flags=re.DOTALL,
+    ):
+        value = match.group(2).strip()
+        if value.startswith(('"', "'")):
+            value = value[1:-1]
+        elif value.startswith("{") and value.endswith("}"):
+            value = value[1:-1].strip().strip('"').strip("'")
+        attrs[match.group(1)] = value
+    return attrs
+
+
+def page_title_for_ref(ref: str, known_titles: dict[str, str]) -> str:
+    normalized = ref.strip("/")
+    candidates = [
+        normalized,
+        normalized + ".mdx",
+        normalized + ".md",
+        normalized + "/index.mdx",
+        normalized + "/index.md",
+    ]
+    for candidate in candidates:
+        if candidate in known_titles:
+            return known_titles[candidate]
+    return normalized.rsplit("/", 1)[-1].replace("-", " ").replace("_", " ").title()
+
+
+def url_for_ref(ref: str, known_urls: dict[str, str]) -> str:
+    normalized = ref.strip("/")
+    candidates = [
+        normalized,
+        normalized + ".mdx",
+        normalized + ".md",
+        normalized + "/index.mdx",
+        normalized + "/index.md",
+    ]
+    for candidate in candidates:
+        if candidate in known_urls:
+            return known_urls[candidate]
+    return "/" + normalized + ".html"
+
+
+def build_nav_items(
+    build_dir: Path,
+    known_urls: dict[str, str],
+    known_titles: dict[str, str],
+) -> list[NavItem]:
+    docs_json = build_dir / "docs.json"
+    if not docs_json.exists():
+        return []
+    try:
+        data = json.loads(docs_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+
+    items: list[NavItem] = []
+    seen_pages: set[str] = set()
+
+    def add_heading(title: str, level: int) -> None:
+        title = title.strip()
+        if title:
+            items.append(NavItem("heading", title, level=level))
+
+    def add_page(ref: str, level: int) -> None:
+        url = url_for_ref(ref, known_urls)
+        if url in seen_pages:
+            return
+        seen_pages.add(url)
+        items.append(NavItem("page", page_title_for_ref(ref, known_titles), url, level))
+
+    def walk(value: Any, level: int = 0) -> None:
+        if isinstance(value, str):
+            add_page(value, level)
+            return
+        if isinstance(value, list):
+            for item in value:
+                walk(item, level)
+            return
+        if not isinstance(value, dict):
+            return
+
+        label = (
+            value.get("product")
+            or value.get("item")
+            or value.get("dropdown")
+            or value.get("tab")
+            or value.get("group")
+            or value.get("anchor")
+        )
+        if isinstance(label, str):
+            add_heading(label, level)
+
+        if isinstance(value.get("root"), str):
+            add_page(value["root"], level + 1)
+        for key in ("pages", "tabs", "dropdowns", "menu", "groups", "anchors", "navigation"):
+            if key in value:
+                walk(value[key], level + 1)
+
+    navigation = data.get("navigation", {})
+    if isinstance(navigation, dict) and "products" in navigation:
+        walk(navigation["products"])
+    else:
+        walk(navigation)
+    return items
+
+
 def sort_pages(pages: list[Page], build_dir: Path) -> list[Page]:
     nav_order = load_nav_order(build_dir)
     rank: dict[str, int] = {}
@@ -152,13 +270,75 @@ def rewrite_links(markdown_text: str, known_urls: dict[str, str]) -> str:
     return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", replace, markdown_text)
 
 
-def mdx_to_markdown(text: str) -> str:
-    frontmatter, body = strip_frontmatter(text)
-    del frontmatter
-    body = re.sub(r"(?s)\{/\*.*?\*/\}", "", body)
-    body = re.sub(r"^\s*(import|export)\b.*$", "", body, flags=re.MULTILINE)
+def rewrite_href(value: str) -> str:
+    if not value:
+        return ""
+    if value.startswith(("http://", "https://", "#", "mailto:")):
+        return value
+    if value.endswith(".html"):
+        return value
+    if "#" in value:
+        base, anchor = value.split("#", 1)
+        return rewrite_href(base) + "#" + anchor
+    return value.rstrip("/") + ".html"
 
-    replacements = {
+
+def strip_jsx_braces(text: str) -> str:
+    return re.sub(r"\s+[A-Za-z_:][-A-Za-z0-9_:]*=\{\{.*?\}\}", "", text, flags=re.DOTALL)
+
+
+def transform_mdx_components(body: str) -> str:
+    body = strip_jsx_braces(body)
+
+    def card_group(match: re.Match[str]) -> str:
+        attrs = attrs_from_mdx(match.group("attrs"))
+        cols = html.escape(attrs.get("cols", "2"), quote=True)
+        return f'\n<section class="card-grid cols-{cols}">\n{match.group("body")}\n</section>\n'
+
+    body = re.sub(
+        r"<CardGroup\b(?P<attrs>[^>]*)>(?P<body>.*?)</CardGroup>",
+        card_group,
+        body,
+        flags=re.DOTALL,
+    )
+
+    def card(match: re.Match[str]) -> str:
+        attrs = attrs_from_mdx(match.group("attrs"))
+        title = html.escape(attrs.get("title", ""))
+        href = html.escape(rewrite_href(attrs.get("href", "")), quote=True)
+        cta = html.escape(attrs.get("cta", ""))
+        inner = render_inline_markdown(match.group("body").strip())
+        tag = "a" if href else "div"
+        href_attr = f' href="{href}"' if href else ""
+        cta_html = f'<span class="card-cta">{cta}</span>' if cta else ""
+        title_html = f"<h3>{title}</h3>" if title else ""
+        return f'\n<{tag} class="doc-card"{href_attr}>{title_html}<p>{inner}</p>{cta_html}</{tag}>\n'
+
+    def self_closing_card(match: re.Match[str]) -> str:
+        attrs = attrs_from_mdx(match.group("attrs"))
+        title = html.escape(attrs.get("title", ""))
+        href = html.escape(rewrite_href(attrs.get("href", "")), quote=True)
+        tag = "a" if href else "div"
+        href_attr = f' href="{href}"' if href else ""
+        title_html = f"<h3>{title}</h3>" if title else ""
+        return f'\n<{tag} class="doc-card"{href_attr}>{title_html}</{tag}>\n'
+
+    body = re.sub(
+        r"<Card\b(?P<attrs>[^>]*)/>",
+        self_closing_card,
+        body,
+        flags=re.DOTALL,
+    )
+
+    body = re.sub(
+        r"<Card\b(?P<attrs>[^>]*?)(?<!/)>(?P<body>.*?)</Card>",
+        card,
+        body,
+        flags=re.DOTALL,
+    )
+
+    callout_labels = {
+        "Callout": "提示",
         "Note": "提示",
         "Info": "信息",
         "Tip": "建议",
@@ -166,44 +346,119 @@ def mdx_to_markdown(text: str) -> str:
         "Check": "检查",
         "Danger": "注意",
     }
-    for tag, label in replacements.items():
+    for tag, label in callout_labels.items():
         body = re.sub(
-            rf"<{tag}[^>]*>",
-            f'\n<div class="callout"><strong>{label}</strong>\n\n',
+            rf"<{tag}\b[^>]*>",
+            f'\n<aside class="callout"><strong>{label}</strong>\n',
             body,
+            flags=re.DOTALL,
         )
-        body = re.sub(rf"</{tag}>", "\n</div>\n", body)
+        body = re.sub(rf"</{tag}>", "\n</aside>\n", body)
 
-    title_tags = {
-        "Accordion": "###",
-        "Card": "###",
-        "Step": "###",
-        "Tab": "####",
-    }
-    for tag, prefix in title_tags.items():
+    def titled_block(tag: str, heading: str = "h3") -> None:
+        nonlocal body
+
+        def replace(match: re.Match[str]) -> str:
+            attrs = attrs_from_mdx(match.group("attrs"))
+            title = html.escape(attrs.get("title") or attrs.get("name") or attrs.get("label") or "")
+            summary = f"<{heading}>{title}</{heading}>\n" if title else ""
+            return f"\n<section class=\"mdx-block\">{summary}{match.group('body')}</section>\n"
+
         body = re.sub(
-            rf"<{tag}[^>]*(?:title|name)=[\"']([^\"']+)[\"'][^>]*>",
-            rf"\n{prefix} \1\n\n",
+            rf"<{tag}\b(?P<attrs>[^>]*)>(?P<body>.*?)</{tag}>",
+            replace,
             body,
+            flags=re.DOTALL,
         )
-        body = re.sub(rf"</{tag}>", "\n", body)
 
-    removable_tags = [
-        "AccordionGroup",
-        "CardGroup",
-        "CodeGroup",
-        "Columns",
-        "Frame",
-        "Snippet",
-        "Steps",
-        "Tabs",
-    ]
-    for tag in removable_tags:
-        body = re.sub(rf"</?{tag}[^>]*>", "", body)
+    for tag in ("Tab", "Step", "Accordion", "Expandable"):
+        titled_block(tag)
 
+    body = re.sub(r"</?(Tabs|Steps|AccordionGroup|CodeGroup|Columns|Frame)\b[^>]*>", "", body)
+    body = re.sub(r"</?div\b[^>]*>", "", body)
     body = re.sub(r"<([A-Z][A-Za-z0-9_.:-]*)(\s[^>]*)?/>", "", body)
     body = re.sub(r"</?([A-Z][A-Za-z0-9_.:-]*)(\s[^>]*)?>", "", body)
     return body
+
+
+def mdx_to_markdown(text: str) -> str:
+    frontmatter, body = strip_frontmatter(text)
+    del frontmatter
+    body = re.sub(r"(?s)\{/\*.*?\*/\}", "", body)
+    body = re.sub(r"^\s*(import|export)\b.*$", "", body, flags=re.MULTILINE)
+
+    return transform_mdx_components(body)
+
+
+def render_inline_markdown(text: str) -> str:
+    value = html.escape(re.sub(r"\s+", " ", text).strip())
+    value = re.sub(r"`([^`]+)`", r"<code>\1</code>", value)
+    value = re.sub(
+        r"\[([^\]]+)\]\(([^)]+)\)",
+        lambda m: f'<a href="{html.escape(rewrite_href(m.group(2)), quote=True)}">{m.group(1)}</a>',
+        value,
+    )
+    return value
+
+
+def render_markdown_fallback(markdown_text: str) -> str:
+    code_blocks: list[tuple[str, str]] = []
+
+    def stash_code(match: re.Match[str]) -> str:
+        info = html.escape(match.group(1).strip())
+        code = html.escape(match.group(2).strip("\n"))
+        token = f"@@CODE_BLOCK_{len(code_blocks)}@@"
+        code_blocks.append((token, f'<pre><code data-language="{info}">{code}</code></pre>'))
+        return "\n" + token + "\n"
+
+    text = re.sub(r"```([^\n]*)\n(.*?)```", stash_code, markdown_text, flags=re.DOTALL)
+    text = re.sub(r"^\s*---\s*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"<h([1-6])\b[^>]*>(.*?)</h\1>", r"\n\n<h\1>\2</h\1>\n\n", text, flags=re.DOTALL)
+
+    blocks = re.split(r"\n{2,}", text)
+    rendered: list[str] = []
+    in_list = False
+
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            rendered.append("</ul>")
+            in_list = False
+
+    for block in blocks:
+        raw = block.strip()
+        if not raw:
+            continue
+        if raw.startswith("@@CODE_BLOCK_"):
+            close_list()
+            rendered.append(raw)
+            continue
+        if raw.startswith("<") and raw.endswith(">"):
+            close_list()
+            rendered.append(raw)
+            continue
+        heading = re.match(r"^(#{1,6})\s+(.+)$", raw)
+        if heading:
+            close_list()
+            level = len(heading.group(1))
+            rendered.append(f"<h{level}>{render_inline_markdown(heading.group(2))}</h{level}>")
+            continue
+        lines = raw.splitlines()
+        if all(re.match(r"^\s*[-*]\s+", line) for line in lines):
+            if not in_list:
+                rendered.append("<ul>")
+                in_list = True
+            for line in lines:
+                rendered.append(f"<li>{render_inline_markdown(re.sub(r'^\\s*[-*]\\s+', '', line))}</li>")
+            continue
+        close_list()
+        rendered.append(f"<p>{render_inline_markdown(raw)}</p>")
+
+    close_list()
+    html_text = "\n".join(rendered)
+    for token, block_html in code_blocks:
+        html_text = html_text.replace(token, block_html)
+    return html_text
 
 
 def render_markdown(markdown_text: str) -> str:
@@ -224,10 +479,7 @@ def render_markdown(markdown_text: str) -> str:
             output_format="html5",
         )
     except ImportError:
-        escaped = html.escape(markdown_text)
-        escaped = re.sub(r"^# (.+)$", r"<h1>\1</h1>", escaped, flags=re.MULTILINE)
-        escaped = re.sub(r"^## (.+)$", r"<h2>\1</h2>", escaped, flags=re.MULTILINE)
-        return "<pre>" + escaped + "</pre>"
+        return render_markdown_fallback(markdown_text)
 
 
 def plain_text(markdown_text: str) -> str:
@@ -237,12 +489,32 @@ def plain_text(markdown_text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def render_shell(page: Page, pages: list[Page], content_html: str, title: str) -> str:
-    nav = "\n".join(
-        f'<a class="nav-link{" active" if item.url == page.url else ""}" '
-        f'href="{html.escape(item.url)}">{html.escape(item.title)}</a>'
-        for item in pages
-    )
+def render_shell(
+    page: Page,
+    pages: list[Page],
+    nav_items: list[NavItem],
+    content_html: str,
+    title: str,
+) -> str:
+    if nav_items:
+        nav_parts = []
+        for item in nav_items:
+            if item.kind == "heading":
+                nav_parts.append(
+                    f'<div class="nav-heading level-{item.level}">{html.escape(item.title)}</div>'
+                )
+            else:
+                nav_parts.append(
+                    f'<a class="nav-link level-{item.level}{" active" if item.url == page.url else ""}" '
+                    f'href="{html.escape(item.url)}">{html.escape(item.title)}</a>'
+                )
+        nav = "\n".join(nav_parts)
+    else:
+        nav = "\n".join(
+            f'<a class="nav-link{" active" if item.url == page.url else ""}" '
+            f'href="{html.escape(item.url)}">{html.escape(item.title)}</a>'
+            for item in pages
+        )
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -337,6 +609,27 @@ body {
   padding: 7px 10px;
   text-decoration: none;
 }
+.nav-link.level-2 { padding-left: 22px; }
+.nav-link.level-3 { padding-left: 34px; }
+.nav-link.level-4 { padding-left: 46px; }
+.nav-heading {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 18px 10px 6px;
+  text-transform: uppercase;
+}
+.nav-heading.level-1 {
+  color: #202124;
+  font-size: 13px;
+  text-transform: none;
+}
+.nav-heading.level-2,
+.nav-heading.level-3,
+.nav-heading.level-4 {
+  display: none;
+}
 .nav-link:hover, .nav-link.active {
   background: var(--accent-soft);
   color: #075f7a;
@@ -385,6 +678,43 @@ body {
   border: 1px solid var(--line);
   padding: 8px 10px;
   vertical-align: top;
+}
+.card-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 18px 0;
+}
+.doc-card {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 16px;
+  text-decoration: none;
+}
+.doc-card:hover {
+  border-color: #9ccfe0;
+  background: #f8fcfd;
+}
+.doc-card h3 {
+  margin: 0 0 8px;
+}
+.doc-card p {
+  margin: 0;
+}
+.card-cta {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 650;
+  margin-top: 12px;
+}
+.mdx-block {
+  border-top: 1px solid var(--line);
+  margin: 18px 0;
+  padding-top: 8px;
 }
 .callout {
   border-left: 4px solid var(--accent);
@@ -508,6 +838,15 @@ def build_pages(build_dir: Path, out_dir: Path, title: str) -> list[Page]:
         known_urls[rel.as_posix()] = url
         known_urls[rel.with_suffix("").as_posix()] = url
 
+    known_titles: dict[str, str] = {}
+    for source_path in source_paths:
+        rel = source_path.relative_to(build_dir)
+        raw = source_path.read_text(encoding="utf-8")
+        frontmatter, body = strip_frontmatter(raw)
+        page_title = title_from_markdown(frontmatter, body, rel)
+        known_titles[rel.as_posix()] = page_title
+        known_titles[rel.with_suffix("").as_posix()] = page_title
+
     pages: list[Page] = []
     rendered: dict[str, str] = {}
     for source_path in source_paths:
@@ -532,13 +871,16 @@ def build_pages(build_dir: Path, out_dir: Path, title: str) -> list[Page]:
         rendered[page.url] = content_html
 
     ordered_pages = sort_pages(pages, build_dir)
+    nav_items = build_nav_items(build_dir, known_urls, known_titles)
     page_by_url = {page.url: page for page in ordered_pages}
     for url, content_html in rendered.items():
         page = page_by_url[url]
         output = out_dir / page.out_path
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(
-            strip_trailing_whitespace(render_shell(page, ordered_pages, content_html, title)),
+            strip_trailing_whitespace(
+                render_shell(page, ordered_pages, nav_items, content_html, title)
+            ),
             encoding="utf-8",
         )
     return ordered_pages
