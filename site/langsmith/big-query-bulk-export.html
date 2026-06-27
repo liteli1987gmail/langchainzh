@@ -1197,12 +1197,20 @@
 <section class="mdx-block">
 <h3>原生表</h3>
 <p>原生表将 Parquet 数据传输到 BigQuery 存储中，以获得完整的查询性能。</p>
-<p>1. 前往 Google Cloud 控制台中的<a href="https://console.cloud.google.com/bigquery/transfers">数据传输页面</a>并选择 **+ Create transfer**。 1. 对于 **Source type**，选择 **Google Cloud Storage**。 1. 输入 **Transfer name**。您可以在必要时访问并编辑该传输。 1. 选择 **Schedule option**。如果您不想重复导出，可以选择 **On demand** 并手动触发导出。</p>
+<ol>
+<li>1. 前往 Google Cloud 控制台中的<a href="https://console.cloud.google.com/bigquery/transfers">数据传输页面</a>并选择 **+ Create transfer**。</li>
+<li>1. 对于 **Source type**，选择 **Google Cloud Storage**。</li>
+<li>1. 输入 **Transfer name**。您可以在必要时访问并编辑该传输。</li>
+<li>1. 选择 **Schedule option**。如果您不想重复导出，可以选择 **On demand** 并手动触发导出。</li>
+</ol>
 <p>1. 在 BigQuery 控制台中，在 **Explorer** 窗格中展开您的项目和数据集。 1. 点击数据集的 **操作** 菜单（三个点）并选择 **创建表**。 1. 在 **Source** 下： - 将 **Create table from** 设置为 **Google Cloud Storage**。 - 将文件路径设置为 <code>gs://YOUR_BUCKET_NAME/YOUR_PREFIX/export_id=*</code>。使用 <code>export_id=*</code> 可排除 LangSmith 在目标验证期间写入的 <code>tmp/</code> 文件夹（请参阅<a href="#temporary-validation-file">临时验证文件</a>）。 - 将 **File format** 设置为 **Parquet**。 1. 勾选 **Source data partitioning**，然后： - 将 **Source URI prefix** 设置为 <code>gs://YOUR_BUCKET_NAME/YOUR_PREFIX</code>。 - 将 **Partition inference mode** 设置为 **Automatically infer types**。 1. 在 **Destination** 下： - 选择您的项目和数据集。 - 输入表名，例如 <code>langsmith_runs</code>。 - 将 **Table type** 设置为 **Native table**。 1. 在 **Advanced options** 下，将 **Write preference** 设置为 **Write if empty** 用于新表。 1. 点击 **Create table**。</p>
 <p>BigQuery 运行加载作业来复制数据。Hive 分区列作为常规列出现在表中。可用的数据列完整列表，请参阅<a href="/langsmith/data-export.html#exportable-fields">可导出字段</a>。 &lt;/section&gt;</p>
 <h2>凭证轮换</h2>
 <p>要在不中断活跃导出的情况下轮换您的 HMAC 密钥：</p>
-<p>1. **在 GCP 中为同一服务账号生成新的 HMAC 密钥**。 2. **使用新凭据调用 PATCH 端点**：</p>
+<ol>
+<li>1. **在 GCP 中为同一服务账号生成新的 HMAC 密钥**。</li>
+<li>2. **使用新凭据调用 PATCH 端点**：</li>
+</ol>
 <pre><code data-language="bash">   curl --request PATCH \
      --url &#x27;https://api.smith.langchain.com/api/v1/bulk-exports/destinations/YOUR_DESTINATION_ID&#x27; \
      --header &#x27;Content-Type: application/json&#x27; \
@@ -1216,10 +1224,23 @@
      }&#x27;
    </code></pre>
 <p>LangSmith 在保存前会使用测试写入来验证新凭据。在此验证过程中，存储桶中可能会出现新的 <code>tmp/</code> 文件（请参阅<a href="#temporary-validation-file">临时验证文件</a>）。</p>
-<p>3. **保持旧的 HMAC 密钥有效**，直到所有进行中的导出运行完成。在过渡期间，两组凭据同时有效。 4. 确认没有进行中的运行使用旧密钥后，**删除 GCP 中的旧 HMAC 密钥**。</p>
+<ol>
+<li>3. **保持旧的 HMAC 密钥有效**，直到所有进行中的导出运行完成。在过渡期间，两组凭据同时有效。</li>
+<li>4. 确认没有进行中的运行使用旧密钥后，**删除 GCP 中的旧 HMAC 密钥**。</li>
+</ol>
 <p>如需了解完整详情，请参阅<a href="/langsmith/data-export-destinations.html#rotate-destination-credentials">轮换目标凭据</a>。</p>
 <h2>故障排除</h2>
-<p>| 症状 | 可能原因 | 解决方法 | |---------|--------------|-----| | 创建目标时出现 <code>400 Access denied</code> | HMAC 凭据缺少写入权限 | 验证服务账号对存储桶具有 <code>storage.objects.create</code> 权限 | | <code>400 Key ID you provided does not exist</code> | HMAC 访问 ID 无效 | 在 GCP 中重新生成 HMAC 密钥 | | <code>400 Invalid endpoint</code> | 端点 URL 格式错误 | 必须使用 <code>https://storage.googleapis.com</code> | | BigQuery 表显示无行 | 导出尚未完成 | 使用 <code>GET /api/v1/bulk-exports/{export_id}</code> 检查导出状态 | | BigQuery 分区裁剪不生效 | 源 URI 前缀不正确 | 确保源 URI 前缀在第一个分区键之前结束，例如 <code>gs://BUCKET/PREFIX</code> | | BigQuery 拾取了 <code>tmp/</code> 文件 | 文件路径通配符范围过宽 | 在文件路径中使用 <code>export_id=*</code> 而不是 <code>*</code> |</p>
+<table>
+<thead><tr><th>症状</th><th>可能原因</th><th>解决方法</th></tr></thead>
+<tbody>
+<tr><td>创建目标时出现 <code>400 Access denied</code></td><td>HMAC 凭据缺少写入权限</td><td>验证服务账号对存储桶具有 <code>storage.objects.create</code> 权限</td></tr>
+<tr><td><code>400 Key ID you provided does not exist</code></td><td>HMAC 访问 ID 无效</td><td>在 GCP 中重新生成 HMAC 密钥</td></tr>
+<tr><td><code>400 Invalid endpoint</code></td><td>端点 URL 格式错误</td><td>必须使用 <code>https://storage.googleapis.com</code></td></tr>
+<tr><td>BigQuery 表显示无行</td><td>导出尚未完成</td><td>使用 <code>GET /api/v1/bulk-exports/{export_id}</code> 检查导出状态</td></tr>
+<tr><td>BigQuery 分区裁剪不生效</td><td>源 URI 前缀不正确</td><td>确保源 URI 前缀在第一个分区键之前结束，例如 <code>gs://BUCKET/PREFIX</code></td></tr>
+<tr><td>BigQuery 拾取了 <code>tmp/</code> 文件</td><td>文件路径通配符范围过宽</td><td>在文件路径中使用 <code>export_id=*</code> 而不是 <code>*</code></td></tr>
+</tbody>
+</table>
 <p>有关其他错误代码和导出状态详情，请参阅<a href="/langsmith/data-export-monitor.html">监控和排查批量导出</a>。</p>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>

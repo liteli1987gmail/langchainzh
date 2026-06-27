@@ -1088,7 +1088,12 @@
 </aside>
 <h2>工作原理</h2>
 <p>从高层次来看，CopilotKit 位于您的 React 应用和 LangGraph 部署之间。前端将对话状态发送到一个自定义的 <code>/api/copilotkit</code> 路由，该路由与图 API 一起挂载，该路由再将请求转发到 LangGraph，响应返回助手消息以及您的组件注册表可以在渲染时呈现的任何结构化 UI 负载。</p>
-<p>1. **按常规方式部署图**，使用 LangSmith 或使用 LangGraph 开发服务器。 2. **使用 HTTP 应用扩展部署**，在与图 API 相邻的位置挂载一个 CopilotKit 路由。 3. **用 <code>CopilotKit</code> 包装前端**，并将其指向该自定义运行时 URL。 4. **注册动态 UI 组件**，并在渲染时将助手响应解析为这些组件。</p>
+<ol>
+<li>1. **按常规方式部署图**，使用 LangSmith 或使用 LangGraph 开发服务器。</li>
+<li>2. **使用 HTTP 应用扩展部署**，在与图 API 相邻的位置挂载一个 CopilotKit 路由。</li>
+<li>3. **用 <code>CopilotKit</code> 包装前端**，并将其指向该自定义运行时 URL。</li>
+<li>4. **注册动态 UI 组件**，并在渲染时将助手响应解析为这些组件。</li>
+</ol>
 <pre><code data-language="mermaid">%%{
   init: {
     &quot;fontFamily&quot;: &quot;monospace&quot;,
@@ -1112,7 +1117,15 @@ graph LR
   UI --&gt; RENDER</code></pre>
 <h2>Python 服务器的功能</h2>
 <p><a href="https://pypi.org/project/copilotkit/">copilotkit</a> 及相关包将 LangGraph 部署和 CopilotKit 客户端连接起来。</p>
-<p>| 组件 | 作用 | | --------- | ---- | | <code>CopilotKitMiddleware</code> | 将 CopilotKit 和 AG-UI 状态及请求合并到您的代理中，包括前端<a href="/oss/python/langchain/agents.html#tools">工具调用</a>和上下文。将其添加到 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent">create_agent</a> 或 <a href="https://reference.langchain.com/python/deepagents/graph/create_deep_agent">create_deep_agent</a> 的 <code>middleware</code> 列表中。 | | <code>CopilotKitState</code>（子类） | <a href="/oss/python/langchain/short-term-memory.html">自定义状态</a>：扩展 <code>CopilotKitState</code>，使 CopilotKit 键成为图状态的一部分。 | | <code>LangGraphAGUIAgent</code> | 将编译后的图与名称和描述打包，以便在运行时使用。 | | <code>add_langgraph_fastapi_endpoint</code>（来自 <a href="https://pypi.org/project/ag-ui-langgraph/">ag-ui-langgraph</a>） | 将 **FastAPI** 应用接入 CopilotKit，以便在同一 <a href="/oss/python/langgraph/overview.html">LangGraph</a> 进程中运行您的图。当您在 <code>langgraph.json</code> 中添加<a href="#extend-the-langgraph-deployment-with-a-custom-endpoint">自定义 <code>http</code> 应用</a>而非单独的 HTTP 服务器时使用它。 |</p>
+<table>
+<thead><tr><th>组件</th><th>作用</th></tr></thead>
+<tbody>
+<tr><td><code>CopilotKitMiddleware</code></td><td>将 CopilotKit 和 AG-UI 状态及请求合并到您的代理中，包括前端<a href="/oss/python/langchain/agents.html#tools">工具调用</a>和上下文。将其添加到 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent">create_agent</a> 或 <a href="https://reference.langchain.com/python/deepagents/graph/create_deep_agent">create_deep_agent</a> 的 <code>middleware</code> 列表中。</td></tr>
+<tr><td><code>CopilotKitState</code>（子类）</td><td><a href="/oss/python/langchain/short-term-memory.html">自定义状态</a>：扩展 <code>CopilotKitState</code>，使 CopilotKit 键成为图状态的一部分。</td></tr>
+<tr><td><code>LangGraphAGUIAgent</code></td><td>将编译后的图与名称和描述打包，以便在运行时使用。</td></tr>
+<tr><td><code>add_langgraph_fastapi_endpoint</code>（来自 <a href="https://pypi.org/project/ag-ui-langgraph/">ag-ui-langgraph</a>）</td><td>将 **FastAPI** 应用接入 CopilotKit，以便在同一 <a href="/oss/python/langgraph/overview.html">LangGraph</a> 进程中运行您的图。当您在 <code>langgraph.json</code> 中添加<a href="#extend-the-langgraph-deployment-with-a-custom-endpoint">自定义 <code>http</code> 应用</a>而非单独的 HTTP 服务器时使用它。</td></tr>
+</tbody>
+</table>
 <p><code>CopilotKitMiddleware</code> 对于 <a href="https://reference.langchain.com/python/deepagents/graph/create_deep_agent">create_deep_agent</a> 和来自 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent">create_agent</a> 的图是相同的中间件，当您将其添加到 <code>middleware</code> 列表时。对于使用 <code>CopilotKitState</code> 和 FastAPI 桥接的 <code>create_agent</code> 图，请参阅下面的 <a href="#extend-the-langgraph-deployment-with-a-custom-endpoint">Python <code>main.py</code> 示例</a>。结构化生成式 UI（例如来自客户端的 <code>useAgentContext</code> 和 <code>output_schema</code>）需要额外的中间件将 Copilot 状态映射到<a href="/oss/python/langchain/agents.html#structured-output">结构化输出</a>策略，如同一部分中可展开的 <code>src/middleware.py</code> 示例所示。</p>
 <p>在 <code>langgraph.json</code> 的 <code>http</code> 键上挂载 <code>app</code> 遵循常规的 <a href="/oss/python/langgraph/deploy.html">LangGraph 或 LangSmith 部署</a>，因此单个进程同时为图和相同的 FastAPI 应用提供服务给 CopilotKit 客户端。</p>
 <h2>安装</h2>

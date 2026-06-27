@@ -1076,7 +1076,11 @@
     <main class="content">
       <article class="doc"><p>最强大的基于LLM的应用程序是复杂的问答（Q&amp;A）聊天机器人，它们通过为LLM提供对一组数据的结构化访问来增强LLM的能力。 这些数据可能是私有数据、最新数据或不属于LLM训练数据的数据。 这些应用程序使用一种称为检索增强生成（Retrieval Augmented Generation）的技术，或称<a href="/oss/python/langchain/retrieval.html">RAG</a>。</p>
 <p>本教程将引导你构建一个能够回答长篇非结构化文本问题的应用：</p>
-<p>1. **<a href="#index-your-content">索引内容</a>**：创建从数据源摄取数据并进行索引的管道。 2. **<a href="#rag-agent">RAG agent</a>**：一种通用实现，搜索索引内容并将相关上下文传递给LLM。 3. **<a href="#rag-chain">RAG chain</a>**：一种两步实现，每次查询使用一次LLM调用。这是处理简单查询的快速有效方法。</p>
+<ol>
+<li>1. **<a href="#index-your-content">索引内容</a>**：创建从数据源摄取数据并进行索引的管道。</li>
+<li>2. **<a href="#rag-agent">RAG agent</a>**：一种通用实现，搜索索引内容并将相关上下文传递给LLM。</li>
+<li>3. **<a href="#rag-chain">RAG chain</a>**：一种两步实现，每次查询使用一次LLM调用。这是处理简单查询的快速有效方法。</li>
+</ol>
 <p>本教程使用 Lilian Weng 的 <a href="https://lilianweng.github.io/posts/2023-06-23-agent/">LLM Powered Autonomous Agents</a> 博客文章作为示例。</p>
 <p>在完成本教程的过程中，使用 <a href="/langsmith/observability.html">LangSmith</a> 来<a href="/langsmith/trace-with-langchain.html">追踪</a>检索和生成过程。</p>
 <h2>设置</h2>
@@ -1101,7 +1105,12 @@ os.environ[&quot;LANGSMITH_API_KEY&quot;] = getpass.getpass()</code></pre>
 <h2>为内容建立索引</h2>
 <p>在索引步骤中，您将获取源内容并将其 _分块_ 转换为数值表示。这种数值表示能够捕捉分块的语义含义。将这些数值表示与文档分块的映射关系存储在 <code>VectorStore</code> 中，可以让您在用户基于其自身的数值表示发送查询时，高效地检索相关内容。</p>
 <p>索引通常遵循以下四个步骤：</p>
-<p>1. **<a href="#load-documents">加载</a>**：将数据源加载到 <a href="https://reference.langchain.com/python/langchain-core/documents/base/Document"><code>Document</code></a> 对象中。 2. **<a href="#split-documents">分割</a>**：使用<a href="/oss/python/integrations/splitters.html">文本分割器</a>将大型 <code>Document</code> 分割成更小的分块。这对于索引数据和向模型传递数据都很有用，因为大型分块更难搜索，而且要么无法适应模型的有限上下文窗口，要么会使用超出必要数量的 tokens。 3. **<a href="#select-an-embeddings-model">嵌入</a>**：<a href="/oss/python/integrations/embeddings.html">嵌入模型</a> 将每个分块转换为捕获其含义的数值向量，使您能够对内容进行相似性搜索。 4. **<a href="#store-chunks-and-embeddings-in-vectorstore">存储</a>**：使用 <a href="/oss/python/integrations/vectorstores.html">VectorStore</a> 为分块及其嵌入建立索引以便检索。</p>
+<ol>
+<li>1. **<a href="#load-documents">加载</a>**：将数据源加载到 <a href="https://reference.langchain.com/python/langchain-core/documents/base/Document"><code>Document</code></a> 对象中。</li>
+<li>2. **<a href="#split-documents">分割</a>**：使用<a href="/oss/python/integrations/splitters.html">文本分割器</a>将大型 <code>Document</code> 分割成更小的分块。这对于索引数据和向模型传递数据都很有用，因为大型分块更难搜索，而且要么无法适应模型的有限上下文窗口，要么会使用超出必要数量的 tokens。</li>
+<li>3. **<a href="#select-an-embeddings-model">嵌入</a>**：<a href="/oss/python/integrations/embeddings.html">嵌入模型</a> 将每个分块转换为捕获其含义的数值向量，使您能够对内容进行相似性搜索。</li>
+<li>4. **<a href="#store-chunks-and-embeddings-in-vectorstore">存储</a>**：使用 <a href="/oss/python/integrations/vectorstores.html">VectorStore</a> 为分块及其嵌入建立索引以便检索。</li>
+</ol>
 <p>!<a href="/images/rag_indexing.png.html">index_diagram</a></p>
 <p>在以下步骤中，您将设置摄取源内容所需的组件。</p>
 <aside class="callout"><strong>提示</strong>
@@ -1143,7 +1152,10 @@ In</code></pre>
 <p>:::</p>
 <p>这完成了教程的**索引**部分。您现在拥有了一个可查询向量存储，其中包含博客文章的分块内容。</p>
 <p>下一步是检索和生成：在运行时给定一个用户问题，从索引中拉取相关文本块，并将其传递给模型以生成答案。RAG应用通常分两个阶段实现该流程：</p>
-<p>1. **检索**：给定用户输入，从存储中使用<a href="/oss/python/integrations/retrievers.html">检索器</a>检索相关文本块。 2. **生成**：使用包含问题和检索数据的<a href="/oss/python/langchain/models.html">模型</a>生成答案。</p>
+<ol>
+<li>1. **检索**：给定用户输入，从存储中使用<a href="/oss/python/integrations/retrievers.html">检索器</a>检索相关文本块。</li>
+<li>2. **生成**：使用包含问题和检索数据的<a href="/oss/python/langchain/models.html">模型</a>生成答案。</li>
+</ol>
 <p>!<a href="/images/rag_retrieval_generation.png.html">retrieval_diagram</a></p>
 <p>本教程逐步讲解该流程的两种实现：一种是在需要时调用搜索工具的<a href="#rag-agent">RAG智能体</a>，另一种是始终一次检索并在单次模型调用中回答的<a href="#rag-chain">RAG链</a>。</p>
 <h2>RAG智能体</h2>
@@ -1182,7 +1194,11 @@ Source: https://lilianweng.github.io/posts/2023-06-23-agent/
 Content: Component One: Planning...
 The standard method for Task Decomposition often used is the Chain of Thought (CoT)...</code></pre>
 <p>当你的 agent 运行时：</p>
-<p>1. 生成查询以搜索任务分解的标准方法。 2. 接收答案并生成第二个查询以搜索其常见扩展。 3. 在接收所有必要的上下文后回答问题。</p>
+<ol>
+<li>1. 生成查询以搜索任务分解的标准方法。</li>
+<li>2. 接收答案并生成第二个查询以搜索其常见扩展。</li>
+<li>3. 在接收所有必要的上下文后回答问题。</li>
+</ol>
 <p>如果你在<a href="#set-up-langsmith">设置</a>中启用了 LangSmith，打开 <a href="https://smith.langchain.com?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-langchain-rag">LangSmith</a>，选择你的 **default** 项目，并在 **Traces** 选项卡中打开本次运行的 trace。在 <a href="/langsmith/view-traces.html#details-view">Details view</a> 中检查每次检索和模型调用。你也可以将此 trace 与这个示例 <a href="https://smith.langchain.com/public/7b42d478-33d2-4631-90a4-7cb731681e88/r">LangSmith trace</a> 进行比较。</p>
 <aside class="callout"><strong>建议</strong>
 <p>你可以使用 <a href="/oss/python/langgraph/overview.html">LangGraph</a> 框架直接添加更深层次的控制和自定义。LangGraph 是 LangChain 构建的基础框架。</p>
@@ -1202,7 +1218,14 @@ Task decomposition refers to...</code></pre>
 </section>
 <h2>RAG 链</h2>
 <p>在您创建的 <a href="#rag-agent">RAG agent</a> 中，您允许 LLM 自行决定是否生成 <a href="/oss/python/langchain/models.html#tool-calling">tool call</a> 来帮助回答用户查询。这是一个良好的通用解决方案，但也有一些权衡：</p>
-<p>| ✅ 优势 | ⚠️ 缺点 | |-----------------------------------------------------------------------------|----------------------------------------------------------------------------| | **仅在需要时搜索**：LLM 可以处理问候语、跟进问题和简单查询，而不会触发不必要的搜索。 | **两次推理调用**：当执行搜索时，需要一次调用来生成查询，另一次来产生最终响应。 | | **上下文感知搜索查询**：通过将搜索作为带有 <code>query</code> 输入的工具，LLM 可以生成包含对话上下文的查询。 | **控制力降低**：LLM 可能会跳过实际需要的搜索，或者在不必要时发出额外搜索。 | | **允许多次搜索**：LLM 可以为单个用户查询执行多次搜索以提供支持。 | |</p>
+<table>
+<thead><tr><th>✅ 优势</th><th>⚠️ 缺点</th></tr></thead>
+<tbody>
+<tr><td>**仅在需要时搜索**：LLM 可以处理问候语、跟进问题和简单查询，而不会触发不必要的搜索。</td><td>**两次推理调用**：当执行搜索时，需要一次调用来生成查询，另一次来产生最终响应。</td></tr>
+<tr><td>**上下文感知搜索查询**：通过将搜索作为带有 <code>query</code> 输入的工具，LLM 可以生成包含对话上下文的查询。</td><td>**控制力降低**：LLM 可能会跳过实际需要的搜索，或者在不必要时发出额外搜索。</td></tr>
+<tr><td>**允许多次搜索**：LLM 可以为单个用户查询执行多次搜索以提供支持。</td><td></td></tr>
+</tbody>
+</table>
 <p>另一种常见方法是两步链，在这种方法中，您始终运行搜索（可能使用原始用户查询），并将结果作为上下文纳入单个 LLM 查询中。这导致每次查询一次推理调用，用灵活性换取降低的延迟。</p>
 <p>在这种方法中，我们不再循环调用模型，而是进行单次传递。</p>
 <p>您可以通过从代理中移除工具，并将检索步骤合并到自定义提示词中来实现此链：</p>
@@ -1223,7 +1246,11 @@ Task decomposition refers to...</code></pre>
 <p>例如，本教程中索引的博客文章包含描述 <a href="https://lilianweng.github.io/posts/2023-06-23-agent/#case-studies">Auto-GPT</a> JSON 响应格式的文本。如果用户查询检索到该块，模型可能会输出 JSON 而不是自然语言答案。</p>
 </aside>
 <p>为了缓解这个问题：</p>
-<p>1. **使用防御性提示**：明确指示模型仅将检索到的上下文作为数据处理，并忽略其中的任何指令。本教程中的提示包含此类说明。 2. **使用分隔符包装上下文**：使用清晰的结构标记（例如 XML 标签如 <code>&lt;context&gt;...&lt;/context&gt;</code>）将检索到的数据与指令分离，使模型更容易区分它们。 3. **验证响应**：检查模型输出是否符合预期格式（例如纯文本），并妥善处理意外格式。</p>
+<ol>
+<li>1. **使用防御性提示**：明确指示模型仅将检索到的上下文作为数据处理，并忽略其中的任何指令。本教程中的提示包含此类说明。</li>
+<li>2. **使用分隔符包装上下文**：使用清晰的结构标记（例如 XML 标签如 <code>&lt;context&gt;...&lt;/context&gt;</code>）将检索到的数据与指令分离，使模型更容易区分它们。</li>
+<li>3. **验证响应**：检查模型输出是否符合预期格式（例如纯文本），并妥善处理意外格式。</li>
+</ol>
 <p>没有万无一失的缓解措施——这是当前 LLM 架构的固有局限性，其中指令和数据共享相同的上下文窗口。要了解更多，请参阅 <a href="https://simonwillison.net/series/prompt-injection/">prompt injection</a> 研究。</p>
 <h2>下一步</h2>
 <p>现在您已经通过 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a> 实现了一个简单的 RAG 应用程序，您可以添加新功能并深入了解：</p>

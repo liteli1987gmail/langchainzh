@@ -1094,9 +1094,17 @@
     return { approved };
 }</code></pre>
 <p>当您调用 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/interrupt"><code>interrupt</code></a> 时，以下是发生的过程：</p>
-<p>1. **图执行在** 调用 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/interrupt"><code>interrupt</code></a> 的确切位置被**挂起** 2. **状态被保存** 到检查点中，以便后续可以恢复执行，在生产环境中，这应该是持久化检查点（例如由数据库支持）</p>
-<p>3. **值被返回** 给调用者，存储在 <code>__interrupt__</code> 中；它可以是任何可 JSON 序列化的值（字符串、对象、数组等）</p>
-<p>4. **图无限期等待**，直到您通过响应恢复执行 5. **响应在恢复时被传递回** 节点，成为 <code>interrupt()</code> 调用的返回值</p>
+<ol>
+<li>1. **图执行在** 调用 <a href="https://reference.langchain.com/javascript/langchain-langgraph/index/interrupt"><code>interrupt</code></a> 的确切位置被**挂起**</li>
+<li>2. **状态被保存** 到检查点中，以便后续可以恢复执行，在生产环境中，这应该是持久化检查点（例如由数据库支持）</li>
+</ol>
+<ol>
+<li>3. **值被返回** 给调用者，存储在 <code>__interrupt__</code> 中；它可以是任何可 JSON 序列化的值（字符串、对象、数组等）</li>
+</ol>
+<ol>
+<li>4. **图无限期等待**，直到您通过响应恢复执行</li>
+<li>5. **响应在恢复时被传递回** 节点，成为 <code>interrupt()</code> 调用的返回值</li>
+</ol>
 <h2>恢复中断</h2>
 <p>中断暂停执行后，您可以通过使用包含恢复值的 <code>Command</code> 重新调用图来恢复执行。恢复值被传递回 <code>interrupt</code> 调用，允许节点继续使用外部输入执行。</p>
 <pre><code data-language="typescript">// Initial run - hits the interrupt and pauses
@@ -1623,7 +1631,12 @@ def send_email(to: str, subject: str, body: str):
 <p>**避免在单个节点内使用 <code>while True</code> + <code>interrupt()</code> 循环。** 因为节点在每次恢复时从头重新运行（参见<a href="#rules-of-interrupts">中断规则</a>），所以在循环内多次调用 <code>interrupt()</code> 会导致每次恢复都重放所有先前的迭代：第一次恢复重放 1 次迭代，第二次重放 2 次，依此类推。结果是循环体内的任何代码都呈指数级重新执行。</p>
 </aside>
 <p>正确的模式：</p>
-<p>1. 将重新提示的问题存储在状态中（例如 <code>pendingQuestion</code>）。 2. 在节点中**恰好调用一次** <code>interrupt()</code>，传递状态中的当前问题。 3. 如果答案无效，返回更新后的 <code>pendingQuestion</code>，以便下一次调用重新提示。 4. 使用 <code>addConditionalEdges</code> 循环回节点，直到收集到有效值。</p>
+<ol>
+<li>1. 将重新提示的问题存储在状态中（例如 <code>pendingQuestion</code>）。</li>
+<li>2. 在节点中**恰好调用一次** <code>interrupt()</code>，传递状态中的当前问题。</li>
+<li>3. 如果答案无效，返回更新后的 <code>pendingQuestion</code>，以便下一次调用重新提示。</li>
+<li>4. 使用 <code>addConditionalEdges</code> 循环回节点，直到收集到有效值。</li>
+</ol>
 <p>每次恢复恰好调用一次 <code>getAgeNode</code>，运行一次 <code>interrupt()</code> 调用，然后退出。当答案无效时，条件边循环回，下一个中断使用更新后的问题重新提示。</p>
 <pre><code data-language="typescript">      Command,
       MemorySaver,
@@ -2160,7 +2173,14 @@ async function nodeInSubgraph(state: State) {
 
         await graph.invoke(null, config);  # [!code highlight]
         </code></pre></p>
-<p>1. 断点在 <code>compile</code>（编译）时设置。 2. <code>interruptBefore</code> 指定在节点执行前暂停执行的位置。 3. <code>interruptAfter</code> 指定在节点执行后暂停执行的位置。 4. 需要一个检查点器来启用断点。 5. 图会运行直到触发第一个断点。 6. 通过传入 <code>null</code> 作为输入来恢复图的运行。这将运行图直到下一个断点被触发。</p>
+<ol>
+<li>1. 断点在 <code>compile</code>（编译）时设置。</li>
+<li>2. <code>interruptBefore</code> 指定在节点执行前暂停执行的位置。</li>
+<li>3. <code>interruptAfter</code> 指定在节点执行后暂停执行的位置。</li>
+<li>4. 需要一个检查点器来启用断点。</li>
+<li>5. 图会运行直到触发第一个断点。</li>
+<li>6. 通过传入 <code>null</code> 作为输入来恢复图的运行。这将运行图直到下一个断点被触发。</li>
+</ol>
 </section>
 <section class="mdx-block">
 <h3>在运行时</h3>
@@ -2176,7 +2196,13 @@ async function nodeInSubgraph(state: State) {
         // Resume the graph
         await graph.invoke(null, config);  // [!code highlight]
         </code></pre>
-<p>1. <code>graph.invoke</code> 使用 <code>interruptBefore</code> 和 <code>interruptAfter</code> 参数调用。这是一个运行时配置，可以在每次调用时更改。 2. <code>interruptBefore</code> 指定在节点执行之前暂停执行的位置。 3. <code>interruptAfter</code> 指定在节点执行之后暂停执行的位置。 4. 图会运行直到触发第一个断点。 5. 通过传入 <code>null</code> 作为输入来恢复图运行。这将运行图直到触发下一个断点。</p>
+<ol>
+<li>1. <code>graph.invoke</code> 使用 <code>interruptBefore</code> 和 <code>interruptAfter</code> 参数调用。这是一个运行时配置，可以在每次调用时更改。</li>
+<li>2. <code>interruptBefore</code> 指定在节点执行之前暂停执行的位置。</li>
+<li>3. <code>interruptAfter</code> 指定在节点执行之后暂停执行的位置。</li>
+<li>4. 图会运行直到触发第一个断点。</li>
+<li>5. 通过传入 <code>null</code> 作为输入来恢复图运行。这将运行图直到触发下一个断点。</li>
+</ol>
 </section>
 <aside class="callout"><strong>建议</strong>
 <p>若要调试中断，请使用 <a href="/langsmith/observability.html">LangSmith</a>。</p>

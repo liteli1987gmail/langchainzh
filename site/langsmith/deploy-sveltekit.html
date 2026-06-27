@@ -1099,16 +1099,44 @@ npx wrangler secret put OPENAI_API_KEY</code></pre>
 <h2>必需的 API 端点</h2>
 <p>应用在 <code>/api/threads/...</code> 下公开了 Agent Streaming Protocol。SvelteKit 路由处理器位于 <code>src/routes/api/threads/</code>。</p>
 <h3>最小集（流式聊天）</h3>
-<p>| 方法 | 路径 | 用途 | | --- | --- | --- | | <code>POST</code> | <code>/api/threads/:threadId/commands</code> | 接受协议命令（<code>run.start</code>、…）并启动代理运行 | | <code>POST</code> | <code>/api/threads/:threadId/stream</code> | 运行的 SSE 事件流 | | <code>GET</code> / <code>POST</code> | <code>/api/threads/:threadId/state</code> | 读取和引导检查点线程状态 |</p>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/commands</code></td><td>接受协议命令（<code>run.start</code>、…）并启动代理运行</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/stream</code></td><td>运行的 SSE 事件流</td></tr>
+<tr><td><code>GET</code> / <code>POST</code></td><td><code>/api/threads/:threadId/state</code></td><td>读取和引导检查点线程状态</td></tr>
+</tbody>
+</table>
 <h3>可选（侧边栏）</h3>
-<p>| 方法 | 路径 | 用途 | | --- | --- | --- | | <code>GET</code> | <code>/api/threads</code> | 列出检查点已知的所有线程 | | <code>DELETE</code> | <code>/api/threads/:threadId</code> | 删除线程的会话和检查点 | | <code>POST</code> | <code>/api/threads/:threadId/history</code> | 分页检查点历史记录 |</p>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/api/threads</code></td><td>列出检查点已知的所有线程</td></tr>
+<tr><td><code>DELETE</code></td><td><code>/api/threads/:threadId</code></td><td>删除线程的会话和检查点</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/history</code></td><td>分页检查点历史记录</td></tr>
+</tbody>
+</table>
 <h2>Cloudflare 后端设计</h2>
-<p>| 关注点 | 实现 | | --- | --- | | 前端 | SvelteKit 客户端路由和组件 | | API 层 | <code>src/routes/api/threads/</code> 中的 SvelteKit 服务端点 | | 运行时 | Workers V8 + <code>nodejs_compat</code> | | SSE 重放 | 每个线程的 Durable Object（<code>ThreadSession</code>） | | 代理运行 | Worker 隔离体；协议事件 POST 到 DO | | 静态资产 | Workers Static Assets 通过 <code>adapter-cloudflare</code> | | 密钥 | <code>wrangler secret</code> / 本地 <code>.env</code> |</p>
+<table>
+<thead><tr><th>关注点</th><th>实现</th></tr></thead>
+<tbody>
+<tr><td>前端</td><td>SvelteKit 客户端路由和组件</td></tr>
+<tr><td>API 层</td><td><code>src/routes/api/threads/</code> 中的 SvelteKit 服务端点</td></tr>
+<tr><td>运行时</td><td>Workers V8 + <code>nodejs_compat</code></td></tr>
+<tr><td>SSE 重放</td><td>每个线程的 Durable Object（<code>ThreadSession</code>）</td></tr>
+<tr><td>代理运行</td><td>Worker 隔离体；协议事件 POST 到 DO</td></tr>
+<tr><td>静态资产</td><td>Workers Static Assets 通过 <code>adapter-cloudflare</code></td></tr>
+<tr><td>密钥</td><td><code>wrangler secret</code> / 本地 <code>.env</code></td></tr>
+</tbody>
+</table>
 <h2>生产环境持久化</h2>
 <p>开箱即用，代理使用内存中的 <code>MemorySaver</code> 检查点（<code>src/lib/server/agent/index.ts</code>）。每个线程的 SSE 重放/会话日志存储在 <a href="https://developers.cloudflare.com/durable-objects/">Durable Object</a> 中，这样流式客户端可以重新连接到同一个协调点，而不是进程本地的 map。</p>
 <p>检查点仍然是隔离体本地的演示状态。Cloudflare 隔离体是临时的，可能水平扩展，因此在部署、冷启动或隔离体之间检查点的对话状态**不会持久化**。</p>
 <p>对于生产环境：</p>
-<p>1. 换用持久化检查点（例如 <a href="https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/">通过 Hyperdrive 的 Postgres</a>，或<a href="https://developers.cloudflare.com/agents/model-context-protocol/apis/client-api/#custom-storage-backend">自定义 Durable Object 支持的存储</a>）。 2. 如果客户端需要在 Durable Object 从内存中逐出后重新连接，则持久化长时间的重放/历史记录。</p>
+<ol>
+<li>1. 换用持久化检查点（例如 <a href="https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/">通过 Hyperdrive 的 Postgres</a>，或<a href="https://developers.cloudflare.com/agents/model-context-protocol/apis/client-api/#custom-storage-backend">自定义 Durable Object 支持的存储</a>）。</li>
+<li>2. 如果客户端需要在 Durable Object 从内存中逐出后重新连接，则持久化长时间的重放/历史记录。</li>
+</ol>
 <h2>本地开发</h2>
 <pre><code data-language="bash">cp .env.example .env   # set OPENAI_API_KEY
 pnpm install

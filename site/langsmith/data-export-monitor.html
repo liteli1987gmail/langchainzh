@@ -1140,13 +1140,33 @@
 <li>- **整体工作流超时**：整个导出 72 小时。</li>
 </ul>
 <h3>故障场景</h3>
-<p>| 故障类型 | 原因 | 自动重试？ | 需要采取的操作 | |----------|------|------------|----------------| | **基础设施中断** | <a href="/langsmith/deployment.html">部署</a>、服务器重启、工作进程崩溃 | 是，自动重新排队并保留剩余重试次数。 | 无，作业会自动恢复。 | | **Run 超时** | 单个 run 超过 4 小时限制 | 是，最多重试 20 次（可能更改）。 | 如持续存在，请缩小日期范围、添加筛选条件或<a href="/langsmith/data-export.html#limit-exported-fields">限制导出的字段</a>。 | | **工作流超时** | 整个导出超过 72 小时 | 否 | 减少导出范围（日期范围、筛选条件）或拆分为更小的导出。 | | **存储/目标错误** | <a href="/langsmith/data-export-destinations.html#credentials-configuration">无效凭证</a>、<a href="/langsmith/data-export-destinations.html#configuration-fields">存储桶缺失</a>、<a href="/langsmith/data-export-destinations.html#permissions-required">权限问题</a> | 否 | 修复目标配置并创建新导出。 | | **目标已删除** | 导出期间存储桶被移除 | 否 | 重新创建目标并重新启动导出。 | | **最终处理错误** | 数据序列化问题、资源耗尽 | 是，最多重试 20 次（可能更改）。 | 检查 run 错误详情；可能需要进一步调查。 |</p>
+<table>
+<thead><tr><th>故障类型</th><th>原因</th><th>自动重试？</th><th>需要采取的操作</th></tr></thead>
+<tbody>
+<tr><td>**基础设施中断**</td><td><a href="/langsmith/deployment.html">部署</a>、服务器重启、工作进程崩溃</td><td>是，自动重新排队并保留剩余重试次数。</td><td>无，作业会自动恢复。</td></tr>
+<tr><td>**Run 超时**</td><td>单个 run 超过 4 小时限制</td><td>是，最多重试 20 次（可能更改）。</td><td>如持续存在，请缩小日期范围、添加筛选条件或<a href="/langsmith/data-export.html#limit-exported-fields">限制导出的字段</a>。</td></tr>
+<tr><td>**工作流超时**</td><td>整个导出超过 72 小时</td><td>否</td><td>减少导出范围（日期范围、筛选条件）或拆分为更小的导出。</td></tr>
+<tr><td>**存储/目标错误**</td><td><a href="/langsmith/data-export-destinations.html#credentials-configuration">无效凭证</a>、<a href="/langsmith/data-export-destinations.html#configuration-fields">存储桶缺失</a>、<a href="/langsmith/data-export-destinations.html#permissions-required">权限问题</a></td><td>否</td><td>修复目标配置并创建新导出。</td></tr>
+<tr><td>**目标已删除**</td><td>导出期间存储桶被移除</td><td>否</td><td>重新创建目标并重新启动导出。</td></tr>
+<tr><td>**最终处理错误**</td><td>数据序列化问题、资源耗尽</td><td>是，最多重试 20 次（可能更改）。</td><td>检查 run 错误详情；可能需要进一步调查。</td></tr>
+</tbody>
+</table>
 <aside class="callout"><strong>提示</strong>
 <p>任何单个 run 失败（重试次数用尽后）都会导致整个导出失败。</p>
 </aside>
 <h3>导出状态生命周期</h3>
 <p>导出可以具有以下状态：</p>
-<p>| 状态 | 描述 | |------|------| | <code>CREATED</code> | 导出已创建但尚未开始处理。 | | <code>RUNNING</code> | 导出正在积极处理 runs。 | | <code>COMPLETED</code> | 所有 runs 均已成功导出。 | | <code>FAILED</code> | 一个或多个 runs 在重试次数用尽后失败。 | | <code>CANCELLED</code> | 导出已被用户手动取消。 | | <code>TIMEDOUT</code> | 导出超出了 48 小时的工作流超时限制。 |</p>
+<table>
+<thead><tr><th>状态</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>CREATED</code></td><td>导出已创建但尚未开始处理。</td></tr>
+<tr><td><code>RUNNING</code></td><td>导出正在积极处理 runs。</td></tr>
+<tr><td><code>COMPLETED</code></td><td>所有 runs 均已成功导出。</td></tr>
+<tr><td><code>FAILED</code></td><td>一个或多个 runs 在重试次数用尽后失败。</td></tr>
+<tr><td><code>CANCELLED</code></td><td>导出已被用户手动取消。</td></tr>
+<tr><td><code>TIMEDOUT</code></td><td>导出超出了 48 小时的工作流超时限制。</td></tr>
+</tbody>
+</table>
 <p>单个 runs 可以具有相同的状态：<code>CREATED</code>、<code>RUNNING</code>、<code>COMPLETED</code>、<code>FAILED</code>、<code>CANCELLED</code> 或 <code>TIMEDOUT</code>。</p>
 <h3>并发与速率限制</h3>
 <p>为确保系统稳定性，导出受以下限制约束：</p>
@@ -1160,7 +1180,13 @@
 <p>此进度跟踪支持： - **优雅恢复**：如果某个 run 被中断（例如通过部署），它将从上一个检查点恢复，而不是重新开始。 - **进度监控**：通过 API 跟踪已导出多少数据。 - **高效重试**：失败的 runs 不会重新导出已成功写入的数据。</p>
 <h3>排查导出失败问题</h3>
 <p>如果您的导出失败，请按以下步骤操作：</p>
-<p>1. **检查导出状态**：使用 <a href="/langsmith/smith-api/bulk-exports/get-bulk-export.html"><code>GET /api/v1/bulk-exports/{export_id}</code> 端点</a> 检索导出详情和状态。 2. **查看 run 错误**：您可以使用 <a href="#list-runs-for-an-export">List Runs API</a> 监控您的 runs。每个 run 都包含一个 <code>errors</code> 字段，其中包含按重试尝试（如 <code>retry_0</code>、<code>retry_1</code>）键控的详细错误消息。 3. **验证目标访问**：确保您的<a href="/langsmith/data-export-destinations.html#configuration-fields">目标存储桶</a>仍然存在且<a href="/langsmith/data-export-destinations.html#credentials-configuration">凭证</a>有效。 4. **检查 run 大小**：如果您看到超时错误，您的日期分区可能包含过多数据。<a href="/langsmith/data-export.html#limit-exported-fields">限制导出的字段</a>可能会有所帮助。 5. **检查系统限制**：确保您没有达到<a href="#concurrency-and-rate-limits">并发限制</a>（每个导出 5 个 runs，每个工作区 3 个导出）。</p>
+<ol>
+<li>1. **检查导出状态**：使用 <a href="/langsmith/smith-api/bulk-exports/get-bulk-export.html"><code>GET /api/v1/bulk-exports/{export_id}</code> 端点</a> 检索导出详情和状态。</li>
+<li>2. **查看 run 错误**：您可以使用 <a href="#list-runs-for-an-export">List Runs API</a> 监控您的 runs。每个 run 都包含一个 <code>errors</code> 字段，其中包含按重试尝试（如 <code>retry_0</code>、<code>retry_1</code>）键控的详细错误消息。</li>
+<li>3. **验证目标访问**：确保您的<a href="/langsmith/data-export-destinations.html#configuration-fields">目标存储桶</a>仍然存在且<a href="/langsmith/data-export-destinations.html#credentials-configuration">凭证</a>有效。</li>
+<li>4. **检查 run 大小**：如果您看到超时错误，您的日期分区可能包含过多数据。<a href="/langsmith/data-export.html#limit-exported-fields">限制导出的字段</a>可能会有所帮助。</li>
+<li>5. **检查系统限制**：确保您没有达到<a href="#concurrency-and-rate-limits">并发限制</a>（每个导出 5 个 runs，每个工作区 3 个导出）。</li>
+</ol>
 <p>对于存储相关错误，您可以在重试导出之前使用 AWS CLI 或 gsutil 测试您的目标配置。</p>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>

@@ -1104,7 +1104,10 @@
 </ul>
 <h3>不使用子代理运行</h3>
 <p>要在不使用 <code>task</code> 工具的情况下运行代理，请执行以下两步：</p>
-<p>1. 在活动的 <a href="/oss/python/deepagents/profiles.html#harness-profiles">harness profile</a> 上设置 <code>general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False)</code>。 2. 在 <code>create_deep_agent</code> 上通过 <code>subagents=</code> 不传入同步子代理。</p>
+<ol>
+<li>1. 在活动的 <a href="/oss/python/deepagents/profiles.html#harness-profiles">harness profile</a> 上设置 <code>general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False)</code>。</li>
+<li>2. 在 <code>create_deep_agent</code> 上通过 <code>subagents=</code> 不传入同步子代理。</li>
+</ol>
 <p>Deep Agents 仅在至少存在一个同步子代理时才会附加 <a href="https://reference.langchain.com/python/deepagents/middleware/subagents/SubAgentMiddleware"><code>SubAgentMiddleware</code></a>（以及 <code>task</code> 工具）。如果没有默认的也没有调用者提供的子代理，代理将在没有委托的情况下运行。</p>
 <p>异步子代理不受影响——它们通过自己的中间件和工具流动，具体说明见<a href="/oss/python/deepagents/async-subagents.html">异步子代理</a>。</p>
 <提示>
@@ -1115,10 +1118,31 @@
 <p>对于大多数用例，使用 <a href="#subagent-dictionary-based">SubAgent 字典</a> 将子代理定义为字典。对于复杂的工作流，请使用 <a href="#compiledsubagent"><code>CompiledSubAgent</code></a>：</p>
 <h3>SubAgent（基于字典）</h3>
 <p>使用与 <a href="https://reference.langchain.com/python/deepagents/middleware/subagents/SubAgent"><code>SubAgent</code></a> 规范匹配的字典来定义子代理，包含以下字段：</p>
-<p>| 字段 | 类型 | 描述 | |-------|------|-------------| | <code>name</code> | <code>str</code> | 必需。子代理的唯一标识符。主代理在调用 <code>task()</code> 工具时使用此名称。子代理名称成为 <code>AIMessage</code> 和流式传输的元数据，有助于区分不同的代理。 | | <code>description</code> | <code>str</code> | 必需。子代理功能的描述。请具体且以动作为导向。主代理使用此来决定何时委托。 | | <code>system_prompt</code> | <code>str</code> | 必需。子代理的指令。自定义子代理必须定义自己的指令。包括工具使用指导和输出格式要求。&lt;br&gt;&lt;/br&gt;不从主代理继承。 | | <code>tools</code> | <code>list[Callable]</code> | 可选。子代理可以使用的工具。请保持最小化，只包含所需的内容。&lt;br&gt;&lt;/br&gt;默认从主代理继承。指定后会完全覆盖继承的工具。 | | <code>model</code> | <code>str</code> \| <code>BaseChatModel</code> | 可选。覆盖主代理的模型。省略则使用主代理的模型。&lt;br&gt;&lt;/br&gt;默认从主代理继承。你可以传递模型标识符字符串（如 <code>&#x27;openai:gpt-5.5&#x27;</code>，使用 <code>&#x27;provider:model&#x27;</code> 格式）或 LangChain 聊天模型对象（<code>init_chat_model(&quot;gpt-5.5&quot;)</code> 或 <code>ChatOpenAI(model=&quot;gpt-5.5&quot;)</code>）。 | | <code>middleware</code> | <code>list[Middleware]</code> | 可选。用于自定义行为、日志记录或速率限制的其他中间件。&lt;br&gt;&lt;/br&gt;不从主代理继承。追加到<a href="/oss/python/deepagents/customization.html#default-stack-synchronous-subagents">默认子代理堆栈</a>。 | | <code>interrupt_on</code> | <code>dict[str, bool \| InterruptOnConfig]</code> | 可选。为特定工具配置<a href="/oss/python/deepagents/human-in-the-loop.html">人在环</a>。选项：<code>True</code>、<code>False</code> 或带有 <code>allowed_decisions</code> 的 <code>InterruptOnConfig</code>。需要检查点器。&lt;br&gt;&lt;/br&gt;默认从主代理继承。子代理的值覆盖默认值。 | | <code>skills</code> | <code>list[str]</code> | 可选。<a href="/oss/python/deepagents/skills.html">技能</a>源路径。指定后，子代理将从这些目录加载技能（例如 <code>[&quot;/skills/research/&quot;, &quot;/skills/web-search/&quot;]</code>）。这允许子代理拥有与主代理不同的技能集。&lt;br&gt;&lt;/br&gt;不从主代理继承。只有 general-purpose 子代理会继承主代理的技能。当子代理拥有技能时，它会运行自己独立的 <a href="https://reference.langchain.com/python/deepagents/middleware/skills/SkillsMiddleware"><code>SkillsMiddleware</code></a> 实例。技能状态完全隔离——子代理加载的技能对父代理不可见，反之亦然。 | | <code>response_format</code> | <code>ResponseFormat</code> | 可选。子代理的<a href="/oss/python/langchain/structured-output.html">结构化输出</a>模式。设置后，父代理接收到的子代理结果为 JSON 格式，而非自由文本。接受 Pydantic 模型、<code>ToolStrategy(...)</code>、<code>ProviderStrategy(...)</code> 或原始模式类型。请参阅<a href="#structured-output">结构化输出</a>。 | | <code>permissions</code> | <code>list[FilesystemPermission]</code> | 可选。子代理的<a href="/oss/python/deepagents/permissions.html">文件系统权限规则</a>。设置后，**完全替换**父代理的权限。&lt;br&gt;&lt;/br&gt;默认从主代理继承。 |</p>
+<table>
+<thead><tr><th>字段</th><th>类型</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>name</code></td><td><code>str</code></td><td>必需。子代理的唯一标识符。主代理在调用 <code>task()</code> 工具时使用此名称。子代理名称成为 <code>AIMessage</code> 和流式传输的元数据，有助于区分不同的代理。</td></tr>
+<tr><td><code>description</code></td><td><code>str</code></td><td>必需。子代理功能的描述。请具体且以动作为导向。主代理使用此来决定何时委托。</td></tr>
+<tr><td><code>system_prompt</code></td><td><code>str</code></td><td>必需。子代理的指令。自定义子代理必须定义自己的指令。包括工具使用指导和输出格式要求。&lt;br&gt;&lt;/br&gt;不从主代理继承。</td></tr>
+<tr><td><code>tools</code></td><td><code>list[Callable]</code></td><td>可选。子代理可以使用的工具。请保持最小化，只包含所需的内容。&lt;br&gt;&lt;/br&gt;默认从主代理继承。指定后会完全覆盖继承的工具。</td></tr>
+<tr><td><code>model</code></td><td><code>str</code> \</td><td><code>BaseChatModel</code></td></tr>
+<tr><td><code>middleware</code></td><td><code>list[Middleware]</code></td><td>可选。用于自定义行为、日志记录或速率限制的其他中间件。&lt;br&gt;&lt;/br&gt;不从主代理继承。追加到<a href="/oss/python/deepagents/customization.html#default-stack-synchronous-subagents">默认子代理堆栈</a>。</td></tr>
+<tr><td><code>interrupt_on</code></td><td>`dict[str, bool \</td><td>InterruptOnConfig]`</td></tr>
+<tr><td><code>skills</code></td><td><code>list[str]</code></td><td>可选。<a href="/oss/python/deepagents/skills.html">技能</a>源路径。指定后，子代理将从这些目录加载技能（例如 <code>[&quot;/skills/research/&quot;, &quot;/skills/web-search/&quot;]</code>）。这允许子代理拥有与主代理不同的技能集。&lt;br&gt;&lt;/br&gt;不从主代理继承。只有 general-purpose 子代理会继承主代理的技能。当子代理拥有技能时，它会运行自己独立的 <a href="https://reference.langchain.com/python/deepagents/middleware/skills/SkillsMiddleware"><code>SkillsMiddleware</code></a> 实例。技能状态完全隔离——子代理加载的技能对父代理不可见，反之亦然。</td></tr>
+<tr><td><code>response_format</code></td><td><code>ResponseFormat</code></td><td>可选。子代理的<a href="/oss/python/langchain/structured-output.html">结构化输出</a>模式。设置后，父代理接收到的子代理结果为 JSON 格式，而非自由文本。接受 Pydantic 模型、<code>ToolStrategy(...)</code>、<code>ProviderStrategy(...)</code> 或原始模式类型。请参阅<a href="#structured-output">结构化输出</a>。</td></tr>
+<tr><td><code>permissions</code></td><td><code>list[FilesystemPermission]</code></td><td>可选。子代理的<a href="/oss/python/deepagents/permissions.html">文件系统权限规则</a>。设置后，**完全替换**父代理的权限。&lt;br&gt;&lt;/br&gt;默认从主代理继承。</td></tr>
+</tbody>
+</table>
 <h3>CompiledSubAgent</h3>
 <p>对于复杂的工作流，请使用预构建的 LangGraph 图作为 <a href="https://reference.langchain.com/python/deepagents/middleware/subagents/CompiledSubAgent"><code>CompiledSubAgent</code></a>：</p>
-<p>| 字段 | 类型 | 描述 | |-------|------|-------------| | <code>name</code> | <code>str</code> | 必需。子代理的唯一标识符。子代理名称成为 <code>AIMessage</code> 和流式传输的元数据，有助于区分不同的代理。 | | <code>description</code> | <code>str</code> | 必需。此子代理的功能。 | | <code>runnable</code> | <code>Runnable</code> | 必需。已编译的 LangGraph 图（必须先调用 <code>.compile()</code>）。 |</p>
+<table>
+<thead><tr><th>字段</th><th>类型</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>name</code></td><td><code>str</code></td><td>必需。子代理的唯一标识符。子代理名称成为 <code>AIMessage</code> 和流式传输的元数据，有助于区分不同的代理。</td></tr>
+<tr><td><code>description</code></td><td><code>str</code></td><td>必需。此子代理的功能。</td></tr>
+<tr><td><code>runnable</code></td><td><code>Runnable</code></td><td>必需。已编译的 LangGraph 图（必须先调用 <code>.compile()</code>）。</td></tr>
+</tbody>
+</table>
 <h2>使用 SubAgent</h2>
 <h2>使用 CompiledSubAgent</h2>
 <p>对于更复杂的用例，你可以使用 <a href="https://reference.langchain.com/python/deepagents/middleware/subagents/CompiledSubAgent"><code>CompiledSubAgent</code></a> 为自定义子代理提供自定义功能。 你可以使用 LangChain 的 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a> 创建自定义子代理，或使用<a href="/oss/python/langgraph/graph-api.html">图 API</a>制作自定义 LangGraph 图。</p>
@@ -1160,7 +1184,12 @@ agent = create_deep_agent(
 <h2>在 LangSmith 中按子代理筛选</h2>
 <p>由于每个子代理的 <code>name</code> 都会写入其产生的每个运行的 <code>lc_agent_name</code> 元数据键，因此你可以使用 LangSmith 的元数据筛选功能来隔离特定子代理的所有运行——这对于调试、监控或随时间比较子代理行为非常有用。</p>
 <h3>在 LangSmith UI 中筛选</h3>
-<p>1. 在 <a href="https://smith.langchain.com?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-deepagents-subagents">LangSmith</a> 中打开你的追踪项目。 2. 在追踪项目页面切换到 **Runs** 视图，查看各个跨度。 3. 点击 **Add filter** 并选择 **Metadata**。 4. 将 **Key** 设置为 <code>lc_agent_name</code>，将 **Value** 设置为子代理名称（例如 <code>research-agent</code>）。</p>
+<ol>
+<li>1. 在 <a href="https://smith.langchain.com?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-deepagents-subagents">LangSmith</a> 中打开你的追踪项目。</li>
+<li>2. 在追踪项目页面切换到 **Runs** 视图，查看各个跨度。</li>
+<li>3. 点击 **Add filter** 并选择 **Metadata**。</li>
+<li>4. 将 **Key** 设置为 <code>lc_agent_name</code>，将 **Value** 设置为子代理名称（例如 <code>research-agent</code>）。</li>
+</ol>
 <p>这将只显示该子代理产生的运行。你可以将筛选条件保存为命名视图以便重复使用。如需筛选选项的完整参考，请参阅<a href="/langsmith/filter-traces-in-application.html">筛选追踪记录</a>。</p>
 <h3>使用 SDK 以编程方式筛选</h3>
 <p>使用 LangSmith 筛选查询语言中的 <code>has</code> 比较器按元数据键值对匹配运行：</p>
@@ -1481,7 +1510,9 @@ def flexible_search(query: str, runtime: ToolRuntime[Context]) -&gt; str:
 <h3>子代理未被调用</h3>
 <p>**问题**：主代理尝试自己完成任务，而不是委托给子代理。</p>
 <p>**解决方案**：</p>
-<p>1. **使描述更具体：**</p>
+<ol>
+<li>1. **使描述更具体：**</li>
+</ol>
 <pre><code data-language="python">   # ✅ Good
    {&quot;name&quot;: &quot;research-specialist&quot;, &quot;description&quot;: &quot;Conducts in-depth research on specific topics using web search. Use when you need detailed information that requires multiple searches.&quot;}
 

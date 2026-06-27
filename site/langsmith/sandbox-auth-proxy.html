@@ -1089,13 +1089,29 @@
 <p>这意味着原始协议被阻止不是因为代理&quot;无法理解&quot;它们——它们默认被阻止，并通过 <code>access_control</code> 按主机和端口逐一打开。</p>
 <h3>允许列表和拒绝列表</h3>
 <p>向 <code>proxy_config</code> 添加一个 <code>access_control</code> 对象，使用**要么** <code>allow_list</code> **要么** <code>deny_list</code>（不能同时使用——如果两者都设置，请求会被拒绝）：</p>
-<p>| 模式 | 行为 | |------|----------| | <code>allow_list</code> | **默认拒绝。** 只有列出的目标可达——包括 HTTP/HTTPS。如果您设置了 <code>allow_list</code>，还必须列出沙盒需要的所有 HTTP(S) 主机。 | | <code>deny_list</code> | **HTTP/HTTPS 默认允许。** 除了列出的主机外，所有 HTTP(S) 主机保持可达。<code>deny_list</code> 无法打开原始 TCP 端口。 |</p>
+<table>
+<thead><tr><th>模式</th><th>行为</th></tr></thead>
+<tbody>
+<tr><td><code>allow_list</code></td><td>**默认拒绝。** 只有列出的目标可达——包括 HTTP/HTTPS。如果您设置了 <code>allow_list</code>，还必须列出沙盒需要的所有 HTTP(S) 主机。</td></tr>
+<tr><td><code>deny_list</code></td><td>**HTTP/HTTPS 默认允许。** 除了列出的主机外，所有 HTTP(S) 主机保持可达。<code>deny_list</code> 无法打开原始 TCP 端口。</td></tr>
+</tbody>
+</table>
 <aside class="callout"><strong>提示</strong>
 <p>原始 TCP 出口（例如 5432 上的 PostgreSQL）只能通过指定显式非 HTTP 端口（<code>host:PORT</code>）的 <code>allow_list</code> 条目来启用。默认策略和 <code>deny_list</code> 模式仅允许 HTTP/HTTPS。</p>
 </aside>
 <h3>模式语法</h3>
 <p>每个 <code>allow_list</code>/<code>deny_list</code> 条目使用以下形式：</p>
-<p>| 模式 | 含义 | |---------|----------| | <code>host</code> | 裸主机 → 仅限端口 **80 和 443**（HTTP/S）。 | | <code>host:PORT</code> | 主机在确切的 <code>PORT</code>。<code>:22</code> 仅授予 22，**不会**与 80/443 叠加——如果两者都需要，请列出两次主机。 | | <code>*.example.com</code> | Glob（RFC 1034 风格）。顶级域名（<code>example.com</code>）**不**包含在内。 | | <code>~regex</code> | 不透明的正则匹配；无端口后缀解析。 | | <code>1.2.3.4</code> / <code>10.0.0.0/8</code> | 字面 IP 或 CIDR。CIDR **不能**带端口（允许模式下仅 HTTP/S；拒绝模式下阻止所有端口）。 | | <code>[::1]:22</code> | IPv6 字面量在指定端口时使用括号形式。 |</p>
+<table>
+<thead><tr><th>模式</th><th>含义</th></tr></thead>
+<tbody>
+<tr><td><code>host</code></td><td>裸主机 → 仅限端口 **80 和 443**（HTTP/S）。</td></tr>
+<tr><td><code>host:PORT</code></td><td>主机在确切的 <code>PORT</code>。<code>:22</code> 仅授予 22，**不会**与 80/443 叠加——如果两者都需要，请列出两次主机。</td></tr>
+<tr><td><code>*.example.com</code></td><td>Glob（RFC 1034 风格）。顶级域名（<code>example.com</code>）**不**包含在内。</td></tr>
+<tr><td><code>~regex</code></td><td>不透明的正则匹配；无端口后缀解析。</td></tr>
+<tr><td><code>1.2.3.4</code> / <code>10.0.0.0/8</code></td><td>字面 IP 或 CIDR。CIDR **不能**带端口（允许模式下仅 HTTP/S；拒绝模式下阻止所有端口）。</td></tr>
+<tr><td><code>[::1]:22</code></td><td>IPv6 字面量在指定端口时使用括号形式。</td></tr>
+</tbody>
+</table>
 <h3>连接数据库（原始 TCP）</h3>
 <p>要让沙盒代码访问外部 PostgreSQL 数据库（使用 <code>psql</code>、<code>dbt</code> 或任何驱动程序），请在相应端口上将其主机加入允许列表。由于 <code>allow_list</code> 是默认拒绝的，还需要列出沙盒需要的任何 HTTP(S) 主机：</p>
 <pre><code data-language="bash">curl -X POST &quot;$LANGSMITH_ENDPOINT/v2/sandboxes/boxes&quot; \
@@ -1139,10 +1155,25 @@ await client.createSandbox({
 });</code></pre>
 <h2>配置认证代理规则</h2>
 <p>创建沙箱时添加 <code>proxy_config</code>，或通过修补现有沙箱的 <code>proxy_config</code> 来更新。每个规则指定：</p>
-<p>| 字段 | 描述 | |-------|-------------| | <code>match_hosts</code> | 要拦截的主机（支持通配符，如 <code>*.github.com</code>） | | <code>match_paths</code> | 要匹配的路径（为空 = 所有路径） | | <code>headers</code> | 要注入的头部，每个头部包含 <code>name</code>、<code>type</code> 和 <code>value</code> | | <code>no_proxy</code> | 完全绕过代理的主机（例如 <code>localhost</code>） |</p>
+<table>
+<thead><tr><th>字段</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>match_hosts</code></td><td>要拦截的主机（支持通配符，如 <code>*.github.com</code>）</td></tr>
+<tr><td><code>match_paths</code></td><td>要匹配的路径（为空 = 所有路径）</td></tr>
+<tr><td><code>headers</code></td><td>要注入的头部，每个头部包含 <code>name</code>、<code>type</code> 和 <code>value</code></td></tr>
+<tr><td><code>no_proxy</code></td><td>完全绕过代理的主机（例如 <code>localhost</code>）</td></tr>
+</tbody>
+</table>
 <h3>头部类型</h3>
 <p>每个头部都有 <code>type</code>，用于控制其值的存储和显示方式：</p>
-<p>| 类型 | 描述 | |------|-------------| | <code>workspace_secret</code> | 使用 <code>{KEY}</code> 语法引用工作区密钥。在应用代理配置时解析。 | | <code>plaintext</code> | 值按原样存储和返回。用于非敏感头部。 | | <code>opaque</code> | 只写。值在静态时加密，永不通过 API 返回。 |</p>
+<table>
+<thead><tr><th>类型</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>workspace_secret</code></td><td>使用 <code>{KEY}</code> 语法引用工作区密钥。在应用代理配置时解析。</td></tr>
+<tr><td><code>plaintext</code></td><td>值按原样存储和返回。用于非敏感头部。</td></tr>
+<tr><td><code>opaque</code></td><td>只写。值在静态时加密，永不通过 API 返回。</td></tr>
+</tbody>
+</table>
 <h2>认证 AWS 请求</h2>
 <p>当沙箱代码需要使用 AWS SDK 或 CLI 调用 AWS 服务时，请使用 AWS 认证规则。代理将真实的 AWS 凭证保留在沙箱外部，然后使用 AWS SigV4 对支持的外发 HTTPS 请求进行签名。</p>
 <p>当代理代码需要检查 S3 对象、调用 Bedrock 或使用其他受支持的 AWS HTTPS 端点时，这很有用，而无需在沙箱文件、环境变量、Shell 历史记录或日志中暴露长期 AWS 访问密钥。沙箱接收兼容的 AWS 凭证占位符以使 SDK 凭证检测正常工作，而代理使用配置的凭证对出站请求进行签名。</p>
@@ -1388,7 +1419,13 @@ await client.createSandbox({
 <h2>GitHub 示例</h2>
 <p><a href="https://github.com/langchain-ai/open-swe/blob/main/agent/integrations/langsmith.py">Open SWE</a> 通过在沙箱外部生成一个短期有效的 GitHub App 安装令牌来验证 GitHub 访问权限，然后使用仅写入的 <code>opaque</code> 代理规则修补沙箱。这样可以将短期有效的 GitHub 访问令牌隔离在沙箱文件系统之外，同时避免将其暴露在部署环境变量中。</p>
 <p>配置两条规则：</p>
-<p>| 主机 | 请求头 | |------|--------| | <code>api.github.com</code> | <code>Authorization: Bearer &lt;github-token&gt;</code>，用于 <code>gh</code> 和 REST API 调用 | | <code>github.com</code>、<code>*.github.com</code> | <code>Authorization: Basic &lt;base64(&quot;x-access-token:&lt;github-token&gt;&quot;)&gt;</code>，用于 Git over HTTPS 操作（如 clone、fetch 和 push） |</p>
+<table>
+<thead><tr><th>主机</th><th>请求头</th></tr></thead>
+<tbody>
+<tr><td><code>api.github.com</code></td><td><code>Authorization: Bearer &lt;github-token&gt;</code>，用于 <code>gh</code> 和 REST API 调用</td></tr>
+<tr><td><code>github.com</code>、<code>*.github.com</code></td><td><code>Authorization: Basic &lt;base64(&quot;x-access-token:&lt;github-token&gt;&quot;)&gt;</code>，用于 Git over HTTPS 操作（如 clone、fetch 和 push）</td></tr>
+</tbody>
+</table>
 <pre><code data-language="python Python">from typing import Any
 
 
@@ -1487,7 +1524,15 @@ await client.createSandbox({
 <h2>回调凭证示例</h2>
 <p>静态 <code>workspace_secret</code> 规则在代理配置被应用时从您的工作区拉取凭证，而 <code>opaque</code> 规则允许您的应用程序注入短期凭证，例如 <a href="#github-example">GitHub token 示例</a>。对于必须在代理时由您自己的服务解析的凭证，请使用**回调**。代理向您提供的 URL 发送 POST 请求，您的端点返回要注入的标头，然后代理缓存结果。</p>
 <p>回调与规则一起在 <code>proxy_config</code> 下配置：</p>
-<p>| 字段 | 描述 | |-------|-------------| | <code>match_hosts</code> | 要拦截的主机（与规则语法相同；支持通配符如 <code>*.github.com</code>）。 | | <code>url</code> | 您的回调端点。必须是代理可访问的 <code>http://</code> 或 <code>https://</code> URL。 | | <code>request_headers</code> | 附加到代理 → 回调请求的标头，例如您的端点用于验证请求的 HMAC 或共享密钥。只允许 <code>plaintext</code> 和 <code>opaque</code> 类型（不允许 <code>workspace_secret</code>）。 | | <code>ttl_seconds</code> | 解析后的标头在重新调用回调之前被缓存的时间。必须在 60 到 3600 之间。 |</p>
+<table>
+<thead><tr><th>字段</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>match_hosts</code></td><td>要拦截的主机（与规则语法相同；支持通配符如 <code>*.github.com</code>）。</td></tr>
+<tr><td><code>url</code></td><td>您的回调端点。必须是代理可访问的 <code>http://</code> 或 <code>https://</code> URL。</td></tr>
+<tr><td><code>request_headers</code></td><td>附加到代理 → 回调请求的标头，例如您的端点用于验证请求的 HMAC 或共享密钥。只允许 <code>plaintext</code> 和 <code>opaque</code> 类型（不允许 <code>workspace_secret</code>）。</td></tr>
+<tr><td><code>ttl_seconds</code></td><td>解析后的标头在重新调用回调之前被缓存的时间。必须在 60 到 3600 之间。</td></tr>
+</tbody>
+</table>
 <p>**静态规则优先。** 如果 <code>rules</code> 中的任何规则匹配主机，则该主机会跳过回调。在规则内，首个匹配者优先；如果多个回调匹配，同样的规则也适用于回调之间。</p>
 <h3>回调契约</h3>
 <p>每当代理需要在缓存未命中时为匹配的主机解析凭证时，它会发出以下请求：</p>

@@ -1088,7 +1088,12 @@
 <p>对于 OAuth2 <code>client_credentials</code> 特别说明，<a href="/langsmith/model-configurations.html#oauth-client-credentials">模型配置上的 OAuth 客户端凭据</a> 是一种按配置的自助服务替代方案，工作区管理员可以在不部署身份验证代理的情况下进行设置。在配置级别上路由是互斥的——启用 OAuth 的配置不会通过身份验证代理。</p>
 <h2>工作原理</h2>
 <p>来自 LangSmith 的每个请求都会经过代理中的以下步骤：</p>
-<p>1. 验证 JWT（签名、颁发者、受众） 2. 调用您的 <a href="https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/security/ext_authz_filter"><code>ext_authz</code></a> 服务，该服务接收已验证的 JWT 并返回要作为标头注入的提供商凭据 3. 可选地调用您的 <a href="https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter"><code>ext_proc</code></a> 转换器，它可以重写请求和响应正文（例如，在 OpenAI 格式和自定义网关格式之间转换） 4. 使用自定义标头（静态或动态）将请求转发到上游提供商</p>
+<ol>
+<li>1. 验证 JWT（签名、颁发者、受众）</li>
+<li>2. 调用您的 <a href="https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/security/ext_authz_filter"><code>ext_authz</code></a> 服务，该服务接收已验证的 JWT 并返回要作为标头注入的提供商凭据</li>
+<li>3. 可选地调用您的 <a href="https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter"><code>ext_proc</code></a> 转换器，它可以重写请求和响应正文（例如，在 OpenAI 格式和自定义网关格式之间转换）</li>
+<li>4. 使用自定义标头（静态或动态）将请求转发到上游提供商</li>
+</ol>
 <p><code>ext_authz</code> 服务和转换器都是客户部署的组件，与代理一起运行在您的环境中。根据您的用例，可以启用其中一个或两个（<a href="#when-to-use-ext_proc-vs-ext_authz">何时使用 ext_proc 与 ext_authz</a>）。</p>
 <img
   className="block dark:hidden"
@@ -1342,7 +1347,16 @@ if __name__ == &quot;__main__&quot;:
 <p>当您需要重写请求或响应正文时，例如在 OpenAI 格式和自定义网关格式之间进行转换，或向请求负载中注入额外字段，请使用 <code>ext_proc</code>。这使用 Envoy 的 <a href="https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter"><code>ext_proc</code> 过滤器</a>。</p>
 <p>与 <code>ext_authz</code>（HTTP）不同，<code>ext_proc</code> 使用双向 gRPC 流。Envoy 在每个处理阶段（请求头、请求正文、响应头、响应正文）向您的转换器服务发送一条消息，您的服务在每个阶段回复相应的修改指令。您的转换器必须实现 <code>envoy.service.ext_proc.v3.ExternalProcessor</code> gRPC 服务。图表仓库中的 <a href="https://github.com/langchain-ai/helm/tree/main/charts/langsmith-auth-proxy/e2e/transformer">e2e/transformer/</a> 提供了 Go 示例实现。</p>
 <h3>何时使用 <code>ext_proc</code> 与 <code>ext_authz</code></h3>
-<p>| 功能 | <code>ext_authz</code> | <code>ext_proc</code> | |-----------|-----------|----------| | 修改请求头 | 是 | 是 | | 修改响应头 | 否 | 是 | | 修改请求正文 | 否 | 是 | | 修改响应正文 | 否 | 是 | | 协议 | HTTP | gRPC |</p>
+<table>
+<thead><tr><th>功能</th><th><code>ext_authz</code></th><th><code>ext_proc</code></th></tr></thead>
+<tbody>
+<tr><td>修改请求头</td><td>是</td><td>是</td></tr>
+<tr><td>修改响应头</td><td>否</td><td>是</td></tr>
+<tr><td>修改请求正文</td><td>否</td><td>是</td></tr>
+<tr><td>修改响应正文</td><td>否</td><td>是</td></tr>
+<tr><td>协议</td><td>HTTP</td><td>gRPC</td></tr>
+</tbody>
+</table>
 <p>如果您只需要注入认证头（例如 API 密钥），请使用 <code>ext_authz</code>。如果您需要重写正文，请使用 <code>ext_proc</code>。两者可以同时启用。</p>
 <p>在 <code>values.yaml</code> 中启用 <code>ext_proc</code>：</p>
 <pre><code data-language="yaml">authProxy:
@@ -1359,7 +1373,17 @@ if __name__ == &quot;__main__&quot;:
 <p>设置 <code>failureModeAllow: true</code> 允许在转换器不可用时让请求通过。默认值（<code>false</code>）会拒绝请求。</p>
 <h3>处理模式</h3>
 <p>通过 <code>processingMode</code> 控制哪些阶段会发送到您的转换器。只启用您需要的阶段，因为禁用未使用的阶段可以减少延迟。</p>
-<p>| 字段 | 选项 | 描述 | |-------|---------|-------------| | <code>requestHeaderMode</code> | <code>SEND</code>, <code>SKIP</code>, <code>DEFAULT</code> | 是否转发请求头。 | | <code>responseHeaderMode</code> | <code>SEND</code>, <code>SKIP</code>, <code>DEFAULT</code> | 是否转发响应头。 | | <code>requestBodyMode</code> | <code>NONE</code>, <code>BUFFERED</code>, <code>STREAMED</code>, <code>BUFFERED_PARTIAL</code> | 如何发送请求体。 | | <code>responseBodyMode</code> | <code>NONE</code>, <code>BUFFERED</code>, <code>STREAMED</code>, <code>BUFFERED_PARTIAL</code> | 如何发送响应体。 | | <code>requestTrailerMode</code> | <code>SEND</code>, <code>SKIP</code> | 是否转发请求拖车。 | | <code>responseTrailerMode</code> | <code>SEND</code>, <code>SKIP</code> | 是否转发响应拖车。 |</p>
+<table>
+<thead><tr><th>字段</th><th>选项</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>requestHeaderMode</code></td><td><code>SEND</code>, <code>SKIP</code>, <code>DEFAULT</code></td><td>是否转发请求头。</td></tr>
+<tr><td><code>responseHeaderMode</code></td><td><code>SEND</code>, <code>SKIP</code>, <code>DEFAULT</code></td><td>是否转发响应头。</td></tr>
+<tr><td><code>requestBodyMode</code></td><td><code>NONE</code>, <code>BUFFERED</code>, <code>STREAMED</code>, <code>BUFFERED_PARTIAL</code></td><td>如何发送请求体。</td></tr>
+<tr><td><code>responseBodyMode</code></td><td><code>NONE</code>, <code>BUFFERED</code>, <code>STREAMED</code>, <code>BUFFERED_PARTIAL</code></td><td>如何发送响应体。</td></tr>
+<tr><td><code>requestTrailerMode</code></td><td><code>SEND</code>, <code>SKIP</code></td><td>是否转发请求拖车。</td></tr>
+<tr><td><code>responseTrailerMode</code></td><td><code>SEND</code>, <code>SKIP</code></td><td>是否转发响应拖车。</td></tr>
+</tbody>
+</table>
 <ul>
 <li>- 使用 <code>BUFFERED</code> 进行请求体重写：在发送之前缓冲完整主体，最适合 JSON 重写。</li>
 <li>- 使用 <code>STREAMED</code> 进行流式 LLM 响应体重写：在数据块到达时发送，延迟更低但实现更复杂。</li>
@@ -1691,7 +1715,22 @@ playground:
       responseTrailerMode: &quot;SKIP&quot;</code></pre>
 <h2>JWT 声明参考</h2>
 <p>LangSmith 使用 **Ed25519 (EdDSA)** 对 JWT 进行签名。公钥在 <code>/.well-known/jwks.json</code> 提供，由代理自动获取。认证代理使用这些公钥验证签名。</p>
-<p>| 声明 | 描述 | |-------|-------------| | <code>iat</code>, <code>exp</code>, <code>jti</code>, <code>nbf</code> | 标准 JWT 声明（签发时间、过期时间、JWT ID、生效时间） | | <code>iss</code> | 签发者。SaaS 版本为 <code>langsmith</code>；自托管版本通过 <code>LLM_AUTH_PROXY_ISSUER</code> 设置 | | <code>aud</code> | 受众。与 LangSmith 组织设置中的 JWT 受众匹配 | | <code>sub</code> | 主体标识符（用户 ID、评估器 ID、助手 ID 或 API 密钥 ID） | | <code>actor_type</code> | 类型之一：<code>user</code>、<code>evaluator</code>、<code>agent-builder</code>、<code>api_key</code> | | <code>workspace_id</code> | 工作区 ID | | <code>workspace_name</code> | 工作区名称 | | <code>organization_id</code> | 组织 ID | | <code>organization_name</code> | 组织名称 | | <code>request_id</code> | 请求关联 ID | | <code>ls_user_id</code> | LangSmith 用户 ID（仅当 <code>actor_type</code> 为 <code>user</code> 时存在） |</p>
+<table>
+<thead><tr><th>声明</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>iat</code>, <code>exp</code>, <code>jti</code>, <code>nbf</code></td><td>标准 JWT 声明（签发时间、过期时间、JWT ID、生效时间）</td></tr>
+<tr><td><code>iss</code></td><td>签发者。SaaS 版本为 <code>langsmith</code>；自托管版本通过 <code>LLM_AUTH_PROXY_ISSUER</code> 设置</td></tr>
+<tr><td><code>aud</code></td><td>受众。与 LangSmith 组织设置中的 JWT 受众匹配</td></tr>
+<tr><td><code>sub</code></td><td>主体标识符（用户 ID、评估器 ID、助手 ID 或 API 密钥 ID）</td></tr>
+<tr><td><code>actor_type</code></td><td>类型之一：<code>user</code>、<code>evaluator</code>、<code>agent-builder</code>、<code>api_key</code></td></tr>
+<tr><td><code>workspace_id</code></td><td>工作区 ID</td></tr>
+<tr><td><code>workspace_name</code></td><td>工作区名称</td></tr>
+<tr><td><code>organization_id</code></td><td>组织 ID</td></tr>
+<tr><td><code>organization_name</code></td><td>组织名称</td></tr>
+<tr><td><code>request_id</code></td><td>请求关联 ID</td></tr>
+<tr><td><code>ls_user_id</code></td><td>LangSmith 用户 ID（仅当 <code>actor_type</code> 为 <code>user</code> 时存在）</td></tr>
+</tbody>
+</table>
 <p>JWT 通过 <code>x-langsmith-llm-auth</code> 请求头传递到您的 <code>ext_authz</code> 或 transformer 服务。</p>
 <h2>常见问题</h2>
 <section class="mdx-block">

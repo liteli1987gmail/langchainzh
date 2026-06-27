@@ -1104,7 +1104,23 @@ for await (const message of stream.messages) {
 const finalState = await stream.output;</code></pre>
 <h2>你可以流式传输的内容</h2>
 <p>python | 投影 | 用途 | | ---------- | --- | | <code>for event in stream</code> | 包含完整信封的原始协议事件，可访问每个通道。 | | <code>stream.messages</code> | 模型消息流，每个 LLM 调用一个。 | | <code>message.text</code> | 消息的文本增量内容和最终文本。 | | <code>message.reasoning</code> | 对于暴露推理内容的模型，提供推理增量内容。 | | <code>message.tool_calls</code> | 工具调用参数块和最终确定的工具调用。 | | <code>message.output</code> | 模型调用完成后的最终消息对象。 | | <code>stream.values</code> | Agent 状态快照。 | | <code>stream.output</code> | 最终 Agent 状态。 | | <code>stream.subgraphs</code> | 嵌套图运行（子 Agent 和普通子图）。 | | <code>stream.extensions</code> | 自定义转换器投影。 | | <code>stream.tool_calls</code> | 工具执行生命周期、输入、输出增量、最终输出和错误。 | :::</p>
-<p>| 投影 | 用途 | | ---------- | --- | | <code>for event in stream</code> | 包含完整信封的原始协议事件，可访问每个通道。 | | <code>stream.messages</code> | 模型消息流，每个 LLM 调用一个。 | | <code>message.text</code> | 消息的文本增量内容和最终文本。 | | <code>message.reasoning</code> | 对于暴露推理内容的模型，提供推理增量内容。 | | <code>message.toolCalls</code> | 工具调用参数块和最终确定的工具调用。 | | <code>message.output</code> | 模型调用完成后的最终消息对象。 | | <code>message.usage</code> | 提供商返回时的令牌使用元数据。 | | <code>stream.values</code> | Agent 状态快照。 | | <code>stream.output</code> | 最终 Agent 状态。 | | <code>stream.subgraphs</code> | 嵌套图运行（子 Agent 和普通子图）。 | | <code>stream.extensions</code> | 自定义转换器投影。 | | <code>stream.toolCalls</code> | 工具执行生命周期、输入、输出增量、最终输出和错误。 |</p>
+<table>
+<thead><tr><th>投影</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>for event in stream</code></td><td>包含完整信封的原始协议事件，可访问每个通道。</td></tr>
+<tr><td><code>stream.messages</code></td><td>模型消息流，每个 LLM 调用一个。</td></tr>
+<tr><td><code>message.text</code></td><td>消息的文本增量内容和最终文本。</td></tr>
+<tr><td><code>message.reasoning</code></td><td>对于暴露推理内容的模型，提供推理增量内容。</td></tr>
+<tr><td><code>message.toolCalls</code></td><td>工具调用参数块和最终确定的工具调用。</td></tr>
+<tr><td><code>message.output</code></td><td>模型调用完成后的最终消息对象。</td></tr>
+<tr><td><code>message.usage</code></td><td>提供商返回时的令牌使用元数据。</td></tr>
+<tr><td><code>stream.values</code></td><td>Agent 状态快照。</td></tr>
+<tr><td><code>stream.output</code></td><td>最终 Agent 状态。</td></tr>
+<tr><td><code>stream.subgraphs</code></td><td>嵌套图运行（子 Agent 和普通子图）。</td></tr>
+<tr><td><code>stream.extensions</code></td><td>自定义转换器投影。</td></tr>
+<tr><td><code>stream.toolCalls</code></td><td>工具执行生命周期、输入、输出增量、最终输出和错误。</td></tr>
+</tbody>
+</table>
 <p><code>stream.messages</code> 生成消息流。每个消息流都暴露 <code>.text</code>、<code>.reasoning</code>、<code>.toolCalls</code>、<code>.output</code> 和 <code>.usage</code>。异步投影可以迭代以获取实时增量，也可以等待以获取最终值。</p>
 <h2>Agent 消息</h2>
 <p>当你想从每个 LLM 调用获取模型输出时，使用 <code>stream.messages</code>。</p>
@@ -1369,7 +1385,11 @@ const agent = createAgent({
   middleware: [toolActivityMiddleware],
 });</code></pre>
 <p>在编译时，<code>create_agent</code> 会将中间件注册的工厂与传入其自身 <code>transformers=</code> 参数的内容合并。编译后图上的最终顺序为：</p>
-<p>1. 内置的 <code>ToolCallTransformer</code>。 2. 中间件注册的工厂，按中间件顺序排列。 3. 调用方通过 <code>create_agent</code> 提供的 <code>transformers=</code>。</p>
+<ol>
+<li>1. 内置的 <code>ToolCallTransformer</code>。</li>
+<li>2. 中间件注册的工厂，按中间件顺序排列。</li>
+<li>3. 调用方通过 <code>create_agent</code> 提供的 <code>transformers=</code>。</li>
+</ol>
 <p>这确保了内置的工具调用投影位于消费者转换器之前，并让调用方提供的条目拥有最终决定权。</p>
 <p>内置的 <code>PIIMiddleware</code> 使用此钩子从流式传输的线缆输出中删除 PII。启用 <code>apply_to_output=True</code> 后，其注册的转换器会在内容离开运行之前，从文本增量、工具调用参数、工具输出和状态快照中清除检测到的 PII，从而缩小了 <code>after_model</code> 状态级删除本应让原始 PII 通过到 <code>stream_events(version=&quot;v3&quot;)</code> 实时读取器的窗口。</p>
 <pre><code data-language="py">from langchain.agents import create_agent
@@ -1384,7 +1404,11 @@ agent = create_agent(
 )</code></pre>
 <p>请参阅 <a href="/oss/javascript/langchain/middleware/built-in.html#pii-detection">PII 检测</a> 了解完整的配置界面。</p>
 <p>在编译时，<code>createAgent</code> 将中间件注册的工厂与传入其自身 <code>streamTransformers</code> 选项的内容合并。最终编译图的顺序为：</p>
-<p>1. 内置的 <code>ToolCallTransformer</code>。 2. 按中间件顺序排列的中间件注册工厂。 3. 调用者通过 <code>createAgent</code> 提供的 <code>streamTransformers</code>。</p>
+<ol>
+<li>1. 内置的 <code>ToolCallTransformer</code>。</li>
+<li>2. 按中间件顺序排列的中间件注册工厂。</li>
+<li>3. 调用者通过 <code>createAgent</code> 提供的 <code>streamTransformers</code>。</li>
+</ol>
 <p>这样可以将内置的工具调用投影保持在消费者转换器之前，并让调用者提供的条目拥有最终决定权。</p>
 <p>请参阅 <a href="/oss/javascript/langgraph/event-streaming.html#build-your-own-projection">构建您自己的投影</a> 了解转换器契约。</p>
 <h2>相关内容</h2>

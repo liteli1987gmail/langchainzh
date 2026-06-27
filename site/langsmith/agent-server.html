@@ -1107,7 +1107,10 @@
 <p>图不必用 LangGraph 编写。你也可以使用 LangGraph 函数式 API 部署用其他框架构建的代理，例如 Strands 或 Google ADK。详细信息请参阅<a href="/langsmith/deploy-other-frameworks.html">部署其他框架</a>。</p>
 <h4>图的加载和编译</h4>
 <p>图的编译方式和时间取决于你如何在<a href="/langsmith/application-structure.html">应用程序结构</a>中注册它：</p>
-<p>1. **已编译的图**（推荐）：导出一个已编译的 <code>CompiledGraph</code> 实例。服务器在容器启动时加载一次，并在每次运行中重复使用它——每个请求没有编译开销。 2. **工厂函数**：导出一个代理工厂函数，服务器在需要图时调用它。仅在你需要每次运行自定义图时使用此方法（例如，根据助手配置选择不同的模型或工具）。保持工厂函数轻量级，因为它们每次调用都会运行。</p>
+<ol>
+<li>1. **已编译的图**（推荐）：导出一个已编译的 <code>CompiledGraph</code> 实例。服务器在容器启动时加载一次，并在每次运行中重复使用它——每个请求没有编译开销。</li>
+<li>2. **工厂函数**：导出一个代理工厂函数，服务器在需要图时调用它。仅在你需要每次运行自定义图时使用此方法（例如，根据助手配置选择不同的模型或工具）。保持工厂函数轻量级，因为它们每次调用都会运行。</li>
+</ol>
 <aside class="callout"><strong>建议</strong>
 <p>除非你明确需要每次运行自定义，否则使用已编译的图。工厂函数每次调用都会增加开销；已编译的图不会。</p>
 </aside>
@@ -1181,7 +1184,13 @@
     style Wn fill:#F2FAFF,stroke:#40668D,stroke-width:2px,color:#2F4B68</code></pre>
 <h3>运行执行生命周期</h3>
 <p>当您调用一个运行时，请求会流经多个组件：</p>
-<p>1. 客户端向 API 服务器发送请求，API 服务器会在持久任务队列中创建一个待处理的运行。 2. 队列工作器拾取该运行，获取其租约，加载相应的图，并开始执行。队列强制执行：对于给定的线程，一次最多只能执行 1 个运行。 3. 在图执行过程中，工作器会向持久层写入检查点（频率取决于<a href="/oss/python/langgraph/persistence.html#durability-modes">持久性模式</a>），并通过配置的 pubsub 提供者广播流式事件。 4. 如果客户端打开了 <code>/stream</code> 连接，API 服务器会订阅 pubsub 通道，并通过 server-sent 事件实时将事件转发给客户端。 5. 当执行完成时，工作器会更新运行状态并释放其槽位以供下一个运行使用。</p>
+<ol>
+<li>1. 客户端向 API 服务器发送请求，API 服务器会在持久任务队列中创建一个待处理的运行。</li>
+<li>2. 队列工作器拾取该运行，获取其租约，加载相应的图，并开始执行。队列强制执行：对于给定的线程，一次最多只能执行 1 个运行。</li>
+<li>3. 在图执行过程中，工作器会向持久层写入检查点（频率取决于<a href="/oss/python/langgraph/persistence.html#durability-modes">持久性模式</a>），并通过配置的 pubsub 提供者广播流式事件。</li>
+<li>4. 如果客户端打开了 <code>/stream</code> 连接，API 服务器会订阅 pubsub 通道，并通过 server-sent 事件实时将事件转发给客户端。</li>
+<li>5. 当执行完成时，工作器会更新运行状态并释放其槽位以供下一个运行使用。</li>
+</ol>
 <p>每个工作器最多可同时处理 <a href="/langsmith/env-var-cloud.html"><code>N_JOBS_PER_WORKER</code></a> 个运行（默认：10），因此单个工作器容器可以并行处理多个运行。请参阅<a href="/langsmith/agent-server-scale.html">配置 Agent Server 以实现扩展</a> 以获取调优指南。</p>
 <h2>了解更多</h2>
 <ul>

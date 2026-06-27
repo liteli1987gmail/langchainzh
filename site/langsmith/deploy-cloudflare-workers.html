@@ -1098,9 +1098,23 @@ npx wrangler secret put OPENAI_API_KEY</code></pre>
 <h2>必需的 API 端点</h2>
 <p>该应用在 <code>/api/threads/...</code> 下暴露了 Agent Streaming Protocol。路由在 <code>worker/index.ts</code> 中使用 <a href="https://hono.dev">Hono</a> 实现。</p>
 <h3>最小配置（流式聊天）</h3>
-<p>| Method | Path | Purpose | | --- | --- | --- | | <code>POST</code> | <code>/api/threads/:threadId/commands</code> | 接受协议命令（<code>run.start</code>、…）并启动 agent 运行 | | <code>POST</code> | <code>/api/threads/:threadId/stream</code> | 运行的协议事件 SSE 流 | | <code>GET</code> / <code>POST</code> | <code>/api/threads/:threadId/state</code> | 读取和引导检查点线程状态 |</p>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/commands</code></td><td>接受协议命令（<code>run.start</code>、…）并启动 agent 运行</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/stream</code></td><td>运行的协议事件 SSE 流</td></tr>
+<tr><td><code>GET</code> / <code>POST</code></td><td><code>/api/threads/:threadId/state</code></td><td>读取和引导检查点线程状态</td></tr>
+</tbody>
+</table>
 <h3>可选配置（侧边栏）</h3>
-<p>| Method | Path | Purpose | | --- | --- | --- | | <code>GET</code> | <code>/api/threads</code> | 列出检查点已知的所有线程 | | <code>DELETE</code> | <code>/api/threads/:threadId</code> | 删除线程的会话和检查点 | | <code>POST</code> | <code>/api/threads/:threadId/history</code> | 分页检查点历史 |</p>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/api/threads</code></td><td>列出检查点已知的所有线程</td></tr>
+<tr><td><code>DELETE</code></td><td><code>/api/threads/:threadId</code></td><td>删除线程的会话和检查点</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/history</code></td><td>分页检查点历史</td></tr>
+</tbody>
+</table>
 <h3>请求流程</h3>
 <pre><code data-language="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;lineColor&quot;: &quot;#40668D&quot;, &quot;primaryColor&quot;: &quot;#E5F4FF&quot;, &quot;primaryTextColor&quot;: &quot;#030710&quot;, &quot;primaryBorderColor&quot;: &quot;#006DDD&quot;}}}%%
 flowchart TB
@@ -1142,14 +1156,35 @@ flowchart TB
   class browser,worker process
   class do trigger
   class agent output</code></pre>
-<p>1. 引导线程状态（<code>GET</code>/<code>POST /state</code>）。 2. 提交时，SDK 向 <code>/commands</code> 发送 <code>run.start</code> 并接收 <code>run_id</code>。 3. Worker 启动图运行并将每个协议事件分散到线程的 **Durable Object** 中。 4. SDK 订阅 <code>/stream</code>（SSE）。DO 重放缓冲事件并在实时帧期间保持连接，即使 Worker 隔离重启也不会中断。 5. 子代理（<code>task</code>）运行发出命名空间事件，显示为 <code>stream.subagents</code>。</p>
+<ol>
+<li>1. 引导线程状态（<code>GET</code>/<code>POST /state</code>）。</li>
+<li>2. 提交时，SDK 向 <code>/commands</code> 发送 <code>run.start</code> 并接收 <code>run_id</code>。</li>
+<li>3. Worker 启动图运行并将每个协议事件分散到线程的 **Durable Object** 中。</li>
+<li>4. SDK 订阅 <code>/stream</code>（SSE）。DO 重放缓冲事件并在实时帧期间保持连接，即使 Worker 隔离重启也不会中断。</li>
+<li>5. 子代理（<code>task</code>）运行发出命名空间事件，显示为 <code>stream.subagents</code>。</li>
+</ol>
 <h2>Cloudflare 后端设计</h2>
-<p>| 关注点 | 实现 | | --- | --- | | 前端 | Vite + React SPA（<code>src/</code>） | | API 层 | <code>worker/index.ts</code> 中的 Hono 路由 | | 运行时 | Workers V8 + <code>nodejs_compat</code> | | SSE 重放 | 每线程 **Durable Object**（<code>ThreadSession</code>） | | Agent 运行 | Worker 隔离；协议事件 POST 到 DO | | 静态资源 | Workers Assets（<code>wrangler.jsonc</code> → <code>assets</code>） | | 密钥 | <code>wrangler secret</code> / <code>.dev.vars</code> | | 本地开发 | <code>vite</code>（Cloudflare Vite 插件运行 Worker 运行时） |</p>
+<table>
+<thead><tr><th>关注点</th><th>实现</th></tr></thead>
+<tbody>
+<tr><td>前端</td><td>Vite + React SPA（<code>src/</code>）</td></tr>
+<tr><td>API 层</td><td><code>worker/index.ts</code> 中的 Hono 路由</td></tr>
+<tr><td>运行时</td><td>Workers V8 + <code>nodejs_compat</code></td></tr>
+<tr><td>SSE 重放</td><td>每线程 **Durable Object**（<code>ThreadSession</code>）</td></tr>
+<tr><td>Agent 运行</td><td>Worker 隔离；协议事件 POST 到 DO</td></tr>
+<tr><td>静态资源</td><td>Workers Assets（<code>wrangler.jsonc</code> → <code>assets</code>）</td></tr>
+<tr><td>密钥</td><td><code>wrangler secret</code> / <code>.dev.vars</code></td></tr>
+<tr><td>本地开发</td><td><code>vite</code>（Cloudflare Vite 插件运行 Worker 运行时）</td></tr>
+</tbody>
+</table>
 <p>**Worker**（agent + 检查点器）和 **Durable Object**（SSE 事件日志）之间的分离是 Cloudflare 上的主要设计选择。Worker 隔离是临时的，因此重放缓冲区存在于 Durable Objects 中而不是进程内存中。</p>
 <h2>生产环境持久化</h2>
 <p>开箱即用，agent 使用内存中的 <code>MemorySaver</code> 检查点器（<code>worker/agent/index.ts</code>）。这适用于本地开发和演示，但在 Cloudflare 上（多个隔离、冷启动）对话状态在部署或隔离之间**不是持久化的**。</p>
 <p>对于生产环境：</p>
-<p>1. 换用<a href="/oss/python/langgraph/checkpointers.html#checkpointer-libraries">持久化检查点器</a>（例如通过 Hyperdrive 的 Postgres，或自定义 DO 支持的存储）。 2. 保持每线程 Durable Objects 用于 SSE 重放（或将事件日志持久化到 DO 存储 / KV 以实现长期重连）。</p>
+<ol>
+<li>1. 换用<a href="/oss/python/langgraph/checkpointers.html#checkpointer-libraries">持久化检查点器</a>（例如通过 Hyperdrive 的 Postgres，或自定义 DO 支持的存储）。</li>
+<li>2. 保持每线程 Durable Objects 用于 SSE 重放（或将事件日志持久化到 DO 存储 / KV 以实现长期重连）。</li>
+</ol>
 <p>更多信息请参见<a href="/oss/python/langgraph/checkpointers.html#checkpointer-libraries">检查点器库</a>和<a href="/oss/python/langgraph/add-memory.html">添加内存 / 持久化</a>。</p>
 <h2>本地开发</h2>
 <pre><code data-language="bash">cp .env.example .dev.vars   # set OPENAI_API_KEY

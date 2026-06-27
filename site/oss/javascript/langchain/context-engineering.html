@@ -1078,7 +1078,10 @@
 <p>构建 Agent（或任何 LLM 应用）的难点在于使其足够可靠。虽然它们可能在原型阶段工作正常，但在实际使用场景中往往会失败。</p>
 <h3>Agent 为何会失败？</h3>
 <p>当 Agent 失败时，通常是因为 Agent 内部的 LLM 调用采取了错误的操作/没有做出我们期望的行为。LLM 失败的原因有以下两个：</p>
-<p>1. 底层 LLM 能力不足 2. 没有向 LLM 传递&quot;正确&quot;的上下文</p>
+<ol>
+<li>1. 底层 LLM 能力不足</li>
+<li>2. 没有向 LLM 传递&quot;正确&quot;的上下文</li>
+</ol>
 <p>大多数情况下——实际上第二个原因才是导致 Agent 不可靠的根本所在。</p>
 <p>**上下文工程** 是以正确的格式提供正确的信息和工具，以便 LLM 能够完成任务。这是 AI 工程师的首要工作。这种&quot;正确&quot;上下文的缺失是实现更可靠 Agent 的最大障碍，而 LangChain 的 Agent 抽象层专门设计用于促进上下文工程。</p>
 <aside class="callout"><strong>建议</strong>
@@ -1086,7 +1089,10 @@
 </aside>
 <h3>Agent 循环</h3>
 <p>一个典型的 Agent 循环包含两个主要步骤：</p>
-<p>1. **模型调用** - 使用提示词和可用工具调用 LLM，返回响应或执行工具的请求 2. **工具执行** - 执行 LLM 请求的工具，返回工具结果</p>
+<ol>
+<li>1. **模型调用** - 使用提示词和可用工具调用 LLM，返回响应或执行工具的请求</li>
+<li>2. **工具执行** - 执行 LLM 请求的工具，返回工具结果</li>
+</ol>
 <img
     src="/oss/images/core_agent_loop.png"
     alt="核心 Agent 循环图"
@@ -1095,7 +1101,14 @@
 <p>此循环会持续执行，直到 LLM 决定结束。</p>
 <h3>你可以控制的内容</h3>
 <p>要构建可靠的 Agent，你需要控制 Agent 循环中每个步骤发生的事情，以及步骤之间发生的事情。</p>
-<p>| 上下文类型 | 你控制的内容 | 瞬态还是持久态 | |--------------|------------------|-------------------------| | **<a href="#model-context">模型上下文</a>** | 模型调用的输入内容（指令、消息历史、工具、响应格式） | 瞬态 | | **<a href="#tool-context">工具上下文</a>** | 工具可以访问和产生的内容（对状态、存储、运行时上下文的读写） | 持久态 | | **<a href="#life-cycle-context">生命周期上下文</a>** | 模型调用和工具调用之间发生的事情（摘要、护栏、日志记录等） | 持久态 |</p>
+<table>
+<thead><tr><th>上下文类型</th><th>你控制的内容</th><th>瞬态还是持久态</th></tr></thead>
+<tbody>
+<tr><td>**<a href="#model-context">模型上下文</a>**</td><td>模型调用的输入内容（指令、消息历史、工具、响应格式）</td><td>瞬态</td></tr>
+<tr><td>**<a href="#tool-context">工具上下文</a>**</td><td>工具可以访问和产生的内容（对状态、存储、运行时上下文的读写）</td><td>持久态</td></tr>
+<tr><td>**<a href="#life-cycle-context">生命周期上下文</a>**</td><td>模型调用和工具调用之间发生的事情（摘要、护栏、日志记录等）</td><td>持久态</td></tr>
+</tbody>
+</table>
 <section class="card-grid cols-2">
 <h3>瞬态上下文</h3>
 <p>LLM 在单次调用中看到的内容。你可以修改消息、工具或提示词，而不会更改状态中保存的内容。</p>
@@ -1104,7 +1117,14 @@
 </section>
 <h3>数据源</h3>
 <p>在整个过程中，你的 Agent 会访问（读取/写入）不同的数据源：</p>
-<p>| 数据源 | 也称为 | 范围 | 示例 | |-------------|---------------|-------|----------| | **运行时上下文** | 静态配置 | 对话级别 | 用户 ID、API 密钥、数据库连接、权限、环境设置 | | **状态** | 短期记忆 | 对话级别 | 当前消息、上传的文件、认证状态、工具结果 | | **存储** | 长期记忆 | 跨对话 | 用户偏好、提取的洞察、记忆、历史数据 |</p>
+<table>
+<thead><tr><th>数据源</th><th>也称为</th><th>范围</th><th>示例</th></tr></thead>
+<tbody>
+<tr><td>**运行时上下文**</td><td>静态配置</td><td>对话级别</td><td>用户 ID、API 密钥、数据库连接、权限、环境设置</td></tr>
+<tr><td>**状态**</td><td>短期记忆</td><td>对话级别</td><td>当前消息、上传的文件、认证状态、工具结果</td></tr>
+<tr><td>**存储**</td><td>长期记忆</td><td>跨对话</td><td>用户偏好、提取的洞察、记忆、历史数据</td></tr>
+</tbody>
+</table>
 <h3>工作原理</h3>
 <p>LangChain <a href="/oss/javascript/langchain/middleware.html">中间件</a> 是在底层使开发者使用 LangChain 进行上下文工程变得实用的机制。</p>
 <p>中间件允许你钩入 Agent 生命周期的任何步骤并：</p>
@@ -2507,7 +2527,10 @@ class CustomerSupportTicket(BaseModel):
 <h2>生命周期上下文</h2>
 <p>控制核心代理步骤**之间**发生的事情——拦截数据流以实现跨领域关注点，如摘要生成、护栏和日志记录。</p>
 <p>正如您在<a href="#model-context">模型上下文</a>和<a href="#tool-context">工具上下文</a>中所见，<a href="/oss/javascript/langchain/middleware.html">中间件</a>是使上下文工程变得实用的机制。中间件允许您挂钩到代理生命周期的任何步骤，并可以：</p>
-<p>1. **更新上下文** - 修改状态和存储以保留更改、更新对话历史或保存洞察 2. **跳入生命周期** - 根据上下文移动到代理循环中的不同步骤（例如，如果满足条件则跳过工具执行，使用修改后的上下文重复模型调用）</p>
+<ol>
+<li>1. **更新上下文** - 修改状态和存储以保留更改、更新对话历史或保存洞察</li>
+<li>2. **跳入生命周期** - 根据上下文移动到代理循环中的不同步骤（例如，如果满足条件则跳过工具执行，使用修改后的上下文重复模型调用）</li>
+</ol>
 <img
     src="/oss/images/middleware_final.png"
     alt="代理循环中的中间件钩子"
@@ -2529,13 +2552,24 @@ class CustomerSupportTicket(BaseModel):
   ],
 });</code></pre>
 <p>当对话超出 token 限制时，<code>SummarizationMiddleware</code> 会自动：</p>
-<p>1. 使用单独的 LLM 调用来总结较早的消息 2. 用摘要消息替换它们（在 State 中永久替换） 3. 保持最近的消息完整以保留上下文</p>
+<ol>
+<li>1. 使用单独的 LLM 调用来总结较早的消息</li>
+<li>2. 用摘要消息替换它们（在 State 中永久替换）</li>
+<li>3. 保持最近的消息完整以保留上下文</li>
+</ol>
 <p>总结后的对话历史会被永久更新——后续轮次将看到摘要而非原始消息。</p>
 <aside class="callout"><strong>提示</strong>
 <p>有关内置中间件的完整列表、可用的钩子以及如何创建自定义中间件，请参阅<a href="/oss/javascript/langchain/middleware.html">中间件文档</a>。</p>
 </aside>
 <h2>最佳实践</h2>
-<p>1. **从简单开始** - 从静态提示词和工具开始，仅在需要时才添加动态内容 2. **增量测试** - 每次添加一个上下文工程功能 3. **监控性能** - 跟踪模型调用、token 使用量和延迟 4. **使用内置中间件** - 利用 <a href="/oss/javascript/langchain/middleware.html#summarization"><code>SummarizationMiddleware</code></a>、<a href="/oss/javascript/langchain/middleware.html#llm-tool-selector"><code>LLMToolSelectorMiddleware</code></a> 等 5. **记录你的上下文策略** - 明确说明传递了哪些上下文以及原因 6. **理解瞬态与持久化的区别**：模型上下文变更是瞬态的（每次调用），而生命周期上下文变更会持久化到 state</p>
+<ol>
+<li>1. **从简单开始** - 从静态提示词和工具开始，仅在需要时才添加动态内容</li>
+<li>2. **增量测试** - 每次添加一个上下文工程功能</li>
+<li>3. **监控性能** - 跟踪模型调用、token 使用量和延迟</li>
+<li>4. **使用内置中间件** - 利用 <a href="/oss/javascript/langchain/middleware.html#summarization"><code>SummarizationMiddleware</code></a>、<a href="/oss/javascript/langchain/middleware.html#llm-tool-selector"><code>LLMToolSelectorMiddleware</code></a> 等</li>
+<li>5. **记录你的上下文策略** - 明确说明传递了哪些上下文以及原因</li>
+<li>6. **理解瞬态与持久化的区别**：模型上下文变更是瞬态的（每次调用），而生命周期上下文变更会持久化到 state</li>
+</ol>
 <h2>相关资源</h2>
 <ul>
 <li>- <a href="/oss/javascript/concepts/context.html">上下文概念概述</a> - 了解上下文类型及适用场景</li>

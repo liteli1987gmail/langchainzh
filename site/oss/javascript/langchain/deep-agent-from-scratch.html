@@ -1077,20 +1077,40 @@
       <article class="doc"><p>本指南从头开始构建数据分析代理，使用 <code>create_agent</code> 和 Deep Agents 中间件。</p>
 <p><code>create_agent</code> 和 <code>create_deep_agent</code> 都为你提供了对工具、内存等的细粒度控制。 两者的主要区别在于 Deep Agents 已经内置了一系列常用功能，如规划、文件系统工具和子代理。 如果 Deep Agents 的默认框架不符合你的需求，本指南将展示如何从 <code>create_agent</code> 开始，逐步组装框架，这样你可以清楚地看到每个组件的作用，并且只添加你需要的部分。</p>
 <p>按照本指南构建一个代理，实现以下功能：</p>
-<p>1. 接收 CSV 文件进行分析 2. 在隔离的沙箱中编写和执行 Python 代码 3. 将可视化工作委托给专门的子代理 4. 从技能文件中加载数据分析模式</p>
+<ol>
+<li>1. 接收 CSV 文件进行分析</li>
+<li>2. 在隔离的沙箱中编写和执行 Python 代码</li>
+<li>3. 将可视化工作委托给专门的子代理</li>
+<li>4. 从技能文件中加载数据分析模式</li>
+</ol>
 <p>最终堆栈与 <code>create_deep_agent</code> 默认组装的内容相同。</p>
 <h2>你将学到什么</h2>
 <p>每个步骤为同一个数据分析代理添加一项功能：</p>
-<p>| 步骤 | 没有它的问题 | 添加的内容 | |------|-------------------|--------------| | 最小代理 | — | 基线循环：模型 + 工具，无框架 | | 沙箱 + 文件系统 | 代理无法读取 CSV 或运行 Python | 隔离的<a href="/oss/javascript/deepagents/backends.html">后端</a> + 文件和执行工具 | | 摘要 | 长会话达到上下文限制 | 自动历史压缩 | | 技能 | 领域规则使系统提示膨胀 | 通过<a href="/oss/javascript/langchain/multi-agent/skills-sql-assistant.html">渐进式披露</a>按需获取专业知识 | | 子代理 | 图表迭代挤占主线程 | 隔离的工作线程 + 并行委托 |</p>
+<table>
+<thead><tr><th>步骤</th><th>没有它的问题</th><th>添加的内容</th></tr></thead>
+<tbody>
+<tr><td>最小代理</td><td>—</td><td>基线循环：模型 + 工具，无框架</td></tr>
+<tr><td>沙箱 + 文件系统</td><td>代理无法读取 CSV 或运行 Python</td><td>隔离的<a href="/oss/javascript/deepagents/backends.html">后端</a> + 文件和执行工具</td></tr>
+<tr><td>摘要</td><td>长会话达到上下文限制</td><td>自动历史压缩</td></tr>
+<tr><td>技能</td><td>领域规则使系统提示膨胀</td><td>通过<a href="/oss/javascript/langchain/multi-agent/skills-sql-assistant.html">渐进式披露</a>按需获取专业知识</td></tr>
+<tr><td>子代理</td><td>图表迭代挤占主线程</td><td>隔离的工作线程 + 并行委托</td></tr>
+</tbody>
+</table>
 <h2>设置</h2>
 <section class="mdx-block">
 <h3>安装包</h3>
 <p>安装本教程所需的包：</p>
 <pre><code data-language="bash">npm install deepagents langsmith</code></pre>
 <p>本教程使用 <a href="https://reference.langchain.com/javascript/deepagents/backends/LangSmithSandbox"><code>LangSmithSandbox</code></a>，它通过 <code>SandboxClient</code> 配置沙盒。该客户端使用环境中的 <code>LANGSMITH_API_KEY</code> 向 LangSmith 进行身份验证，因此运行本教程需要 API 密钥。设置 LangSmith 还能让您查看代理运行时的追踪信息。</p>
-<p>1. <a href="https://smith.langchain.com?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-langchain-deep-agent-from-scratch">注册免费账户</a>。您可以使用 Google、GitHub 或邮箱注册。 2. 在 **Settings → API Keys** 中<a href="/langsmith/create-account-api-key.html">创建 API 密钥</a>。 3. 导出 LangSmith API 密钥：</p>
+<ol>
+<li>1. <a href="https://smith.langchain.com?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-langchain-deep-agent-from-scratch">注册免费账户</a>。您可以使用 Google、GitHub 或邮箱注册。</li>
+<li>2. 在 **Settings → API Keys** 中<a href="/langsmith/create-account-api-key.html">创建 API 密钥</a>。</li>
+<li>3. 导出 LangSmith API 密钥：</li>
+</ol>
 <pre><code data-language="bash"></code></pre>
-<p>4. 启用跟踪以检查工具调用、中间件步骤和子代理委托，随你添加每个组件时：</p>
+<ol>
+<li>4. 启用跟踪以检查工具调用、中间件步骤和子代理委托，随你添加每个组件时：</li>
+</ol>
 <pre><code data-language="bash"></code></pre>
 </section>
 <section class="mdx-block">
@@ -1160,7 +1180,15 @@ Write a markdown summary to `report.md` alongside any generated charts.</code></
 <p>如果您在<a href="#setup">设置</a>中启用了跟踪，请在 <a href="https://smith.langchain.com/?utm_source=docs&amp;amp;utm_medium=cta&amp;amp;utm_campaign=langsmith-signup&amp;amp;utm_content=oss-langchain-deep-agent-from-scratch">LangSmith</a> 中打开运行。您应该会看到一个对 <code>visualizer</code> 的 <code>task</code> 调用，一个带有自己工具循环的单独子运行，以及返回给监督者的简短结果。</p>
 <h2>您构建的内容</h2>
 <p>您已经构建了一个具有以下中间件的定制智能体：</p>
-<p>| 中间件 | 功能 | |---|---| | <a href="https://reference.langchain.com/javascript/deepagents/middleware/createFilesystemMiddleware"><code>FilesystemMiddleware</code></a> + <code>LangSmithSandbox</code> | 隔离文件系统 + <code>execute</code> 工具 | | <a href="https://reference.langchain.com/javascript/langchain/index/summarizationMiddleware"><code>SummarizationMiddleware</code></a> | 自动上下文压缩 | | <a href="https://reference.langchain.com/javascript/deepagents/middleware/createSkillsMiddleware"><code>SkillsMiddleware</code></a> | 按需加载领域知识 | | <a href="https://reference.langchain.com/javascript/langchain/index/todoListMiddleware"><code>TodoListMiddleware</code></a> + <a href="https://reference.langchain.com/javascript/deepagents/middleware/createSubAgentMiddleware"><code>SubAgentMiddleware</code></a> | 并行可视化子智能体 |</p>
+<table>
+<thead><tr><th>中间件</th><th>功能</th></tr></thead>
+<tbody>
+<tr><td><a href="https://reference.langchain.com/javascript/deepagents/middleware/createFilesystemMiddleware"><code>FilesystemMiddleware</code></a> + <code>LangSmithSandbox</code></td><td>隔离文件系统 + <code>execute</code> 工具</td></tr>
+<tr><td><a href="https://reference.langchain.com/javascript/langchain/index/summarizationMiddleware"><code>SummarizationMiddleware</code></a></td><td>自动上下文压缩</td></tr>
+<tr><td><a href="https://reference.langchain.com/javascript/deepagents/middleware/createSkillsMiddleware"><code>SkillsMiddleware</code></a></td><td>按需加载领域知识</td></tr>
+<tr><td><a href="https://reference.langchain.com/javascript/langchain/index/todoListMiddleware"><code>TodoListMiddleware</code></a> + <a href="https://reference.langchain.com/javascript/deepagents/middleware/createSubAgentMiddleware"><code>SubAgentMiddleware</code></a></td><td>并行可视化子智能体</td></tr>
+</tbody>
+</table>
 <p>这与 <a href="https://reference.langchain.com/javascript/deepagents/agent/createDeepAgent"><code>createDeepAgent</code></a> 的基础相同：手动组装以便您精确控制包含的内容。</p>
 <p>可能性不仅限于此：请参阅<a href="/oss/javascript/langchain/middleware/built-in.html">预构建中间件</a>获取完整的可组合功能列表，以及 <a href="https://reference.langchain.com/javascript/langchain/index/createAgent"><code>create_agent</code></a> 参考文档了解所有配置选项。</p>
 <p>要使用预组装版本，请参阅<a href="/oss/javascript/deepagents/customization.html">自定义深度智能体</a>。有关使用 <code>createDeepAgent</code> 的完整数据分析示例，请参阅<a href="/oss/javascript/deepagents/data-analysis.html">数据分析</a>。</p>

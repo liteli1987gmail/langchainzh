@@ -1163,13 +1163,31 @@ def calc(expression: str) -&gt; str:
     </code></pre>
 <h3>保留的参数名称</h3>
 <p>以下参数名称是保留的，不能用作工具参数。使用这些名称将导致运行时错误。</p>
-<p>| 参数名称 | 用途 | |----------------|---------| | <code>config</code> | 内部传递 <code>RunnableConfig</code> 给工具 | | <code>runtime</code> | <code>ToolRuntime</code> 参数（访问状态、上下文、存储）|</p>
+<table>
+<thead><tr><th>参数名称</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>config</code></td><td>内部传递 <code>RunnableConfig</code> 给工具</td></tr>
+<tr><td><code>runtime</code></td><td><code>ToolRuntime</code> 参数（访问状态、上下文、存储）</td></tr>
+</tbody>
+</table>
 <p>要访问运行时信息，请使用 <a href="https://reference.langchain.com/python/langchain/tools/#langchain.tools.ToolRuntime"><code>ToolRuntime</code></a> 参数，而不是将自己的参数命名为 <code>config</code> 或 <code>runtime</code>。</p>
 <p>如果您使用 <code>InjectedState</code>、<code>InjectedStore</code>、<code>get_runtime()</code> 或 <code>InjectedToolCallId</code>，请参阅<a href="#migrate-from-older-injection-patterns">从旧版注入模式迁移</a>。</p>
 <h2>访问上下文</h2>
 <p>工具在能够访问对话历史、用户数据和持久内存等运行时信息时最为强大。本节介绍如何从工具内部访问和更新这些信息。</p>
 <p>工具可以通过 <a href="https://reference.langchain.com/python/langchain/tools/#langchain.tools.ToolRuntime"><code>ToolRuntime</code></a> 参数访问运行时信息，该参数提供：</p>
-<p>| 组件 | 描述 | 用例 | |-----------|-------------|----------| | **State** | 短期内存 - 存在于当前对话中的可变数据（消息、计数器、自定义字段） | 访问对话历史、跟踪工具调用次数 | | **Context** | 调用时传递的不可变配置（用户 ID、会话信息） | 根据用户身份个性化响应 | | **Store** | 长期内存 - 跨对话持久存在的数据 | 保存用户偏好、维护知识库 | | **Stream Writer** | 在工具执行过程中发出实时更新 | 显示长时间运行的进度 | | **Execution Info** | 当前执行的标识和重试信息（线程 ID、运行 ID、重试次数） | 访问线程/运行 ID，根据重试状态调整行为 | | **Server Info** | 在 LangGraph Server 上运行时特定于服务器的元数据（助手 ID、图 ID、已认证用户） | 访问助手 ID、图 ID 或已认证用户信息 | | **Config** | 执行的 <a href="https://reference.langchain.com/python/langchain-core/runnables/config/RunnableConfig"><code>RunnableConfig</code></a> | 访问回调、标签和元数据 | | **Tool Call ID** | 当前工具调用的唯一标识符 | 关联工具调用以进行日志和模型调用 |</p>
+<table>
+<thead><tr><th>组件</th><th>描述</th><th>用例</th></tr></thead>
+<tbody>
+<tr><td>**State**</td><td>短期内存 - 存在于当前对话中的可变数据（消息、计数器、自定义字段）</td><td>访问对话历史、跟踪工具调用次数</td></tr>
+<tr><td>**Context**</td><td>调用时传递的不可变配置（用户 ID、会话信息）</td><td>根据用户身份个性化响应</td></tr>
+<tr><td>**Store**</td><td>长期内存 - 跨对话持久存在的数据</td><td>保存用户偏好、维护知识库</td></tr>
+<tr><td>**Stream Writer**</td><td>在工具执行过程中发出实时更新</td><td>显示长时间运行的进度</td></tr>
+<tr><td>**Execution Info**</td><td>当前执行的标识和重试信息（线程 ID、运行 ID、重试次数）</td><td>访问线程/运行 ID，根据重试状态调整行为</td></tr>
+<tr><td>**Server Info**</td><td>在 LangGraph Server 上运行时特定于服务器的元数据（助手 ID、图 ID、已认证用户）</td><td>访问助手 ID、图 ID 或已认证用户信息</td></tr>
+<tr><td>**Config**</td><td>执行的 <a href="https://reference.langchain.com/python/langchain-core/runnables/config/RunnableConfig"><code>RunnableConfig</code></a></td><td>访问回调、标签和元数据</td></tr>
+<tr><td>**Tool Call ID**</td><td>当前工具调用的唯一标识符</td><td>关联工具调用以进行日志和模型调用</td></tr>
+</tbody>
+</table>
 <pre><code data-language="mermaid">graph LR
     %% Runtime Context
     subgraph &quot;🔧 Tool Runtime Context&quot;
@@ -1722,7 +1740,12 @@ def get_message_count(runtime: ToolRuntime) -&gt; str:
 </ul>
 <h3>模式工作原理</h3>
 <p>在两个运行时中，模型看到一个可以调用的普通工具，但实际执行发生在服务器进程之外。</p>
-<p>1. **定义**一个带有 <code>tool(name=..., description=..., args_schema=...)</code> 的无头工具，来自 <code>langchain.tools</code>。无头工具仅包含模式，没有进程内实现。 2. **注册**该工具与 <code>create_agent</code> 或你的 LangGraph 图，以便模型可以正常调用它。 3. **处理**工具被调用时的中断负载。图不会在本地运行，而是暂停，负载形状类似 <code>{&quot;type&quot;: &quot;tool&quot;, &quot;tool_call&quot;: {&quot;id&quot;, &quot;name&quot;, &quot;args&quot;}}</code>。 4. **恢复**你的应用、另一个服务或人工步骤执行操作后恢复图。对于基于浏览器的流程，你可以在前端镜像模式并在那里附加 <code>.implement(...)</code>。</p>
+<ol>
+<li>1. **定义**一个带有 <code>tool(name=..., description=..., args_schema=...)</code> 的无头工具，来自 <code>langchain.tools</code>。无头工具仅包含模式，没有进程内实现。</li>
+<li>2. **注册**该工具与 <code>create_agent</code> 或你的 LangGraph 图，以便模型可以正常调用它。</li>
+<li>3. **处理**工具被调用时的中断负载。图不会在本地运行，而是暂停，负载形状类似 <code>{&quot;type&quot;: &quot;tool&quot;, &quot;tool_call&quot;: {&quot;id&quot;, &quot;name&quot;, &quot;args&quot;}}</code>。</li>
+<li>4. **恢复**你的应用、另一个服务或人工步骤执行操作后恢复图。对于基于浏览器的流程，你可以在前端镜像模式并在那里附加 <code>.implement(...)</code>。</li>
+</ol>
 <aside class="callout"><strong>信息</strong>
 <p>如果你在 Python 中仅用 <code>name</code>、<code>description</code> 和 <code>args_schema</code> 调用 <code>tool(...)</code>，LangChain 会返回一个 <code>HeadlessTool</code>。Python 端没有 <code>.implement()</code> API。</p>
 </aside>

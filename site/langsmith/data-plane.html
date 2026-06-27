@@ -1097,14 +1097,22 @@
 <p>Redis 在每个 Agent Server 中用作服务器和队列 worker 之间通信的方式，并存储临时元数据。Redis 中不存储任何用户或运行数据。</p>
 <h3>通信</h3>
 <p>Agent Server 中的所有运行都由属于每个部署的后台 worker 池执行。为了在这些运行中启用某些功能（如取消和输出流式传输），我们需要一个双向通信通道，用于服务器与处理特定运行的 worker 之间进行通信。我们使用 Redis 来组织这种通信。</p>
-<p>1. Redis 列表用作在新运行创建时立即唤醒 worker 的机制。该列表中仅存储一个哨兵值，不存储任何实际运行信息。Worker 随后从 PostgreSQL 中检索运行信息。 2. Redis 字符串和 Redis PubSub 通道的组合用于服务器向适当的 worker 传达运行取消请求。 3. Redis PubSub 通道由 worker 用于在处理运行时分发代理的流式输出。服务器中任何打开的 <code>/stream</code> 请求都会订阅该通道，并在事件到达时将其转发到响应中。Redis 中不会在任何时候存储任何事件。</p>
+<ol>
+<li>1. Redis 列表用作在新运行创建时立即唤醒 worker 的机制。该列表中仅存储一个哨兵值，不存储任何实际运行信息。Worker 随后从 PostgreSQL 中检索运行信息。</li>
+<li>2. Redis 字符串和 Redis PubSub 通道的组合用于服务器向适当的 worker 传达运行取消请求。</li>
+<li>3. Redis PubSub 通道由 worker 用于在处理运行时分发代理的流式输出。服务器中任何打开的 <code>/stream</code> 请求都会订阅该通道，并在事件到达时将其转发到响应中。Redis 中不会在任何时候存储任何事件。</li>
+</ol>
 <h3>临时元数据</h3>
 <p>Agent Server 中的运行可能会因特定失败而重试（目前仅针对运行期间遇到的临时 PostgreSQL 错误）。为了限制重试次数（目前限制为每个运行 3 次尝试），我们在拾取运行时将尝试次数记录在 Redis 字符串中。这不包含除其 ID 之外的任何特定运行信息，并且会在短时间后过期。</p>
 <h2>数据平面功能</h2>
 <p>本节描述数据平面的各种功能。对于平台特定行为，请参阅<a href="/langsmith/cloud-platform-features.html">云平台功能</a>或<a href="/langsmith/deploy-to-self-hosted-overview.html">部署到自托管</a>。</p>
 <h3>自动扩缩</h3>
 <p><a href="/langsmith/cloud-platform-features.html#deployment-types"><code>Production</code> 类型</a>的部署会自动扩展到最多 10 个容器。扩缩基于 3 个指标：</p>
-<p>1. CPU 利用率 2. 内存利用率 3. 待处理（进行中）<a href="/langsmith/runs.html">运行</a>数量</p>
+<ol>
+<li>1. CPU 利用率</li>
+<li>2. 内存利用率</li>
+<li>3. 待处理（进行中）<a href="/langsmith/runs.html">运行</a>数量</li>
+</ol>
 <p>对于 CPU 利用率，自动扩缩器以 75% 利用率为目标。这意味着自动扩缩器将向上或向下扩展容器数量，以确保 CPU 利用率接近或等于 75%。对于内存利用率，自动扩缩器也以 75% 利用率为目标。</p>
 <p>对于待处理运行数量，自动扩缩器以 10 个待处理运行为目标。例如，如果当前容器数量为 1，但待处理运行数量为 20，则自动扩缩器将把部署扩展到 2 个容器（20 个待处理运行 / 2 个容器 = 每个容器 10 个待处理运行）。</p>
 <p>每个指标都是独立计算的，自动扩缩器将根据导致最大容器数量的指标来确定扩缩操作。</p>
@@ -1118,13 +1126,28 @@
 <p>请参阅<a href="/langsmith/configure-checkpointer.html">配置检查点后端</a>获取设置说明。</p>
 <h3>LangSmith 追踪</h3>
 <p>Agent Server 会自动配置为向 LangSmith 发送追踪。根据各部署选项，详见下表。</p>
-<p>| Cloud | Hybrid | Self-Hosted | |------------|------------------------|----------------------| | 必需&lt;br /&gt;追踪到 LangSmith SaaS。 | 可选&lt;br /&gt;禁用追踪或追踪到 LangSmith SaaS。 | 可选&lt;br /&gt;禁用追踪、追踪到 LangSmith SaaS 或追踪到自托管 LangSmith。 |</p>
+<table>
+<thead><tr><th>Cloud</th><th>Hybrid</th><th>Self-Hosted</th></tr></thead>
+<tbody>
+<tr><td>必需&lt;br /&gt;追踪到 LangSmith SaaS。</td><td>可选&lt;br /&gt;禁用追踪或追踪到 LangSmith SaaS。</td><td>可选&lt;br /&gt;禁用追踪、追踪到 LangSmith SaaS 或追踪到自托管 LangSmith。</td></tr>
+</tbody>
+</table>
 <h3>遥测</h3>
 <p>Agent Server 会自动配置为报告用于计费的遥测元数据。根据各部署选项，详见下表。</p>
-<p>| Cloud | Hybrid | Self-Hosted | |------------|------------------------|----------------------| | 遥测数据发送到 LangSmith SaaS。 | 遥测数据发送到 LangSmith SaaS。 | 空气隙隔离许可证密钥的自我报告使用量（审计）。&lt;br /&gt;LangSmith 许可证密钥的遥测数据发送到 LangSmith SaaS。 |</p>
+<table>
+<thead><tr><th>Cloud</th><th>Hybrid</th><th>Self-Hosted</th></tr></thead>
+<tbody>
+<tr><td>遥测数据发送到 LangSmith SaaS。</td><td>遥测数据发送到 LangSmith SaaS。</td><td>空气隙隔离许可证密钥的自我报告使用量（审计）。&lt;br /&gt;LangSmith 许可证密钥的遥测数据发送到 LangSmith SaaS。</td></tr>
+</tbody>
+</table>
 <h3>许可</h3>
 <p>Agent Server 会自动配置为执行许可证密钥验证。根据各部署选项，详见下表。</p>
-<p>| Cloud | Hybrid | Self-Hosted | |------------|------------------------|----------------------| | LangSmith API Key 在 LangSmith SaaS 上验证。 | LangSmith API Key 在 LangSmith SaaS 上验证。 | 空气隙隔离许可证密钥或平台许可证密钥在 LangSmith SaaS 上验证。 |</p>
+<table>
+<thead><tr><th>Cloud</th><th>Hybrid</th><th>Self-Hosted</th></tr></thead>
+<tbody>
+<tr><td>LangSmith API Key 在 LangSmith SaaS 上验证。</td><td>LangSmith API Key 在 LangSmith SaaS 上验证。</td><td>空气隙隔离许可证密钥或平台许可证密钥在 LangSmith SaaS 上验证。</td></tr>
+</tbody>
+</table>
 <aside class="callout"><strong>提示</strong>
 <p><a href="/use-these-docs.html">Connect these docs</a> to Claude, VSCode, and more via MCP for real-time answers.</p>
 </aside>

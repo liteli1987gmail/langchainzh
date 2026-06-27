@@ -1139,11 +1139,25 @@ pnpm build</code></pre>
 <p>应用通过 <code>/api/threads/...</code> 公开代理流式协议。Nitro 路由处理器位于 <code>server/api/threads/</code>。</p>
 <h3>最小配置（流式聊天）</h3>
 <p>这三个端点足以使用 <code>@langchain/vue</code> 的 <code>HttpAgentServerAdapter</code> 运行单线程流式聊天：</p>
-<p>| 方法 | 路径 | 用途 | | --- | --- | --- | | <code>POST</code> | <code>/api/threads/:threadId/commands</code> | 接受协议命令（<code>run.start</code>，…）并启动代理运行 | | <code>POST</code> | <code>/api/threads/:threadId/stream</code> | 运行的协议事件 SSE 流 | | <code>GET</code> / <code>POST</code> | <code>/api/threads/:threadId/state</code> | 读取和引导检查点线程状态 |</p>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/commands</code></td><td>接受协议命令（<code>run.start</code>，…）并启动代理运行</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/stream</code></td><td>运行的协议事件 SSE 流</td></tr>
+<tr><td><code>GET</code> / <code>POST</code></td><td><code>/api/threads/:threadId/state</code></td><td>读取和引导检查点线程状态</td></tr>
+</tbody>
+</table>
 <p>客户端通过 <code>GET /state</code> 引导线程（404 时使用 <code>POST /state</code>），以便在发送第一条消息之前水合不会 404。</p>
 <h3>可选配置（线程侧边栏）</h3>
 <p>此示例还实现了线程历史侧边栏的端点。如果你的 UI 不需要多线程管理，可以省略它们：</p>
-<p>| 方法 | 路径 | 用途 | | --- | --- | --- | | <code>GET</code> | <code>/api/threads</code> | 列出检查点已知的所有线程 | | <code>DELETE</code> | <code>/api/threads/:threadId</code> | 删除线程的会话和检查点 | | <code>POST</code> | <code>/api/threads/:threadId/history</code> | 分页检查点历史（代理协议） |</p>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/api/threads</code></td><td>列出检查点已知的所有线程</td></tr>
+<tr><td><code>DELETE</code></td><td><code>/api/threads/:threadId</code></td><td>删除线程的会话和检查点</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/history</code></td><td>分页检查点历史（代理协议）</td></tr>
+</tbody>
+</table>
 <h3>请求流程</h3>
 <pre><code data-language="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;lineColor&quot;: &quot;#40668D&quot;, &quot;primaryColor&quot;: &quot;#E5F4FF&quot;, &quot;primaryTextColor&quot;: &quot;#030710&quot;, &quot;primaryBorderColor&quot;: &quot;#006DDD&quot;}}}%%
 flowchart TB
@@ -1181,14 +1195,37 @@ flowchart TB
   class browser,nitro process
   class server trigger
   class agent output</code></pre>
-<p>1. 引导线程状态（<code>GET</code>/<code>POST /state</code>）。 2. 提交时，SDK 向 <code>/commands</code> 发送 <code>run.start</code> 并接收 <code>run_id</code>。 3. SDK 订阅 <code>/stream</code>（SSE）以获取回放和实时协议事件。 4. 子代理（<code>task</code>）运行发出的命名空间事件作为 <code>stream.subagents</code> 暴露。</p>
+<ol>
+<li>1. 引导线程状态（<code>GET</code>/<code>POST /state</code>）。</li>
+<li>2. 提交时，SDK 向 <code>/commands</code> 发送 <code>run.start</code> 并接收 <code>run_id</code>。</li>
+<li>3. SDK 订阅 <code>/stream</code>（SSE）以获取回放和实时协议事件。</li>
+<li>4. 子代理（<code>task</code>）运行发出的命名空间事件作为 <code>stream.subagents</code> 暴露。</li>
+</ol>
 <h2>Nitro 后端设计</h2>
-<p>| 问题 | 实现 | | --- | --- | | 前端 | <code>app/</code> 中的 Vue 组件（为 SSE 包装在 `<code> 中） | | API 层 | </code>server/api/threads/<code> 中的 Nitro 路由处理器 | | 运行时 | Node.js（Nitro 预设取决于部署目标） | | SSE 回放 | 进程本地的 </code>LocalThreadSession<code>（</code>server/utils/session.ts<code>） | | 代理运行 | 同一 Nitro 进程；事件缓存在 LangGraph </code>StreamChannel<code> 中 | | 线程存储 | 内存中的 </code>MemorySaver<code> 检查点器（</code>server/agent/index.ts<code>） | | 密钥 | 本地为 </code>.env`；生产环境为主机环境变量 |</p>
+<table>
+<thead><tr><th>问题</th><th>实现</th></tr></thead>
+<tbody>
+<tr><td>前端</td><td><code>app/</code> 中的 Vue 组件（为 SSE 包装在 `` 中）</td></tr>
+<tr><td>API 层</td><td><code>server/api/threads/</code> 中的 Nitro 路由处理器</td></tr>
+<tr><td>运行时</td><td>Node.js（Nitro 预设取决于部署目标）</td></tr>
+<tr><td>SSE 回放</td><td>进程本地的 <code>LocalThreadSession</code>（<code>server/utils/session.ts</code>）</td></tr>
+<tr><td>代理运行</td><td>同一 Nitro 进程；事件缓存在 LangGraph <code>StreamChannel</code> 中</td></tr>
+<tr><td>线程存储</td><td>内存中的 <code>MemorySaver</code> 检查点器（<code>server/agent/index.ts</code>）</td></tr>
+<tr><td>密钥</td><td>本地为 <code>.env</code>；生产环境为主机环境变量</td></tr>
+</tbody>
+</table>
 <p>代理的检查点器是线程的唯一真实来源。没有客户端缓存：侧边栏始终从服务器获取，重新启动服务器会清除所有线程。</p>
 <h2>生产环境持久化</h2>
 <p>开箱即用，代理使用内存中的 <code>MemorySaver</code> 检查点器（<code>server/agent/index.ts</code>）和进程本地的会话映射（<code>server/utils/runtime.ts</code>）。这适用于本地开发和单实例服务器，但在无服务器或多实例主机上，对话状态在冷启动或副本之间**不是持久化的**。</p>
 <p>对于生产环境，换用<a href="/oss/python/langgraph/checkpointers.html#checkpointer-libraries">持久化检查点器</a>：</p>
-<p>| 包 | 后端 | | --- | --- | | <a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-redis"><code>@langchain/langgraph-checkpoint-redis</code></a> | Redis（<code>RedisSaver</code>） | | <a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-postgres"><code>@langchain/langgraph-checkpoint-postgres</code></a> | Postgres（<code>PostgresSaver</code>） | | <a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-sqlite"><code>@langchain/langgraph-checkpoint-sqlite</code></a> | SQLite（<code>SqliteSaver</code>） |</p>
+<table>
+<thead><tr><th>包</th><th>后端</th></tr></thead>
+<tbody>
+<tr><td><a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-redis"><code>@langchain/langgraph-checkpoint-redis</code></a></td><td>Redis（<code>RedisSaver</code>）</td></tr>
+<tr><td><a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-postgres"><code>@langchain/langgraph-checkpoint-postgres</code></a></td><td>Postgres（<code>PostgresSaver</code>）</td></tr>
+<tr><td><a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-sqlite"><code>@langchain/langgraph-checkpoint-sqlite</code></a></td><td>SQLite（<code>SqliteSaver</code>）</td></tr>
+</tbody>
+</table>
 <p>替换 <code>server/agent/index.ts</code> 中的 <code>MemorySaver</code>，并将新的检查点器传递给 <code>createDeepAgent</code>。Nitro 路由处理器和 <code>server/utils/threads.ts</code> 辅助函数保持不变。</p>
 <p>还需要在 <code>server/utils/runtime.ts</code> 中设置一个共享的会话/回放存储，以便 SSE 重连在无服务器调用之间正常工作。</p>
 <p>更多信息请参阅<a href="/oss/python/langgraph/checkpointers.html#checkpointer-libraries">检查点器库</a>和<a href="/oss/python/langgraph/add-memory.html">添加内存/持久化</a>。</p>

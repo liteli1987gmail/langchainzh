@@ -1178,7 +1178,18 @@ await graph.getState(config);</code></pre>
 )</code></pre>
 <p>:::</p>
 <h4>StateSnapshot 字段</h4>
-<p>| Field | Type | Description | |-------|------|-------------| | <code>values</code> | <code>dict</code> | 此检查点的状态通道值。 | | <code>next</code> | <code>tuple[str, ...]</code> | 接下来要执行的节点名称。空 <code>()</code> 表示图执行完成。 | | <code>config</code> | <code>dict</code> | 包含 <code>thread_id</code>、<code>checkpoint_ns</code> 和 <code>checkpoint_id</code>。 | | <code>metadata</code> | <code>dict</code> | 执行元数据。包含 <code>source</code>（<code>&quot;input&quot;</code>、<code>&quot;loop&quot;</code> 或 <code>&quot;update&quot;</code>）、<code>writes</code>（节点输出）和 <code>step</code>（超步计数器）。 | | <code>created_at</code> | <code>str</code> | 此检查点创建时的 ISO 8601 时间戳。 | | <code>parent_config</code> | <code>dict \| None</code> | 前一个检查点的配置。第一个检查点为 <code>None</code>。 | | <code>tasks</code> | <code>tuple[PregelTask, ...]</code> | 此步骤要执行的任务。每个任务具有 <code>id</code>、<code>name</code>、<code>error</code>、<code>interrupts</code>，以及可选的 <code>state</code>（子图快照，使用 <code>subgraphs=True</code> 时）。 |</p>
+<table>
+<thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>values</code></td><td><code>dict</code></td><td>此检查点的状态通道值。</td></tr>
+<tr><td><code>next</code></td><td><code>tuple[str, ...]</code></td><td>接下来要执行的节点名称。空 <code>()</code> 表示图执行完成。</td></tr>
+<tr><td><code>config</code></td><td><code>dict</code></td><td>包含 <code>thread_id</code>、<code>checkpoint_ns</code> 和 <code>checkpoint_id</code>。</td></tr>
+<tr><td><code>metadata</code></td><td><code>dict</code></td><td>执行元数据。包含 <code>source</code>（<code>&quot;input&quot;</code>、<code>&quot;loop&quot;</code> 或 <code>&quot;update&quot;</code>）、<code>writes</code>（节点输出）和 <code>step</code>（超步计数器）。</td></tr>
+<tr><td><code>created_at</code></td><td><code>str</code></td><td>此检查点创建时的 ISO 8601 时间戳。</td></tr>
+<tr><td><code>parent_config</code></td><td>`dict \</td><td>None`</td></tr>
+<tr><td><code>tasks</code></td><td><code>tuple[PregelTask, ...]</code></td><td>此步骤要执行的任务。每个任务具有 <code>id</code>、<code>name</code>、<code>error</code>、<code>interrupts</code>，以及可选的 <code>state</code>（子图快照，使用 <code>subgraphs=True</code> 时）。</td></tr>
+</tbody>
+</table>
 <h3>获取状态历史</h3>
 <p>您可以通过调用 <a href="https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.CompiledStateGraph.get_state_history"><code>graph.get_state_history(config)</code></a> 获取给定线程的完整图执行历史。这将返回与 config 中提供的线程 ID 关联的 <code>StateSnapshot</code> 对象列表。重要的是，检查点将按时间顺序排列，最新的检查点 / <code>StateSnapshot</code> 位于列表首位。</p>
 <pre><code data-language="python">config = {&quot;configurable&quot;: {&quot;thread_id&quot;: &quot;1&quot;}}
@@ -1644,7 +1655,15 @@ CREATE TABLE writes (
 <p>如果编写自定义序列化器，请确保它能够往返处理来自 <code>langgraph.checkpoint.serde.types</code> 的 <code>_DeltaSnapshot</code>。</p>
 <h3>扩展功能</h3>
 <p>这些方法是可选的，但可以解锁额外的 Agent Server 功能。如果你的存储后端能够高效支持，请实现它们。</p>
-<p>| 方法 | 启用功能 | |---|---| | <code>adelete_for_runs</code> | 回滚多任务策略 | | <code>acopy_thread</code> | 高效的线程分叉 | | <code>aprune</code> | 线程历史修剪 | | <code>aget_delta_channel_history</code> | 高效的 delta 通道状态重建（见下文） |</p>
+<table>
+<thead><tr><th>方法</th><th>启用功能</th></tr></thead>
+<tbody>
+<tr><td><code>adelete_for_runs</code></td><td>回滚多任务策略</td></tr>
+<tr><td><code>acopy_thread</code></td><td>高效的线程分叉</td></tr>
+<tr><td><code>aprune</code></td><td>线程历史修剪</td></tr>
+<tr><td><code>aget_delta_channel_history</code></td><td>高效的 delta 通道状态重建（见下文）</td></tr>
+</tbody>
+</table>
 <p>Agent Server 在启动时自动检测你的 checkpointer 实现了哪些功能，并激活相应的特性。</p>
 <h3>Delta 通道支持</h3>
 <aside class="callout"><strong>信息</strong>
@@ -1761,7 +1780,11 @@ def get_delta_channel_history(self, *, config, channels):
 <h4>使用 delta channel 的裁剪</h4>
 <p><code>DeltaChannel</code> 状态不是自包含在单个检查点中的——它依赖于回溯到最近 <code>_DeltaSnapshot</code> 的祖先写入链。如果您实现了 <code>prune</code> 或 <code>delete_for_runs</code>，则不能删除存活检查点的 delta channel 所依赖的写入行。</p>
 <p>安全选项：</p>
-<p>1. **裁剪前先遍历** — 对于每个您打算保留的检查点，遍历其祖先链并将直到最近 <code>_DeltaSnapshot</code> 的所有写入行标记为不可删除。 2. **裁剪前强制创建快照** — 在您要保留的检查点上重写 <code>channel_values[ch] = _DeltaSnapshot(reconstructed_value)</code>，然后自由删除祖先。 3. **跳过 delta-channel 线程的裁剪** — 如果您尚不需要裁剪，这是最安全的短期选项。</p>
+<ol>
+<li>1. **裁剪前先遍历** — 对于每个您打算保留的检查点，遍历其祖先链并将直到最近 <code>_DeltaSnapshot</code> 的所有写入行标记为不可删除。</li>
+<li>2. **裁剪前强制创建快照** — 在您要保留的检查点上重写 <code>channel_values[ch] = _DeltaSnapshot(reconstructed_value)</code>，然后自由删除祖先。</li>
+<li>3. **跳过 delta-channel 线程的裁剪** — 如果您尚不需要裁剪，这是最安全的短期选项。</li>
+</ol>
 <h4>使用 delta channel 复制线程</h4>
 <p>在实现 <code>copy_thread</code> 时，复制完整的祖先链——而不仅仅是头部检查点。目标线程必须为每个 delta channel 拥有回溯到至少一个 <code>_DeltaSnapshot</code> 的写入行，否则这些 channel 在复制后将重建为空。</p>
 <h3>使用一致性套件进行测试</h3>

@@ -1077,7 +1077,12 @@
       <article class="doc"><p><a href="https://github.com/thesysdev/openui">OpenUI</a> 是一个生成式 UI 库，它允许语言模型以称为 **openui-lang** 的声明式格式生成完整的交互式 UI。与返回聊天消息不同，代理返回一个组件树，包含卡片、图表、表格、标签页和表单，<code>Renderer</code> 将其转换为真正的 React UI。</p>
 <p>此集成非常适合数据密集型输出，如报告、仪表板和数据浏览器，在这些场景中模型既是数据分析师也是 UI 设计师。</p>
 <h2>工作原理</h2>
-<p>1. **生成系统提示词：** 在启动时调用一次 <code>openuiLibrary.prompt()</code>；它会产生一个完整的 openui-lang 参考，供模型编写有效的组件树 2. **在首条消息中注入：** 在新对话开始时，将系统提示词作为开场系统消息发送 3. **模型编写 openui-lang：** 模型响应的是一个程序，如 <code>root = Stack([header, kpis, chart])</code>，而不是文本 4. **使用 <code>Renderer</code> 渲染：** 将文本传递给 OpenUI 的 <code>Renderer</code> 和组件库；它会解析并渲染该树</p>
+<ol>
+<li>1. **生成系统提示词：** 在启动时调用一次 <code>openuiLibrary.prompt()</code>；它会产生一个完整的 openui-lang 参考，供模型编写有效的组件树</li>
+<li>2. **在首条消息中注入：** 在新对话开始时，将系统提示词作为开场系统消息发送</li>
+<li>3. **模型编写 openui-lang：** 模型响应的是一个程序，如 <code>root = Stack([header, kpis, chart])</code>，而不是文本</li>
+<li>4. **使用 <code>Renderer</code> 渲染：** 将文本传递给 OpenUI 的 <code>Renderer</code> 和组件库；它会解析并渲染该树</li>
+</ol>
 <pre><code data-language="mermaid">%%{
   init: {
     &quot;fontFamily&quot;: &quot;monospace&quot;,
@@ -1194,7 +1199,16 @@ marketSection = Card([CardHeader(&quot;Market Breakdown&quot;), tbl, ch1])</code
 <p>启用提升（推荐）后，<code>root</code> 行会首先写入，以便页面结构立即显示，每个部分在模型定义时逐步填充。</p>
 <h2>渐进式渲染工具</h2>
 <p>将 <a href="https://reference.langchain.com/javascript/langchain-react/index/useStream"><code>useStream</code></a> 直接连接到 <code>Renderer</code> 会导致每个流式 token 都触发重新渲染，并在每次响应中产生数百次无效的重新解析。当图表组件的数据尚未到达时，这会导致其崩溃。以下工具可以解决这些问题：</p>
-<p>| 问题 | 解决方案 | | --- | --- | | **不完整的字符串字面量** | <code>truncateAtOpenString</code> / <code>closeOrTruncateOpenString</code> — 在解析前删除或关闭不完整的字符串 | | **Token 级别的抖动** | <code>useStableText</code> — 在完整的语句边界（<code>name = Expr(…)</code>）而非每个 token 处控制 Renderer 更新 | | **图表空数据崩溃** | <code>chartDataRefsResolved</code> — 在将图表纳入快照前验证其 <code>Series</code> 和标签数组已定义 | | **尚未有 <code>root</code> / 回退方案** | <code>buildProgressiveRoot</code> — 当模型尚未写入 <code>root</code> 时，从顶级变量合成 <code>root = Stack([…])</code> | | **Snake_case 标识符** | <code>sanitizeIdentifiers</code> — 解析器仅接受 camelCase；将模型生成的任何 <code>snake_case</code> 名称进行转换 |</p>
+<table>
+<thead><tr><th>问题</th><th>解决方案</th></tr></thead>
+<tbody>
+<tr><td>**不完整的字符串字面量**</td><td><code>truncateAtOpenString</code> / <code>closeOrTruncateOpenString</code> — 在解析前删除或关闭不完整的字符串</td></tr>
+<tr><td>**Token 级别的抖动**</td><td><code>useStableText</code> — 在完整的语句边界（<code>name = Expr(…)</code>）而非每个 token 处控制 Renderer 更新</td></tr>
+<tr><td>**图表空数据崩溃**</td><td><code>chartDataRefsResolved</code> — 在将图表纳入快照前验证其 <code>Series</code> 和标签数组已定义</td></tr>
+<tr><td>**尚未有 <code>root</code> / 回退方案**</td><td><code>buildProgressiveRoot</code> — 当模型尚未写入 <code>root</code> 时，从顶级变量合成 <code>root = Stack([…])</code></td></tr>
+<tr><td>**Snake_case 标识符**</td><td><code>sanitizeIdentifiers</code> — 解析器仅接受 camelCase；将模型生成的任何 <code>snake_case</code> 名称进行转换</td></tr>
+</tbody>
+</table>
 <p>将完整代码块复制到项目中，并将 <code>stable</code> 传递给 ``：</p>
 <pre><code data-language="tsx expandable">  useCallback,
   useEffect,

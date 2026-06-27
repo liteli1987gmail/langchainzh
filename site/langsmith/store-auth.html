@@ -1078,7 +1078,11 @@
 <p>本指南介绍如何在 LangSmith Deployment 中配置该隔离。相同的模式也适用于启用了自定义认证的<a href="/langsmith/self-hosted.html">自托管</a>部署。</p>
 <h2>工作原理</h2>
 <p>Store 项由 **namespace** 元组（例如 <code>(&quot;memories&quot;, &quot;preferences&quot;)</code>）和 **key** 组织。与线程和助手不同，store 命名空间由您的应用程序定义，因此授权的工作方式不同：</p>
-<p>1. 您的 <code>@auth.authenticate</code> 处理程序验证调用者并为每个用户返回唯一的 <code>identity</code>。 2. 您的 <code>@auth.on.store</code> 处理程序**验证**命名空间以该身份开头，或者**重写**命名空间以添加该身份前缀。 3. 服务器使用验证或重写后的命名空间执行实际读取或写入操作。</p>
+<ol>
+<li>1. 您的 <code>@auth.authenticate</code> 处理程序验证调用者并为每个用户返回唯一的 <code>identity</code>。</li>
+<li>2. 您的 <code>@auth.on.store</code> 处理程序**验证**命名空间以该身份开头，或者**重写**命名空间以添加该身份前缀。</li>
+<li>3. 服务器使用验证或重写后的命名空间执行实际读取或写入操作。</li>
+</ol>
 <p>用户写入逻辑命名空间 <code>(&quot;memories&quot;,)</code> 时，自动前缀重写实际上会将数据存储在 <code>(&quot;user-123&quot;, &quot;memories&quot;)</code>。其他用户无法读取或覆盖该数据，因为他们的请求被限定在 <code>(&quot;user-456&quot;, ...)</code> 范围内。</p>
 <aside class="callout"><strong>提示</strong>
 <p>Store 授权处理程序接收一个**可变的** <code>value</code> 字典。对 <code>value[&quot;namespace&quot;]</code> 的更改会在操作中生效。您不需要像线程那样返回元数据过滤器。</p>
@@ -1102,7 +1106,13 @@
 <p><code>auth</code> 对象必须暴露一个 <code>langgraph_sdk.Auth</code> 实例（通常命名为 <code>auth</code>）。</p>
 <h2>选择存储授权模式</h2>
 <p>存储隔离需要一个 <code>@auth.on.store</code> 处理器。有两种常见模式效果良好；请根据您希望用户作用域位于何处来选择。</p>
-<p>| 模式 | 用户作用域设置位置 | 最佳场景 | | --- | --- | --- | | **显式命名空间 + 拒绝** | 应用程序代码将 <code>user_id</code> 放在每个命名空间的第一位 | 您已经将用户身份传递到图代码中，或者您希望命名空间反映完整存储路径 | | **自动前缀重写** | 认证处理器在逻辑命名空间前添加 <code>ctx.user.identity</code> | 您希望更简单的代理代码和在 API 层透明的隔离 |</p>
+<table>
+<thead><tr><th>模式</th><th>用户作用域设置位置</th><th>最佳场景</th></tr></thead>
+<tbody>
+<tr><td>**显式命名空间 + 拒绝**</td><td>应用程序代码将 <code>user_id</code> 放在每个命名空间的第一位</td><td>您已经将用户身份传递到图代码中，或者您希望命名空间反映完整存储路径</td></tr>
+<tr><td>**自动前缀重写**</td><td>认证处理器在逻辑命名空间前添加 <code>ctx.user.identity</code></td><td>您希望更简单的代理代码和在 API 层透明的隔离</td></tr>
+</tbody>
+</table>
 <p>两种模式都使用单一的 <code>@auth.on.store</code> 处理器来覆盖所有存储操作（<code>put</code>、<code>get</code>、<code>search</code>、<code>delete</code> 和 <code>list_namespaces</code>）。只有在需要为每个操作设置不同规则时，才需要特定操作的处理器，如 <code>@auth.on.store.put</code>。</p>
 <aside class="callout"><strong>建议</strong>
 <p>如果您使用全局 <code>@auth.on</code> 处理器拒绝未处理的请求，请显式注册 <code>@auth.on.store</code> 以允许存储操作。请参阅 <a href="https://reference.langchain.com/python/langgraph-sdk/auth/Auth">Auth 参考文档</a> 了解特定操作的处理器名称。</p>
@@ -1233,7 +1243,13 @@ if __name__ == &quot;__main__&quot;:
     asyncio.run(main())</code></pre>
 <h2>与线程隔离结合使用</h2>
 <p>存储隔离和<a href="/langsmith/resource-auth.html">线程隔离</a>解决不同的问题：</p>
-<p>| 关注点 | 机制 | 范围 | | --- | --- | --- | | 对话历史 | 线程元数据过滤器（<code>owner</code>） | 每个线程的检查点和消息 | | 长期记忆 | 存储命名空间重写 | 跨线程记忆、偏好设置和文档 |</p>
+<table>
+<thead><tr><th>关注点</th><th>机制</th><th>范围</th></tr></thead>
+<tbody>
+<tr><td>对话历史</td><td>线程元数据过滤器（<code>owner</code>）</td><td>每个线程的检查点和消息</td></tr>
+<tr><td>长期记忆</td><td>存储命名空间重写</td><td>跨线程记忆、偏好设置和文档</td></tr>
+</tbody>
+</table>
 <p>对于多用户代理，请同时配置两者。参见<a href="/langsmith/resource-auth.html">使对话保持私密</a>了解线程和运行范围。</p>
 <h2>另请参阅</h2>
 <ul>

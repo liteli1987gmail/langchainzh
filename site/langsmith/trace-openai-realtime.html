@@ -1080,9 +1080,36 @@
 <h2>事件模型</h2>
 <p>每个事件都有一个可辨识的 <code>type</code> 字符串，表示它代表的含义：音频、工具调用等。</p>
 <p>客户端**发送**事件来配置会话和流式传输音频。您不会将这些作为跨度追踪；它们是请求，其效果作为服务器事件返回：</p>
-<p>| 客户端事件 | 功能 | | --- | --- | | <code>session.update</code> | 配置会话：指令、语音、音频格式、转录模型、语音检测、工具。 | | <code>input_audio_buffer.append</code> | 流式传输 base64 PCM16 麦克风片段。持续发送。 | | <code>conversation.item.create</code> | 添加一个项目——用于在运行工具后返回 <code>function_call_output</code>。 | | <code>response.create</code> | 请求模型生成响应（当语音检测使用 <code>create_response: false</code> 时需要显式调用）。 |</p>
+<table>
+<thead><tr><th>客户端事件</th><th>功能</th></tr></thead>
+<tbody>
+<tr><td><code>session.update</code></td><td>配置会话：指令、语音、音频格式、转录模型、语音检测、工具。</td></tr>
+<tr><td><code>input_audio_buffer.append</code></td><td>流式传输 base64 PCM16 麦克风片段。持续发送。</td></tr>
+<tr><td><code>conversation.item.create</code></td><td>添加一个项目——用于在运行工具后返回 <code>function_call_output</code>。</td></tr>
+<tr><td><code>response.create</code></td><td>请求模型生成响应（当语音检测使用 <code>create_response: false</code> 时需要显式调用）。</td></tr>
+</tbody>
+</table>
 <p>服务器**发送回**事件：</p>
-<p>| 服务器事件 | 携带内容 | 是否追踪？ | | --- | --- | --- | | <code>session.created</code> / <code>session.updated</code> | 握手 / 配置确认。 | 是 | | <code>input_audio_buffer.speech_started</code> | 服务器 VAD 检测到用户开始说话——**打断信号**；刷新扬声器缓冲区。 | 是 | | <code>input_audio_buffer.speech_stopped</code> | 服务器 VAD 检测到用户停止说话。 | 是 | | <code>input_audio_buffer.committed</code> | 音频缓冲区已成为对话项目。 | 是 | | <code>conversation.item.created</code> | 服务器端添加了一个项目。 | 是 | | <code>conversation.item.input_audio_transcription.completed</code> | 该轮次的完整用户转录文本。 | 是 | | <code>response.created</code> | 模型开始生成。 | 是 | | <code>response.output_audio.delta</code> | 代理语音的一个片段（base64 PCM16）；每个响应数百个。 | 否——直接播放，不作为跨度 | | <code>response.output_audio_transcript.delta</code> | 代理转录文本的流式片段。 | 否 | | <code>response.output_audio_transcript.done</code> | 响应的代理完整转录文本。 | 是 | | <code>response.function_call_arguments.delta</code> / <code>.done</code> | 流式 / 最终的工具调用参数。 | 仅 <code>.done</code> | | <code>response.output_item.*</code>、<code>response.content_part.*</code> | 响应的结构化进度。 | 是 | | <code>response.done</code> | 完整响应对象：所有输出项目（包括每个 <code>function_call</code>），以及 token 使用量。 | 是 | | <code>error</code> | 服务器报告的错误。 | 是 | | <code>rate_limits.updated</code> | 配额记账。 | 是 |</p>
+<table>
+<thead><tr><th>服务器事件</th><th>携带内容</th><th>是否追踪？</th></tr></thead>
+<tbody>
+<tr><td><code>session.created</code> / <code>session.updated</code></td><td>握手 / 配置确认。</td><td>是</td></tr>
+<tr><td><code>input_audio_buffer.speech_started</code></td><td>服务器 VAD 检测到用户开始说话——**打断信号**；刷新扬声器缓冲区。</td><td>是</td></tr>
+<tr><td><code>input_audio_buffer.speech_stopped</code></td><td>服务器 VAD 检测到用户停止说话。</td><td>是</td></tr>
+<tr><td><code>input_audio_buffer.committed</code></td><td>音频缓冲区已成为对话项目。</td><td>是</td></tr>
+<tr><td><code>conversation.item.created</code></td><td>服务器端添加了一个项目。</td><td>是</td></tr>
+<tr><td><code>conversation.item.input_audio_transcription.completed</code></td><td>该轮次的完整用户转录文本。</td><td>是</td></tr>
+<tr><td><code>response.created</code></td><td>模型开始生成。</td><td>是</td></tr>
+<tr><td><code>response.output_audio.delta</code></td><td>代理语音的一个片段（base64 PCM16）；每个响应数百个。</td><td>否——直接播放，不作为跨度</td></tr>
+<tr><td><code>response.output_audio_transcript.delta</code></td><td>代理转录文本的流式片段。</td><td>否</td></tr>
+<tr><td><code>response.output_audio_transcript.done</code></td><td>响应的代理完整转录文本。</td><td>是</td></tr>
+<tr><td><code>response.function_call_arguments.delta</code> / <code>.done</code></td><td>流式 / 最终的工具调用参数。</td><td>仅 <code>.done</code></td></tr>
+<tr><td><code>response.output_item.*</code>、<code>response.content_part.*</code></td><td>响应的结构化进度。</td><td>是</td></tr>
+<tr><td><code>response.done</code></td><td>完整响应对象：所有输出项目（包括每个 <code>function_call</code>），以及 token 使用量。</td><td>是</td></tr>
+<tr><td><code>error</code></td><td>服务器报告的错误。</td><td>是</td></tr>
+<tr><td><code>rate_limits.updated</code></td><td>配额记账。</td><td>是</td></tr>
+</tbody>
+</table>
 <h2>事件如何映射到 LangSmith 运行</h2>
 <p>我们建议将整个对话作为单个追踪进行追踪，每个被追踪的事件按到达顺序对应一个跨度：</p>
 <pre><code data-language="text">realtime_session                                 ← root run (chain)

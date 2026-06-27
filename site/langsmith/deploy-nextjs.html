@@ -1097,11 +1097,25 @@
 <p>该应用在 <code>/api/threads/...</code> 下暴露 Agent Streaming Protocol。路由处理器位于 <code>app/api/threads/</code> 中。</p>
 <h3>最低要求（流式聊天）</h3>
 <p>以下三个端点足以使用 <code>@langchain/react</code> 的 <code>HttpAgentServerAdapter</code> 运行单线程流式聊天：</p>
-<p>| 方法 | 路径 | 用途 | | --- | --- | --- | | <code>POST</code> | <code>/api/threads/:threadId/commands</code> | 接受协议命令（<code>run.start</code>、…）并启动智能体运行 | | <code>POST</code> | <code>/api/threads/:threadId/stream</code> | 运行的协议事件 SSE 流 | | <code>GET</code> / <code>POST</code> | <code>/api/threads/:threadId/state</code> | 读取和引导检查点线程状态 |</p>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/commands</code></td><td>接受协议命令（<code>run.start</code>、…）并启动智能体运行</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/stream</code></td><td>运行的协议事件 SSE 流</td></tr>
+<tr><td><code>GET</code> / <code>POST</code></td><td><code>/api/threads/:threadId/state</code></td><td>读取和引导检查点线程状态</td></tr>
+</tbody>
+</table>
 <p>客户端使用 <code>GET /state</code>（404 时使用 <code>POST /state</code>）引导线程，这样在发送第一条消息之前水合不会导致 404。</p>
 <h3>可选（线程侧边栏）</h3>
 <p>此示例还为线程历史侧边栏实现了端点。如果你的 UI 不需要多线程管理，可以省略它们：</p>
-<p>| 方法 | 路径 | 用途 | | --- | --- | --- | | <code>GET</code> | <code>/api/threads</code> | 列出检查点已知的所有线程 | | <code>DELETE</code> | <code>/api/threads/:threadId</code> | 删除线程的会话和检查点 | | <code>POST</code> | <code>/api/threads/:threadId/history</code> | 分页检查点历史记录（Agent Protocol） |</p>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>GET</code></td><td><code>/api/threads</code></td><td>列出检查点已知的所有线程</td></tr>
+<tr><td><code>DELETE</code></td><td><code>/api/threads/:threadId</code></td><td>删除线程的会话和检查点</td></tr>
+<tr><td><code>POST</code></td><td><code>/api/threads/:threadId/history</code></td><td>分页检查点历史记录（Agent Protocol）</td></tr>
+</tbody>
+</table>
 <h3>请求流程</h3>
 <pre><code data-language="mermaid">%%{init: {&quot;themeVariables&quot;: {&quot;lineColor&quot;: &quot;#40668D&quot;, &quot;primaryColor&quot;: &quot;#E5F4FF&quot;, &quot;primaryTextColor&quot;: &quot;#030710&quot;, &quot;primaryBorderColor&quot;: &quot;#006DDD&quot;}}}%%
 flowchart TB
@@ -1139,11 +1153,23 @@ flowchart TB
   class browser,routes process
   class server trigger
   class agent output</code></pre>
-<p>1. 引导线程状态（<code>GET</code>/<code>POST /state</code>）。 2. 提交时，SDK 向 <code>/commands</code> 发送 <code>run.start</code> 并接收 <code>run_id</code>。 3. SDK 订阅 <code>/stream</code>（SSE）以获取回放 + 实时协议事件。 4. 子代理（<code>task</code>）运行发出命名空间事件，作为 <code>stream.subagents</code> 暴露。</p>
+<ol>
+<li>1. 引导线程状态（<code>GET</code>/<code>POST /state</code>）。</li>
+<li>2. 提交时，SDK 向 <code>/commands</code> 发送 <code>run.start</code> 并接收 <code>run_id</code>。</li>
+<li>3. SDK 订阅 <code>/stream</code>（SSE）以获取回放 + 实时协议事件。</li>
+<li>4. 子代理（<code>task</code>）运行发出命名空间事件，作为 <code>stream.subagents</code> 暴露。</li>
+</ol>
 <h2>生产环境持久化</h2>
 <p>开箱即用，代理使用内存中的 <code>MemorySaver</code> 检查点（<code>lib/agent/index.ts</code>）和进程本地会话映射（<code>lib/server/registry.ts</code>）。这适用于本地开发和单实例服务器，但在 Vercel（无服务器、多副本）上，会话状态在冷启动或实例间**不持久**。</p>
 <p>对于生产环境，请换入一个<a href="/oss/python/langgraph/checkpointers.html#checkpointer-libraries">持久化检查点器</a>：</p>
-<p>| 包 | 后端 | | --- | --- | | <a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-redis"><code>@langchain/langgraph-checkpoint-redis</code></a> | Redis（<code>RedisSaver</code>） | | <a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-postgres"><code>@langchain/langgraph-checkpoint-postgres</code></a> | Postgres（<code>PostgresSaver</code>） | | <a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-sqlite"><code>@langchain/langgraph-checkpoint-sqlite</code></a> | SQLite（<code>SqliteSaver</code>） |</p>
+<table>
+<thead><tr><th>包</th><th>后端</th></tr></thead>
+<tbody>
+<tr><td><a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-redis"><code>@langchain/langgraph-checkpoint-redis</code></a></td><td>Redis（<code>RedisSaver</code>）</td></tr>
+<tr><td><a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-postgres"><code>@langchain/langgraph-checkpoint-postgres</code></a></td><td>Postgres（<code>PostgresSaver</code>）</td></tr>
+<tr><td><a href="https://www.npmjs.com/package/@langchain/langgraph-checkpoint-sqlite"><code>@langchain/langgraph-checkpoint-sqlite</code></a></td><td>SQLite（<code>SqliteSaver</code>）</td></tr>
+</tbody>
+</table>
 <p>在 <code>lib/agent/index.ts</code> 中将 <code>MemorySaver</code> 替换为新的检查点器，并将新的检查点器传递给 <code>createDeepAgent</code>。路由处理程序和 <code>lib/server/threads.ts</code> 中的辅助函数保持不变。</p>
 <h3>Vercel 上的 Redis</h3>
 <p>Vercel 上常用的一种选择是通过 <a href="https://vercel.com/docs/redis">Marketplace</a> 使用 Redis（例如 <a href="https://vercel.com/marketplace/upstash">Upstash Redis</a>）。在你的 Vercel 项目上安装集成；凭证会自动作为环境变量注入。</p>

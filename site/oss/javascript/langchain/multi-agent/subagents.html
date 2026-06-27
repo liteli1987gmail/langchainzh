@@ -1133,10 +1133,25 @@ const mainAgent = createAgent({ model: &quot;google_genai:gemini-3.5-flash&quot;
 <p>了解如何使用子代理模式构建个人助手，其中一个中央主代理（监督者）协调专门的 worker 代理。</p><span class="card-cta">了解更多</span></a>
 <h2>设计决策</h2>
 <p>实现子代理模式时，您需要做出几个关键的设计选择。此表格总结了各个选项——每个选项都将在下面的章节中详细讨论。</p>
-<p>| 决策 | 选项 | |------|------| | <a href="#sync-vs-async">**同步 vs. 异步**</a> | 同步（阻塞）vs. 异步（后台） | | <a href="#tool-patterns">**工具模式**</a> | 每个代理一个工具 vs. 单分派工具 | | <a href="#subagent-specs">**子代理规范**</a> | 系统提示词 vs. 枚举约束 vs. 基于工具的发现（仅限单分派工具） | | <a href="#subagent-inputs">**子代理输入**</a> | 仅查询 vs. 完整上下文 | | <a href="#subagent-outputs">**子代理输出**</a> | 子代理结果 vs. 完整对话历史 |</p>
+<table>
+<thead><tr><th>决策</th><th>选项</th></tr></thead>
+<tbody>
+<tr><td><a href="#sync-vs-async">**同步 vs. 异步**</a></td><td>同步（阻塞）vs. 异步（后台）</td></tr>
+<tr><td><a href="#tool-patterns">**工具模式**</a></td><td>每个代理一个工具 vs. 单分派工具</td></tr>
+<tr><td><a href="#subagent-specs">**子代理规范**</a></td><td>系统提示词 vs. 枚举约束 vs. 基于工具的发现（仅限单分派工具）</td></tr>
+<tr><td><a href="#subagent-inputs">**子代理输入**</a></td><td>仅查询 vs. 完整上下文</td></tr>
+<tr><td><a href="#subagent-outputs">**子代理输出**</a></td><td>子代理结果 vs. 完整对话历史</td></tr>
+</tbody>
+</table>
 <h2>同步 vs. 异步</h2>
 <p>子代理执行可以是 **同步**（阻塞）或 **异步**（后台）。您的选择取决于主代理是否需要结果才能继续。</p>
-<p>| 模式 | 主代理行为 | 适用场景 | 权衡 | |------|-----------|----------|------| | **同步** | 等待子代理完成 | 主代理需要结果才能继续 | 简单，但会阻塞对话 | | **异步** | 在子代理后台运行时继续执行 | 独立任务，用户不应等待 | 响应更快，但更复杂 |</p>
+<table>
+<thead><tr><th>模式</th><th>主代理行为</th><th>适用场景</th><th>权衡</th></tr></thead>
+<tbody>
+<tr><td>**同步**</td><td>等待子代理完成</td><td>主代理需要结果才能继续</td><td>简单，但会阻塞对话</td></tr>
+<tr><td>**异步**</td><td>在子代理后台运行时继续执行</td><td>独立任务，用户不应等待</td><td>响应更快，但更复杂</td></tr>
+</tbody>
+</table>
 <aside class="callout"><strong>建议</strong>
 <p>不要与 Python 的 <code>async</code>/<code>await</code> 混淆。这里&quot;async&quot;表示主代理启动后台任务（通常在单独的进程或服务中）并继续执行而不阻塞。</p>
 </aside>
@@ -1188,7 +1203,13 @@ const mainAgent = createAgent({ model: &quot;google_genai:gemini-3.5-flash&quot;
 <p>**处理任务完成：** 当任务完成时，您的应用程序需要通知用户。一种方法是显示一个通知，点击后会发送类似&quot;Check job_123 and summarize the results.&quot;的 <code>HumanMessage</code>。</p>
 <h2>工具模式</h2>
 <p>将 Subagent 作为工具暴露有两种主要方式：</p>
-<p>| 模式 | 适用场景 | 权衡 | |---------|----------|-----------| | <a href="#tool-per-agent">**每个代理一个工具**</a> | 精细控制每个 Subagent 的输入/输出 | 设置更复杂，但定制化程度更高 | | <a href="#single-dispatch-tool">**单一调度工具**</a> | 多个代理、分布式团队、约定优于配置 | 组合更简单，但每个代理的定制化程度较低 |</p>
+<table>
+<thead><tr><th>模式</th><th>适用场景</th><th>权衡</th></tr></thead>
+<tbody>
+<tr><td><a href="#tool-per-agent">**每个代理一个工具**</a></td><td>精细控制每个 Subagent 的输入/输出</td><td>设置更复杂，但定制化程度更高</td></tr>
+<tr><td><a href="#single-dispatch-tool">**单一调度工具**</a></td><td>多个代理、分布式团队、约定优于配置</td><td>组合更简单，但每个代理的定制化程度较低</td></tr>
+</tbody>
+</table>
 <h3>每个代理一个工具</h3>
 <pre><code data-language="mermaid">graph LR
     A[User] --&gt; B[Main Agent]
@@ -1335,7 +1356,14 @@ const mainAgent = createAgent({
 });</code></pre>
 <h2>上下文工程</h2>
 <p>控制主代理与其子代理之间上下文的流动方式：</p>
-<p>| 类别 | 目的 | 影响 | |----------|---------|---------| | <a href="#subagent-specs">**子代理规格**</a> | 确保子代理在应该被调用时被调用 | 主代理路由决策 | | <a href="#subagent-inputs">**子代理输入**</a> | 确保子代理能够使用优化后的上下文良好执行 | 子代理性能 | | <a href="#subagent-outputs">**子代理输出**</a> | 确保监督者能够根据子代理结果采取行动 | 主代理性能 |</p>
+<table>
+<thead><tr><th>类别</th><th>目的</th><th>影响</th></tr></thead>
+<tbody>
+<tr><td><a href="#subagent-specs">**子代理规格**</a></td><td>确保子代理在应该被调用时被调用</td><td>主代理路由决策</td></tr>
+<tr><td><a href="#subagent-inputs">**子代理输入**</a></td><td>确保子代理能够使用优化后的上下文良好执行</td><td>子代理性能</td></tr>
+<tr><td><a href="#subagent-outputs">**子代理输出**</a></td><td>确保监督者能够根据子代理结果采取行动</td><td>主代理性能</td></tr>
+</tbody>
+</table>
 <p>另请参阅我们关于代理<a href="/oss/javascript/langchain/context-engineering.html">上下文工程</a>的综合指南。</p>
 <h3>子代理规格</h3>
 <p>与子代理关联的**名称**和**描述**是主代理了解应该调用哪些子代理的主要方式。这些是提示词调整手段——请谨慎选择。</p>
@@ -1344,7 +1372,14 @@ const mainAgent = createAgent({
 <li>* **描述**：主代理对子代理能力的了解。具体说明它处理哪些任务以及何时使用。</li>
 </ul>
 <p>对于<a href="#single-dispatch-tool">单分派工具</a>设计，你还必须向主代理提供有关其可调用的子代理的信息。 你可以根据代理数量和注册表是静态还是动态，以不同方式提供此信息：</p>
-<p>| 方法 | 适用场景 | 权衡 | |--------|----------|----------| | **系统提示枚举** | 小型静态代理列表（&lt; 10 个代理） | 简单，但代理变更时需要更新提示词 | | **枚举约束** | 小型静态代理列表（&lt; 10 个代理） | 类型安全且明确，但代理变更时需要代码更改 | | **基于工具的发现** | 大型或动态代理注册表 | 灵活且可扩展，但会增加复杂性 |</p>
+<table>
+<thead><tr><th>方法</th><th>适用场景</th><th>权衡</th></tr></thead>
+<tbody>
+<tr><td>**系统提示枚举**</td><td>小型静态代理列表（&lt; 10 个代理）</td><td>简单，但代理变更时需要更新提示词</td></tr>
+<tr><td>**枚举约束**</td><td>小型静态代理列表（&lt; 10 个代理）</td><td>类型安全且明确，但代理变更时需要代码更改</td></tr>
+<tr><td>**基于工具的发现**</td><td>大型或动态代理注册表</td><td>灵活且可扩展，但会增加复杂性</td></tr>
+</tbody>
+</table>
 <h4>系统提示枚举</h4>
 <p>直接在主代理的系统提示中列出可用代理。主代理将代理列表及其描述作为其指令的一部分。</p>
 <p>**使用场景：** - 你有少量固定代理（&lt; 10 个） - 代理注册表很少更改 - 你希望实现最简单的方案</p>
@@ -1447,7 +1482,10 @@ const callSubagent1 = tool(
 );</code></pre>
 <h3>子代理输出</h3>
 <p>自定义主代理接收到的内容，以便其做出正确的决策。两种策略：</p>
-<p>1. **提示子代理**：明确指定应返回的内容。一个常见的失败模式是子代理执行了工具调用或推理，但在其最终消息中未包含结果——提醒它主管只能看到最终输出。 2. **以代码格式返回**：在返回之前调整或丰富响应。例如，除了最终文本外，还使用 <a href="/oss/javascript/langgraph/graph-api.html#command"><code>Command</code></a> 传回特定的状态键。</p>
+<ol>
+<li>1. **提示子代理**：明确指定应返回的内容。一个常见的失败模式是子代理执行了工具调用或推理，但在其最终消息中未包含结果——提醒它主管只能看到最终输出。</li>
+<li>2. **以代码格式返回**：在返回之前调整或丰富响应。例如，除了最终文本外，还使用 <a href="/oss/javascript/langgraph/graph-api.html#command"><code>Command</code></a> 传回特定的状态键。</li>
+</ol>
 <pre><code data-language="typescript Subagent outputs example expandable">const callSubagent1 = tool(
   async ({ query }, config) =&gt; {
     const result = await subagent1.invoke({

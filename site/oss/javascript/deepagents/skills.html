@@ -1168,13 +1168,24 @@ const agent = await createDeepAgent({
 <p>技能使用**渐进式披露**：智能体分层加载技能信息，而不是一次性全部加载。在启动时，它只能看到每个技能的名称和描述。当某个技能被调用时，它会读取完整的 <code>SKILL.md</code> 指令。辅助文件随后加载，但仅在指令需要时才会被读取。</p>
 </aside>
 <p>技能分三个层级加载。每个层级仅在任务需要时添加更多细节：</p>
-<p>| 层级 | 加载内容 | 时机 | | --- | -------- | ---- | | **1. 元数据** | <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a> 中的 <a href="#frontmatter-fields"><code>name</code></a> 和 <a href="#frontmatter-fields"><code>description</code></a> | 智能体启动时，针对每个已配置的技能 | | **2. 指令** | 完整的 <code>SKILL.md</code> 主体内容 | 当技能被调用时 | | **3. 资源** | <code>scripts/</code>、<code>references/</code> 和 <code>assets/</code> 下的<a href="#add-supporting-resources">辅助文件</a> | 调用后按需加载，当指令引用它们时 |</p>
+<table>
+<thead><tr><th>层级</th><th>加载内容</th><th>时机</th></tr></thead>
+<tbody>
+<tr><td>**1. 元数据**</td><td><code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a> 中的 <a href="#frontmatter-fields"><code>name</code></a> 和 <a href="#frontmatter-fields"><code>description</code></a></td><td>智能体启动时，针对每个已配置的技能</td></tr>
+<tr><td>**2. 指令**</td><td>完整的 <code>SKILL.md</code> 主体内容</td><td>当技能被调用时</td></tr>
+<tr><td>**3. 资源**</td><td><code>scripts/</code>、<code>references/</code> 和 <code>assets/</code> 下的<a href="#add-supporting-resources">辅助文件</a></td><td>调用后按需加载，当指令引用它们时</td></tr>
+</tbody>
+</table>
 <p>下图展示了在特定时刻智能体上下文中出现的内容。在启动时，每个技能的第一层元数据都在系统提示中。当某个技能被调用时，第二层指令加入上下文。第三层文件保留在后端，直到智能体在调用后读取它们。</p>
 <p>!<a href="/oss/images/deepagents/skills-composition.svg.html">How skill components map into agent context at startup and activation</a></p>
 <p>当智能体处理任务时，它会分层加载技能信息：</p>
 <p>!<a href="/oss/images/deepagents/skills-progressive-disclosure.svg.html">How skills load in layers from metadata to instructions to resources</a></p>
 <p>在 Deep Agents 中，<a href="https://reference.langchain.com/javascript/deepagents/middleware/createSkillsMiddleware"><code>SkillsMiddleware</code></a>（传递 <code>skills</code> 时<a href="/oss/javascript/deepagents/customization.html#default-stack-main-agent">默认中间件栈</a>的一部分）处理前两个层级，第三个层级由 LLM 处理：</p>
-<p>1. **发现**（第一层）：在智能体启动时，中间件扫描已配置的技能路径，解析每个 <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a>，并将 <a href="#frontmatter-fields"><code>name</code></a> 和 <a href="#frontmatter-fields"><code>description</code></a> 字段注入系统提示。 2. **读取**（第二层）：当智能体调用某个技能时，它通过 <code>read_file</code> 读取完整的 <code>SKILL.md</code> 内容。 3. **执行**（第三层）：调用后，智能体遵循技能的指令，并仅在指令需要时读取辅助文件（脚本、参考资料、资产）。</p>
+<ol>
+<li>1. **发现**（第一层）：在智能体启动时，中间件扫描已配置的技能路径，解析每个 <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a>，并将 <a href="#frontmatter-fields"><code>name</code></a> 和 <a href="#frontmatter-fields"><code>description</code></a> 字段注入系统提示。</li>
+<li>2. **读取**（第二层）：当智能体调用某个技能时，它通过 <code>read_file</code> 读取完整的 <code>SKILL.md</code> 内容。</li>
+<li>3. **执行**（第三层）：调用后，智能体遵循技能的指令，并仅在指令需要时读取辅助文件（脚本、参考资料、资产）。</li>
+</ol>
 <h2>何时使用技能</h2>
 <p>如果你发现自己向智能体反复提供类似的指令，尤其是包含多个步骤的详细指令时，请考虑将这些指令编码化供智能体使用。这样，当将来你想要完成类似的任务时，智能体已经知道该怎么做了。</p>
 <aside class="callout"><strong>建议</strong>
@@ -1409,7 +1420,11 @@ agent = create_deep_agent(
 <p>或者，配置 <code>interrupt_on={&quot;write_file&quot;: True, &quot;edit_file&quot;: True}</code> 以要求对所有文件系统写入操作进行审批，而不仅仅是技能路径。请参阅 <a href="/oss/javascript/deepagents/human-in-the-loop.html">人在回路</a> 了解如何处理和恢复中断。</p>
 <h3>允许智能体编辑个人技能</h3>
 <p>默认情况下，如果后端允许且没有权限规则阻止该路径，智能体可以写入技能文件。要让智能体创建或优化技能而不影响共享库：</p>
-<p>1. 将 <code>/skills/personal/</code> 等可写路径路由到用户范围的 <code>StoreBackend</code>。 2. 在 <code>skills</code> 中传递该路径（以及任何共享路径）。 3. 不要为可写路径添加 <code>deny</code> 规则。如果混合使用共享路径和个人路径，请将更具体的规则放在更广泛的拒绝规则之前（<a href="/oss/javascript/deepagents/permissions.html#rule-ordering">规则顺序</a>）。</p>
+<ol>
+<li>1. 将 <code>/skills/personal/</code> 等可写路径路由到用户范围的 <code>StoreBackend</code>。</li>
+<li>2. 在 <code>skills</code> 中传递该路径（以及任何共享路径）。</li>
+<li>3. 不要为可写路径添加 <code>deny</code> 规则。如果混合使用共享路径和个人路径，请将更具体的规则放在更广泛的拒绝规则之前（<a href="/oss/javascript/deepagents/permissions.html#rule-ordering">规则顺序</a>）。</li>
+</ol>
 <pre><code data-language="typescript">  createDeepAgent,
   CompositeBackend,
   StateBackend,
@@ -1474,7 +1489,9 @@ Search arXiv for papers matching the user&#x27;s query.
 <h3>技能未激活</h3>
 <p>**问题**：代理处理任务时未读取技能的 <code>SKILL.md</code>。</p>
 <p>**解决方案**：</p>
-<p>1. **使描述更加具体。** 代理仅根据<a href="#how-skills-work">发现</a>时的<a href="#frontmatter-fields"><code>描述</code></a>字段选择技能。包括技能的作用、使用时机以及代理可以匹配的关键词：</p>
+<ol>
+<li>1. **使描述更加具体。** 代理仅根据<a href="#how-skills-work">发现</a>时的<a href="#frontmatter-fields"><code>描述</code></a>字段选择技能。包括技能的作用、使用时机以及代理可以匹配的关键词：</li>
+</ol>
 <pre><code data-language="yaml">   # Good
    description: &gt;-
      Search the arXiv preprint repository for research papers. Use when the
@@ -1483,21 +1500,39 @@ Search arXiv for papers matching the user&#x27;s query.
    # Poor
    description: Helps with research.
    </code></pre>
-<p>2. **减少技能之间的重叠。** 如果多个技能的描述相似，智能体可能会跳过正确的技能或选错技能。请区分描述或<a href="#write-effective-skills">整合相关技能</a>。</p>
-<p>3. **确认技能在 <code>skills</code> 数组中。** 技能仅从您在创建智能体时传递的路径或子智能体特定的 <code>skills</code> 参数加载。</p>
+<ol>
+<li>2. **减少技能之间的重叠。** 如果多个技能的描述相似，智能体可能会跳过正确的技能或选错技能。请区分描述或<a href="#write-effective-skills">整合相关技能</a>。</li>
+</ol>
+<ol>
+<li>3. **确认技能在 <code>skills</code> 数组中。** 技能仅从您在创建智能体时传递的路径或子智能体特定的 <code>skills</code> 参数加载。</li>
+</ol>
 <h3>启动时缺失技能</h3>
 <p>**问题**：智能体未在其系统提示中列出技能，或对 <code>SKILL.md</code> 的 <code>read_file</code> 失败。</p>
 <p>**解决方案**：</p>
-<p>1. **检查技能路径。** 路径必须使用正斜杠，并相对于后端根目录。使用 <code>FilesystemBackend</code> 时，路径相对于 <code>root_dir</code>。使用 <code>StateBackend</code> 时，在 <code>invoke(files={...})</code> 中使用 <code>create_file_data()</code> 传入技能文件。</p>
-<p>2. **验证 <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a>。** <a href="#frontmatter-fields"><code>name</code></a> 必须与父目录名称匹配，并遵循 <a href="https://agentskills.io/specification">Agent Skills 规范</a>。使用 <a href="https://github.com/agentskills/agentskills/tree/main/skills-ref"><code>skills-ref</code> 验证工具</a> 检查格式。</p>
-<p>3. **检查文件大小。** Deep Agents 在发现阶段会跳过超过 10 MB 的 <code>SKILL.md</code> 文件。</p>
-<p>4. **检查分层来源。** 当同一技能名称出现在多个来源时，<a href="#usage">后一个来源优先</a>。来自较晚路径的较旧或空技能可能会覆盖您期望的技能。</p>
+<ol>
+<li>1. **检查技能路径。** 路径必须使用正斜杠，并相对于后端根目录。使用 <code>FilesystemBackend</code> 时，路径相对于 <code>root_dir</code>。使用 <code>StateBackend</code> 时，在 <code>invoke(files={...})</code> 中使用 <code>create_file_data()</code> 传入技能文件。</li>
+</ol>
+<ol>
+<li>2. **验证 <code>SKILL.md</code> <a href="#frontmatter-fields">frontmatter</a>。** <a href="#frontmatter-fields"><code>name</code></a> 必须与父目录名称匹配，并遵循 <a href="https://agentskills.io/specification">Agent Skills 规范</a>。使用 <a href="https://github.com/agentskills/agentskills/tree/main/skills-ref"><code>skills-ref</code> 验证工具</a> 检查格式。</li>
+</ol>
+<ol>
+<li>3. **检查文件大小。** Deep Agents 在发现阶段会跳过超过 10 MB 的 <code>SKILL.md</code> 文件。</li>
+</ol>
+<ol>
+<li>4. **检查分层来源。** 当同一技能名称出现在多个来源时，<a href="#usage">后一个来源优先</a>。来自较晚路径的较旧或空技能可能会覆盖您期望的技能。</li>
+</ol>
 <h3>找不到支持文件</h3>
 <p>**问题**：智能体读取了 <code>SKILL.md</code> 但无法访问脚本、引用或资源。</p>
 <p>**解决方案**：</p>
-<p>1. **从 <code>SKILL.md</code> 引用文件。** 智能体不会自动发现支持文件。说明每个文件包含的内容及使用时机。使用从技能根目录开始的<a href="#reference-files-from-skill-md">相对路径</a>。</p>
-<p>2. **保持路径在技能目录内。** 文件路径相对于后端解析。确认支持文件存在于您说明中引用的路径。</p>
-<p>3. **将技能同步到沙箱。** 如果您使用<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>，容器外的技能文件在复制进去之前不可用。请参见 <a href="#sandbox-scripts">沙箱脚本</a> 和<a href="/oss/javascript/deepagents/going-to-production.html#example-syncing-skills-and-memories-with-custom-middleware">使用自定义中间件同步技能和记忆</a>。</p>
+<ol>
+<li>1. **从 <code>SKILL.md</code> 引用文件。** 智能体不会自动发现支持文件。说明每个文件包含的内容及使用时机。使用从技能根目录开始的<a href="#reference-files-from-skill-md">相对路径</a>。</li>
+</ol>
+<ol>
+<li>2. **保持路径在技能目录内。** 文件路径相对于后端解析。确认支持文件存在于您说明中引用的路径。</li>
+</ol>
+<ol>
+<li>3. **将技能同步到沙箱。** 如果您使用<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>，容器外的技能文件在复制进去之前不可用。请参见 <a href="#sandbox-scripts">沙箱脚本</a> 和<a href="/oss/javascript/deepagents/going-to-production.html#example-syncing-skills-and-memories-with-custom-middleware">使用自定义中间件同步技能和记忆</a>。</li>
+</ol>
 <h3>脚本运行失败</h3>
 <p>**问题**：智能体读取了脚本但无法运行。</p>
 <p>**解决方案**：智能体可以从任何后端读取脚本，但运行它们需要<a href="/oss/javascript/deepagents/sandboxes.html">沙箱后端</a>。请参见<a href="#execute-code-with-skills">使用技能执行代码</a>。</p>
@@ -1507,11 +1542,30 @@ Search arXiv for papers matching the user&#x27;s query.
 <h2>参考</h2>
 <h3>技能、记忆和工具</h3>
 <p>技能、<a href="/oss/javascript/deepagents/memory.html">记忆</a>（<code>AGENTS.md</code> 文件）和工具都为智能体提供上下文或能力。下表总结何时使用每种：</p>
-<p>| | 技能 | 记忆 | 工具 | |---|--------|--------|-------| | **用途** | 通过渐进式披露发现按需使用的能力 | 在启动时加载的持久上下文 | 智能体可调用的编程操作 | | **加载方式** | 仅在智能体确定相关性时读取 | 在智能体启动时加载 | 每轮对话都可用 | | **格式** | 命名目录中的 <code>SKILL.md</code> | <code>AGENTS.md</code> 文件 | 绑定到智能体的函数 | | **分层方式** | 用户级，然后项目级（后者覆盖） | 用户级，然后项目级（合并） | 在创建智能体时定义 | | **使用场景** | 说明是特定于任务的且可能较大 | 上下文始终相关（项目约定、偏好） | 智能体需要编程操作，或无法访问文件系统 |</p>
+<table>
+<thead><tr><th></th><th>技能</th><th>记忆</th><th>工具</th></tr></thead>
+<tbody>
+<tr><td>**用途**</td><td>通过渐进式披露发现按需使用的能力</td><td>在启动时加载的持久上下文</td><td>智能体可调用的编程操作</td></tr>
+<tr><td>**加载方式**</td><td>仅在智能体确定相关性时读取</td><td>在智能体启动时加载</td><td>每轮对话都可用</td></tr>
+<tr><td>**格式**</td><td>命名目录中的 <code>SKILL.md</code></td><td><code>AGENTS.md</code> 文件</td><td>绑定到智能体的函数</td></tr>
+<tr><td>**分层方式**</td><td>用户级，然后项目级（后者覆盖）</td><td>用户级，然后项目级（合并）</td><td>在创建智能体时定义</td></tr>
+<tr><td>**使用场景**</td><td>说明是特定于任务的且可能较大</td><td>上下文始终相关（项目约定、偏好）</td><td>智能体需要编程操作，或无法访问文件系统</td></tr>
+</tbody>
+</table>
 <p>这些是指导原则，而非硬性界限。在实践中，技能和记忆处于一个光谱上。智能体可以在工作时更新自己的技能，捕获新流程并随时间完善说明。这样，技能可以作为一种渐进式披露记忆的形式：智能体在工作中构建并按需检索的上下文，而不是在每个提示时加载。</p>
 <h3>Frontmatter 字段</h3>
 <p><a href="https://agentskills.io/specification">Agent Skills 规范</a> 定义了以下 frontmatter 字段：</p>
-<p>| 字段 | 必需 | 描述 | |-------|----------|-------------| | <code>name</code> | 是 | 小写字母数字和连字符，1-64 个字符。必须与父目录名称匹配。 | | <code>description</code> | 是 | 技能的功能及使用场景。最多 1,024 个字符。 | | <code>license</code> | 否 | 许可证名称或对捆绑许可证文件的引用。 | | <code>compatibility</code> | 否 | 环境要求（系统包、网络访问）。最多 500 个字符。 | | <code>metadata</code> | 否 | 用于附加属性的任意键值对。 | | <code>allowed-tools</code> | 否 | 技能可使用的预批准工具空格分隔列表。实验性功能。 |</p>
+<table>
+<thead><tr><th>字段</th><th>必需</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>name</code></td><td>是</td><td>小写字母数字和连字符，1-64 个字符。必须与父目录名称匹配。</td></tr>
+<tr><td><code>description</code></td><td>是</td><td>技能的功能及使用场景。最多 1,024 个字符。</td></tr>
+<tr><td><code>license</code></td><td>否</td><td>许可证名称或对捆绑许可证文件的引用。</td></tr>
+<tr><td><code>compatibility</code></td><td>否</td><td>环境要求（系统包、网络访问）。最多 500 个字符。</td></tr>
+<tr><td><code>metadata</code></td><td>否</td><td>用于附加属性的任意键值对。</td></tr>
+<tr><td><code>allowed-tools</code></td><td>否</td><td>技能可使用的预批准工具空格分隔列表。实验性功能。</td></tr>
+</tbody>
+</table>
 <pre><code data-language="`md expandable">---
 name: langgraph-docs
 description: Use this skill for requests related to LangGraph in order to fetch relevant documentation to provide accurate, up-to-date guidance.

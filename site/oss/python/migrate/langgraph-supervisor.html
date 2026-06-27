@@ -1077,7 +1077,15 @@
       <article class="doc"><p><a href="https://github.com/langchain-ai/langgraph-supervisor-py"><code>langgraph-supervisor</code></a> 包不再积极维护。请改用 <a href="/oss/python/langchain/multi-agent/subagents.html">subagents</a> 模式：主 agent 通过将专业 worker 作为 <a href="/oss/python/langchain/tools.html">tools</a> 调用来协调它们。</p>
 <p>本指南介绍如何从 <code>create_supervisor</code> 迁移到 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a>，包括使用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 和外部 API 回调的设置。</p>
 <h2>变更摘要</h2>
-<p>| langgraph-supervisor | 推荐替代方案 | |--------------------|-------------------------| | 将 worker agents 作为图节点的 <code>create_supervisor</code> | 使用包装为 <a href="https://reference.langchain.com/python/langchain-core/tools/convert/tool"><code>@tool</code></a> 函数的 subagents 的 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a> | | 用于消息历史的 <code>output_mode</code> | 在 tool wrapper 中格式化 subagent 输出（参见 <a href="/oss/python/langchain/multi-agent/subagents.html#subagent-outputs">subagent 输出</a>） | | 用于自定义路由的 <code>create_handoff_tool</code> | 调用 <code>subagent.invoke(...)</code> 的自定义 <a href="https://reference.langchain.com/python/langchain-core/tools/convert/tool"><code>@tool</code></a> | | 嵌套 supervisors（supervisors 的 <code>create_supervisor</code>） | 包装为 <a href="https://reference.langchain.com/python/langchain-core/tools/convert/tool"><code>@tool</code></a> 并调用其他 subagents 的 subagent |</p>
+<table>
+<thead><tr><th>langgraph-supervisor</th><th>推荐替代方案</th></tr></thead>
+<tbody>
+<tr><td>将 worker agents 作为图节点的 <code>create_supervisor</code></td><td>使用包装为 <a href="https://reference.langchain.com/python/langchain-core/tools/convert/tool"><code>@tool</code></a> 函数的 subagents 的 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a></td></tr>
+<tr><td>用于消息历史的 <code>output_mode</code></td><td>在 tool wrapper 中格式化 subagent 输出（参见 <a href="/oss/python/langchain/multi-agent/subagents.html#subagent-outputs">subagent 输出</a>）</td></tr>
+<tr><td>用于自定义路由的 <code>create_handoff_tool</code></td><td>调用 <code>subagent.invoke(...)</code> 的自定义 <a href="https://reference.langchain.com/python/langchain-core/tools/convert/tool"><code>@tool</code></a></td></tr>
+<tr><td>嵌套 supervisors（supervisors 的 <code>create_supervisor</code>）</td><td>包装为 <a href="https://reference.langchain.com/python/langchain-core/tools/convert/tool"><code>@tool</code></a> 并调用其他 subagents 的 subagent</td></tr>
+</tbody>
+</table>
 <h2>基本迁移</h2>
 <p>使用 <code>langgraph-supervisor</code> 时，worker agents 是图节点，supervisor 使用 handoff tools 在它们之间路由：</p>
 <pre><code data-language="python">from langgraph_supervisor import create_supervisor
@@ -1129,7 +1137,10 @@ response = supervisor.invoke(
 supervisor.invoke(Command(resume=external_result), config=config)</code></pre>
 <h3>中断传播的要求</h3>
 <p>为了使 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 能够通过嵌套的 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a> 层向上冒泡，请遵循以下规则：</p>
-<p>1. **仅在最外层图上使用检查点器进行编译。** 子代理不使用 <code>checkpointer=...</code>，这样它们会使用<a href="/oss/python/langgraph/use-subgraphs.html#per-invocation-default">每次调用持久化</a>，并在运行时继承父级的检查点器。 2. **在 <code>configurable</code> 中传递 <code>thread_id</code>。** 外层的 <code>invoke()</code> 或 <code>stream_events()</code> 调用必须包含 <code>thread_id</code>，以便图能够进行检查点保存和恢复。</p>
+<ol>
+<li>1. **仅在最外层图上使用检查点器进行编译。** 子代理不使用 <code>checkpointer=...</code>，这样它们会使用<a href="/oss/python/langgraph/use-subgraphs.html#per-invocation-default">每次调用持久化</a>，并在运行时继承父级的检查点器。</li>
+<li>2. **在 <code>configurable</code> 中传递 <code>thread_id</code>。** 外层的 <code>invoke()</code> 或 <code>stream_events()</code> 调用必须包含 <code>thread_id</code>，以便图能够进行检查点保存和恢复。</li>
+</ol>
 <p>这些规则适用于任意嵌套的设置。例如，自定义 <a href="https://reference.langchain.com/python/langgraph/graph/state/StateGraph"><code>StateGraph</code></a> 外层、中间 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a> 主管和内层 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a> 子代理都遵循相同的机制：</p>
 <pre><code data-language="txt">Custom StateGraph (outer, with checkpointer)
   └── prospecting_agent (create_agent, no checkpointer)
@@ -1142,7 +1153,10 @@ supervisor.invoke(Command(resume=external_result), config=config)</code></pre>
 <p>当您需要将确定性步骤与代理步骤混合时，可以使用自定义 <a href="https://reference.langchain.com/python/langgraph/graph/state/StateGraph"><code>StateGraph</code></a>。例如，固定路由、验证或外部 API 调用与 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a> 节点结合使用。</p>
 <h2>迁移嵌套主管</h2>
 <p><code>langgraph-supervisor</code> 支持多层级的层次结构，方法是编译主管并将其传递给另一个 <code>create_supervisor</code> 调用。使用子代理模式时，您有两个选择：</p>
-<p>1. **扁平化为单一主管**，每个叶节点代理一个工具。当每个工作节点相互独立时，这是最简单的方法。 2. **嵌套工具调用**在需要中间协调时使用。将中间层代理（本身就是带有自己子代理工具的 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a>）作为工具包装在顶层主管上。</p>
+<ol>
+<li>1. **扁平化为单一主管**，每个叶节点代理一个工具。当每个工作节点相互独立时，这是最简单的方法。</li>
+<li>2. **嵌套工具调用**在需要中间协调时使用。将中间层代理（本身就是带有自己子代理工具的 <a href="https://reference.langchain.com/python/langchain/agents/factory/create_agent"><code>create_agent</code></a>）作为工具包装在顶层主管上。</li>
+</ol>
 <p>如果需要静态子图发现、每层检查点命名空间或跨层级共享状态键，请改用带有<a href="/oss/python/langgraph/use-subgraphs.html#add-a-subgraph-as-a-node">子图节点</a>的自定义 <a href="https://reference.langchain.com/python/langgraph/graph/state/StateGraph"><code>StateGraph</code></a>。</p>
 <h2>迁移消息历史选项</h2>
 <p><code>create_supervisor</code> 提供 <code>output_mode</code> 参数来控制工作节点消息在对话历史中的显示方式：</p>

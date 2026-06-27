@@ -403,6 +403,46 @@ def render_inline_markdown(text: str) -> str:
     return value
 
 
+def split_table_row(line: str) -> list[str]:
+    stripped = line.strip().strip("|")
+    return [cell.strip() for cell in stripped.split("|")]
+
+
+def is_table_separator(line: str) -> bool:
+    cells = split_table_row(line)
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells)
+
+
+def render_table(lines: list[str]) -> str | None:
+    table_lines = [line for line in lines if line.strip()]
+    if len(table_lines) < 2 or "|" not in table_lines[0] or not is_table_separator(table_lines[1]):
+        return None
+
+    headers = split_table_row(table_lines[0])
+    rows = [split_table_row(line) for line in table_lines[2:] if "|" in line]
+    column_count = len(headers)
+    if column_count == 0:
+        return None
+
+    def normalize(row: list[str]) -> list[str]:
+        if len(row) < column_count:
+            return [*row, *([""] * (column_count - len(row)))]
+        return row[:column_count]
+
+    head_html = "".join(f"<th>{render_inline_markdown(cell)}</th>" for cell in headers)
+    body_rows = []
+    for row in rows:
+        cells = "".join(f"<td>{render_inline_markdown(cell)}</td>" for cell in normalize(row))
+        body_rows.append(f"<tr>{cells}</tr>")
+    return (
+        "<table>\n<thead><tr>"
+        + head_html
+        + "</tr></thead>\n<tbody>\n"
+        + "\n".join(body_rows)
+        + "\n</tbody>\n</table>"
+    )
+
+
 def render_markdown_fallback(markdown_text: str) -> str:
     code_blocks: list[tuple[str, str]] = []
 
@@ -446,12 +486,24 @@ def render_markdown_fallback(markdown_text: str) -> str:
             rendered.append(f"<h{level}>{render_inline_markdown(heading.group(2))}</h{level}>")
             continue
         lines = raw.splitlines()
+        table_html = render_table(lines)
+        if table_html:
+            close_list()
+            rendered.append(table_html)
+            continue
         if all(re.match(r"^\s*[-*]\s+", line) for line in lines):
             if not in_list:
                 rendered.append("<ul>")
                 in_list = True
             for line in lines:
                 rendered.append(f"<li>{render_inline_markdown(re.sub(r'^\\s*[-*]\\s+', '', line))}</li>")
+            continue
+        if all(re.match(r"^\s*\d+\.\s+", line) for line in lines):
+            close_list()
+            rendered.append("<ol>")
+            for line in lines:
+                rendered.append(f"<li>{render_inline_markdown(re.sub(r'^\\s*\\d+\\.\\s+', '', line))}</li>")
+            rendered.append("</ol>")
             continue
         close_list()
         rendered.append(f"<p>{render_inline_markdown(raw)}</p>")

@@ -1105,7 +1105,16 @@
     class Done,MaxOut alert</code></pre>
 <h2>配置中间件</h2>
 <p>在调用 <code>create_deep_agent</code> 时，将 <code>RubricMiddleware</code> 添加到 <code>middleware</code> 列表中：</p>
-<p>| 参数 | 必填 | 默认值 | 描述 | | --- | --- | --- | --- | | <code>model</code> | 是 | <code>None</code> | LLM-as-a-judge 评分子代理使用的聊天模型。接受 <code>&quot;provider:model-id&quot;</code> 字符串或 <code>BaseChatModel</code> 实例。通常比深度代理的工作模型更小或更便宜。 | | <code>system_prompt</code> | 否 | 内置评分器提示词 | 自定义评分指令。回退到默认系统提示词，教导评分器判决格式及其可用的工具。 | | <code>tools</code> | 否 | <code>None</code> | 评分器在做出判决前可以调用的工具，用于收集证据（运行测试、计算 token、读取文件）。如果不提供工具，评分器仅根据对话记录进行推理。 | | <code>max_iterations</code> | 否 | <code>3</code> | 每次评分标准尝试的评分器迭代次数硬上限。最大输入值为 20。当达到上限仍未获得 <code>satisfied</code> 判决时，代理将以 <code>max_iterations_reached</code> 状态终止。 | | <code>on_evaluation</code> | 否 | <code>None</code> | 可选回调，在每次评分迭代后（无论使用 <code>invoke()</code>、<code>stream()</code> 还是 <code>stream_events()</code>）调用，包含每个 <code>RubricEvaluation</code>。可用于日志记录、自定义指标、评估数据集或 UI 更新。 |</p>
+<table>
+<thead><tr><th>参数</th><th>必填</th><th>默认值</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>model</code></td><td>是</td><td><code>None</code></td><td>LLM-as-a-judge 评分子代理使用的聊天模型。接受 <code>&quot;provider:model-id&quot;</code> 字符串或 <code>BaseChatModel</code> 实例。通常比深度代理的工作模型更小或更便宜。</td></tr>
+<tr><td><code>system_prompt</code></td><td>否</td><td>内置评分器提示词</td><td>自定义评分指令。回退到默认系统提示词，教导评分器判决格式及其可用的工具。</td></tr>
+<tr><td><code>tools</code></td><td>否</td><td><code>None</code></td><td>评分器在做出判决前可以调用的工具，用于收集证据（运行测试、计算 token、读取文件）。如果不提供工具，评分器仅根据对话记录进行推理。</td></tr>
+<tr><td><code>max_iterations</code></td><td>否</td><td><code>3</code></td><td>每次评分标准尝试的评分器迭代次数硬上限。最大输入值为 20。当达到上限仍未获得 <code>satisfied</code> 判决时，代理将以 <code>max_iterations_reached</code> 状态终止。</td></tr>
+<tr><td><code>on_evaluation</code></td><td>否</td><td><code>None</code></td><td>可选回调，在每次评分迭代后（无论使用 <code>invoke()</code>、<code>stream()</code> 还是 <code>stream_events()</code>）调用，包含每个 <code>RubricEvaluation</code>。可用于日志记录、自定义指标、评估数据集或 UI 更新。</td></tr>
+</tbody>
+</table>
 <h2>调用时传递评分标准</h2>
 <p>在调用状态上传递 <code>rubric</code> 字符串以启动自评循环。使用 <code>invoke()</code> 进行单个阻塞调用，或使用 <a href="/oss/javascript/langchain/event-streaming.html"><code>stream_events(..., version=&quot;v3&quot;)</code></a> 配合 <a href="/oss/javascript/langchain/event-streaming.html#custom-updates"><code>CustomTransformer</code></a> 接收 <code>stream.custom</code> 上实时发生的评分事件：</p>
 <section class="mdx-block">
@@ -1114,16 +1123,47 @@
 <section class="mdx-block">
 <h3>stream_events()</h3>
 <p>评分标准评分在 <code>stream.custom</code> 上发出以下自定义事件：</p>
-<p>| 事件 | 触发时机 | 载荷字段 | | --- | --- | --- | | <code>rubric_evaluation_start</code> | 评分器运行之前。 | &lt;ul&gt;&lt;li&gt;<code>type</code>：事件名称&lt;/li&gt;&lt;li&gt;<code>grading_run_id</code>：在一次评分标准尝试中所有事件共享&lt;/li&gt;&lt;li&gt;<code>iteration</code>：当前评分运行的从零开始的索引&lt;/li&gt;&lt;/ul&gt; | | <code>rubric_evaluation_end</code> | 评分器返回后或评分器异常后。 | &lt;ul&gt;&lt;li&gt;<code>type</code>：事件名称&lt;/li&gt;&lt;li&gt;<code>grading_run_id</code>：在一次评分标准尝试中所有事件共享&lt;/li&gt;&lt;li&gt;<code>iteration</code>：当前评分器遍历的从零开始的索引&lt;/li&gt;&lt;li&gt;<code>result</code>：本次遍历的最终判决&lt;/li&gt;&lt;li&gt;<code>explanation</code>：评分器的摘要&lt;/li&gt;&lt;li&gt;<code>criteria</code>：每项标准的判决&lt;/li&gt;&lt;/ul&gt; | &lt;/section&gt;</p>
+<table>
+<thead><tr><th>事件</th><th>触发时机</th><th>载荷字段</th></tr></thead>
+<tbody>
+<tr><td><code>rubric_evaluation_start</code></td><td>评分器运行之前。</td><td>&lt;ul&gt;&lt;li&gt;<code>type</code>：事件名称&lt;/li&gt;&lt;li&gt;<code>grading_run_id</code>：在一次评分标准尝试中所有事件共享&lt;/li&gt;&lt;li&gt;<code>iteration</code>：当前评分运行的从零开始的索引&lt;/li&gt;&lt;/ul&gt;</td></tr>
+<tr><td><code>rubric_evaluation_end</code></td><td>评分器返回后或评分器异常后。</td><td>&lt;ul&gt;&lt;li&gt;<code>type</code>：事件名称&lt;/li&gt;&lt;li&gt;<code>grading_run_id</code>：在一次评分标准尝试中所有事件共享&lt;/li&gt;&lt;li&gt;<code>iteration</code>：当前评分器遍历的从零开始的索引&lt;/li&gt;&lt;li&gt;<code>result</code>：本次遍历的最终判决&lt;/li&gt;&lt;li&gt;<code>explanation</code>：评分器的摘要&lt;/li&gt;&lt;li&gt;<code>criteria</code>：每项标准的判决&lt;/li&gt;&lt;/ul&gt;</td></tr>
+</tbody>
+</table>
 <h3>评分标准判决</h3>
 <p>当深度代理完成推理并产生输出后，LLM-as-a-judge 评分子代理会根据评分标准审查输出，并产生以下判决之一：</p>
-<p>| 状态 | 含义 | 是否回环？ | | --- | --- | --- | | <code>satisfied</code> | 评分标准中的每项标准都通过。 | 否 | | <code>needs_revision</code> | 至少一项标准未通过；评分器反馈被注入，代理再次运行。 | 是 | | <code>max_iterations_reached</code> | 评分器仍希望进行修改，但已达到 <code>max_iterations</code>。 | 否 | | <code>failed</code> | 评分器判定评分标准格式不正确或无法根据对话记录进行评估。 | 否 | | <code>grader_error</code> | LLM-as-a-judge 评分子代理本身抛出异常（提供商超时、凭据缺失、格式错误的结构化响应等）。 | 否 |</p>
+<table>
+<thead><tr><th>状态</th><th>含义</th><th>是否回环？</th></tr></thead>
+<tbody>
+<tr><td><code>satisfied</code></td><td>评分标准中的每项标准都通过。</td><td>否</td></tr>
+<tr><td><code>needs_revision</code></td><td>至少一项标准未通过；评分器反馈被注入，代理再次运行。</td><td>是</td></tr>
+<tr><td><code>max_iterations_reached</code></td><td>评分器仍希望进行修改，但已达到 <code>max_iterations</code>。</td><td>否</td></tr>
+<tr><td><code>failed</code></td><td>评分器判定评分标准格式不正确或无法根据对话记录进行评估。</td><td>否</td></tr>
+<tr><td><code>grader_error</code></td><td>LLM-as-a-judge 评分子代理本身抛出异常（提供商超时、凭据缺失、格式错误的结构化响应等）。</td><td>否</td></tr>
+</tbody>
+</table>
 <h2>观察迭代进度</h2>
 <p><code>on_evaluation</code> 是一个回调函数，在每次评分迭代后（无论你调用 <code>invoke()</code> 还是 <code>stream_events()</code>）触发，包含评分器的判决。如果你没有从 <code>stream.custom</code>（使用 <code>CustomTransformer</code>）读取评分事件，也没有使用 LangSmith 对运行进行跟踪，这是检查评分过程中发生了什么的主要方式。</p>
 <p>中间件在每次<a href="#grader-pass-events">评分器遍历</a>后用 <code>RubricEvaluation</code> 字典调用你的函数。<code>RubricEvaluation</code> 字典包含：</p>
-<p>| 字段 | 类型 | 描述 | | --- | --- | --- | | <code>grading_run_id</code> | <code>str</code> | 在一次评分标准尝试中所有评估共享的标识符。当调用者提供不同的 <code>rubric</code> 时，或在得到最终判决后再次使用相同的 <code>rubric</code> 调用时，新的运行开始。 | | <code>iteration</code> | <code>int</code> | 该运行中当前评分器遍历的从零开始的索引。 | | <code>result</code> | <code>str</code> | 本次遍历的评分器判决：<code>satisfied</code>、<code>needs_revision</code>、<code>failed</code> 或 <code>grader_error</code>。 | | <code>explanation</code> | <code>str</code> | 评分器的自由格式摘要。在基础设施故障时，包含异常类型和消息。 | | <code>criteria</code> | <code>list</code> | 每项标准的判决。每个条目为 <code>{name, passed: true}</code> 或 <code>{name, passed: false, gap}</code>，其中 <code>gap</code> 是针对未通过标准的可操作反馈。 |</p>
+<table>
+<thead><tr><th>字段</th><th>类型</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td><code>grading_run_id</code></td><td><code>str</code></td><td>在一次评分标准尝试中所有评估共享的标识符。当调用者提供不同的 <code>rubric</code> 时，或在得到最终判决后再次使用相同的 <code>rubric</code> 调用时，新的运行开始。</td></tr>
+<tr><td><code>iteration</code></td><td><code>int</code></td><td>该运行中当前评分器遍历的从零开始的索引。</td></tr>
+<tr><td><code>result</code></td><td><code>str</code></td><td>本次遍历的评分器判决：<code>satisfied</code>、<code>needs_revision</code>、<code>failed</code> 或 <code>grader_error</code>。</td></tr>
+<tr><td><code>explanation</code></td><td><code>str</code></td><td>评分器的自由格式摘要。在基础设施故障时，包含异常类型和消息。</td></tr>
+<tr><td><code>criteria</code></td><td><code>list</code></td><td>每项标准的判决。每个条目为 <code>{name, passed: true}</code> 或 <code>{name, passed: false, gap}</code>，其中 <code>gap</code> 是针对未通过标准的可操作反馈。</td></tr>
+</tbody>
+</table>
 <h3>评分器遍历事件</h3>
-<p>| 事件 | 描述 | | ----- | ------------- | | **成功评分** | 每次遍历触发一次，包括中间的 <code>needs_revision</code> 判决和最终的 <code>satisfied</code> 或 <code>failed</code> 判决。&lt;br /&gt;&lt;br /&gt; 当评分器返回 <code>needs_revision</code> 但已达到 <code>max_iterations</code> 时，回调仍然接收 <code>result: &quot;needs_revision&quot;</code>（评分器的判决）。运行的最终状态是私有状态 <code>_rubric_status</code> 上的 <code>max_iterations_reached</code>，而不是评估记录上的。在 <code>invoke</code> 完成后检查 <code>_rubric_status</code>，或者同时读取 <code>_rubric_evaluations</code> 的最后一条和 <code>_rubric_iterations</code>，以在达到上限时进行分支处理。 | | **评分器异常** | 使用 <code>result: &quot;grader_error&quot;</code>、从异常派生的解释和空的 <code>criteria</code> 列表触发。 | | **回调中的错误** | 异常被记录并抑制。评分循环继续。不要使用 <code>on_evaluation</code> 来强制控制流（例如，抛出异常来停止代理）。 |</p>
+<table>
+<thead><tr><th>事件</th><th>描述</th></tr></thead>
+<tbody>
+<tr><td>**成功评分**</td><td>每次遍历触发一次，包括中间的 <code>needs_revision</code> 判决和最终的 <code>satisfied</code> 或 <code>failed</code> 判决。&lt;br /&gt;&lt;br /&gt; 当评分器返回 <code>needs_revision</code> 但已达到 <code>max_iterations</code> 时，回调仍然接收 <code>result: &quot;needs_revision&quot;</code>（评分器的判决）。运行的最终状态是私有状态 <code>_rubric_status</code> 上的 <code>max_iterations_reached</code>，而不是评估记录上的。在 <code>invoke</code> 完成后检查 <code>_rubric_status</code>，或者同时读取 <code>_rubric_evaluations</code> 的最后一条和 <code>_rubric_iterations</code>，以在达到上限时进行分支处理。</td></tr>
+<tr><td>**评分器异常**</td><td>使用 <code>result: &quot;grader_error&quot;</code>、从异常派生的解释和空的 <code>criteria</code> 列表触发。</td></tr>
+<tr><td>**回调中的错误**</td><td>异常被记录并抑制。评分循环继续。不要使用 <code>on_evaluation</code> 来强制控制流（例如，抛出异常来停止代理）。</td></tr>
+</tbody>
+</table>
 <h2>在调用之间持久化评分标准</h2>
 <p>单个 <code>agent.invoke()</code> 或 <code>agent.stream_events()</code> 调用会运行评分标准循环直到完成，并以最终判决结束：<code>satisfied</code>、<code>failed</code> 或 <code>max_iterations_reached</code>。</p>
 <p>要将评分标准延续到后续调用，请附加一个<a href="/oss/javascript/langgraph/checkpointers.html#checkpoints">检查点保存器</a>，并在调用时传递相同的 <code>thread_id</code>。在这些情况下，相同的 <code>rubric</code> 会在未来的 <code>invoke()</code> 或 <code>stream_events()</code> 调用中保持有效，直到你在输入中传入新的 <code>rubric</code>。</p>

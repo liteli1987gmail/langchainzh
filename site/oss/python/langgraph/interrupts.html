@@ -1095,8 +1095,15 @@ def approval_node(state: State):
     # When you resume, Command(resume=...) returns that value here
     return {&quot;approved&quot;: approved}</code></pre>
 <p>当您调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 时，以下是发生的过程：</p>
-<p>1. **图执行在** 调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 的确切位置被**挂起** 2. **状态被保存** 到检查点中，以便后续可以恢复执行，在生产环境中，这应该是持久化检查点（例如由数据库支持） 3. **值被返回** 给调用者，在使用<a href="/oss/python/langgraph/event-streaming.html">事件流</a>时（<code>graph.stream_events(..., version=&quot;v3&quot;)</code>）返回到 <code>stream.interrupts</code>，或使用默认的 <code>invoke()</code> API 时返回到 <code>__interrupt__</code>；它可以是任何可 JSON 序列化的值（字符串、对象、数组等）</p>
-<p>4. **图无限期等待**，直到您通过响应恢复执行 5. **响应在恢复时被传递回** 节点，成为 <code>interrupt()</code> 调用的返回值</p>
+<ol>
+<li>1. **图执行在** 调用 <a href="https://reference.langchain.com/python/langgraph/types/interrupt"><code>interrupt</code></a> 的确切位置被**挂起**</li>
+<li>2. **状态被保存** 到检查点中，以便后续可以恢复执行，在生产环境中，这应该是持久化检查点（例如由数据库支持）</li>
+<li>3. **值被返回** 给调用者，在使用<a href="/oss/python/langgraph/event-streaming.html">事件流</a>时（<code>graph.stream_events(..., version=&quot;v3&quot;)</code>）返回到 <code>stream.interrupts</code>，或使用默认的 <code>invoke()</code> API 时返回到 <code>__interrupt__</code>；它可以是任何可 JSON 序列化的值（字符串、对象、数组等）</li>
+</ol>
+<ol>
+<li>4. **图无限期等待**，直到您通过响应恢复执行</li>
+<li>5. **响应在恢复时被传递回** 节点，成为 <code>interrupt()</code> 调用的返回值</li>
+</ol>
 <h2>恢复中断</h2>
 <p>中断暂停执行后，您可以通过使用包含恢复值的 <code>Command</code> 重新调用图来恢复执行。恢复值被传递回 <code>interrupt</code> 调用，允许节点继续使用外部输入执行。</p>
 <p>驱动可能中断的图的推荐方式是<a href="/oss/python/langgraph/event-streaming.html">事件流</a>——它通过 <code>stream.interrupts</code> 和 <code>stream.interrupted</code> 暴露中断，并通过 <code>stream.output</code> 公开最终状态。</p>
@@ -1292,7 +1299,12 @@ graph.stream_events(Command(resume=False), config=config, version=&quot;v3&quot;
 <p>**避免在单个节点内使用 <code>while True</code> + <code>interrupt()</code> 循环。** 因为节点在每次恢复时从头重新运行（参见<a href="#rules-of-interrupts">中断规则</a>），所以在循环内多次调用 <code>interrupt()</code> 会导致每次恢复都重放所有先前的迭代：第一次恢复重放 1 次迭代，第二次重放 2 次，依此类推。结果是循环体内的任何代码都呈指数级重新执行。</p>
 </aside>
 <p>正确的模式：</p>
-<p>1. 将重新提示的问题存储在状态中（例如 <code>pending_question</code>）。 2. 在节点中**恰好调用一次** <code>interrupt()</code>，传递状态中的当前问题。 3. 如果答案无效，返回更新后的 <code>pending_question</code>，以便下一次调用重新提示。 4. 使用 <code>add_conditional_edges</code> 循环回节点，直到收集到有效值。</p>
+<ol>
+<li>1. 将重新提示的问题存储在状态中（例如 <code>pending_question</code>）。</li>
+<li>2. 在节点中**恰好调用一次** <code>interrupt()</code>，传递状态中的当前问题。</li>
+<li>3. 如果答案无效，返回更新后的 <code>pending_question</code>，以便下一次调用重新提示。</li>
+<li>4. 使用 <code>add_conditional_edges</code> 循环回节点，直到收集到有效值。</li>
+</ol>
 <p>每次恢复恰好调用一次 <code>get_age_node</code>，运行一次 <code>interrupt()</code> 调用，然后退出。当答案无效时，条件边循环回，下一个中断使用更新后的问题重新提示。没有代码在每次恢复时运行超过一次。</p>
 <p>python</p>
 <pre><code data-language="python">        graph = builder.compile(
@@ -1334,7 +1346,13 @@ graph.stream_events(Command(resume=False), config=config, version=&quot;v3&quot;
         # Resume the graph
         graph.invoke(None, config=config)  # [!code highlight]
         </code></pre>
-<p>1. <code>graph.invoke</code> 使用 <code>interrupt_before</code> 和 <code>interrupt_after</code> 参数调用。这是一个运行时配置，可以在每次调用时更改。 2. <code>interrupt_before</code> 指定在节点执行前暂停执行的位置。 3. <code>interrupt_after</code> 指定在节点执行后暂停执行的位置。 4. 图运行直到命中第一个断点。 5. 通过传入 <code>None</code> 作为输入来恢复图。这将运行图直到命中下一个断点。</p>
+<ol>
+<li>1. <code>graph.invoke</code> 使用 <code>interrupt_before</code> 和 <code>interrupt_after</code> 参数调用。这是一个运行时配置，可以在每次调用时更改。</li>
+<li>2. <code>interrupt_before</code> 指定在节点执行前暂停执行的位置。</li>
+<li>3. <code>interrupt_after</code> 指定在节点执行后暂停执行的位置。</li>
+<li>4. 图运行直到命中第一个断点。</li>
+<li>5. 通过传入 <code>None</code> 作为输入来恢复图。这将运行图直到命中下一个断点。</li>
+</ol>
 </section>
 <aside class="callout"><strong>建议</strong>
 <p>若要调试中断，请使用 <a href="/langsmith/observability.html">LangSmith</a>。</p>

@@ -1076,9 +1076,15 @@
     <main class="content">
       <article class="doc"><h2>图</h2>
 <p>LangGraph 的核心是将智能体工作流建模为图。您可以使用三个关键组件来定义智能体的行为：</p>
-<p>1. <a href="#state"><code>State</code></a>：一个共享数据结构，表示应用程序的当前快照。它可以是任何数据类型，但通常使用共享状态模式来定义。</p>
-<p>2. <a href="#nodes"><code>Nodes</code></a>：对智能体逻辑进行编码的函数。它们接收当前状态作为输入，执行一些计算或副作用，并返回更新后的状态。</p>
-<p>3. <a href="#edges"><code>Edges</code></a>：根据当前状态确定下一步执行哪个 <code>Node</code> 的函数。它们可以是条件分支或固定转换。</p>
+<ol>
+<li>1. <a href="#state"><code>State</code></a>：一个共享数据结构，表示应用程序的当前快照。它可以是任何数据类型，但通常使用共享状态模式来定义。</li>
+</ol>
+<ol>
+<li>2. <a href="#nodes"><code>Nodes</code></a>：对智能体逻辑进行编码的函数。它们接收当前状态作为输入，执行一些计算或副作用，并返回更新后的状态。</li>
+</ol>
+<ol>
+<li>3. <a href="#edges"><code>Edges</code></a>：根据当前状态确定下一步执行哪个 <code>Node</code> 的函数。它们可以是条件分支或固定转换。</li>
+</ol>
 <p>通过组合 <code>Nodes</code> 和 <code>Edges</code>，您可以创建随时间演化状态的复杂循环工作流。不过，真正的强大之处在于 LangGraph 如何管理该状态。</p>
 <p>需要强调的是：<code>Nodes</code> 和 <code>Edges</code> 不过是函数——它们可以包含 LLM 或只是普通的代码。</p>
 <p>简而言之：_节点做工作，边决定下一步做什么_。</p>
@@ -1100,8 +1106,12 @@
 <p>也可以为图定义显式的输入和输出模式。在这些情况下，我们定义一个包含图操作所有相关键的&quot;内部&quot;模式。但是，我们还定义 <code>input</code> 和 <code>output</code> 模式作为&quot;内部&quot;模式的子集，以约束图的输入和输出。有关更多详细信息，请参阅<a href="/oss/python/langgraph/use-graph-api.html#define-input-and-output-schemas">定义输入和输出模式</a>。</p>
 <p>让我们看一个例子：</p>
 <p>这里有两个微妙但重要的点需要注意：</p>
-<p>1. 我们将 <code>state: InputState</code> 作为输入模式传递给 <code>node_1</code>。但是，我们写入的是 <code>foo</code>，这是 <code>OverallState</code> 中的一个通道。我们如何写入不包含在输入模式中的状态通道？这是因为节点_可以写入图状态中的任何状态通道_。图状态是在初始化时定义的状态通道的并集，其中包括 <code>OverallState</code> 和过滤器 <code>InputState</code> 和 <code>OutputState</code>。</p>
-<p>2. 我们使用以下方式初始化图：</p>
+<ol>
+<li>1. 我们将 <code>state: InputState</code> 作为输入模式传递给 <code>node_1</code>。但是，我们写入的是 <code>foo</code>，这是 <code>OverallState</code> 中的一个通道。我们如何写入不包含在输入模式中的状态通道？这是因为节点_可以写入图状态中的任何状态通道_。图状态是在初始化时定义的状态通道的并集，其中包括 <code>OverallState</code> 和过滤器 <code>InputState</code> 和 <code>OutputState</code>。</li>
+</ol>
+<ol>
+<li>2. 我们使用以下方式初始化图：</li>
+</ol>
 <pre><code data-language="python">    StateGraph(
         OverallState,
         input_schema=InputState,
@@ -1110,7 +1120,9 @@
     </code></pre>
 <p>如何在 <code>node_2</code> 中写入 <code>PrivateState</code>？如果 <code>StateGraph</code> 初始化时没有传入该 schema，图表如何获得对该 schema 的访问权限？我们可以通过 <code>_nodes</code> 声明额外的状态 <code>channels_</code>，只要状态 schema 定义存在即可。在这种情况下，<code>PrivateState</code> schema 已定义，因此我们可以将 <code>bar</code> 作为新的状态 channel 添加到图表中并写入。</p>
 <p>js</p>
-<p>1. We pass <code>state</code> as the input schema to <code>node1</code>. But, we write out to <code>foo</code>, a channel in <code>OverallState</code>. How can we write out to a state channel that is not included in the input schema? This is because a node _can write to any state channel in the graph state._ The graph state is the union of the state channels defined at initialization, which includes <code>OverallState</code> and the filters <code>InputState</code> and <code>OutputState</code>.</p>
+<ol>
+<li>1. We pass <code>state</code> as the input schema to <code>node1</code>. But, we write out to <code>foo</code>, a channel in <code>OverallState</code>. How can we write out to a state channel that is not included in the input schema? This is because a node _can write to any state channel in the graph state._ The graph state is the union of the state channels defined at initialization, which includes <code>OverallState</code> and the filters <code>InputState</code> and <code>OutputState</code>.</li>
+</ol>
 <p>2. We initialize the graph with <code>StateGraph({ state: OverallState, input: InputState, output: OutputState })</code>. How can we write to <code>PrivateState</code> in <code>node2</code>? How does the graph gain access to this schema if it was not passed in the <code>StateGraph</code> initialization? We can do this because _nodes can also declare additional state channels_ as long as the state schema definition exists. In this case, the <code>PrivateState</code> schema is defined, so we can add <code>bar</code> as a new state channel in the graph and write to it. :::</p>
 <aside class="callout"><strong>警告</strong>
 <p>**Private channels are not redacted when streaming.**</p>
@@ -1192,7 +1204,11 @@ class State(MessagesState):
     documents: list[str]</code></pre>
 <h2>节点</h2>
 <p>在 LangGraph 中，节点是 Python 函数（可以是同步或异步的），它们接受以下参数：</p>
-<p>1. <code>state</code>—图的 <a href="#state">state</a> 2. <code>config</code>—一个包含配置信息的 <a href="https://reference.langchain.com/python/langchain-core/runnables/config/RunnableConfig"><code>RunnableConfig</code></a> 对象，如 <code>thread_id</code> 和追踪信息（如 <code>tags</code>） 3. <code>runtime</code>—一个包含 <a href="#runtime-context">runtime <code>context</code></a> 和其他信息的 <code>Runtime</code> 对象，如 <code>store</code>、<code>stream_writer</code>、<code>execution_info</code>、<code>server_info</code>、<code>heartbeat</code>（用于空闲超时刷新）和 <code>control</code>（用于<a href="/oss/python/langgraph/fault-tolerance.html#graceful-shutdown">优雅关闭</a>））</p>
+<ol>
+<li>1. <code>state</code>—图的 <a href="#state">state</a></li>
+<li>2. <code>config</code>—一个包含配置信息的 <a href="https://reference.langchain.com/python/langchain-core/runnables/config/RunnableConfig"><code>RunnableConfig</code></a> 对象，如 <code>thread_id</code> 和追踪信息（如 <code>tags</code>）</li>
+<li>3. <code>runtime</code>—一个包含 <a href="#runtime-context">runtime <code>context</code></a> 和其他信息的 <code>Runtime</code> 对象，如 <code>store</code>、<code>stream_writer</code>、<code>execution_info</code>、<code>server_info</code>、<code>heartbeat</code>（用于空闲超时刷新）和 <code>control</code>（用于<a href="/oss/python/langgraph/fault-tolerance.html#graceful-shutdown">优雅关闭</a>））</li>
+</ol>
 <p>与 <code>NetworkX</code> 类似，你可以使用 <a href="https://reference.langchain.com/python/langgraph/graph/state/StateGraph/add_node"><code>add_node</code></a> 方法将这些节点添加到图中：</p>
 <pre><code data-language="python">from dataclasses import dataclass
 from typing_extensions import TypedDict
@@ -1623,7 +1639,13 @@ except GraphRecursionError as e:
     # Handle externally after graph execution fails
     result = {&quot;messages&quot;: [&quot;Fallback: recursion limit exceeded&quot;]}</code></pre>
 <p>这些方法之间的主要区别是：</p>
-<p>| 方法 | 检测 | 处理 | 控制流 | |------|------|------|--------| | 主动方式（使用 <code>RemainingSteps</code>） | 在达到限制之前 | 在图内通过条件路由 | 图继续执行到完成节点 | | 被动方式（捕获 <code>GraphRecursionError</code>） | 在超过限制之后 | 在图外的 try/catch 中 | 图执行终止 |</p>
+<table>
+<thead><tr><th>方法</th><th>检测</th><th>处理</th><th>控制流</th></tr></thead>
+<tbody>
+<tr><td>主动方式（使用 <code>RemainingSteps</code>）</td><td>在达到限制之前</td><td>在图内通过条件路由</td><td>图继续执行到完成节点</td></tr>
+<tr><td>被动方式（捕获 <code>GraphRecursionError</code>）</td><td>在超过限制之后</td><td>在图外的 try/catch 中</td><td>图执行终止</td></tr>
+</tbody>
+</table>
 <p>**主动方式的优点：**</p>
 <ul>
 <li>- 图内优雅降级</li>

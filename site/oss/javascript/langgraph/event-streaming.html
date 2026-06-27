@@ -1091,12 +1091,27 @@ const finalState = await stream.output;</code></pre>
 <p>要针对部署在 Agent Server 后面的图进行流式处理，请参阅 <a href="/langsmith/streaming.html">LangSmith Streaming API</a>。</p>
 <h2>各部分如何协同工作</h2>
 <p>流式处理栈有两个主要层：</p>
-<p>1. **流式处理** 从 Pregel 引擎发出原始图执行事件。 2. **事件流式处理** 规范化这些事件，通过流转换器运行它们，并公开类型化投影。</p>
+<ol>
+<li>1. **流式处理** 从 Pregel 引擎发出原始图执行事件。</li>
+<li>2. **事件流式处理** 规范化这些事件，通过流转换器运行它们，并公开类型化投影。</li>
+</ol>
 <p>Pregel 引擎 运行图步骤 发出 原始 Pregel 事件 &lt;code&gt;updates&lt;/code&gt;, &lt;code&gt;values&lt;/code&gt;, &lt;code&gt;messages&lt;/code&gt;, &lt;code&gt;custom&lt;/code&gt;, &lt;code&gt;checkpoints&lt;/code&gt;, &lt;code&gt;tasks&lt;/code&gt;, &lt;code&gt;debug&lt;/code&gt; 发送到 事件路由器 通过转换器管道路由每个事件 级联通过 流转换器 ValuesTransformer MessagesTransformer ... 自定义转换器 产生 事件流 面向应用程序代码的投影事件</p>
 <p>事件路由器是两个层之间的桥梁。它接收规范化的 Pregel 事件，并将每个事件通过已注册的流转换器。内置转换器创建标准投影，如 <code>stream.messages</code>、<code>stream.values</code>、<code>stream.subgraphs</code> 和 <code>stream.output</code>。自定义转换器可以在 <code>stream.extensions</code> 下添加特定于应用程序的投影。</p>
 <h2>事件流式处理提供的内容</h2>
 <p>运行流公开了一个底层事件流之上的类型化投影：</p>
-<p>| 投影 | 用途 | | ---------- | --- | | <code>stream</code> | 遍历每个协议事件。 | | <code>stream.messages</code> | 流式传输聊天模型消息和令牌增量。 | | <code>stream.values</code> | 遍历状态快照并等待最终值。 | | <code>stream.output</code> | 等待最终输出。 | | <code>stream.subgraphs</code> | 发现并观察嵌套图执行。 | | <code>stream.interrupts</code> | 检查人工介入中断的有效载荷。 | | <code>stream.interrupted</code> | 检查运行是否因人工输入而暂停。 | | <code>stream.extensions</code> | 使用自定义流转换器投影。 |</p>
+<table>
+<thead><tr><th>投影</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>stream</code></td><td>遍历每个协议事件。</td></tr>
+<tr><td><code>stream.messages</code></td><td>流式传输聊天模型消息和令牌增量。</td></tr>
+<tr><td><code>stream.values</code></td><td>遍历状态快照并等待最终值。</td></tr>
+<tr><td><code>stream.output</code></td><td>等待最终输出。</td></tr>
+<tr><td><code>stream.subgraphs</code></td><td>发现并观察嵌套图执行。</td></tr>
+<tr><td><code>stream.interrupts</code></td><td>检查人工介入中断的有效载荷。</td></tr>
+<tr><td><code>stream.interrupted</code></td><td>检查运行是否因人工输入而暂停。</td></tr>
+<tr><td><code>stream.extensions</code></td><td>使用自定义流转换器投影。</td></tr>
+</tbody>
+</table>
 <p>多个消费者可以同时读取这些投影。读取 <code>stream.messages</code> 不会消耗 <code>stream.values</code>、<code>stream.subgraphs</code> 或 <code>stream.output</code> 所需的事件。</p>
 <p>事件流式处理位于<a href="/oss/javascript/langgraph/streaming.html">流式处理</a>之上一层，后者通过 <code>stream_mode</code> 模式（如 <code>updates</code>、<code>values</code>、<code>messages</code>、<code>custom</code>、<code>checkpoints</code>、<code>tasks</code> 和 <code>debug</code>）公开原始图执行事件。当需要低级访问这些模式时使用流式处理；当应用程序代码受益于类型化投影时使用事件流式处理。</p>
 <h2>流式传输消息</h2>
@@ -1210,7 +1225,21 @@ for await (const event of stream) {
 <p><code>namespace</code> 是从根图到发出事件的范围的路径。根是空数组 <code>[]</code>。每个子执行添加一个 <code>&quot;name:runtime_id&quot;</code> 段，因此子图中嵌套的工具调用看起来像 <code>[&quot;researcher:6f4d&quot;, &quot;tools:91ac&quot;]</code>。<code>:</code> 之前的名称是稳定的图或节点名称；后缀是每次调用的运行时 ID。当您只关心特定的子树时，请按 namespace 自行过滤原始事件——<code>stream.subgraphs</code> 已经为嵌套图执行完成了此操作。</p>
 <h2>通道和事件生命周期</h2>
 <p>原始事件在通道上流动。通道名称显示为事件的 <code>method</code>；每个通道发出特定的事件形状。</p>
-<p>| 通道 | 用途 | | ------- | ------- | | <code>values</code> | 完整图状态快照。 | | <code>updates</code> | 每节点状态增量。 | | <code>messages</code> | 内容块为中心的聊天模型输出。 | | <code>tools</code> | 工具调用开始、流式输出、完成和错误事件。 | | <code>lifecycle</code> | 运行、子图和子代理状态变更。 | | <code>checkpoints</code> | 用于分支和时间旅行的轻量级检查点信封。 | | <code>input</code> | 人工介入输入请求和响应。 | | <code>tasks</code> | Pregel 任务创建和结果事件。 | | <code>custom</code> | 来自图代码的用户定义负载。 | | <code>custom:&lt;name&gt;</code> | 应用程序定义的流转换器输出。 |</p>
+<table>
+<thead><tr><th>通道</th><th>用途</th></tr></thead>
+<tbody>
+<tr><td><code>values</code></td><td>完整图状态快照。</td></tr>
+<tr><td><code>updates</code></td><td>每节点状态增量。</td></tr>
+<tr><td><code>messages</code></td><td>内容块为中心的聊天模型输出。</td></tr>
+<tr><td><code>tools</code></td><td>工具调用开始、流式输出、完成和错误事件。</td></tr>
+<tr><td><code>lifecycle</code></td><td>运行、子图和子代理状态变更。</td></tr>
+<tr><td><code>checkpoints</code></td><td>用于分支和时间旅行的轻量级检查点信封。</td></tr>
+<tr><td><code>input</code></td><td>人工介入输入请求和响应。</td></tr>
+<tr><td><code>tasks</code></td><td>Pregel 任务创建和结果事件。</td></tr>
+<tr><td><code>custom</code></td><td>来自图代码的用户定义负载。</td></tr>
+<tr><td><code>custom:&lt;name&gt;</code></td><td>应用程序定义的流转换器输出。</td></tr>
+</tbody>
+</table>
 <p>类型化投影（<code>stream.messages</code>、<code>stream.values</code> 等）是从这些通道构建的。当您直接迭代运行对象时，通道名称显示为原始事件的 <code>method</code> 字段。</p>
 <h3>消息</h3>
 <p><code>messages</code> 通道将输出建模为内容块。数据的 <code>event</code> 字段是以下之一：</p>
@@ -1267,7 +1296,12 @@ for await (const event of stream) {
     C --&gt; D[User transformers]
     D --&gt; E[Run projections]</code></pre>
 <p>流处理器是一个流的核心调度器。对于每个协议事件，它会：</p>
-<p>1. 按顺序调用每个已注册变换器的 <code>process(event)</code> 钩子。 2. 将命名的 <code>StreamChannel</code> 推送连接回协议事件流。 3. 除非变换器抑制该事件，否则将其存储到运行流中。 4. 当运行结束时，对每个变换器调用 <code>finalize()</code> 或 <code>fail()</code>。</p>
+<ol>
+<li>1. 按顺序调用每个已注册变换器的 <code>process(event)</code> 钩子。</li>
+<li>2. 将命名的 <code>StreamChannel</code> 推送连接回协议事件流。</li>
+<li>3. 除非变换器抑制该事件，否则将其存储到运行流中。</li>
+<li>4. 当运行结束时，对每个变换器调用 <code>finalize()</code> 或 <code>fail()</code>。</li>
+</ol>
 <p>变换器是观察性的。它们不会回调到图运行时。相反，它们消费事件并将派生值推送到 <code>StreamChannel</code>、promise 或其他投影对象中。</p>
 <h3>变换器形态</h3>
 <p>变换器实现 <code>StreamTransformer</code> 接口：</p>
