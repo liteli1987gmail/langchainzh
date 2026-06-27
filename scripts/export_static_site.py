@@ -386,6 +386,8 @@ def mdx_to_markdown(text: str) -> str:
     del frontmatter
     body = re.sub(r"(?s)\{/\*.*?\*/\}", "", body)
     body = re.sub(r"^\s*(import|export)\b.*$", "", body, flags=re.MULTILINE)
+    body = re.sub(r"^\s*</?fragment>\s*$", "", body, flags=re.MULTILINE)
+    body = re.sub(r"</?fragment>", "", body)
 
     return transform_mdx_components(body)
 
