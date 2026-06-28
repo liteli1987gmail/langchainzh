@@ -568,6 +568,8 @@ def should_translate_text_slot(text: str) -> bool:
         return False
     if not has_translatable_english(stripped):
         return False
+    if re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$.-]*\s*=", stripped):
+        return False
     if stripped.startswith(("/", "http://", "https://", "#", "{", "$")):
         return False
     if "/" in stripped or "\\" in stripped:
@@ -766,6 +768,11 @@ def translate_text_slots(
     translated: dict[int, str] = {}
     for batch in json_batches(batch_items, min(max_chars, JSON_BATCH_MAX_CHARS)):
         translated.update(translate_json_batch_resilient(batch, client))
+    source_by_id = {slot.index: slot.text for slot in slots}
+    translated = {
+        index: preserve_html_entities(source_by_id.get(index, ""), value)
+        for index, value in translated.items()
+    }
     suspicious = [
         (index, value)
         for index, value in translated.items()
@@ -777,6 +784,16 @@ def translate_text_slots(
         sample = "; ".join(f"{index}: {value[:80]}" for index, value in suspicious[:5])
         raise RuntimeError(f"Translated text slot contains MDX/HTML tags: {sample}")
     return translated
+
+
+def preserve_html_entities(source: str, translated: str) -> str:
+    """Keep source HTML entities that MDX needs for literal angle brackets."""
+    result = translated
+    if "&lt;" in source:
+        result = result.replace("<", "&lt;")
+    if "&gt;" in source:
+        result = result.replace(">", "&gt;")
+    return result
 
 
 def split_fenced_blocks(text: str) -> list[tuple[str, str]]:

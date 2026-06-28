@@ -28,24 +28,24 @@ import LanggraphSqlAgentHitlAssembleJs from '/snippets/code-samples/langgraph-sq
 import LanggraphSqlAgentHitlStreamJs from '/snippets/code-samples/langgraph-sql-agent-hitl-stream-js.mdx';
 import LanggraphSqlAgentHitlResumeJs from '/snippets/code-samples/langgraph-sql-agent-hitl-resume-js.mdx';
 
-在本教程中，我们将构建一个能够使用 LangGraph 回答 SQL 数据库相关问题的自定义 agent。
+在本教程中，我们将构建一个自定义 agent，该 agent 可以使用 LangGraph 回答有关 SQL 数据库的问题。
 
-LangChain 提供内置 [agent](/oss/langchain/agents) 实现，使用 [LangGraph](/oss/langgraph/overview) 原语实现。如果需要更深入的定制，可以直接在 LangGraph 中实现 agent。本指南演示了 SQL agent 的示例实现。关于实践介绍，请参阅 [使用更高级的 LangChain 抽象构建 SQL agent](/oss/langchain/sql-agent).
+LangChain 提供内置 [agent](/oss/langchain/agents) 实现，使用 [LangGraph](/oss/langgraph/overview) 原语。如果需要更深入的定制，可以直接在 LangGraph 中实现 agent。本指南演示了 SQL agent 的示例实现。关于实际介绍，请参阅 [使用更高级别的 LangChain 抽象构建 SQL agent](/oss/langchain/sql-agent).
 
 <Warning>
-构建 SQL 数据库问答系统需要执行模型生成的 SQL 查询。这存在固有风险。请确保您的数据库连接权限始终尽可能窄地限定于 agent 的需求范围。这将减轻（但不能完全消除）构建模型驱动系统的风险。
+构建 SQL 数据库的问答系统需要执行模型生成的 SQL 查询。这样做存在固有风险。请确保您的数据库连接权限始终尽可能窄地限定在 agent 的需求范围内。这将减轻（但不能消除）构建模型驱动系统的风险。
 </Warning>
 
-该 [预构建 agent](/oss/langchain/sql-agent) 让我们可以快速入门，但我们依赖系统提示来约束其行为——例如，我们指示 agent 始终以 "list tables" 工具开始，并在执行查询之前始终运行 query-checker 工具。
+该 [预构建 agent](/oss/langchain/sql-agent) 让我们快速入门，但我们依赖系统提示来约束其行为——例如，我们指示 agent 始终以"list tables"工具开始，并在执行查询之前始终运行查询检查工具。
 
-通过自定义 agent，我们可以在 LangGraph 中实现更高程度的控制。在这里，我们实现了一个简单的 ReAct-agent 设置，具有用于特定工具调用的专用节点。我们将使用与预构建 agent 相同的 [state]。
+通过自定义 agent，我们可以在 LangGraph 中实施更高程度的控制。在这里，我们实现了一个简单的 ReAct-agent 设置，具有用于特定工具调用的专用节点。我们将使用与预构建 agent 相同的 [state]。
 
 ### 概念
 
 我们将涵盖以下概念：
 
-- [工具](/oss/langchain/tools) 用于读取 SQL 数据库
-- LangGraph [Graph API](/oss/langgraph/graph-api)，包括 state、nodes、edges 和条件 edges。
+- [工具](/oss/langchain/tools) 用于从 SQL 数据库读取
+- LangGraph [图形 API](/oss/langgraph/graph-api)，包括状态、节点、边和条件边。
 - [Human-in-the-loop](/oss/langgraph/interrupts) 流程
 
 ## 设置
@@ -74,14 +74,14 @@ LangChain 提供内置 [agent](/oss/langchain/agents) 实现，使用 [LangGraph
     :::
 
 ### LangSmith
-设置 [LangSmith](https://smith.langchain.com) 来检查您的 chain 或 agent 内部发生了什么。然后设置以下环境变量：
+设置 [LangSmith](https://smith.langchain.com) 以检查链或 agent 内部发生的情况。然后设置以下环境变量：
 
     ```shell
     export LANGSMITH_TRACING="true"
     export LANGSMITH_API_KEY="..."
     ```
 
-## 1. 选择 LLM
+## 1. 选择一个 LLM
 
 选择一个支持 [tool-calling](/oss/integrations/providers/overview):
 
@@ -96,15 +96,15 @@ LangChain 提供内置 [agent](/oss/langchain/agents) 实现，使用 [LangGraph
 
 ## 2. 配置数据库
 
-您将为此教程创建一个 [SQLite 数据库](https://www.sqlitetutorial.net/sqlite-sample-database/) 。SQLite 是一个易于设置和使用的轻量级数据库。我们将加载 `chinook` 数据库，这是一个代表数字媒体商店的示例数据库。
+您将创建一个 [SQLite 数据库](https://www.sqlitetutorial.net/sqlite-sample-database/) 用于本教程。SQLite 是一个轻量级数据库，易于设置和使用。我们将加载 `chinook` 数据库，这是一个代表数字媒体商店的示例数据库。
 
-为方便起见，我们已将数据库（`Chinook.db`）托管在公共 GCS bucket 上。
+为方便起见，我们将数据库（`Chinook.db`）托管在一个公共 GCS 存储桶上。
 
 :::python
 
 <SqlAgentDownloadChinookPy />
 
-我们将使用 Python 内置 `sqlite3` 模块与数据库交互：
+我们将使用 Python 内置的 `sqlite3` 模块与数据库交互：
 
 <SqlAgentExploreDatabasePy />
 ```
@@ -127,10 +127,10 @@ Sample output: [{"ArtistId":1,"Name":"AC/DC"},{"ArtistId":2,"Name":"Accept"},{"A
 ```
 :::
 
-## 3. 添加数据库交互工具
+## 3. 添加用于数据库交互的工具
 
 <Warning>
-以下数据库工具仅作为演示目的的最小包装器。它们不打算用于安全目的或生产环境。在执行模型生成的 SQL 之前，请使用范围狭窄的数据库权限并添加特定于应用程序的验证。
+以下数据库工具仅为演示目的的最小包装器。它们不打算用于安全或生产环境。在执行模型生成的 SQL 之前，请使用范围狭窄的数据库权限并添加特定于应用程序的验证。
 </Warning>
 
 :::python
@@ -172,7 +172,7 @@ sql_db_query: Input to this tool is a detailed and correct SQL query, output is 
 - 生成查询
 - 检查查询
 
-将这些步骤放在专用节点中让我们能够（1）在需要时强制工具调用，（2）自定义与每个步骤相关的提示。
+将这些步骤放在专用节点中使我们能够 (1) 在需要时强制工具调用，以及 (2) 自定义与每个步骤关联的提示。
 
 :::python
 
@@ -187,13 +187,13 @@ sql_db_query: Input to this tool is a detailed and correct SQL query, output is 
 
 ## 5. 实现代理
 
-我们现在可以使用 [Graph API](/oss/langgraph/graph-api)将这些步骤组合成工作流。我们定义一个 [条件边](/oss/langgraph/graph-api#conditional-edges) 在查询生成步骤中，如果生成了查询则路由到查询检查器，如果没有工具调用则结束，以便LLM已返回对查询的响应。
+我们现在可以使用 [Graph API](/oss/langgraph/graph-api)将这些步骤组装成工作流程。 [条件边](/oss/langgraph/graph-api#conditional-edges) 在查询生成步骤处定义，如果生成了查询则路由到查询检查器，如果没有工具调用则结束，此时 LLM 已将响应返回给用户。
 
 :::python
 
 <LanggraphSqlAgentAssembleAgentPy />
 
-我们在下面可视化该应用：
+我们在下方可视化该应用：
 
 <LanggraphSqlAgentVisualizeGraphPy />
 
@@ -202,15 +202,15 @@ sql_db_query: Input to this tool is a detailed and correct SQL query, output is 
 
 <LanggraphSqlAgentAssembleAgentJs />
 
-我们在下面可视化该应用：
+我们在下方可视化该应用：
 
 <LanggraphSqlAgentVisualizeGraphJs />
 
 :::
 <img
   src="/oss/images/sql-agent-langgraph.png"
-  alt="SQL代理图"
-  style="{{ height: "800px" }}
+  alt="SQL agent graph"
+  style={{ height: "800px" }}
 />
 
 我们现在可以调用该图：
@@ -301,22 +301,22 @@ The genre with the longest tracks on average is "Sci Fi & Fantasy," with an aver
 ```
 :::python
 <Tip>
-查看 [LangSmith跟踪](https://smith.langchain.com/public/94b8c9ac-12f7-4692-8706-836a1f30f1ea/r) 了解上述运行。
+请参阅 [LangSmith trace](https://smith.langchain.com/public/94b8c9ac-12f7-4692-8706-836a1f30f1ea/r) 查看上述运行。
 </Tip>
 :::
 :::js
 <Tip>
-查看 [LangSmith跟踪](https://smith.langchain.com/public/a6a96896-686a-4040-b9b5-28d701453d6f/r) 了解上述运行。
+请参阅 [LangSmith trace](https://smith.langchain.com/public/a6a96896-686a-4040-b9b5-28d701453d6f/r) 查看上述运行。
 </Tip>
 :::
 
 ## 6. 实现人工介入审查
 
-在执行SQL查询之前检查代理的SQL查询以防止任何意外操作或低效问题是明智的做法。
+在执行 SQL 查询之前检查代理的查询，以防止任何意外操作或低效情况，这是明智的做法。
 
-在这里我们利用LangGraph的 [human-in-the-loop](/oss/langgraph/interrupts) 功能在执行SQL查询之前暂停运行并等待人工审查。使用LangGraph的 [持久层](/oss/langgraph/persistence)，我们可以无限期暂停运行（或至少在持久层存活期间）。
+在这里我们利用 LangGraph 的 [human-in-the-loop](/oss/langgraph/interrupts) 功能，在执行 SQL 查询之前暂停运行并等待人工审查。使用 LangGraph 的 [持久化层](/oss/langgraph/persistence)，我们可以无限期暂停运行（或者至少在持久化层存活期间）。
 
-让我们将 `sql_db_query` 工具包装在接收人工输入的节点中。我们可以使用 [interrupt](/oss/langgraph/interrupts) 函数来实现这一点。下面，我们允许输入来批准工具调用、编辑其参数或提供用户反馈。
+让我们在接收人工输入的节点中包装 `sql_db_query` 工具。我们可以使用 [interrupt](/oss/langgraph/interrupts) 函数来实现这一点。在下方，我们允许输入以批准工具调用、编辑其参数或提供用户反馈。
 
 :::python
 
@@ -330,10 +330,10 @@ The genre with the longest tracks on average is "Sci Fi & Fantasy," with an aver
 :::
 
 <Note>
-上述实现遵循 [工具中断示例](/oss/langgraph/interrupts#interrupts-in-tools) ，属于更广泛的 [human-in-the-loop](/oss/langgraph/interrupts) 指南。请参阅该指南了解更多详情和替代方案。
+上述实现遵循 [工具中断示例](/oss/langgraph/interrupts#interrupts-in-tools) ，该示例位于更广泛的 [human-in-the-loop](/oss/langgraph/interrupts) 指南中。请参阅该指南以了解详细信息和替代方案。
 </Note>
 
-现在让我们重新组合图。我们将用人工审查替换程序化检查。注意我们现在包含了一个 [checkpointer](/oss/langgraph/persistence)；这是暂停和恢复运行所必需的。
+现在让我们重新组装图。我们将用人工审查替换程序化检查。请注意，我们现在包含了一个 [checkpointer](/oss/langgraph/persistence)；这是暂停和恢复运行所必需的。
 
 :::python
 
@@ -346,7 +346,7 @@ The genre with the longest tracks on average is "Sci Fi & Fantasy," with an aver
 
 :::
 
-我们可以像之前一样调用该图。这次，执行会被中断：
+我们可以像之前一样调用图。这次，执行会被中断：
 
 :::python
 
@@ -400,7 +400,7 @@ Name: sql_db_query
 The genre with the longest average track length is "Sci Fi & Fantasy" with an average length of about 2,911,783 milliseconds. Other genres with long average track lengths include "Science Fiction," "Drama," "TV Shows," and "Comedy."
 ```
 
-请参阅 [人在环指南](/oss/langgraph/interrupts) 了解更多详情。
+接受或编辑工具调用 [人在回路指南](/oss/langgraph/interrupts) 详情请参阅。
 
-## 后续步骤
-查看 [评估图](/langsmith/evaluate-graph) 了解如何使用 LangSmith 评估 LangGraph 应用程序（包括类似的 SQL 代理）。
+## 下一步
+请参阅 [评估图](/langsmith/evaluate-graph) 了解如何使用 LangSmith 评估 LangGraph 应用程序（包括此类 SQL 代理）的指南。
